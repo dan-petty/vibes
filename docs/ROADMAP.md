@@ -70,9 +70,9 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [x] **Interactive Prompt Mutation Suite & Invariant Fuzzer (`examples/prompt-mutation-fuzzer/`)**:
   - Grammar-guided adversarial prompt perturbation generator testing agent resilience against instruction dilution, distraction noise, prompt injection prefixes, and context truncation.
   - Quantified drift scoring: automatically measures frequency of AST invariant violations and contract regression under perturbed system instructions.
-- [ ] **Fast-Feedback Subprocess Worker Pool & In-Process Test Runner**:
-  - Eliminates the ~2.5s per-test-suite subprocess startup tax in the Resource Iteration Workbench by maintaining a warm pytest execution pool.
-  - Slashes full repository evaluation latency from 45s down to < 5s for rapid iterative agent cycles.
+- [🔄] **Fast-Feedback Test Optimization & In-Process Runner**:
+  - Phase 1 (Complete): Added `-o addopts=` worker bypass in `ResourceRunner`, dropping single-file test overhead by > 85% (from 4.4s down to 0.3s) and halving repository iteration time.
+  - Phase 2 (Planned): In-process `pytest.main()` runner with warm module cache and stdout/stderr capture to slash multi-target execution down to < 2s.
 - [ ] **Continuous File-Watcher Mode (`devops-cli / vibes --watch`)**:
   - Real-time inotify/event-driven daemon executing the 5-phase `Scan -> Run -> Review -> Feedback -> Iterate` loop on file save.
   - Instant ASCII diff display showing complexity delta ($\Delta M$) and test latency delta ($\Delta t$) immediately upon code modification.

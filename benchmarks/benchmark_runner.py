@@ -80,16 +80,19 @@ def handle_request(req_type, user_role, is_auth, payload):
 """
 
 
+def _node_complexity_weight(node: ast.AST) -> int:
+    """Return cyclomatic complexity weight contributed by an individual AST node."""
+    if isinstance(node, (ast.If, ast.While, ast.For, ast.ExceptHandler, ast.IfExp)):
+        return 1
+    if isinstance(node, ast.BoolOp):
+        return max(0, len(node.values) - 1)
+    return 0
+
+
 def calculate_cyclomatic_complexity(source_code: str) -> int:
     """Calculate cyclomatic complexity of functions in source string."""
     tree = ast.parse(source_code)
-    complexity = 0
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.If, ast.While, ast.For, ast.ExceptHandler, ast.IfExp)):
-            complexity += 1
-        elif isinstance(node, ast.BoolOp):
-            complexity += len(node.values) - 1
-    return complexity + 1
+    return 1 + sum(_node_complexity_weight(node) for node in ast.walk(tree))
 
 
 def run_complexity_benchmark() -> TrackResult:

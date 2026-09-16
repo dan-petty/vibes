@@ -285,3 +285,32 @@ def test_cli_export_backlog_flag(tmp_path: Path) -> None:
     assert backlog_path.is_file()
     data = json.loads(backlog_path.read_text(encoding="utf-8"))
     assert isinstance(data, list)
+
+
+def test_resource_runner_passes_addopts_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Ensure run_tests_for_resource passes -o addopts= to prevent xdist worker overhead."""
+    captured_command: list[str] = []
+
+    def mock_run_command(cls, command: list[str], target: str, cwd: Path, timeout: int = 30) -> RunExecutionResult:
+        captured_command.extend(command)
+        return RunExecutionResult(
+            target=target,
+            command=command,
+            exit_code=0,
+            duration_seconds=0.1,
+            stdout="1 passed",
+            stderr="",
+            passed_count=1,
+            failed_count=0,
+            warnings_count=0,
+        )
+
+    monkeypatch.setattr(ResourceRunner, "run_command", classmethod(mock_run_command))
+    dummy_test = tmp_path / "test_example.py"
+    dummy_test.touch()
+
+    res = ResourceRunner.run_tests_for_resource(dummy_test, cwd=tmp_path)
+    assert res.passed_count == 1
+    assert "-o" in captured_command
+    assert "addopts=" in captured_command
+

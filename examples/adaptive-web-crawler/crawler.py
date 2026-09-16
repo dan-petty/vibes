@@ -255,6 +255,15 @@ class DomainStrategyStore:
             logger.warning("Could not load strategies from %s: %s", self.persistence_path, err)
 
 
+def _is_disallowed_private_ip(hostname: str) -> bool:
+    """Return True if hostname resolves to a private IP not in allowed test networks."""
+    try:
+        ip_obj = ipaddress.ip_address(hostname)
+        return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS)
+    except ValueError:
+        return False
+
+
 def validate_url_security(url: str) -> tuple[str, str]:
     """Validate URL protocol and protect against SSRF to unwhitelisted private IPs."""
     parsed = urlparse(url)
@@ -265,15 +274,8 @@ def validate_url_security(url: str) -> tuple[str, str]:
     if not hostname:
         raise ValueError("URL must include a valid hostname.")
 
-    # Guard against private RFC 1918 subnets unless explicitly in allowed test networks
-    try:
-        ip_obj = ipaddress.ip_address(hostname)
-        if ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS):
-            raise ValueError(f"SSRF violation: connection to private IP '{hostname}' denied.")
-    except ValueError as val_err:
-        if "SSRF violation" in str(val_err):
-            raise
-        # Hostname is a domain name, not an IP address (standard safe case)
+    if _is_disallowed_private_ip(hostname):
+        raise ValueError(f"SSRF violation: connection to private IP '{hostname}' denied.")
 
     return parsed.scheme, hostname
 
