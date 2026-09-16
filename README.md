@@ -54,12 +54,14 @@ vibes/
 │   │   ├── 03-autonomous-project-governance.md
 │   │   ├── 04-zero-trust-egress-and-sanitization.md
 │   │   ├── 05-harness-slots-and-subagent-offloading.md
-│   │   └── 06-rate-limits-and-anti-brittle-heuristics.md
+│   │   ├── 06-rate-limits-and-anti-brittle-heuristics.md
+│   │   └── 07-proactive-headroom-and-recursive-feedback-loops.md
 │   ├── polyglot/                      # Cross-language agentic engineering observations
 │   │   ├── 01-rust-type-state-invariants.md
 │   │   └── 02-typescript-cst-and-type-gymnastics.md
 │   └── systems/                       # Distributed systems & observability field studies
-│       └── 01-distributed-telemetry-and-agent-waterfalls.md
+│       ├── 01-distributed-telemetry-and-agent-waterfalls.md
+│       └── 02-subprocess-test-harness-instrumentation-tax.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── cegis-and-hypothesis-debugging.md
@@ -124,6 +126,7 @@ The headline exhibition in `vibes` is drawn from the autonomous development of [
 | [**04. Zero-Trust Egress & Sanitization**](./observations/devops-cli/04-zero-trust-egress-and-sanitization.md) | Eliminating homelab IP leaks, private paths, and secrets through automated sanitizers and RFC dummy standards. |
 | [**05. Harness Slots & Sub-Agent Offloading**](./observations/devops-cli/05-harness-slots-and-subagent-offloading.md) | "Big decides, small types, big checks": Partitioning reasoning vs. symbol extraction to slash token overhead by 85%+. |
 | [**06. Rate Limits & Anti-Brittle Heuristics**](./observations/devops-cli/06-rate-limits-and-anti-brittle-heuristics.md) | Surviving API quotas with client-side token buckets and strictly prohibiting arbitrary partial pattern matches. |
+| [**07. Proactive Headroom & Recursive Feedback Loops**](./observations/devops-cli/07-proactive-headroom-and-recursive-feedback-loops.md) | Why hard caps are insufficient: using headroom analysis and automated SDLC backlog export to self-remediate before hitting invariant ceilings. |
 
 ---
 
@@ -138,6 +141,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Rust Type-State Invariants**](./observations/polyglot/01-rust-type-state-invariants.md) | Rust (Affine Types) | How the type-state pattern and zero-sized marker types eliminate 90%+ invalid state bugs at compile time. |
 | [**TypeScript CST & Type Gymnastics**](./observations/polyglot/02-typescript-cst-and-type-gymnastics.md) | TypeScript (CST & Generics) | Taming deep conditional types and enforcing zero-`any` / zero-`@ts-ignore` invariant gates. |
 | [**Distributed Telemetry & Agent Waterfalls**](./observations/systems/01-distributed-telemetry-and-agent-waterfalls.md) | Distributed Systems (OTel) | Eliminating the agent black box with W3C traceparent propagation, semantic tokens, and waterfall analysis. |
+| [**Subprocess Test Harness Instrumentation Tax**](./observations/systems/02-subprocess-test-harness-instrumentation-tax.md) | Systems & DevEx | How unpruned workspace test plugins (xdist/cov/logfire) create 10x latency traps in iterative agent feedback loops, and how selective bypass restores sub-second velocity. |
 
 ---
 
