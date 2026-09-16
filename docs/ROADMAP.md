@@ -67,9 +67,17 @@ High-density product roadmap, engineering milestones, and open-source curation s
   - `TokenEconomy`: Quantified token savings comparing monolithic frontier prompting vs. local subagent slot offloading.
 - [x] **OpenTelemetry Agent Waterfall Trace Generator (`examples/agent-telemetry-trace-generator/`)**:
   - Reference trace generator emitting W3C traceparent spans, token usage attributes, and ASCII waterfall timelines.
-- [ ] **Interactive Prompt Mutation Suite & Invariant Fuzzer (`tools/prompt_fuzzer/`)**:
+- [x] **Interactive Prompt Mutation Suite & Invariant Fuzzer (`examples/prompt-mutation-fuzzer/`)**:
   - Grammar-guided adversarial prompt perturbation generator testing agent resilience against instruction dilution, distraction noise, prompt injection prefixes, and context truncation.
   - Quantified drift scoring: automatically measures frequency of AST invariant violations and contract regression under perturbed system instructions.
+- [ ] **Fast-Feedback Subprocess Worker Pool & In-Process Test Runner**:
+  - Eliminates the ~2.5s per-test-suite subprocess startup tax in the Resource Iteration Workbench by maintaining a warm pytest execution pool.
+  - Slashes full repository evaluation latency from 45s down to < 5s for rapid iterative agent cycles.
+- [ ] **Continuous File-Watcher Mode (`devops-cli / vibes --watch`)**:
+  - Real-time inotify/event-driven daemon executing the 5-phase `Scan -> Run -> Review -> Feedback -> Iterate` loop on file save.
+  - Instant ASCII diff display showing complexity delta ($\Delta M$) and test latency delta ($\Delta t$) immediately upon code modification.
+- [ ] **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**:
+  - Mechanical AST rewriting engine that consumes `PROACTIVE_REFACTOR` opportunities from the Feedback Engine and auto-decomposes branching ladders ($M \ge 7$) into single-responsibility predicate helpers.
 - [ ] **Live OTLP Observability Mesh & Jaeger/Grafana Collector Pipeline**:
   - Reference export integration streaming agent spans over OpenTelemetry Protocol (OTLP/gRPC and OTLP/HTTP) into live Jaeger, Tempo, and Grafana collector endpoints.
   - Standardized semantic attributes for agent execution: `agent.persona`, `agent.tool.call_name`, `agent.tokens.prompt`, `agent.tokens.completion`, `agent.cache_hit`, and `agent.verification_result`.
@@ -151,10 +159,13 @@ Upcoming field observations, empirical studies, and architectural investigations
 |  | GitHub Actions CI & Recursive Workflows | GitHub Workflows / `pytest` | High | Low | v0.2.0 | ✅ Completed |
 |  | Autonomous Project Tooling (`tools/project_tooling.py`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 |  | Polyglot Case Studies (Rust & TypeScript) | Systems Engineering | High | Low | v0.2.0 | ✅ Completed |
+|  | Continuous File-Watcher Mode (`--watch`) | Python / inotify | High | Low | v0.3.0 | 📋 Scheduled |
 |  | Formal Tool Contract Verification Gates | Pydantic v2 / JSON Schema | High | Low | v0.3.0 | 📋 Scheduled |
 | **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest` / AST Analyzer | High | Medium | v0.3.0 | ✅ Completed |
 |  | OpenTelemetry Agent Waterfall Generator | OpenTelemetry / Python | High | Medium | v0.3.0 | ✅ Completed |
-|  | Interactive Prompt Mutation Suite & Invariant Fuzzer | Python / AST / Fuzzing | High | Medium | v0.3.0 | 📋 Scheduled |
+|  | Interactive Prompt Mutation Suite & Invariant Fuzzer | Python / AST / Fuzzing | High | Medium | v0.3.0 | ✅ Completed |
+|  | Fast-Feedback Worker Pool & Test Runner | Pytest Daemon / Python | High | Medium | v0.3.0 | 📋 Scheduled |
+|  | Automated AST Conditional Refactorer | Python AST Transformer | High | Medium | v0.3.0 | 📋 Scheduled |
 |  | OTLP Live Collector & Jaeger/Grafana Mesh | OTLP / gRPC / Docker | High | Medium | v0.3.0 | 📋 Scheduled |
 |  | Go Concurrency & Goroutine Leak Sentinel | Go 1.23 / `pprof` | High | Medium | v0.4.0 | 📋 Scheduled |
 |  | Rust Memory & Type-State Benchmark Track | Cargo / Clippy / Rust | High | Medium | v0.4.0 | 📋 Scheduled |
