@@ -35,7 +35,8 @@ vibes/
 ├── docs/                              # Foundational theory, taxonomy, and curation standards
 │   ├── MANIFESTO.md                   # Beyond "Vibe Coding": The Disciplined Agentic Manifesto
 │   ├── TAXONOMY.md                    # Structured taxonomy of agentic architectures & failure modes
-│   └── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
+│   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
+│   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
 │
 ├── observations/                      # Empirical field studies & engineering breakthroughs
 │   └── devops-cli/                    # In-depth case studies from the devops-cli project
@@ -52,15 +53,20 @@ vibes/
 │   ├── root-cause-hardening.md
 │   └── epistemic-hygiene-and-context-pruning.md
 │
-└── artifacts/                         # Battle-tested prompts, harnesses, and schemas
-    ├── prompts/
-    │   ├── multi-persona-code-reviewer.md
-    │   └── architectural-invariant-sentinel.md
-    ├── task-harnesses/
-    │   ├── structured-task-spec-template.md
-    │   └── sample-completed-task-spec.md
-    └── schemas/
-        └── fastmcp-agent-tool-manifest-spec.json
+├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
+│   ├── prompts/
+│   │   ├── multi-persona-code-reviewer.md
+│   │   └── architectural-invariant-sentinel.md
+│   ├── task-harnesses/
+│   │   ├── structured-task-spec-template.md
+│   │   └── sample-completed-task-spec.md
+│   └── schemas/
+│       └── fastmcp-agent-tool-manifest-spec.json
+│
+└── examples/                          # Executable reference sample applications
+    ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
+    ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
+    └── cegis-debugging-workbench/     # Counterexample synthesis testbench
 ```
 
 ---
@@ -113,6 +119,25 @@ Read the full [**Manifesto**](./docs/MANIFESTO.md):
 3. **Zero Zombie Code & Clean Solutions Over Legacy Remnants.**
 4. **Grounded Project Tracking (Zero Invisible Agent Actions).**
 5. **Self-Healing Instructions (Fix Root Causes, Not Symptoms).**
+---
+
+## 💻 Executable Sample Applications (`examples/`)
+
+Runnable, zero-dependency reference implementations demonstrating core agentic engineering mechanics in action:
+
+| Sample Application | Mechanics Demonstrated | Automated Test Suite |
+|---|---|---|
+| [**AST Invariant Sentinel**](./examples/ast-invariant-sentinel/) | Python AST NodeVisitor measuring cyclomatic complexity ($M \le 10$), nesting depth ($\le 5$), and RFC 5737 zero-trust IP sanitization. | `pytest test_sentinel.py` |
+| [**FastMCP Token-Bucket Gateway**](./examples/fastmcp-token-bucket-gateway/) | Client-side rate limiter and tool dispatcher with burst capacity, token refills, and jittered backoff protecting external APIs. | `pytest test_gateway.py` |
+| [**CEGIS Debugging Workbench**](./examples/cegis-debugging-workbench/) | Formal Counterexample-Guided Inductive Synthesis loop accumulating negative constraints to converge on minimal atomic patches. | `pytest test_workbench.py` |
+
+---
+
+## 🗺️ Strategic Roadmap
+
+Follow our multi-milestone evolution from foundational case studies to polyglot testbeds, multi-agent benchmark suites, and autonomous self-curating swarms.
+
+- Read the full [**Strategic Roadmap (`docs/ROADMAP.md`)**](./docs/ROADMAP.md).
 
 ---
 
