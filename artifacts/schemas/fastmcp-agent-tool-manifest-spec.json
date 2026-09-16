@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FastMCPAgentToolManifest",
+  "description": "Standardized schema definition for FastMCP tool manifestations and parameter contracts exposed to autonomous AI agents.",
+  "type": "object",
+  "required": [
+    "server_name",
+    "version",
+    "tools"
+  ],
+  "properties": {
+    "server_name": {
+      "type": "string",
+      "description": "Unique identifier of the FastMCP server (e.g. 'devops-cli')."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "SemVer version of the tool manifest."
+    },
+    "description": {
+      "type": "string",
+      "description": "High-level summary of the tool server capabilities."
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "parameters",
+          "safety_tier"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Identifier of the tool function."
+          },
+          "description": {
+            "type": "string",
+            "description": "Actionable explanation of tool behavior and return schema."
+          },
+          "safety_tier": {
+            "type": "string",
+            "enum": [
+              "read_only",
+              "idempotent_mutation",
+              "destructive_mutation",
+              "privileged_execution"
+            ],
+            "description": "Safety classification gating autonomous invocation permissions."
+          },
+          "rate_limited": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether invocations are subject to client-side token bucket metering."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "JSON schema definition of the input parameters."
+          }
+        }
+      }
+    }
+  }
+}
