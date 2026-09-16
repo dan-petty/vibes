@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-worker-sandbox
+  namespace: agent-workloads
+  labels:
+    app.kubernetes.io/name: agent-sandbox
+    app.kubernetes.io/role: agent-sandbox
+    app.kubernetes.io/part-of: vibes-mesh
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: sandbox-executor
+      image: python:3.14-slim
+      command: ["python3", "-c", "import sys; print('Vibes Sandbox Initialized'); sys.exit(0)"]
+      workingDir: /workspace
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          cpu: "1000m"
+          memory: "512Mi"
+      volumeMounts:
+        - name: workspace-scratch
+          mountPath: /workspace
+        - name: tmp-scratch
+          mountPath: /tmp
+  volumes:
+    - name: workspace-scratch
+      emptyDir:
+        sizeLimit: "256Mi"
+    - name: tmp-scratch
+      emptyDir:
+        sizeLimit: "64Mi"

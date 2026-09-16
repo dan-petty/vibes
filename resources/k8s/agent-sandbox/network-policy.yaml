@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-sandbox-egress-guard
+  namespace: agent-workloads
+  labels:
+    app.kubernetes.io/name: agent-sandbox
+    app.kubernetes.io/part-of: vibes-mesh
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/role: agent-sandbox
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: [] # Deny all inbound traffic to sandbox pods
+  egress:
+    # 1. Allow cluster DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # 2. Allow egress to local cluster cache (Valkey)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # 3. Allow egress to in-cluster OpenTelemetry Collector
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+
+    # 4. Strict Public Internet Egress (Deny all private RFC 1918 subnets and cloud metadata)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

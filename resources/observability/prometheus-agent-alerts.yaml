@@ -1,0 +1,54 @@
+# Prometheus Alerting Rules for Agentic Operations
+# Designed for detecting runaway token velocity, invariant failure spikes, and CEGIS stalls.
+groups:
+  - name: agent_operational_alerts
+    rules:
+      - alert: AgentTokenBurnSpike
+        expr: rate(vibes_agent_tokens_total[5m]) * 60 > 50000
+        for: 2m
+        labels:
+          severity: warning
+          component: agent_telemetry
+        annotations:
+          summary: "Agent token burn rate exceeds threshold (>50k tokens/min)"
+          description: "Active agent workflows are consuming tokens at a velocity of {{ $value }} tokens/min. Investigate prompt recursion or context window inflation."
+
+      - alert: AgentASTInvariantBreachRate
+        expr: sum(rate(vibes_agent_invariant_violations_total[10m])) / sum(rate(vibes_agent_gate_checks_total[10m])) > 0.25
+        for: 3m
+        labels:
+          severity: critical
+          component: quality_gate
+        annotations:
+          summary: "Architectural invariant breach rate exceeds 25%"
+          description: "Over 25% of recent code synthesis attempts violated cyclomatic complexity or nesting depth limits. Candidate patches may be devolving."
+
+      - alert: AgentCEGISConvergenceStall
+        expr: vibes_agent_cegis_iteration_rounds > 8
+        for: 1m
+        labels:
+          severity: warning
+          component: synthesis_engine
+        annotations:
+          summary: "CEGIS synthesis loop stalled (>8 rounds without convergence)"
+          description: "The counterexample-guided inductive synthesis loop has reached {{ $value }} iterations without converging on a valid patch."
+
+      - alert: AgentAPIQuotaNearExhaustion
+        expr: vibes_agent_rate_limiter_remaining_quota < 100
+        for: 1m
+        labels:
+          severity: critical
+          component: gateway
+        annotations:
+          summary: "Upstream API quota near exhaustion (<100 requests remaining)"
+          description: "Remaining client-side API token bucket capacity has dropped below 100. Backoff with jitter engaged."
+
+      - alert: AgentEgressViolationAttempt
+        expr: increase(vibes_agent_egress_firewall_blocks_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: page
+          component: security_sandbox
+        annotations:
+          summary: "Agent sandbox egress policy blocked connection attempt"
+          description: "An isolated agent container attempted egress to a blocked or non-whitelisted IP/hostname. Possible SSRF or prompt injection."

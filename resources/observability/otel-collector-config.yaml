@@ -1,0 +1,68 @@
+# OpenTelemetry Collector Configuration for Agentic Telemetry
+# Tailored for AI Coding Agents, Subagent Hierarchies, and Invariant Gates
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: "agent_workloads"
+          scrape_interval: 10s
+          static_configs:
+            - targets: ["localhost:8888"]
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 256
+
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 20
+
+  attributes/agent_defaults:
+    actions:
+      - key: environment
+        value: development
+        action: insert
+      - key: agent.telemetry.mesh
+        value: vibes-sentinel
+        action: insert
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: vibes_agent
+
+  debug:
+    verbosity: normal
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/agent_defaults, batch]
+      exporters: [otlp/jaeger, debug]
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+  telemetry:
+    logs:
+      level: info

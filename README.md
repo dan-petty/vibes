@@ -55,15 +55,18 @@ vibes/
 │   │   ├── 04-zero-trust-egress-and-sanitization.md
 │   │   ├── 05-harness-slots-and-subagent-offloading.md
 │   │   └── 06-rate-limits-and-anti-brittle-heuristics.md
-│   └── polyglot/                      # Cross-language agentic engineering observations
-│       ├── 01-rust-type-state-invariants.md
-│       └── 02-typescript-cst-and-type-gymnastics.md
+│   ├── polyglot/                      # Cross-language agentic engineering observations
+│   │   ├── 01-rust-type-state-invariants.md
+│   │   └── 02-typescript-cst-and-type-gymnastics.md
+│   └── systems/                       # Distributed systems & observability field studies
+│       └── 01-distributed-telemetry-and-agent-waterfalls.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── fifo-pull-request-shepherding.md
 │   ├── root-cause-hardening.md
-│   └── epistemic-hygiene-and-context-pruning.md
+│   ├── epistemic-hygiene-and-context-pruning.md
+│   └── zero-trust-sandboxing-and-observability.md
 │
 ├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
 │   ├── prompts/
@@ -74,6 +77,11 @@ vibes/
 │   │   └── sample-completed-task-spec.md
 │   └── schemas/
 │       └── fastmcp-agent-tool-manifest-spec.json
+│
+├── resources/                         # Infrastructure & Observability configurations
+│   ├── observability/                 # OTel Collector, Prometheus alerts, Grafana dashboard
+│   ├── k8s/                           # Hardened sandbox pod, NetworkPolicy, OTel manifests
+│   └── docker-compose/                # Turnkey 6-service local evaluation environment
 │
 ├── examples/                          # Executable reference sample applications
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
@@ -89,7 +97,8 @@ vibes/
 │   └── project_tooling.py             # CLI for issue triage and self-hardening audits
 │
 └── tests/                             # Automated test suites for tools and harnesses
-    └── test_project_tooling.py        # Unit tests for autonomous project engine
+    ├── test_project_tooling.py        # Unit tests for autonomous project engine
+    └── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
 ```
 
 ---
@@ -109,14 +118,17 @@ The headline exhibition in `vibes` is drawn from the autonomous development of [
 
 ---
 
-## 🦀 Polyglot Engineering Observations (`observations/polyglot/`)
+---
 
-Agentic coding manifests differently across languages and compiler architectures:
+## 🔬 Polyglot & Systems Case Studies
 
-| Exhibition Piece | Language & Focus | Core Observation |
+Agentic coding manifests differently across languages, compiler architectures, and infrastructure topologies:
+
+| Exhibition Piece | Domain & Focus | Core Observation |
 |---|---|---|
 | [**Rust Type-State Invariants**](./observations/polyglot/01-rust-type-state-invariants.md) | Rust (Affine Types) | How the type-state pattern and zero-sized marker types eliminate 90%+ invalid state bugs at compile time. |
 | [**TypeScript CST & Type Gymnastics**](./observations/polyglot/02-typescript-cst-and-type-gymnastics.md) | TypeScript (CST & Generics) | Taming deep conditional types and enforcing zero-`any` / zero-`@ts-ignore` invariant gates. |
+| [**Distributed Telemetry & Agent Waterfalls**](./observations/systems/01-distributed-telemetry-and-agent-waterfalls.md) | Distributed Systems (OTel) | Eliminating the agent black box with W3C traceparent propagation, semantic tokens, and waterfall analysis. |
 
 ---
 
@@ -140,6 +152,7 @@ graph TD
 - [**FIFO Pull Request Shepherding**](./patterns/fifo-pull-request-shepherding.md): How chronological queue processing eliminates cascading merge conflicts and PR starvation in agent swarms.
 - [**Root-Cause Hardening**](./patterns/root-cause-hardening.md): The self-updating instruction loop—never fixing a bug in code without updating `AGENTS.md` to prevent recurrence.
 - [**Epistemic Hygiene & Context Pruning**](./patterns/epistemic-hygiene-and-context-pruning.md): Human-like cognitive information foraging, multi-scale outlines, and bounded string caps ($\le 256$ chars).
+- [**Zero-Trust Sandboxing & Distributed Observability**](./patterns/zero-trust-sandboxing-and-observability.md): Defense-in-depth pairing rootless, capability-dropped sandboxes and SSRF egress blocking with real-time OTLP span streaming.
 
 ---
 
@@ -165,6 +178,20 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**FastMCP Token-Bucket Gateway**](./examples/fastmcp-token-bucket-gateway/) | Client-side rate limiter and tool dispatcher with burst capacity, token refills, and jittered backoff protecting external APIs. | `pytest test_gateway.py` |
 | [**CEGIS Debugging Workbench**](./examples/cegis-debugging-workbench/) | Formal Counterexample-Guided Inductive Synthesis loop accumulating negative constraints to converge on minimal atomic patches. | `pytest test_workbench.py` |
 | [**Agent Waterfall Trace Generator**](./examples/agent-telemetry-trace-generator/) | OpenTelemetry distributed trace generator rendering ASCII waterfalls and tracking token spend across model tiers. | `pytest test_generator.py` |
+
+---
+
+## 🌐 Infrastructure & Observability Resources (`resources/`)
+
+Production-ready infrastructure configurations, container sandboxes, and observability pipelines for agent swarms:
+
+| Category | Key Resources | Description |
+|---|---|---|
+| [**Observability Mesh**](./resources/observability/) | `otel-collector-config.yaml`<br>`prometheus-agent-alerts.yaml`<br>`grafana/agent-telemetry-dashboard.json` | OTel Collector pipeline with memory limiter and log scrubbing, Prometheus alert rules for token burn spikes and invariant failures, and turnkey Grafana dashboard. |
+| [**Kubernetes Manifests**](./resources/k8s/) | `sandbox-pod.yaml`<br>`network-policy.yaml`<br>`resource-quota.yaml`<br>`otel-collector-deployment.yaml` | Hardened, unprivileged pod specs (`Restricted` PSS), zero-trust egress `NetworkPolicy` dropping RFC 1918/metadata access, namespace quotas, and in-cluster OTel/Jaeger/Valkey. |
+| [**Docker Compose Stack**](./resources/docker-compose/) | `docker-compose.yml`<br>`.env.example` | Turnkey 6-service local evaluation environment (`jaeger`, `otel-collector`, `prometheus`, `valkey`, `grafana`, `agent-sandbox`) with single-command startup (`docker compose up -d`). |
+
+Read the full [**Resources Guide (`resources/README.md`)**](./resources/README.md).
 
 ---
 
