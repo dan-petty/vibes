@@ -313,4 +313,7 @@ def test_resource_runner_passes_addopts_override(monkeypatch: pytest.MonkeyPatch
     assert res.passed_count == 1
     assert "-o" in captured_command
     assert "addopts=" in captured_command
+    assert "no:cov" in captured_command
+    assert "no:logfire" in captured_command
+    assert "no:xdist" in captured_command
 

@@ -426,7 +426,20 @@ class ResourceRunner:
 
     @classmethod
     def run_tests_for_resource(cls, resource_path: Path, cwd: Path) -> RunExecutionResult:
-        cmd = [sys.executable, "-m", "pytest", "-o", "addopts=", str(resource_path)]
+        cmd = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "no:cov",
+            "-p",
+            "no:logfire",
+            "-p",
+            "no:xdist",
+            "-o",
+            "addopts=",
+            str(resource_path),
+        ]
         return cls.run_command(cmd, str(resource_path), cwd=cwd)
 
     @staticmethod

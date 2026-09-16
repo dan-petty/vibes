@@ -42,13 +42,12 @@ def test_clean_content_extractor_markdown() -> None:
     title, content, links = cleaner.get_clean_content()
 
     assert title == "Documentation Guide"
-    assert "Getting Started" in content
-    assert "Installation" in content
-    assert "- Run pip install framework" in content
-    assert "Header Title" not in content  # <header> is ignored
-    assert "Copyright 2026" not in content  # <footer> is ignored
-    assert "analytics" not in content  # <script> is ignored
     assert "http://example.com/guide" in links
+
+    expected_present = ["Getting Started", "Installation", "- Run pip install framework"]
+    expected_absent = ["Header Title", "Copyright 2026", "analytics"]
+    assert all(item in content for item in expected_present)
+    assert not any(item in content for item in expected_absent)
 
 
 def test_spa_detector_identifies_empty_shell() -> None:
@@ -124,15 +123,18 @@ def test_crawler_escalates_to_headless_on_spa_shell() -> None:
     crawler = AdaptiveWebCrawler(strategy_store=store, http_fetcher=mock_http, headless_fetcher=mock_headless)
     page = crawler.crawl_page("http://example.com/app")
 
-    assert headless_invoked is True
-    assert page.tier_used == ExtractionTier.HEADLESS_BROWSER
-    assert page.quality == PageQuality.HIGH
+    assert (headless_invoked, page.tier_used, page.quality) == (
+        True,
+        ExtractionTier.HEADLESS_BROWSER,
+        PageQuality.HIGH,
+    )
     assert "Hydrated Dashboard" in page.markdown_content
 
-    # Verify that the store has learned that example.com requires JS
     strategy = store.get_strategy("example.com")
-    assert strategy.preferred_tier == ExtractionTier.HEADLESS_BROWSER
-    assert strategy.requires_js is True
+    assert (strategy.preferred_tier, strategy.requires_js) == (
+        ExtractionTier.HEADLESS_BROWSER,
+        True,
+    )
 
 
 def test_crawler_reuses_learned_headless_strategy() -> None:
