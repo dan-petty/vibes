@@ -55,36 +55,54 @@ def buggy_manifest_parser(raw_text: str) -> dict[str, int | str]:
     return result
 
 
+def _parse_line_naive(line: str) -> tuple[str, int | str] | None:
+    if not line or ":" not in line:
+        return None
+    key, val = line.split(":", 1)
+    k, v = key.strip(), val.strip()
+    try:
+        return k, (int(v) if k == "replicas" else v)
+    except Exception:
+        return None
+
+
 # Candidate patches synthesized by agent
 def candidate_patch_naive_workaround(raw_text: str) -> dict[str, int | str]:
     """Bad Agent Patch: Masks exception instead of fixing root cause."""
     result: dict[str, int | str] = {}
     for line in raw_text.strip().splitlines():
-        if not line or ":" not in line:
-            continue
-        key, val = line.split(":", 1)
-        k, v = key.strip(), val.strip()
-        try:
-            result[k] = int(v) if k == "replicas" else v
-        except Exception:
-            pass  # Drops the key entirely! Violates spec
+        parsed = _parse_line_naive(line)
+        if parsed:
+            result[parsed[0]] = parsed[1]
     return result
+
+
+def _parse_line_converged(line: str) -> tuple[str, int | str] | None:
+    if not line or ":" not in line:
+        return None
+    key, val = line.split(":", 1)
+    k, v = key.strip(), val.strip()
+    if k == "replicas":
+        clean_v = v.strip("\"'")
+        return k, int(clean_v) if clean_v.isdigit() else 0
+    return k, v
 
 
 def candidate_patch_cegis_converged(raw_text: str) -> dict[str, int | str]:
     """Correct CEGIS Patch: Strips quotes and safely coerces numeric string to int."""
     result: dict[str, int | str] = {}
     for line in raw_text.strip().splitlines():
-        if not line or ":" not in line:
-            continue
-        key, val = line.split(":", 1)
-        k, v = key.strip(), val.strip()
-        if k == "replicas":
-            clean_v = v.strip("\"'")
-            result[k] = int(clean_v) if clean_v.isdigit() else 0
-        else:
-            result[k] = v
+        parsed = _parse_line_converged(line)
+        if parsed:
+            result[parsed[0]] = parsed[1]
     return result
+
+
+def _test_matches(candidate_fn: Callable[[str], dict[str, int | str]], test: ConstraintSpec) -> bool:
+    try:
+        return candidate_fn(test.input_data) == test.expected_output
+    except Exception:
+        return False
 
 
 class CEGISRunner:
@@ -100,11 +118,7 @@ class CEGISRunner:
         """Verify candidate function against all baseline tests and accumulated counterexamples."""
         all_tests = self.baseline_suite + self.state.accumulated_counterexamples
         for test in all_tests:
-            try:
-                actual = candidate_fn(test.input_data)
-                if actual != test.expected_output:
-                    return False, test
-            except Exception:
+            if not _test_matches(candidate_fn, test):
                 return False, test
         return True, None
 
