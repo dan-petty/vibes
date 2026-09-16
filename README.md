@@ -87,7 +87,8 @@ vibes/
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
 │   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
 │   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
-│   └── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
+│   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
+│   └── adaptive-web-crawler/          # Two-tier adaptive crawler with domain strategy memory
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
@@ -153,6 +154,7 @@ graph TD
 - [**Root-Cause Hardening**](./patterns/root-cause-hardening.md): The self-updating instruction loop—never fixing a bug in code without updating `AGENTS.md` to prevent recurrence.
 - [**Epistemic Hygiene & Context Pruning**](./patterns/epistemic-hygiene-and-context-pruning.md): Human-like cognitive information foraging, multi-scale outlines, and bounded string caps ($\le 256$ chars).
 - [**Zero-Trust Sandboxing & Distributed Observability**](./patterns/zero-trust-sandboxing-and-observability.md): Defense-in-depth pairing rootless, capability-dropped sandboxes and SSRF egress blocking with real-time OTLP span streaming.
+- [**Adaptive Headless Web Crawling**](./patterns/adaptive-headless-web-crawling.md): Two-tier dynamic escalation, SPA shell detection, noise/modal pruning, and persistent domain strategy memory.
 
 ---
 
@@ -178,6 +180,7 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**FastMCP Token-Bucket Gateway**](./examples/fastmcp-token-bucket-gateway/) | Client-side rate limiter and tool dispatcher with burst capacity, token refills, and jittered backoff protecting external APIs. | `pytest test_gateway.py` |
 | [**CEGIS Debugging Workbench**](./examples/cegis-debugging-workbench/) | Formal Counterexample-Guided Inductive Synthesis loop accumulating negative constraints to converge on minimal atomic patches. | `pytest test_workbench.py` |
 | [**Agent Waterfall Trace Generator**](./examples/agent-telemetry-trace-generator/) | OpenTelemetry distributed trace generator rendering ASCII waterfalls and tracking token spend across model tiers. | `pytest test_generator.py` |
+| [**Adaptive Web Crawler**](./examples/adaptive-web-crawler/) | Two-tier adaptive crawler detecting SPA shells, escalating to headless browsing, and persisting learned domain strategies. | `pytest test_crawler.py` |
 
 ---
 
