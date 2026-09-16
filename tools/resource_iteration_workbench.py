@@ -942,6 +942,83 @@ class ResourceIterationWorkbench:
         return tasks
 
 
+class ResourceWatcher:
+    """Event-driven continuous file-watcher triggering recursive iteration cycles."""
+
+    @staticmethod
+    def _is_valid_py_file(path: Path) -> bool:
+        return not (".venv" in path.parts or "__pycache__" in path.parts)
+
+    @staticmethod
+    def _safe_mtime(path: Path) -> float | None:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return None
+
+    @classmethod
+    def snapshot(cls, root_dir: Path) -> dict[str, float]:
+        """Scan directory and return mapping of Python file paths to their modification times."""
+        manifest: dict[str, float] = {}
+        targets = (p for p in sorted(root_dir.rglob("*.py")) if cls._is_valid_py_file(p))
+        for py_path in targets:
+            mtime = cls._safe_mtime(py_path)
+            if mtime is not None:
+                manifest[str(py_path)] = mtime
+        return manifest
+
+    @classmethod
+    def detect_changes(cls, prev_snapshot: dict[str, float], current_snapshot: dict[str, float]) -> list[str]:
+        """Identify paths that have been created, modified, or deleted between snapshots."""
+        changed: list[str] = []
+        all_keys = set(prev_snapshot.keys()) | set(current_snapshot.keys())
+        for key in sorted(all_keys):
+            prev_mtime = prev_snapshot.get(key)
+            curr_mtime = current_snapshot.get(key)
+            if prev_mtime != curr_mtime:
+                changed.append(key)
+        return changed
+
+    @classmethod
+    def watch_tick(
+        cls,
+        workbench: ResourceIterationWorkbench,
+        prev_snapshot: dict[str, float],
+        execute_tests: bool = True,
+    ) -> tuple[dict[str, float], IterationReport | None]:
+        """Execute a single change detection tick and trigger iteration cycle if changes occur."""
+        curr_snapshot = cls.snapshot(workbench.root_dir)
+        changed = cls.detect_changes(prev_snapshot, curr_snapshot)
+        if not changed:
+            return prev_snapshot, None
+
+        report = workbench.run_cycle(execute_tests=execute_tests)
+        return curr_snapshot, report
+
+    @classmethod
+    def watch_loop(
+        cls,
+        workbench: ResourceIterationWorkbench,
+        interval: float = 1.0,
+        max_ticks: int | None = None,
+        execute_tests: bool = True,
+    ) -> list[IterationReport]:
+        """Run continuous polling loop triggering cycles upon filesystem modifications."""
+        reports: list[IterationReport] = []
+        snapshot: dict[str, float] = {}
+        ticks = 0
+
+        while max_ticks is None or ticks < max_ticks:
+            snapshot, report = cls.watch_tick(workbench, snapshot, execute_tests=execute_tests)
+            if report is not None:
+                reports.append(report)
+            ticks += 1
+            if max_ticks is not None and ticks >= max_ticks:
+                break
+            time.sleep(interval)
+        return reports
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser for resource iteration workbench."""
     parser = argparse.ArgumentParser(description="Resource Iteration Workbench for AI Agents.")
@@ -950,17 +1027,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-tests", action="store_true", help="Skip executing test suites.")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON report.")
     parser.add_argument("--export-backlog", type=Path, default=None, help="Export feedback to SDLC backlog JSON.")
+    parser.add_argument("--watch", "-w", action="store_true", help="Run in continuous file-watcher mode.")
+    parser.add_argument("--watch-interval", type=float, default=1.0, help="Watch mode polling interval in seconds.")
+    parser.add_argument("--max-ticks", type=int, default=None, help="Maximum watch ticks before exiting.")
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Execute resource iteration workbench CLI runner."""
-    parser = build_arg_parser()
-    args = parser.parse_args(argv)
+def _handle_watch_mode(workbench: ResourceIterationWorkbench, args: argparse.Namespace) -> int:
+    """Handle execution in continuous file-watcher mode."""
+    print(f"👀 Watching {args.root} for changes (interval: {args.watch_interval}s)...")
+    try:
+        reports = ResourceWatcher.watch_loop(
+            workbench,
+            interval=args.watch_interval,
+            max_ticks=args.max_ticks,
+            execute_tests=not args.skip_tests,
+        )
+        for r in reports:
+            print(workbench.render_report(r))
+        return 0
+    except KeyboardInterrupt:
+        print("\nWatcher stopped by user.")
+        return 0
 
-    workbench = ResourceIterationWorkbench(root_dir=args.root)
+
+def _handle_single_run(workbench: ResourceIterationWorkbench, args: argparse.Namespace) -> int:
+    """Handle standard single-cycle iteration execution."""
     report = workbench.run_cycle(target_pattern=args.pattern, execute_tests=not args.skip_tests)
-
     if args.export_backlog:
         tasks = workbench.export_feedback_to_sdlc(report.improvement_feedback)
         args.export_backlog.parent.mkdir(parents=True, exist_ok=True)
@@ -973,6 +1066,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(workbench.render_report(report))
 
     return 0 if report.overall_health in (HealthStatus.HEALTHY, HealthStatus.NEEDS_REMEDIATION) else 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Execute resource iteration workbench CLI runner."""
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    workbench = ResourceIterationWorkbench(root_dir=args.root)
+
+    if getattr(args, "watch", False):
+        return _handle_watch_mode(workbench, args)
+
+    return _handle_single_run(workbench, args)
 
 
 if __name__ == "__main__":

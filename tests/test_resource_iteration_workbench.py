@@ -21,6 +21,7 @@ from resource_iteration_workbench import (
     ResourceScanMetrics,
     ResourceScanner,
     ResourceType,
+    ResourceWatcher,
     ReviewEvaluation,
     RunExecutionResult,
     main,
@@ -314,4 +315,67 @@ def test_resource_runner_passes_addopts_override(monkeypatch: pytest.MonkeyPatch
     res = ResourceRunner.run_tests_for_resource(dummy_test, cwd=tmp_path)
     expected_flags = ("-o", "addopts=", "no:cov", "no:logfire", "no:xdist")
     assert res.passed_count == 1 and all(flag in captured_command for flag in expected_flags)
+
+
+def test_resource_watcher_snapshot_detects_files(tmp_path: Path) -> None:
+    """Verify ResourceWatcher.snapshot discovers Python files and excludes virtual environments."""
+    (tmp_path / "app.py").write_text("print('hello')\n", encoding="utf-8")
+    (tmp_path / "test_app.py").write_text("def test_it(): pass\n", encoding="utf-8")
+    venv_dir = tmp_path / ".venv" / "lib"
+    venv_dir.mkdir(parents=True)
+    (venv_dir / "ignored.py").write_text("# ignored\n", encoding="utf-8")
+
+    snapshot = ResourceWatcher.snapshot(tmp_path)
+    assert len(snapshot) == 2
+    assert str(tmp_path / "app.py") in snapshot
+    assert str(tmp_path / "test_app.py") in snapshot
+
+
+def test_resource_watcher_detect_changes(tmp_path: Path) -> None:
+    """Verify ResourceWatcher.detect_changes spots added, modified, and deleted files."""
+    f1 = str(tmp_path / "file1.py")
+    f2 = str(tmp_path / "file2.py")
+    prev = {f1: 100.0, f2: 200.0}
+
+    # Modified f1, deleted f2, added f3
+    f3 = str(tmp_path / "file3.py")
+    curr = {f1: 105.0, f3: 300.0}
+
+    changes = ResourceWatcher.detect_changes(prev, curr)
+    assert sorted(changes) == sorted([f1, f2, f3])
+
+
+def test_resource_watcher_tick_triggers_cycle_on_changes(tmp_path: Path) -> None:
+    """Verify ResourceWatcher.watch_tick executes cycle when changes occur and skips when idle."""
+    py_file = tmp_path / "module.py"
+    py_file.write_text("def add(a: int, b: int) -> int:\n    return a + b\n", encoding="utf-8")
+    wb = ResourceIterationWorkbench(root_dir=tmp_path)
+
+    prev_snapshot: dict[str, float] = {}
+    new_snapshot, report = ResourceWatcher.watch_tick(wb, prev_snapshot, execute_tests=False)
+    assert report is not None
+    assert report.overall_health == HealthStatus.HEALTHY
+    assert len(new_snapshot) == 1
+
+    # Second tick with no changes returns report=None
+    idle_snapshot, idle_report = ResourceWatcher.watch_tick(wb, new_snapshot, execute_tests=False)
+    assert idle_report is None
+    assert idle_snapshot == new_snapshot
+
+
+def test_resource_watcher_loop_terminates_at_max_ticks(tmp_path: Path) -> None:
+    """Verify ResourceWatcher.watch_loop halts when max_ticks is reached."""
+    (tmp_path / "script.py").write_text("x = 1\n", encoding="utf-8")
+    wb = ResourceIterationWorkbench(root_dir=tmp_path)
+    # Should run 2 ticks and exit without hanging
+    reports = ResourceWatcher.watch_loop(wb, interval=0.01, max_ticks=2, execute_tests=False)
+    assert len(reports) >= 1
+
+
+def test_workbench_main_watch_flag(tmp_path: Path) -> None:
+    """Verify main() CLI accepts --watch and --max-ticks flags."""
+    (tmp_path / "main_demo.py").write_text("def hello() -> str:\n    return 'world'\n", encoding="utf-8")
+    exit_code = main(["--root", str(tmp_path), "--watch", "--max-ticks", "1", "--skip-tests"])
+    assert exit_code == 0
+
 

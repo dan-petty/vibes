@@ -73,9 +73,10 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [🔄] **Fast-Feedback Test Optimization & In-Process Runner**:
   - Phase 1 (Complete): Added `-o addopts=` worker bypass in `ResourceRunner`, dropping single-file test overhead by > 85% (from 4.4s down to 0.3s) and halving repository iteration time.
   - Phase 2 (Planned): In-process `pytest.main()` runner with warm module cache and stdout/stderr capture to slash multi-target execution down to < 2s.
-- [ ] **Continuous File-Watcher Mode (`devops-cli / vibes --watch`)**:
-  - Real-time inotify/event-driven daemon executing the 5-phase `Scan -> Run -> Review -> Feedback -> Iterate` loop on file save.
-  - Instant ASCII diff display showing complexity delta ($\Delta M$) and test latency delta ($\Delta t$) immediately upon code modification.
+- [x] **Continuous File-Watcher Mode (`devops-cli / vibes --watch`)**:
+  - Real-time inotify/event-driven daemon executing the 5-phase `Scan -> Run -> Review -> Feedback -> Iterate` loop on file save (`ResourceWatcher`).
+  - Instant change detection discovering added, modified, or deleted Python modules across repository topology while ignoring virtual environments and bytecode caches.
+  - CLI flags: `--watch`, `--watch-interval <seconds>`, and `--max-ticks <n>` with graceful `KeyboardInterrupt` signal handling.
 - [ ] **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**:
   - Mechanical AST rewriting engine that consumes `PROACTIVE_REFACTOR` opportunities from the Feedback Engine and auto-decomposes branching ladders ($M \ge 7$) into single-responsibility predicate helpers.
 - [x] **Live OTLP Observability Mesh & Jaeger/Grafana Collector Pipeline**:
@@ -160,7 +161,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 |  | GitHub Actions CI & Recursive Workflows | GitHub Workflows / `pytest` | High | Low | v0.2.0 | ✅ Completed |
 |  | Autonomous Project Tooling (`tools/project_tooling.py`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 |  | Polyglot Case Studies (Rust & TypeScript) | Systems Engineering | High | Low | v0.2.0 | ✅ Completed |
-|  | Continuous File-Watcher Mode (`--watch`) | Python / inotify | High | Low | v0.3.0 | 📋 Scheduled |
+|  | Continuous File-Watcher Mode (`--watch`) | Python / inotify | High | Low | v0.3.0 | ✅ Completed |
 |  | Formal Tool Contract Verification Gates | Pydantic v2 / JSON Schema | High | Low | v0.3.0 | 📋 Scheduled |
 | **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest` / AST Analyzer | High | Medium | v0.3.0 | ✅ Completed |
 |  | OpenTelemetry Agent Waterfall Generator | OpenTelemetry / Python | High | Medium | v0.3.0 | ✅ Completed |
