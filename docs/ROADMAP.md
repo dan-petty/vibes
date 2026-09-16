@@ -77,8 +77,9 @@ High-density product roadmap, engineering milestones, and open-source curation s
   - Real-time inotify/event-driven daemon executing the 5-phase `Scan -> Run -> Review -> Feedback -> Iterate` loop on file save (`ResourceWatcher`).
   - Instant change detection discovering added, modified, or deleted Python modules across repository topology while ignoring virtual environments and bytecode caches.
   - CLI flags: `--watch`, `--watch-interval <seconds>`, and `--max-ticks <n>` with graceful `KeyboardInterrupt` signal handling.
-- [ ] **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**:
-  - Mechanical AST rewriting engine that consumes `PROACTIVE_REFACTOR` opportunities from the Feedback Engine and auto-decomposes branching ladders ($M \ge 7$) into single-responsibility predicate helpers.
+- [x] **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**:
+  - Mechanical AST rewriting engine consuming `PROACTIVE_REFACTOR` opportunities from the Feedback Engine and auto-decomposing branching ladders ($M \ge 7$) and deep nesting into table-driven dictionary dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples.
+  - Invariant safety verification gate re-evaluating syntax validity and cyclomatic complexity reduction, with unified diff output and `--from-feedback` backlog ingestion.
 - [x] **Live OTLP Observability Mesh & Jaeger/Grafana Collector Pipeline**:
   - Reference export integration streaming agent spans over OpenTelemetry Protocol (OTLP/HTTP) into live Jaeger, Tempo, and Grafana collector endpoints (`examples/agent-telemetry-trace-generator/`).
   - Standardized semantic attributes for agent execution: `agent.persona`, `agent.tool.call_name`, `agent.tokens.prompt`, `agent.tokens.completion`, `agent.cache_hit`, and `agent.verification_result`.

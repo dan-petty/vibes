@@ -129,6 +129,7 @@ The headline exhibition in `vibes` is drawn from the autonomous development of [
 | [**06. Rate Limits & Anti-Brittle Heuristics**](./observations/devops-cli/06-rate-limits-and-anti-brittle-heuristics.md) | Surviving API quotas with client-side token buckets and strictly prohibiting arbitrary partial pattern matches. |
 | [**07. Proactive Headroom & Recursive Feedback Loops**](./observations/devops-cli/07-proactive-headroom-and-recursive-feedback-loops.md) | Why hard caps are insufficient: using headroom analysis and automated SDLC backlog export to self-remediate before hitting invariant ceilings. |
 | [**08. Closed-Loop Feedback Inversion & Autonomous Quality Elevation**](./observations/devops-cli/08-closed-loop-feedback-inversion-and-autonomous-quality-elevation.md) | How clearing high-priority blockers automatically inverts agent focus from reactive bug-fixing to proactive contract completion (100% docstring coverage). |
+| [**09. Mechanical AST Rewriting & Automated Refactoring Convergence**](./observations/devops-cli/09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md) | Deterministic structural refactoring (table dispatch, guard flattening, predicate extraction) consuming SDLC feedback to eliminate complexity traps without LLM hallucination. |
 
 ---
 
@@ -269,6 +270,7 @@ flowchart LR
 - [**Project Tooling CLI (`tools/project_tooling.py`)**](./tools/project_tooling.py): Rate-managed client for issue classification, acceptance criteria parsing, and self-hardening audits.
 - [**SDLC Project Manager CLI (`tools/sdlc_project_manager.py`)**](./tools/sdlc_project_manager.py): Deterministic multi-dimensional priority scoring, dependency graph cycle detection, and agent next-action dispatch.
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
+- [**Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**](./tools/ast_refactorer.py): Mechanical AST rewriting engine auto-decomposing branching ladders ($M \ge 7$) and nesting depth into table dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples with round-trip safety verification.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
 - [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Automated diff inspection blocking complexity creep and IP leaks.
