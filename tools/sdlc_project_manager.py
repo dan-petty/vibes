@@ -229,17 +229,24 @@ class SDLCProjectManager:
                 )
         return None
 
+    def _is_unblocked_candidate(self, res: SDLCResource) -> bool:
+        """Predicate checking if a resource is an unblocked backlog or ready issue."""
+        if res.kind != SDLCResourceKind.ISSUE:
+            return False
+        if res.lifecycle_state not in (LifecycleState.READY, LifecycleState.BACKLOG):
+            return False
+        return not self.dep_graph.is_blocked(res.number)
+
     def _find_unblocked_issue_action(self, ranked: list[SDLCResource]) -> AgentActionRecommendation | None:
         """Find top unblocked issue ready for implementation."""
         for res in ranked:
-            if res.kind == SDLCResourceKind.ISSUE and res.lifecycle_state in (LifecycleState.READY, LifecycleState.BACKLOG):
-                if not self.dep_graph.is_blocked(res.number):
-                    return AgentActionRecommendation(
-                        action_type="IMPLEMENT_ISSUE",
-                        target_resource=res,
-                        rationale=f"Top unblocked issue #{res.number} ('{res.title}') ready for TDD implementation.",
-                        priority_score=res.calculated_score,
-                    )
+            if self._is_unblocked_candidate(res):
+                return AgentActionRecommendation(
+                    action_type="IMPLEMENT_ISSUE",
+                    target_resource=res,
+                    rationale=f"Top unblocked issue #{res.number} ('{res.title}') ready for TDD implementation.",
+                    priority_score=res.calculated_score,
+                )
         return None
 
     def recommend_next_agent_action(self) -> AgentActionRecommendation | None:
@@ -279,22 +286,33 @@ class SDLCProjectManager:
             "==========================================================================================",
         ]
 
-        for state in (LifecycleState.IN_PROGRESS, LifecycleState.IN_REVIEW, LifecycleState.READY, LifecycleState.BACKLOG, LifecycleState.DONE):
-            items = columns[state]
-            lines.append(f"\n[ {state.value.upper()} ] ({len(items)} items)")
-            if not items:
-                lines.append("  (empty)")
-                continue
-            for item in sorted(items, key=lambda r: r.calculated_score, reverse=True):
-                prefix = "PR" if item.kind == SDLCResourceKind.PULL_REQUEST else "ISSUE"
-                blocked_tag = " [🚫 BLOCKED]" if self.dep_graph.is_blocked(item.number) else ""
-                lines.append(
-                    f"  • #{item.number} [{prefix}] {item.title[:40]:<40} "
-                    f"| {item.priority.value:<11} | Score: {item.calculated_score:>6.1f}{blocked_tag}"
-                )
+        states = (LifecycleState.IN_PROGRESS, LifecycleState.IN_REVIEW, LifecycleState.READY, LifecycleState.BACKLOG, LifecycleState.DONE)
+        for state in states:
+            lines.extend(_render_column(state, columns[state], self.dep_graph))
 
         lines.append("==========================================================================================")
         return "\n".join(lines)
+
+
+def _render_column_item(item: SDLCResource, is_blocked: bool) -> str:
+    """Format single resource line in Kanban column."""
+    prefix = "PR" if item.kind == SDLCResourceKind.PULL_REQUEST else "ISSUE"
+    blocked_tag = " [🚫 BLOCKED]" if is_blocked else ""
+    return (
+        f"  • #{item.number} [{prefix}] {item.title[:40]:<40} "
+        f"| {item.priority.value:<11} | Score: {item.calculated_score:>6.1f}{blocked_tag}"
+    )
+
+
+def _render_column(state: LifecycleState, items: list[SDLCResource], dep_graph: DependencyGraph) -> list[str]:
+    """Format single Kanban lifecycle state column."""
+    lines = [f"\n[ {state.value.upper()} ] ({len(items)} items)"]
+    if not items:
+        lines.append("  (empty)")
+        return lines
+    sorted_items = sorted(items, key=lambda r: r.calculated_score, reverse=True)
+    lines.extend(_render_column_item(item, dep_graph.is_blocked(item.number)) for item in sorted_items)
+    return lines
 
 
 def load_resources_from_json(path: Path) -> list[SDLCResource]:

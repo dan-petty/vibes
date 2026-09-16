@@ -473,6 +473,40 @@ class ResourceRunner:
         return passed, failed, warnings
 
 
+def _evaluate_scan_penalties(scan: ResourceScanMetrics, recs: list[str]) -> float:
+    penalty = 0.0
+    if scan.complexity_violations:
+        penalty += len(scan.complexity_violations) * 20.0
+        recs.append(f"Decompose functions to satisfy M <= {MAX_ALLOWED_COMPLEXITY}: {scan.complexity_violations}")
+    if scan.sanitization_violations:
+        penalty += len(scan.sanitization_violations) * 15.0
+        recs.append(f"Remediate private IP/subdomain leaks: {scan.sanitization_violations}")
+    return penalty
+
+
+def _evaluate_run_penalties(run: RunExecutionResult, file_path: str, recs: list[str]) -> float:
+    penalty = 0.0
+    if run.failed_count > 0 or run.exit_code != 0:
+        penalty += max(run.failed_count * 25.0, 30.0)
+        recs.append(f"Remediate {run.failed_count} failing tests in {file_path}")
+    if run.warnings_count > 0:
+        penalty += run.warnings_count * 5.0
+        recs.append(f"Resolve {run.warnings_count} deprecation warnings")
+    return penalty
+
+
+def _is_critical_health(scan: ResourceScanMetrics, run: RunExecutionResult | None) -> bool:
+    if scan.complexity_violations:
+        return True
+    return bool(run and (run.failed_count > 0 or run.exit_code != 0))
+
+
+def _is_needs_remediation(score: float, scan: ResourceScanMetrics, run: RunExecutionResult | None) -> bool:
+    if score < 85.0 or scan.sanitization_violations:
+        return True
+    return bool(run and run.warnings_count > 0)
+
+
 class OutputReviewer:
     """Reviews scan and execution metrics, computing quality scores and recommendations."""
 
@@ -483,29 +517,12 @@ class OutputReviewer:
         run: RunExecutionResult | None = None,
         baseline: dict[str, Any] | None = None,
     ) -> ReviewEvaluation:
-        score = 100.0
         recs: list[str] = []
         deltas: dict[str, float] = {}
 
-        # 1. Deduct for complexity and sanitization violations
-        if scan.complexity_violations:
-            score -= len(scan.complexity_violations) * 20.0
-            recs.append(f"Decompose functions to satisfy M <= {MAX_ALLOWED_COMPLEXITY}: {scan.complexity_violations}")
-
-        if scan.sanitization_violations:
-            score -= len(scan.sanitization_violations) * 15.0
-            recs.append(f"Remediate private IP/subdomain leaks: {scan.sanitization_violations}")
-
-        # 2. Factor in execution run results
+        score = 100.0 - _evaluate_scan_penalties(scan, recs)
         if run is not None:
-            if run.failed_count > 0 or run.exit_code != 0:
-                score -= max(run.failed_count * 25.0, 30.0)
-                recs.append(f"Remediate {run.failed_count} failing tests in {scan.file_path}")
-            if run.warnings_count > 0:
-                score -= run.warnings_count * 5.0
-                recs.append(f"Resolve {run.warnings_count} deprecation warnings")
-
-        # 3. Factor in baseline comparisons (deltas)
+            score -= _evaluate_run_penalties(run, scan.file_path, recs)
         if baseline:
             cls._calculate_deltas(scan, baseline, deltas)
 
@@ -530,9 +547,9 @@ class OutputReviewer:
 
     @staticmethod
     def _determine_health(score: float, scan: ResourceScanMetrics, run: RunExecutionResult | None) -> HealthStatus:
-        if scan.complexity_violations or (run and (run.failed_count > 0 or run.exit_code != 0)):
+        if _is_critical_health(scan, run):
             return HealthStatus.CRITICAL
-        if score < 85.0 or scan.sanitization_violations or (run and run.warnings_count > 0):
+        if _is_needs_remediation(score, scan, run):
             return HealthStatus.NEEDS_REMEDIATION
         return HealthStatus.HEALTHY
 
@@ -755,6 +772,20 @@ class ResourceIterationWorkbench:
         regex = re.compile(pattern)
         return [s for s in scans if regex.search(s.file_path)]
 
+    @staticmethod
+    def _resolve_overall_health_and_action(
+        evals: list[ReviewEvaluation],
+        failed: int,
+        violations: int,
+        avg_score: float,
+        fb_list: list[ImprovementFeedback],
+    ) -> tuple[HealthStatus, str]:
+        if failed > 0 or violations > 0 or any(e.health_status == HealthStatus.CRITICAL for e in evals):
+            return HealthStatus.CRITICAL, "Remediate failing tests and AST complexity violations before proceeding."
+        if avg_score < 90.0 or any(e.health_status == HealthStatus.NEEDS_REMEDIATION for e in evals):
+            return HealthStatus.NEEDS_REMEDIATION, "Refactor modules with high nesting or warnings to reach 100% quality gate."
+        return HealthStatus.HEALTHY, ResourceIterationWorkbench._determine_healthy_action(fb_list)
+
     def _synthesize_report(
         self,
         evals: list[ReviewEvaluation],
@@ -766,26 +797,15 @@ class ResourceIterationWorkbench:
         fb_list = feedback or []
         if not evals:
             return IterationReport(
-                time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                HealthStatus.HEALTHY,
-                100.0,
-                [],
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                overall_health=HealthStatus.HEALTHY,
+                overall_score=100.0,
+                resources_evaluated=[],
                 improvement_feedback=fb_list,
             )
 
         avg_score = round(sum(e.quality_score for e in evals) / len(evals), 1)
-        any_critical = any(e.health_status == HealthStatus.CRITICAL for e in evals)
-        any_remediation = any(e.health_status == HealthStatus.NEEDS_REMEDIATION for e in evals)
-
-        if any_critical or failed > 0 or violations > 0:
-            overall_health = HealthStatus.CRITICAL
-            action = "Remediate failing tests and AST complexity violations before proceeding."
-        elif any_remediation or avg_score < 90.0:
-            overall_health = HealthStatus.NEEDS_REMEDIATION
-            action = "Refactor modules with high nesting or warnings to reach 100% quality gate."
-        else:
-            overall_health = HealthStatus.HEALTHY
-            action = self._determine_healthy_action(fb_list)
+        overall_health, action = self._resolve_overall_health_and_action(evals, failed, violations, avg_score, fb_list)
 
         return IterationReport(
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
