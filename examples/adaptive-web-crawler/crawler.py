@@ -96,32 +96,41 @@ class HTMLContentCleaner(HTMLParser):
         self.lines: list[str] = []
         self.links: list[str] = []
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        tag_lower = tag.lower()
+    def _should_ignore_tag(self, tag_lower: str) -> bool:
         if tag_lower in self.IGNORE_TAGS:
             self.ignore_depth += 1
-            return
-        if self.ignore_depth > 0:
+            return True
+        return self.ignore_depth > 0
+
+    def _handle_a_tag(self, attrs: list[tuple[str, str | None]]) -> None:
+        hrefs = [val for name, val in attrs if name.lower() == "href" and val]
+        self.links.extend(hrefs)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_lower = tag.lower()
+        if self._should_ignore_tag(tag_lower):
             return
         if tag_lower == "title":
             self.in_title = True
             return
         if tag_lower == "a":
-            hrefs = [val for name, val in attrs if name.lower() == "href" and val]
-            self.links.extend(hrefs)
+            self._handle_a_tag(attrs)
             return
 
         prefix = self._tag_prefix(tag_lower)
         if prefix:
             self.lines.append(prefix)
 
-    def handle_endtag(self, tag: str) -> None:
-        tag_lower = tag.lower()
+    def _handle_ignore_endtag(self, tag_lower: str) -> bool:
         if tag_lower in self.IGNORE_TAGS:
             if self.ignore_depth > 0:
                 self.ignore_depth -= 1
-            return
-        if self.ignore_depth > 0:
+            return True
+        return self.ignore_depth > 0
+
+    def handle_endtag(self, tag: str) -> None:
+        tag_lower = tag.lower()
+        if self._handle_ignore_endtag(tag_lower):
             return
         if tag_lower == "title":
             self.in_title = False
