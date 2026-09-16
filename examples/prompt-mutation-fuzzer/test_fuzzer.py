@@ -77,12 +77,14 @@ def compute_hash(val: str) -> str:
     return val.strip().lower()
 """
     evaluation = InvariantAuditor.evaluate_code("clean", clean_code)
-    assert evaluation.max_complexity == 1
-    assert evaluation.max_depth == 1
-    assert not evaluation.complexity_violation
-    assert not evaluation.nesting_violation
-    assert not evaluation.sanitization_leak
-    assert len(evaluation.violations) == 0
+    assert (
+        evaluation.max_complexity,
+        evaluation.max_depth,
+        evaluation.complexity_violation,
+        evaluation.nesting_violation,
+        evaluation.sanitization_leak,
+        evaluation.violations,
+    ) == (1, 1, False, False, False, [])
 
 
 def test_invariant_auditor_detects_complexity_and_nesting() -> None:

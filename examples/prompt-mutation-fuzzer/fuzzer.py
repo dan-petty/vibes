@@ -174,6 +174,42 @@ class PromptPerturbationEngine:
         return f"{prompt}\n{snippet}", ["Injected nested complexity trap constraint"]
 
 
+BRANCH_NODE_TYPES = (
+    ast.If,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.ExceptHandler,
+    ast.Assert,
+    ast.IfExp,
+)
+
+
+def _node_complexity_weight(node: ast.AST) -> int:
+    """Calculate cyclomatic complexity branch contribution for an AST node."""
+    if isinstance(node, BRANCH_NODE_TYPES):
+        return 1
+    if isinstance(node, ast.BoolOp):
+        return len(node.values) - 1
+    return 0
+
+
+def _evaluate_fn_bounds(
+    fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    max_complexity: int,
+    max_nesting: int,
+) -> tuple[int, int, list[str]]:
+    """Evaluate complexity and nesting depth for a single function AST node."""
+    c = InvariantAuditor._calculate_complexity(fn)
+    d = InvariantAuditor._calculate_depth(fn)
+    violations: list[str] = []
+    if c > max_complexity:
+        violations.append(f"{fn.name}:{fn.lineno} M={c} > {max_complexity}")
+    if d > max_nesting:
+        violations.append(f"{fn.name}:{fn.lineno} Depth={d} > {max_nesting}")
+    return c, d, violations
+
+
 class InvariantAuditor:
     """Validates synthesized code against AST complexity, nesting, and sanitization."""
 
@@ -208,33 +244,17 @@ class InvariantAuditor:
 
     @classmethod
     def _check_ast_bounds(cls, tree: ast.AST) -> tuple[int, int, list[str]]:
-        max_c = 1
-        max_d = 1
-        viols: list[str] = []
-
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                c = cls._calculate_complexity(node)
-                d = cls._calculate_depth(node)
-                max_c = max(max_c, c)
-                max_d = max(max_d, d)
-                if c > MAX_ALLOWED_COMPLEXITY:
-                    viols.append(f"{node.name}:{node.lineno} M={c} > {MAX_ALLOWED_COMPLEXITY}")
-                if d > MAX_ALLOWED_NESTING:
-                    viols.append(f"{node.name}:{node.lineno} Depth={d} > {MAX_ALLOWED_NESTING}")
-
+        max_c, max_d, viols = 1, 1, []
+        functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        for fn in functions:
+            c, d, fn_viols = _evaluate_fn_bounds(fn, MAX_ALLOWED_COMPLEXITY, MAX_ALLOWED_NESTING)
+            max_c, max_d = max(max_c, c), max(max_d, d)
+            viols.extend(fn_viols)
         return max_c, max_d, viols
 
     @classmethod
     def _calculate_complexity(cls, fn: ast.AST) -> int:
-        c = 1
-        branch_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler, ast.Assert, ast.IfExp)
-        for child in ast.walk(fn):
-            if isinstance(child, branch_types):
-                c += 1
-            elif isinstance(child, ast.BoolOp):
-                c += len(child.values) - 1
-        return c
+        return 1 + sum(_node_complexity_weight(child) for child in ast.walk(fn))
 
     @classmethod
     def _calculate_depth(cls, root: ast.AST) -> int:
@@ -249,12 +269,8 @@ class InvariantAuditor:
                     deepest = sub
             return deepest
 
-        max_seen = 0
-        for stmt in getattr(root, "body", []):
-            d = walk(stmt, 1)
-            if d > max_seen:
-                max_seen = d
-        return max_seen
+        body = getattr(root, "body", [])
+        return max((walk(stmt, 1) for stmt in body), default=0)
 
     @classmethod
     def _check_sanitization(cls, tree: ast.AST) -> list[str]:
@@ -264,22 +280,36 @@ class InvariantAuditor:
                 cls._inspect_string_constant(node.value, getattr(node, "lineno", 0), leaks)
         return leaks
 
+    @staticmethod
+    def _is_private_leak(ip_str: str) -> bool:
+        """Check if an IPv4 address string is an unapproved RFC 1918 leak."""
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+            return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS)
+        except ValueError:
+            return False
+
+    @classmethod
+    def _check_ip_leak(cls, val: str, lineno: int, leaks: list[str]) -> None:
+        for match in IPV4_PATTERN.findall(val):
+            if cls._is_private_leak(match):
+                leaks.append(f"Line {lineno}: Hardcoded RFC 1918 IP '{match}'.")
+
+    @classmethod
+    def _check_subdomain_leak(cls, val: str, lineno: int, leaks: list[str]) -> None:
+        if "://" not in val:
+            return
+        match = re.search(r"https?://([^/:]+)", val)
+        if not match:
+            return
+        host = match.group(1)
+        if host != CANONICAL_MOCK_DOMAIN and host.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
+            leaks.append(f"Line {lineno}: Subdomain '{host}' detected.")
+
     @classmethod
     def _inspect_string_constant(cls, val: str, lineno: int, leaks: list[str]) -> None:
-        for match in IPV4_PATTERN.findall(val):
-            try:
-                ip_obj = ipaddress.ip_address(match)
-                if ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS):
-                    leaks.append(f"Line {lineno}: Hardcoded RFC 1918 IP '{match}'.")
-            except ValueError:
-                continue
-
-        if "http://" in val or "https://" in val:
-            match = re.search(r"https?://([^/:]+)", val)
-            if match:
-                host = match.group(1)
-                if host != CANONICAL_MOCK_DOMAIN and host.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
-                    leaks.append(f"Line {lineno}: Subdomain '{host}' detected.")
+        cls._check_ip_leak(val, lineno, leaks)
+        cls._check_subdomain_leak(val, lineno, leaks)
 
 
 class PromptMutationFuzzer:
