@@ -14,6 +14,8 @@ import sys
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Sequence
+import urllib.error
+import urllib.request
 
 
 @dataclass
@@ -31,6 +33,7 @@ class Span:
 
     @property
     def duration_ms(self) -> float:
+        """Calculate elapsed duration of span in milliseconds."""
         return self.end_time_ms - self.start_time_ms
 
 
@@ -43,6 +46,7 @@ class AgentTraceSession:
     spans: list[Span] = field(default_factory=list)
 
     def total_duration_ms(self) -> float:
+        """Calculate cumulative duration across all recorded session spans."""
         if not self.spans:
             return 0.0
         start = min(s.start_time_ms for s in self.spans)
@@ -50,6 +54,7 @@ class AgentTraceSession:
         return end - start
 
     def total_tokens(self) -> dict[str, int]:
+        """Aggregate prompt, completion, and cached token consumption."""
         prompt_tokens = sum(s.attributes.get("ai.tokens.prompt", 0) for s in self.spans)
         completion_tokens = sum(s.attributes.get("ai.tokens.completion", 0) for s in self.spans)
         cached_tokens = sum(s.attributes.get("ai.tokens.cached", 0) for s in self.spans)
@@ -93,6 +98,8 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "ai.tokens.completion": 820,
             "ai.tokens.cached": 18000,
             "ai.step": "architectural_plan",
+            "agent.persona": "architect",
+            "agent.cache_hit": True,
         },
     )
 
@@ -113,6 +120,9 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "ai.tokens.completion": 1200,
             "ai.step": "symbol_extraction",
             "local.offloaded": True,
+            "agent.persona": "explorer",
+            "agent.tool.call_name": "ast_symbol_extractor",
+            "agent.cache_hit": False,
         },
     )
 
@@ -133,6 +143,9 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "ai.tokens.completion": 510,
             "cegis.rounds": 3,
             "cegis.converged": True,
+            "agent.persona": "coder",
+            "agent.tool.call_name": "cegis_synthesizer",
+            "agent.verification_result": "PASS",
         },
     )
 
@@ -150,6 +163,9 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "sentinel.complexity.max": 4,
             "sentinel.nesting.max": 3,
             "sentinel.status": "APPROVED",
+            "agent.persona": "reviewer",
+            "agent.tool.call_name": "ast_invariant_sentinel",
+            "agent.verification_result": "APPROVED",
         },
     )
 
@@ -212,6 +228,93 @@ def render_ascii_waterfall(session: AgentTraceSession, bar_width: int = 40) -> s
     return "\n".join(lines)
 
 
+def _format_otlp_attribute_value(val: Any) -> dict[str, Any]:
+    """Convert Python primitive into OTLP AnyValue object."""
+    if isinstance(val, bool):
+        return {"boolValue": val}
+    if isinstance(val, int):
+        return {"intValue": val}
+    if isinstance(val, float):
+        return {"doubleValue": val}
+    return {"stringValue": str(val)}
+
+
+def _format_otlp_span(span: Span) -> dict[str, Any]:
+    """Convert an internal Span into an OTLP-compliant span dictionary."""
+    start_nano = str(int(span.start_time_ms * 1_000_000))
+    end_nano = str(int(span.end_time_ms * 1_000_000))
+
+    attrs = [
+        {"key": k, "value": _format_otlp_attribute_value(v)}
+        for k, v in sorted(span.attributes.items())
+    ]
+
+    otlp_span: dict[str, Any] = {
+        "traceId": span.trace_id,
+        "spanId": span.span_id,
+        "name": span.name,
+        "kind": 1,
+        "startTimeUnixNano": start_nano,
+        "endTimeUnixNano": end_nano,
+        "attributes": attrs,
+        "status": {"code": 1},
+    }
+    if span.parent_span_id:
+        otlp_span["parentSpanId"] = span.parent_span_id
+    return otlp_span
+
+
+def to_otlp_json(session: AgentTraceSession, service_name: str = "vibes-agent-mesh") -> dict[str, Any]:
+    """Serialize trace session into standard OpenTelemetry OTLP/HTTP Protobuf-JSON schema."""
+    otlp_spans = [_format_otlp_span(s) for s in session.spans]
+
+    return {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": service_name}},
+                        {"key": "service.version", "value": {"stringValue": "0.3.0"}},
+                        {"key": "telemetry.sdk.language", "value": {"stringValue": "python"}},
+                        {"key": "session.goal", "value": {"stringValue": session.session_goal}},
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {
+                            "name": "vibes.agent.waterfall.generator",
+                            "version": "0.3.0",
+                        },
+                        "spans": otlp_spans,
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def export_otlp_http(
+    session: AgentTraceSession,
+    endpoint: str = "http://localhost:4318/v1/traces",
+    service_name: str = "vibes-agent-mesh",
+    timeout: float = 5.0,
+) -> bool:
+    """Stream trace spans over OTLP/HTTP to an OpenTelemetry collector or Jaeger."""
+    payload = json.dumps(to_otlp_json(session, service_name=service_name)).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= getattr(resp, "status", 200) < 300
+    except (urllib.error.URLError, TimeoutError, OSError) as err:
+        print(f"OTLP export notice: Collector at {endpoint} unavailable: {err}", file=sys.stderr)
+        return False
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI runner for telemetry generator."""
     parser = argparse.ArgumentParser(description="OpenTelemetry Agent Waterfall Trace Generator")
@@ -222,9 +325,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Session goal description",
     )
     parser.add_argument("--json", action="store_true", help="Emit trace spans as OpenTelemetry JSON")
+    parser.add_argument("--otlp", action="store_true", help="Emit trace spans as standard OTLP Protobuf-JSON")
+    parser.add_argument(
+        "--export-otlp",
+        type=str,
+        metavar="ENDPOINT",
+        help="Stream spans over OTLP/HTTP to collector endpoint (e.g. http://localhost:4318/v1/traces)",
+    )
     args = parser.parse_args(argv)
 
     session = build_synthetic_agent_session(args.goal)
+
+    if args.export_otlp:
+        success = export_otlp_http(session, endpoint=args.export_otlp)
+        print(f"OTLP Export {'succeeded' if success else 'failed'} -> {args.export_otlp}")
+        return 0 if success else 1
+
+    if args.otlp:
+        print(json.dumps(to_otlp_json(session), indent=2))
+        return 0
 
     if args.json:
         data = {
@@ -234,9 +353,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "spans": [asdict(s) for s in session.spans],
         }
         print(json.dumps(data, indent=2))
-    else:
-        print(render_ascii_waterfall(session))
+        return 0
 
+    print(render_ascii_waterfall(session))
     return 0
 
 

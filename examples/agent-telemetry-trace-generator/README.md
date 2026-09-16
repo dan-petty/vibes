@@ -27,6 +27,17 @@ python3 generator.py
 python3 generator.py --json
 ```
 
+### Export as Standard OTLP Protobuf-JSON (`v1/traces`)
+```bash
+python3 generator.py --otlp
+```
+
+### Stream Spans Directly to Live OTLP/HTTP Collector or Jaeger
+```bash
+# Streams trace directly to OpenTelemetry Collector or Jaeger OTLP ingest (default port 4318)
+python3 generator.py --export-otlp http://localhost:4318/v1/traces
+```
+
 ### Run the Unit Tests
 ```bash
 pytest test_generator.py -v

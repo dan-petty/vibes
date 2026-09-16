@@ -78,9 +78,10 @@ High-density product roadmap, engineering milestones, and open-source curation s
   - Instant ASCII diff display showing complexity delta ($\Delta M$) and test latency delta ($\Delta t$) immediately upon code modification.
 - [ ] **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**:
   - Mechanical AST rewriting engine that consumes `PROACTIVE_REFACTOR` opportunities from the Feedback Engine and auto-decomposes branching ladders ($M \ge 7$) into single-responsibility predicate helpers.
-- [ ] **Live OTLP Observability Mesh & Jaeger/Grafana Collector Pipeline**:
-  - Reference export integration streaming agent spans over OpenTelemetry Protocol (OTLP/gRPC and OTLP/HTTP) into live Jaeger, Tempo, and Grafana collector endpoints.
+- [x] **Live OTLP Observability Mesh & Jaeger/Grafana Collector Pipeline**:
+  - Reference export integration streaming agent spans over OpenTelemetry Protocol (OTLP/HTTP) into live Jaeger, Tempo, and Grafana collector endpoints (`examples/agent-telemetry-trace-generator/`).
   - Standardized semantic attributes for agent execution: `agent.persona`, `agent.tool.call_name`, `agent.tokens.prompt`, `agent.tokens.completion`, `agent.cache_hit`, and `agent.verification_result`.
+  - CLI support for standard OTLP Protobuf-JSON (`--otlp`) and direct network streaming (`--export-otlp <endpoint>`).
 - [ ] **Valkey L2 Caching for AST Repomaps & Embedding Drift Auditor**:
   - High-throughput Valkey L2 caching tier storing AST symbol tables, file digest hashes, and embeddings across subagent invocations.
   - Embedding drift auditor monitoring semantic degradation and cosine distance shifts when refactoring source modules.

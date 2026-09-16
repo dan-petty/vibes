@@ -1,10 +1,17 @@
-"""Unit tests for OpenTelemetry Agent Waterfall Trace Generator."""
+import json
+from unittest.mock import MagicMock
+import urllib.error
+import urllib.request
+import pytest
 
 from generator import (
     AgentTraceSession,
     Span,
     build_synthetic_agent_session,
+    export_otlp_http,
+    main,
     render_ascii_waterfall,
+    to_otlp_json,
 )
 
 
@@ -41,3 +48,53 @@ def test_render_ascii_waterfall() -> None:
 
     expected_snippets = ["AGENT WATERFALL TRACE", "AgentSession", "FrontierPlanning", "Tokens: Prompt="]
     assert all(snippet in output for snippet in expected_snippets)
+
+
+def test_to_otlp_json_schema_conformance() -> None:
+    session = build_synthetic_agent_session("OTLP Schema test")
+    otlp = to_otlp_json(session, service_name="test-agent-mesh")
+
+    assert "resourceSpans" in otlp
+    resource_span = otlp["resourceSpans"][0]
+    scope_span = resource_span["scopeSpans"][0]
+    spans = scope_span["spans"]
+
+    assert (len(spans), scope_span["scope"]["name"]) == (5, "vibes.agent.waterfall.generator")
+    first_span = spans[0]
+    assert (first_span["traceId"], first_span["kind"], first_span["status"]["code"]) == (session.trace_id, 1, 1)
+
+    # Verify semantic attributes presence
+    attr_keys = {attr["key"] for s in spans for attr in s.get("attributes", [])}
+    assert {"ai.model.tier", "agent.persona", "ai.tokens.prompt"}.issubset(attr_keys)
+
+
+def test_export_otlp_http_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = build_synthetic_agent_session("HTTP export test")
+
+    # Mock success HTTP 200
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.__enter__.return_value = mock_resp
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=5.0: mock_resp)
+    assert export_otlp_http(session, "http://localhost:4318/v1/traces") is True
+
+    # Mock failure with URLError
+    def mock_fail(req, timeout=5.0):
+        raise urllib.error.URLError("Connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_fail)
+    assert export_otlp_http(session, "http://localhost:4318/v1/traces") is False
+
+
+def test_main_cli_otlp_output(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(["--otlp", "--goal", "CLI OTLP Goal"])
+    captured = capsys.readouterr().out
+    data = json.loads(captured)
+    assert (exit_code, "resourceSpans" in data) == (0, True)
+
+
+def test_main_cli_export_otlp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("generator.export_otlp_http", lambda s, endpoint: True)
+    exit_code = main(["--export-otlp", "http://localhost:4318/v1/traces"])
+    assert exit_code == 0
