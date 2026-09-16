@@ -45,12 +45,14 @@ class MyClass:
     py_file.write_text(sample_code, encoding="utf-8")
 
     metrics = ResourceScanner.scan_python_file(py_file)
-    assert metrics.loc > 0
-    assert metrics.functions_count == 2  # sample_func + method
-    assert metrics.classes_count == 1
-    assert metrics.max_complexity == 3  # sample_func has 2 ifs
-    assert metrics.max_depth == 3
-    assert len(metrics.complexity_violations) == 0
+    assert (
+        metrics.loc > 0,
+        metrics.functions_count,
+        metrics.classes_count,
+        metrics.max_complexity,
+        metrics.max_depth,
+        metrics.complexity_violations,
+    ) == (True, 2, 1, 3, 3, [])
 
 
 def test_ast_metric_calculator_sanitization(tmp_path: Path) -> None:
@@ -310,10 +312,6 @@ def test_resource_runner_passes_addopts_override(monkeypatch: pytest.MonkeyPatch
     dummy_test.touch()
 
     res = ResourceRunner.run_tests_for_resource(dummy_test, cwd=tmp_path)
-    assert res.passed_count == 1
-    assert "-o" in captured_command
-    assert "addopts=" in captured_command
-    assert "no:cov" in captured_command
-    assert "no:logfire" in captured_command
-    assert "no:xdist" in captured_command
+    expected_flags = ("-o", "addopts=", "no:cov", "no:logfire", "no:xdist")
+    assert res.passed_count == 1 and all(flag in captured_command for flag in expected_flags)
 

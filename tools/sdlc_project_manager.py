@@ -114,23 +114,18 @@ class DependencyGraph:
     def has_circular_dependency(self) -> bool:
         """Detect whether circular blocker loops exist."""
         visited: set[int] = set()
-        recursion_stack: set[int] = set()
-
-        for node in self.adj_list:
-            if node not in visited:
-                if self._dfs_cycle(node, visited, recursion_stack):
-                    return True
-        return False
+        stack: set[int] = set()
+        unvisited = (node for node in self.adj_list if node not in visited)
+        return any(self._dfs_cycle(node, visited, stack) for node in unvisited)
 
     def _dfs_cycle(self, node: int, visited: set[int], stack: set[int]) -> bool:
         visited.add(node)
         stack.add(node)
 
         for neighbor in self.adj_list.get(node, []):
-            if neighbor not in visited:
-                if self._dfs_cycle(neighbor, visited, stack):
-                    return True
-            elif neighbor in stack:
+            if neighbor in stack:
+                return True
+            if neighbor not in visited and self._dfs_cycle(neighbor, visited, stack):
                 return True
 
         stack.remove(node)
@@ -351,6 +346,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _handle_prioritize(manager: SDLCProjectManager, is_json: bool) -> int:
+    ranked = manager.get_ranked_resources()
+    if is_json:
+        print(json.dumps([r.to_dict() for r in ranked], indent=2))
+        return 0
+    print(manager.render_kanban_board())
+    print("\n🎯 TOP RANKED PRIORITIES:")
+    for i, r in enumerate(ranked[:5], 1):
+        print(f"  {i}. #{r.number} ({r.kind.value}): {r.title} — Score: {r.calculated_score} ({r.priority.value})")
+    return 0
+
+
+def _handle_next(manager: SDLCProjectManager) -> int:
+    rec = manager.recommend_next_agent_action()
+    if not rec:
+        print("No actionable tasks available.")
+        return 0
+    print("🤖 RECOMMENDED AGENT NEXT ACTION:")
+    print(f"  Action:    {rec.action_type}")
+    print(f"  Target:    #{rec.target_resource.number} ({rec.target_resource.kind.value}) — {rec.target_resource.title}")
+    print(f"  Score:     {rec.priority_score}")
+    print(f"  Rationale: {rec.rationale}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
@@ -362,34 +382,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     resources = load_resources_from_json(args.file)
     manager = SDLCProjectManager(resources)
 
-    if args.command == "prioritize":
-        ranked = manager.get_ranked_resources()
-        if getattr(args, "json", False):
-            print(json.dumps([r.to_dict() for r in ranked], indent=2))
-        else:
-            print(manager.render_kanban_board())
-            print("\n🎯 TOP RANKED PRIORITIES:")
-            for i, r in enumerate(ranked[:5], 1):
-                print(f"  {i}. #{r.number} ({r.kind.value}): {r.title} — Score: {r.calculated_score} ({r.priority.value})")
-        return 0
-
-    if args.command == "next":
-        rec = manager.recommend_next_agent_action()
-        if not rec:
-            print("No actionable tasks available.")
-            return 0
-        print("🤖 RECOMMENDED AGENT NEXT ACTION:")
-        print(f"  Action:    {rec.action_type}")
-        print(f"  Target:    #{rec.target_resource.number} ({rec.target_resource.kind.value}) — {rec.target_resource.title}")
-        print(f"  Score:     {rec.priority_score}")
-        print(f"  Rationale: {rec.rationale}")
-        return 0
-
-    if args.command == "board":
-        print(manager.render_kanban_board())
-        return 0
-
-    return 0
+    dispatch = {
+        "prioritize": lambda: _handle_prioritize(manager, getattr(args, "json", False)),
+        "next": lambda: _handle_next(manager),
+        "board": lambda: (print(manager.render_kanban_board()), 0)[1],
+    }
+    handler = dispatch.get(args.command)
+    return handler() if handler else 0
 
 
 if __name__ == "__main__":

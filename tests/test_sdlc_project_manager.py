@@ -174,14 +174,10 @@ def test_cli_prioritize_and_next_commands(tmp_path: Path, capsys: pytest.Capture
 
     # 1. Test 'next' command
     exit_code = main(["next", "--file", str(test_json)])
-    assert exit_code == 0
     captured = capsys.readouterr().out
-    assert "REMEDIATE_PR_CHECKS" in captured
-    assert "#11" in captured
+    assert (exit_code, "REMEDIATE_PR_CHECKS" in captured, "#11" in captured) == (0, True, True)
 
     # 2. Test 'prioritize' command with JSON
     exit_code_prio = main(["prioritize", "--file", str(test_json), "--json"])
-    assert exit_code_prio == 0
     prio_output = json.loads(capsys.readouterr().out)
-    assert len(prio_output) == 2
-    assert prio_output[0]["number"] == 11  # Failing PR has highest priority score
+    assert (exit_code_prio, len(prio_output), prio_output[0]["number"]) == (0, 2, 11)

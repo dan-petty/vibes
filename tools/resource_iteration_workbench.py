@@ -190,20 +190,33 @@ class IterationReport:
         }
 
 
+BRANCH_NODE_TYPES = (
+    ast.If,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.ExceptHandler,
+    ast.Assert,
+    ast.IfExp,
+)
+
+
+def _node_complexity_weight(node: ast.AST) -> int:
+    """Calculate cyclomatic complexity branch contribution for an AST node."""
+    if isinstance(node, BRANCH_NODE_TYPES):
+        return 1
+    if isinstance(node, ast.BoolOp):
+        return len(node.values) - 1
+    return 0
+
+
 class ASTMetricCalculator:
     """Calculates McCabe cyclomatic complexity, nesting depth, and sanitization."""
 
     @classmethod
     def calculate_complexity(cls, node: ast.AST) -> int:
         """Calculate McCabe complexity M = E - N + 2P for a function AST node."""
-        complexity = 1
-        branch_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler, ast.Assert, ast.IfExp)
-        for child in ast.walk(node):
-            if isinstance(child, branch_types):
-                complexity += 1
-            elif isinstance(child, ast.BoolOp):
-                complexity += len(child.values) - 1
-        return complexity
+        return 1 + sum(_node_complexity_weight(child) for child in ast.walk(node))
 
     @classmethod
     def calculate_max_nesting(cls, root: ast.AST) -> int:
@@ -237,25 +250,31 @@ class ASTMetricCalculator:
                 cls._check_subdomain_string(val, getattr(node, "lineno", 0), violations)
         return violations
 
+    @staticmethod
+    def _is_private_leak(ip_str: str) -> bool:
+        """Check if an IPv4 address string is an unapproved RFC 1918 leak."""
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+            return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS)
+        except ValueError:
+            return False
+
     @classmethod
     def _check_ip_string(cls, text: str, lineno: int, violations: list[str]) -> None:
         for match in IPV4_PATTERN.findall(text):
-            try:
-                ip_obj = ipaddress.ip_address(match)
-                if ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS):
-                    violations.append(f"Line {lineno}: Hardcoded RFC 1918 IP '{match}'. Use RFC 5737 or loopback.")
-            except ValueError:
-                continue
+            if cls._is_private_leak(match):
+                violations.append(f"Line {lineno}: Hardcoded RFC 1918 IP '{match}'. Use RFC 5737 or loopback.")
 
     @classmethod
     def _check_subdomain_string(cls, text: str, lineno: int, violations: list[str]) -> None:
-        if "http://" in text or "https://" in text:
-            if CANONICAL_MOCK_DOMAIN in text:
-                match = re.search(r"https?://([^/:]+)", text)
-                if match:
-                    host = match.group(1)
-                    if host != CANONICAL_MOCK_DOMAIN and host.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
-                        violations.append(f"Line {lineno}: Subdomain '{host}' detected. Use standard '{CANONICAL_MOCK_DOMAIN}'.")
+        if "://" not in text or CANONICAL_MOCK_DOMAIN not in text:
+            return
+        match = re.search(r"https?://([^/:]+)", text)
+        if not match:
+            return
+        host = match.group(1)
+        if host != CANONICAL_MOCK_DOMAIN and host.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
+            violations.append(f"Line {lineno}: Subdomain '{host}' detected. Use standard '{CANONICAL_MOCK_DOMAIN}'.")
 
 
 @dataclass

@@ -17,6 +17,11 @@ def _load_all_yaml_documents(path: Path) -> list[dict[str, Any]]:
     return docs
 
 
+def _validate_k8s_doc(doc: dict[str, Any]) -> bool:
+    """Predicate verifying required Kubernetes document root keys."""
+    return "apiVersion" in doc and "kind" in doc and "name" in doc.get("metadata", {})
+
+
 def test_observability_otel_collector_config_valid() -> None:
     """Ensure otel-collector-config.yaml is syntactically valid and has pipelines."""
     config_path = RESOURCES_DIR / "observability" / "otel-collector-config.yaml"
@@ -26,12 +31,9 @@ def test_observability_otel_collector_config_valid() -> None:
     assert len(docs) == 1
     config = docs[0]
 
-    assert "receivers" in config
-    assert "processors" in config
-    assert "exporters" in config
-    assert "service" in config
-    assert "pipelines" in config["service"]
-    assert "traces" in config["service"]["pipelines"]
+    required_keys = ("receivers", "processors", "exporters", "service")
+    assert all(k in config for k in required_keys)
+    assert "traces" in config.get("service", {}).get("pipelines", {})
 
 
 def test_observability_prometheus_alerts_valid() -> None:
@@ -40,15 +42,10 @@ def test_observability_prometheus_alerts_valid() -> None:
     assert alerts_path.is_file(), f"Missing alerts: {alerts_path}"
 
     docs = _load_all_yaml_documents(alerts_path)
-    assert len(docs) == 1
-    config = docs[0]
-
-    assert "groups" in config
-    rules = config["groups"][0]["rules"]
-    assert len(rules) >= 4
+    assert len(docs) == 1 and "groups" in docs[0]
+    rules = docs[0]["groups"][0]["rules"]
     rule_names = {rule["alert"] for rule in rules}
-    assert "AgentTokenBurnSpike" in rule_names
-    assert "AgentASTInvariantBreachRate" in rule_names
+    assert len(rules) >= 4 and {"AgentTokenBurnSpike", "AgentASTInvariantBreachRate"}.issubset(rule_names)
 
 
 def test_observability_grafana_dashboard_valid() -> None:
@@ -57,10 +54,12 @@ def test_observability_grafana_dashboard_valid() -> None:
     assert dash_path.is_file(), f"Missing dashboard: {dash_path}"
 
     data = json.loads(dash_path.read_text(encoding="utf-8"))
-    assert data["schemaVersion"] >= 30
-    assert data["uid"] == "vibes-agent-mesh"
-    assert "panels" in data
-    assert len(data["panels"]) >= 5
+    assert (
+        data["schemaVersion"] >= 30,
+        data["uid"] == "vibes-agent-mesh",
+        "panels" in data,
+        len(data["panels"]) >= 5,
+    ) == (True, True, True, True)
 
 
 def test_k8s_manifests_validity_and_metadata() -> None:
@@ -71,11 +70,8 @@ def test_k8s_manifests_validity_and_metadata() -> None:
 
     for file_path in yaml_files:
         docs = _load_all_yaml_documents(file_path)
-        assert len(docs) > 0, f"Empty document in {file_path}"
-        for doc in docs:
-            assert "apiVersion" in doc, f"Missing apiVersion in {file_path}"
-            assert "kind" in doc, f"Missing kind in {file_path}"
-            assert "metadata" in doc and "name" in doc["metadata"], f"Missing metadata.name in {file_path}"
+        assert docs, f"Empty document in {file_path}"
+        assert all(_validate_k8s_doc(doc) for doc in docs), f"Invalid K8s doc in {file_path}"
 
 
 def test_k8s_sandbox_security_context_invariants() -> None:
@@ -85,14 +81,14 @@ def test_k8s_sandbox_security_context_invariants() -> None:
     pod = docs[0]
 
     pod_sec = pod["spec"]["securityContext"]
-    assert pod_sec.get("runAsNonRoot") is True
-    assert pod_sec.get("seccompProfile", {}).get("type") == "RuntimeDefault"
-
-    container = pod["spec"]["containers"][0]
-    container_sec = container["securityContext"]
-    assert container_sec.get("readOnlyRootFilesystem") is True
-    assert container_sec.get("allowPrivilegeEscalation") is False
-    assert "ALL" in container_sec.get("capabilities", {}).get("drop", [])
+    container_sec = pod["spec"]["containers"][0]["securityContext"]
+    assert (
+        pod_sec.get("runAsNonRoot"),
+        pod_sec.get("seccompProfile", {}).get("type"),
+        container_sec.get("readOnlyRootFilesystem"),
+        container_sec.get("allowPrivilegeEscalation"),
+        "ALL" in container_sec.get("capabilities", {}).get("drop", []),
+    ) == (True, "RuntimeDefault", True, False, True)
 
 
 def test_k8s_network_policy_egress_rules() -> None:
@@ -100,12 +96,14 @@ def test_k8s_network_policy_egress_rules() -> None:
     net_path = RESOURCES_DIR / "k8s" / "agent-sandbox" / "network-policy.yaml"
     docs = _load_all_yaml_documents(net_path)
     policy = docs[0]
-
-    assert policy["kind"] == "NetworkPolicy"
     spec = policy["spec"]
-    assert "Egress" in spec["policyTypes"]
-    assert "Ingress" in spec["policyTypes"]
-    assert spec.get("ingress") == []
+
+    assert (
+        policy["kind"] == "NetworkPolicy",
+        "Egress" in spec["policyTypes"],
+        "Ingress" in spec["policyTypes"],
+        spec.get("ingress") == [],
+    ) == (True, True, True, True)
 
 
 def test_docker_compose_validity_and_services() -> None:
