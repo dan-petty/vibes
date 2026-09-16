@@ -95,7 +95,8 @@ vibes/
 │   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
 │   ├── adaptive-web-crawler/          # Two-tier adaptive crawler with domain strategy memory
 │   ├── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
-│   └── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
+│   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
+│   └── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
@@ -201,6 +202,7 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**Adaptive Web Crawler**](./examples/adaptive-web-crawler/) | Two-tier adaptive crawler detecting SPA shells, escalating to headless browsing, and persisting learned domain strategies. | `pytest test_crawler.py` |
 | [**Prompt Mutation Fuzzer**](./examples/prompt-mutation-fuzzer/) | Grammar-guided prompt perturbation engine evaluating agent code invariant resilience under noise, dilution, and injection escapes. | `pytest examples/prompt-mutation-fuzzer/test_fuzzer.py` |
 | [**Tool Contract Verifier**](./examples/tool-contract-verifier/) | Formal JSON Schema Draft 2020-12 verification gate enforcing negative assertions against hallucinated parameters, type mismatches, and bounded string caps. | `pytest examples/tool-contract-verifier/test_verifier.py` |
+| [**Valkey L2 Repomap Cache & Drift Auditor**](./examples/valkey-l2-repomap-cache/) | High-throughput two-tier AST symbol caching with RESP protocol, content SHA-256 addressing, and cosine distance semantic drift auditing. | `pytest examples/valkey-l2-repomap-cache/test_repomap_cache.py` |
 
 ---
 
@@ -242,8 +244,8 @@ Follow our multi-milestone evolution from foundational case studies to polyglot 
 
 - **v0.1.0 — Foundations & Retrospective** (✅ *Completed*): Architecture, Manifesto, Taxonomy, 6 `devops-cli` Case Studies, 4 Core Patterns, and FastMCP schemas.
 - **v0.2.0 — Interactive Testbeds & Reference Apps** (✅ *Completed*): AST Sentinel, FastMCP Gateway, CEGIS Workbench, CI matrix, Project Tooling, and Autonomous GitHub Workflows.
-- **v0.3.0 — Benchmark Suites & Observability Mesh** (🔄 *Active*): Multi-Agent Benchmark Runner, Waterfall Trace Generator, Prompt Mutation Fuzzing, and live OTLP Collector pipelines.
-- **v0.4.0 — Polyglot Invariants & Ephemeral Sandboxes** (📋 *Planned*): Go Goroutine Leak Sentinel, Rust Type-State Track, Rootless Docker Container Sandboxes, and Tree-Sitter CST engine.
+- **v0.3.0 — Benchmark Suites & Observability Mesh** (✅ *Completed*): Multi-Agent Benchmark Runner, Waterfall Trace Generator, Prompt Mutation Fuzzing, Tool Contract Verification, AST Conditional Refactorer, and Valkey L2 Repomap Cache.
+- **v0.4.0 — Polyglot Invariants & Ephemeral Sandboxes** (🔄 *Active / In Flight*): Go Goroutine Leak Sentinel, Rust Type-State Track, Rootless Docker Container Sandboxes, and Tree-Sitter CST engine.
 - **v0.5.0 — Autonomous Swarm Orchestration** (📋 *Planned*): Closed-loop PR Triage Bot, Conversation-to-Case-Study Synthesizer, and Live Multi-Model Cost-per-Invariant Index.
 - **v1.0.0 — Enterprise Governance & Living Standard** (💡 *North Star*): AIBOM Supply-Chain Scanner, Prompt Injection Egress Validator, and Certified Living Standard.
 

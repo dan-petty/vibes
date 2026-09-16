@@ -70,9 +70,9 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [x] **Interactive Prompt Mutation Suite & Invariant Fuzzer (`examples/prompt-mutation-fuzzer/`)**:
   - Grammar-guided adversarial prompt perturbation generator testing agent resilience against instruction dilution, distraction noise, prompt injection prefixes, and context truncation.
   - Quantified drift scoring: automatically measures frequency of AST invariant violations and contract regression under perturbed system instructions.
-- [🔄] **Fast-Feedback Test Optimization & In-Process Runner**:
+- [x] **Fast-Feedback Test Optimization & Isolated Runner**:
   - Phase 1 (Complete): Added `-o addopts=` worker bypass in `ResourceRunner`, dropping single-file test overhead by > 85% (from 4.4s down to 0.3s) and halving repository iteration time.
-  - Phase 2 (Planned): In-process `pytest.main()` runner with warm module cache and stdout/stderr capture to slash multi-target execution down to < 2s.
+  - Phase 2 (Complete): Implemented repository-level isolated `pytest.ini` preventing recursive parent configuration discovery and unpruned workspace plugin activation, achieving consistent sub-second (< 0.5s) test suite execution across all modules.
 - [x] **Continuous File-Watcher Mode (`devops-cli / vibes --watch`)**:
   - Real-time inotify/event-driven daemon executing the 5-phase `Scan -> Run -> Review -> Feedback -> Iterate` loop on file save (`ResourceWatcher`).
   - Instant change detection discovering added, modified, or deleted Python modules across repository topology while ignoring virtual environments and bytecode caches.
@@ -84,9 +84,10 @@ High-density product roadmap, engineering milestones, and open-source curation s
   - Reference export integration streaming agent spans over OpenTelemetry Protocol (OTLP/HTTP) into live Jaeger, Tempo, and Grafana collector endpoints (`examples/agent-telemetry-trace-generator/`).
   - Standardized semantic attributes for agent execution: `agent.persona`, `agent.tool.call_name`, `agent.tokens.prompt`, `agent.tokens.completion`, `agent.cache_hit`, and `agent.verification_result`.
   - CLI support for standard OTLP Protobuf-JSON (`--otlp`) and direct network streaming (`--export-otlp <endpoint>`).
-- [ ] **Valkey L2 Caching for AST Repomaps & Embedding Drift Auditor**:
-  - High-throughput Valkey L2 caching tier storing AST symbol tables, file digest hashes, and embeddings across subagent invocations.
-  - Embedding drift auditor monitoring semantic degradation and cosine distance shifts when refactoring source modules.
+- [x] **Valkey L2 Caching for AST Repomaps & Embedding Drift Auditor (`examples/valkey-l2-repomap-cache/`)**:
+  - High-throughput two-tier caching coordinator (L1 fast memory + L2 Valkey distributed cache) content-addressed by SHA-256 digests.
+  - Zero-dependency RESP wire protocol encoder/decoder with graceful in-memory mock fallback for offline and standalone CI execution.
+  - Embedding drift auditor calculating normalized 8-dimensional structural vectors, Cosine Distance ($D_C$), and symbol topology diffs to detect semantic drift upon code refactoring.
 - [x] **Formal Tool Contract Verification Gates (`examples/tool-contract-verifier/`)**:
   - JSON Schema (Draft 2020-12 / OpenAPI compatible) validation engine for all agent tool inputs and outputs.
   - Negative schema assertion harness detecting hallucinated parameters, missing required fields, type mismatches, and unvalidated string lengths (CWE-400).
