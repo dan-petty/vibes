@@ -224,7 +224,7 @@ Read the full [**Resources Guide (`resources/README.md`)**](./resources/README.m
 
 ## 🏆 Multi-Agent Benchmark Suite (`benchmarks/`)
 
-An automated, quantitative benchmark runner evaluating AI coding agents across three operational tracks:
+An automated, quantitative benchmark runner evaluating AI coding agents across four operational tracks:
 
 ```bash
 python3 benchmarks/benchmark_runner.py
@@ -235,6 +235,7 @@ python3 benchmarks/benchmark_runner.py
 | **Complexity Refactoring** | Cyclomatic complexity reduction on procedural code | $M \le 10$ and $\ge 50\%$ complexity reduction |
 | **CEGIS Convergence** | Rounds required to synthesize minimal patches under negative constraints | Converged within $\le 6$ iterative rounds |
 | **Token Economy** | Frontier cloud token savings via local subagent slot offloading | $\ge 70\%$ cloud token reduction |
+| **Rust Type-State Pattern** | Compile-time state machine invariant enforcement and zero-cost abstractions | 100% `cargo test` pass rate, 0 `unsafe` blocks, and 0 bytes memory overhead |
 
 Read the full [**Benchmark Suite Guide (`benchmarks/README.md`)**](./benchmarks/README.md).
 

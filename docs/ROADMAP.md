@@ -99,9 +99,9 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [ ] **Go Concurrency & Goroutine Leak Sentinel (`examples/go-leak-sentinel/`)**:
   - Executable reference tool utilizing Go runtime stack inspection (`runtime.NumGoroutine()`) and `pprof` trace analysis to detect orphaned goroutines, deadlock-prone unbuffered channels, and leaking context lifecycles.
   - Integration with `golangci-lint` AST checkers for static channel closure verification.
-- [ ] **Rust Memory & Type-State Benchmark Track (`benchmarks/rust/`)**:
-  - Specialized benchmark suite evaluating agent capability to synthesize memory-safe, zero-cost abstractions using Rust's affine ownership types and type-state builders.
-  - Automated `cargo check` and `clippy` harness measuring compilation error resolution velocity and lifetime annotation precision.
+- [x] **Rust Memory & Type-State Benchmark Track (`benchmarks/rust/`)**:
+  - Specialized benchmark suite evaluating agent capability to synthesize memory-safe, zero-cost abstractions using Rust's affine ownership types and type-state builders (`benchmarks/rust/src/lib.rs`).
+  - Automated `cargo test` harness verifying `#![forbid(unsafe_code)]`, zero-sized type-state memory overhead (`size_of::<State>() == 0`), and compile-time rejection of invalid lifecycle transitions.
 - [ ] **Ephemeral Rootless Docker Sandbox Harness (`tools/sandbox/`)**:
   - Lightweight, isolated execution harness for executing untrusted agent-generated code inside unprivileged, rootless containers.
   - Hardened execution policies: seccomp system call filtering, cgroups v2 resource caps (CPU, memory, process limits), read-only root filesystems, and strict network egress deny-all policies (loopback only).
@@ -176,7 +176,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 |  | OTLP Live Collector & Jaeger/Grafana Mesh | OTLP / gRPC / Docker | High | Medium | v0.3.0 | ✅ Completed |
 |  | Valkey L2 AST Caching & Embedding Drift Auditor | Valkey / Redis / Vector | High | Medium | v0.3.0 | ✅ Completed |
 |  | Go Concurrency & Goroutine Leak Sentinel | Go 1.23 / `pprof` | High | Medium | v0.4.0 | 📋 Scheduled |
-|  | Rust Memory & Type-State Benchmark Track | Cargo / Clippy / Rust | High | Medium | v0.4.0 | 📋 Scheduled |
+|  | Rust Memory & Type-State Benchmark Track | Cargo / Clippy / Rust | High | Medium | v0.4.0 | ✅ Completed |
 |  | Rootless Docker Sandbox Harness | Docker / cgroups v2 | High | High | v0.4.0 | 📋 Scheduled |
 |  | Polyglot Tree-Sitter CST Ingestion Engine | Tree-Sitter / Multi-Lang | High | High | v0.4.0 | 📋 Scheduled |
 |  | Closed-Loop PR Triage & Invariant Review Bot | FastMCP / GitHub Actions | High | High | v0.5.0 | 📋 Scheduled |

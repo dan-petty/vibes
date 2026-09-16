@@ -29,6 +29,10 @@ graph TD
 - **Focus**: Evaluates token consumption and cost efficiency by comparing monolithic frontier model prompting against multi-tier swappable harness slots ("Big decides, small types, big checks").
 - **Pass Criteria**: Minimum 70% reduction in frontier cloud tokens by offloading mechanical symbol extraction and AST parsing to local open-weight models.
 
+### 4. Rust Type-State Pattern Track (`RustTypeState`)
+- **Focus**: Evaluates the agent's capability to synthesize memory-safe, zero-cost state machine abstractions in Rust using affine types, zero-sized markers (`Unauthenticated`, `Authenticated`, `Connected`, `Closed`), and `#![forbid(unsafe_code)]`.
+- **Pass Criteria**: 100% passing `cargo test` suite, 0 `unsafe` blocks, and 0 runtime memory overhead (`size_of::<State>() == 0`).
+
 ---
 
 ## Quick Start
