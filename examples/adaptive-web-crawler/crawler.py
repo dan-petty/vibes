@@ -107,6 +107,7 @@ class HTMLContentCleaner(HTMLParser):
         self.links.extend(hrefs)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Process opening HTML tag and extract relevant metadata or links."""
         tag_lower = tag.lower()
         if self._should_ignore_tag(tag_lower):
             return
@@ -129,6 +130,7 @@ class HTMLContentCleaner(HTMLParser):
         return self.ignore_depth > 0
 
     def handle_endtag(self, tag: str) -> None:
+        """Process closing HTML tag and append structure breaks."""
         tag_lower = tag.lower()
         if self._handle_ignore_endtag(tag_lower):
             return
@@ -139,6 +141,7 @@ class HTMLContentCleaner(HTMLParser):
             self.lines.append("\n")
 
     def handle_data(self, data: str) -> None:
+        """Process text node content outside ignored boilerplates."""
         if self.ignore_depth > 0:
             return
         if self.in_title:
@@ -158,6 +161,7 @@ class HTMLContentCleaner(HTMLParser):
         return None
 
     def get_clean_content(self) -> tuple[str, str, list[str]]:
+        """Return sanitized page title, cleaned text, and extracted links."""
         raw_text = "".join(self.lines).strip()
         clean_text = re.sub(r"\n{3,}", "\n\n", raw_text)
         return self.page_title, clean_text, self.links
@@ -187,6 +191,7 @@ class SPADetector:
 
     @classmethod
     def analyze(cls, html: str, text_content: str) -> PageQuality:
+        """Classify the HTML document into a PageQuality category."""
         lower_html = html.lower()
         if cls._is_blocked(lower_html):
             return PageQuality.BLOCKED
@@ -208,11 +213,13 @@ class DomainStrategyStore:
             self._load()
 
     def get_strategy(self, domain: str) -> DomainStrategy:
+        """Retrieve or initialize domain extraction strategy."""
         if domain not in self._strategies:
             self._strategies[domain] = DomainStrategy(domain=domain)
         return self._strategies[domain]
 
     def record_success(self, domain: str, tier_used: ExtractionTier) -> None:
+        """Update strategy upon successful page extraction."""
         strategy = self.get_strategy(domain)
         strategy.preferred_tier = tier_used
         strategy.requires_js = (tier_used == ExtractionTier.HEADLESS_BROWSER)
@@ -221,12 +228,14 @@ class DomainStrategyStore:
         self._save_if_configured()
 
     def record_shell_detected(self, domain: str) -> None:
+        """Escalate strategy to headless browser when SPA shell is encountered."""
         strategy = self.get_strategy(domain)
         strategy.preferred_tier = ExtractionTier.HEADLESS_BROWSER
         strategy.requires_js = True
         self._save_if_configured()
 
     def record_rate_limit(self, domain: str) -> None:
+        """Apply exponential backoff delay when HTTP 429 rate limit is encountered."""
         strategy = self.get_strategy(domain)
         strategy.rate_limit_delay = min(strategy.rate_limit_delay * 2.0, 10.0)
         self._save_if_configured()
