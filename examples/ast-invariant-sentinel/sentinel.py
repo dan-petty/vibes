@@ -57,6 +57,15 @@ class AuditReport:
         return len(self.violations) == 0
 
 
+def _ast_node_complexity(node: ast.AST) -> int:
+    """Return cyclomatic complexity weight contributed by an AST node."""
+    if isinstance(node, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler, ast.Assert, ast.IfExp)):
+        return 1
+    if isinstance(node, ast.BoolOp):
+        return max(0, len(node.values) - 1)
+    return 0
+
+
 class ComplexityVisitor(ast.NodeVisitor):
     """Measures Cyclomatic Complexity and Nesting Depth per function."""
 
@@ -103,15 +112,7 @@ class ComplexityVisitor(ast.NodeVisitor):
 
     def _calculate_complexity(self, node: ast.AST) -> int:
         """Calculate McCabe Cyclomatic Complexity M = E - N + 2P."""
-        complexity = 1
-        for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler)):
-                complexity += 1
-            elif isinstance(child, ast.BoolOp):
-                complexity += len(child.values) - 1
-            elif isinstance(child, (ast.Assert, ast.IfExp)):
-                complexity += 1
-        return complexity
+        return 1 + sum(_ast_node_complexity(child) for child in ast.walk(node))
 
     def _calculate_max_nesting(self, root: ast.AST) -> int:
         """Calculate the deepest indentation nesting level within a function."""
@@ -144,6 +145,32 @@ class ComplexityVisitor(ast.NodeVisitor):
         return max_seen
 
 
+def _is_prohibited_ip(match: str) -> bool:
+    """Return True if match is a private IP not in allowed documentation networks."""
+    try:
+        ip_obj = ipaddress.ip_address(match)
+        return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS)
+    except ValueError:
+        return False
+
+
+def _is_url_with_example(text: str) -> bool:
+    """Return True if text contains an http/https URL referencing example.com."""
+    return "example.com" in text and ("http://" in text or "https://" in text)
+
+
+def _extract_disallowed_subdomain(text: str) -> str | None:
+    """Extract and return any non-canonical subdomain of example.com found in URLs."""
+    if not _is_url_with_example(text):
+        return None
+    match = re.search(r"https?://([^/:]+)", text)
+    if not match:
+        return None
+    hostname = match.group(1)
+    is_subdomain = hostname != CANONICAL_MOCK_DOMAIN and hostname.endswith(f".{CANONICAL_MOCK_DOMAIN}")
+    return hostname if is_subdomain else None
+
+
 class SanitizationVisitor(ast.NodeVisitor):
     """Scans string literals for private IPs and non-standard mock domains."""
 
@@ -159,12 +186,7 @@ class SanitizationVisitor(ast.NodeVisitor):
 
     def _check_ip_leakage(self, text: str, lineno: int) -> None:
         for match in IPV4_PATTERN.findall(text):
-            try:
-                ip_obj = ipaddress.ip_address(match)
-            except ValueError:
-                continue
-
-            if ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS):
+            if _is_prohibited_ip(match):
                 self.violations.append(
                     Violation(
                         file_path=self.file_path,
@@ -175,21 +197,16 @@ class SanitizationVisitor(ast.NodeVisitor):
                 )
 
     def _check_mock_domain(self, text: str, lineno: int) -> None:
-        # Detect non-standard dummy domains (e.g. test.example.com, fakeapp.dev)
-        if "http://" in text or "https://" in text:
-            if "example.com" in text:
-                match = re.search(r"https?://([^/:]+)", text)
-                if match:
-                    hostname = match.group(1)
-                    if hostname != CANONICAL_MOCK_DOMAIN and hostname.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
-                        self.violations.append(
-                            Violation(
-                                file_path=self.file_path,
-                                line_number=lineno,
-                                invariant="ZeroTrustSanitization",
-                                message=f"Subdomain '{hostname}' detected. Standardize mock hostnames to '{CANONICAL_MOCK_DOMAIN}' with no subdomains.",
-                            )
-                        )
+        hostname = _extract_disallowed_subdomain(text)
+        if hostname:
+            self.violations.append(
+                Violation(
+                    file_path=self.file_path,
+                    line_number=lineno,
+                    invariant="ZeroTrustSanitization",
+                    message=f"Subdomain '{hostname}' detected. Standardize mock hostnames to '{CANONICAL_MOCK_DOMAIN}' with no subdomains.",
+                )
+            )
 
 
 def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) -> list[Violation]:
@@ -216,23 +233,25 @@ def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) ->
     return complexity_visitor.violations + sanitization_visitor.violations
 
 
+def _is_test_file(path: Path) -> bool:
+    return path.name.startswith("test_") or path.name.endswith("_test.py")
+
+
+def _collect_py_targets(root_path: Path, skip_tests: bool) -> list[Path]:
+    if root_path.is_file():
+        return [root_path] if root_path.suffix == ".py" else []
+    return [p for p in root_path.rglob("*.py") if not (skip_tests and _is_test_file(p))]
+
+
 def audit_directory(
     root_path: Path, max_complexity: int = 10, max_depth: int = 5, skip_tests: bool = True
 ) -> AuditReport:
     """Audit Python files under root_path, supporting single files or directories."""
     report = AuditReport()
-    if root_path.is_file():
-        if root_path.suffix == ".py":
-            report.files_checked = 1
-            report.violations = audit_file(root_path, max_complexity, max_depth)
-        return report
-
-    for py_file in root_path.rglob("*.py"):
-        if skip_tests and (py_file.name.startswith("test_") or py_file.name.endswith("_test.py")):
-            continue
-        report.files_checked += 1
-        violations = audit_file(py_file, max_complexity, max_depth)
-        report.violations.extend(violations)
+    targets = _collect_py_targets(root_path, skip_tests)
+    report.files_checked = len(targets)
+    for py_file in targets:
+        report.violations.extend(audit_file(py_file, max_complexity, max_depth))
     return report
 
 
