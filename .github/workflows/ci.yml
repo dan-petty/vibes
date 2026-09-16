@@ -36,12 +36,15 @@ jobs:
           pytest examples/ast-invariant-sentinel/test_sentinel.py \
                  examples/fastmcp-token-bucket-gateway/test_gateway.py \
                  examples/cegis-debugging-workbench/test_workbench.py \
-                 tests/test_project_tooling.py -v
+                 examples/agent-telemetry-trace-generator/test_generator.py \
+                 tests/test_project_tooling.py \
+                 benchmarks/test_benchmark_runner.py -v
 
       - name: Run AST Invariant Sentinel Gates
         run: |
           python examples/ast-invariant-sentinel/sentinel.py examples
           python examples/ast-invariant-sentinel/sentinel.py tools/project_tooling.py
+          python examples/ast-invariant-sentinel/sentinel.py benchmarks/benchmark_runner.py
 
       - name: Validate FastMCP JSON Schema Manifests
         run: |

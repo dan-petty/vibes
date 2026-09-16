@@ -51,14 +51,17 @@ High-density product roadmap, engineering milestones, and open-source curation s
   - `autonomous-triage.yml`: Automatic taxonomy classification, labeling, and onboarding comments.
   - `pr-sentinel.yml`: Invariant sentinel gating PRs with automatic feedback and certification labels.
   - `recursive-hardening.yml`: Closed-loop self-hardening verification on merged defect fixes.
-- [ ] **Polyglot Case Studies (TypeScript & Rust)**: Expanding empirical observations to type-level compile-time guarantees in Rust and strict TypeScript AST visitors.
+- [x] **Polyglot Case Studies (`observations/polyglot/`)**:
+  - `01-rust-type-state-invariants.md`: Type-state patterns and affine types eliminating state bugs at build time.
+  - `02-typescript-cst-and-type-gymnastics.md`: Preserving generic contracts and avoiding `any` or `@ts-ignore`.
 
-### Milestone 3: Multi-Agent Benchmark Suites & Telemetry Mesh (v0.3.0 - Future Vision)
-- [ ] **Standardized Agentic Benchmark Tasks (`benchmarks/`)**:
-  - Refactoring Benchmark: Measuring agent success rate when refactoring legacy procedural code under strict complexity caps.
-  - Defect Remediation Benchmark: Testing single-shot guessing vs. CEGIS constraint convergence.
-  - Token Efficiency Metric: Measuring token consumption ratio between monolithic frontier prompting vs. local subagent offloading.
-- [ ] **OpenTelemetry Agent Trace Visualizer**: Reference traces illustrating agent thought-action waterfalls, tool latencies, and token spend per turn exported to Jaeger/Grafana.
+### Milestone 3: Multi-Agent Benchmark Suites & Telemetry Mesh (v0.3.0 - Active)
+- [x] **Standardized Agentic Benchmark Runner (`benchmarks/`)**:
+  - `ComplexityRefactoring`: Complexity reduction rate and AST $M \le 10$ compliance on messy procedural code.
+  - `CEGISConvergence`: Defect convergence velocity and candidate patch minimization.
+  - `TokenEconomy`: Quantified token savings comparing monolithic prompting vs. subagent slot offloading.
+- [x] **OpenTelemetry Agent Waterfall Trace Generator (`examples/agent-telemetry-trace-generator/`)**:
+  - Reference trace generator emitting W3C traceparent spans, token usage attributes, and ASCII waterfall timelines.
 - [ ] **Interactive Prompt Mutation Suite**: Automated tool that mutates prompts and evaluates whether agent behavior degrades or adheres to invariants.
 
 ### Milestone 4: Autonomous Swarm Curation & Enterprise Playbooks (v1.0.0 - North Star)
@@ -72,13 +75,14 @@ High-density product roadmap, engineering milestones, and open-source curation s
 
 | Priority Category | Feature / Deliverable | Primary Resource | Value | Effort | Target Milestone | Status |
 |---|---|---|---|---|---|---|
-| **Quick Wins** | Executable Sample Apps (`sentinel`, `gateway`, `workbench`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
+| **Quick Wins** | Executable Sample Apps (`sentinel`, `gateway`, `workbench`, `trace-gen`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 |  | Strategic Product Roadmap (`docs/ROADMAP.md`) | Markdown / Planning | High | Low | v0.2.0 | ✅ Completed |
 |  | GitHub Actions CI & Recursive Workflows | GitHub Workflows / `pytest` | High | Low | v0.2.0 | ✅ Completed |
 |  | Autonomous Project Tooling (`tools/`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
-| **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest-benchmark` / LLM Harness | High | High | v0.3.0 | 💡 Future Vision |
+|  | Polyglot Case Studies (Rust & TypeScript) | Systems Engineering | High | Low | v0.2.0 | ✅ Completed |
+| **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest` / AST Analyzer | High | Medium | v0.3.0 | ✅ Completed |
+|  | OpenTelemetry Agent Waterfall Generator | OpenTelemetry / Python | High | Medium | v0.3.0 | ✅ Completed |
 |  | Self-Curating PR Review & Invariant Bot | FastMCP / GitHub Actions | High | High | v1.0.0 | 💡 Future Vision |
-|  | OpenTelemetry Agent Waterfall Traces | OpenTelemetry / Jaeger | Medium | Medium | v0.3.0 | 💡 Future Vision |
 | **Fill-Ins** | Interactive Prompt Mutation Runner | Python / Pydantic | Medium | Low | v0.3.0 | 💡 Future Vision |
 |  | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |

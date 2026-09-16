@@ -48,13 +48,16 @@ vibes/
 │   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
 │
 ├── observations/                      # Empirical field studies & engineering breakthroughs
-│   └── devops-cli/                    # In-depth case studies from the devops-cli project
-│       ├── 01-tdd-as-living-contract.md
-│       ├── 02-architectural-invariants-and-complexity-caps.md
-│       ├── 03-autonomous-project-governance.md
-│       ├── 04-zero-trust-egress-and-sanitization.md
-│       ├── 05-harness-slots-and-subagent-offloading.md
-│       └── 06-rate-limits-and-anti-brittle-heuristics.md
+│   ├── devops-cli/                    # In-depth case studies from the devops-cli project
+│   │   ├── 01-tdd-as-living-contract.md
+│   │   ├── 02-architectural-invariants-and-complexity-caps.md
+│   │   ├── 03-autonomous-project-governance.md
+│   │   ├── 04-zero-trust-egress-and-sanitization.md
+│   │   ├── 05-harness-slots-and-subagent-offloading.md
+│   │   └── 06-rate-limits-and-anti-brittle-heuristics.md
+│   └── polyglot/                      # Cross-language agentic engineering observations
+│       ├── 01-rust-type-state-invariants.md
+│       └── 02-typescript-cst-and-type-gymnastics.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── cegis-and-hypothesis-debugging.md
@@ -75,7 +78,12 @@ vibes/
 ├── examples/                          # Executable reference sample applications
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
 │   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
-│   └── cegis-debugging-workbench/     # Counterexample synthesis testbench
+│   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
+│   └── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
+│
+├── benchmarks/                        # Multi-agent benchmark suite
+│   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
+│   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
 │   └── project_tooling.py             # CLI for issue triage and self-hardening audits
@@ -98,6 +106,17 @@ The headline exhibition in `vibes` is drawn from the autonomous development of [
 | [**04. Zero-Trust Egress & Sanitization**](./observations/devops-cli/04-zero-trust-egress-and-sanitization.md) | Eliminating homelab IP leaks, private paths, and secrets through automated sanitizers and RFC dummy standards. |
 | [**05. Harness Slots & Sub-Agent Offloading**](./observations/devops-cli/05-harness-slots-and-subagent-offloading.md) | "Big decides, small types, big checks": Partitioning reasoning vs. symbol extraction to slash token overhead by 85%+. |
 | [**06. Rate Limits & Anti-Brittle Heuristics**](./observations/devops-cli/06-rate-limits-and-anti-brittle-heuristics.md) | Surviving API quotas with client-side token buckets and strictly prohibiting arbitrary partial pattern matches. |
+
+---
+
+## 🦀 Polyglot Engineering Observations (`observations/polyglot/`)
+
+Agentic coding manifests differently across languages and compiler architectures:
+
+| Exhibition Piece | Language & Focus | Core Observation |
+|---|---|---|
+| [**Rust Type-State Invariants**](./observations/polyglot/01-rust-type-state-invariants.md) | Rust (Affine Types) | How the type-state pattern and zero-sized marker types eliminate 90%+ invalid state bugs at compile time. |
+| [**TypeScript CST & Type Gymnastics**](./observations/polyglot/02-typescript-cst-and-type-gymnastics.md) | TypeScript (CST & Generics) | Taming deep conditional types and enforcing zero-`any` / zero-`@ts-ignore` invariant gates. |
 
 ---
 
@@ -145,6 +164,25 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**AST Invariant Sentinel**](./examples/ast-invariant-sentinel/) | Python AST NodeVisitor measuring cyclomatic complexity ($M \le 10$), nesting depth ($\le 5$), and RFC 5737 zero-trust IP sanitization. | `pytest test_sentinel.py` |
 | [**FastMCP Token-Bucket Gateway**](./examples/fastmcp-token-bucket-gateway/) | Client-side rate limiter and tool dispatcher with burst capacity, token refills, and jittered backoff protecting external APIs. | `pytest test_gateway.py` |
 | [**CEGIS Debugging Workbench**](./examples/cegis-debugging-workbench/) | Formal Counterexample-Guided Inductive Synthesis loop accumulating negative constraints to converge on minimal atomic patches. | `pytest test_workbench.py` |
+| [**Agent Waterfall Trace Generator**](./examples/agent-telemetry-trace-generator/) | OpenTelemetry distributed trace generator rendering ASCII waterfalls and tracking token spend across model tiers. | `pytest test_generator.py` |
+
+---
+
+## 🏆 Multi-Agent Benchmark Suite (`benchmarks/`)
+
+An automated, quantitative benchmark runner evaluating AI coding agents across three operational tracks:
+
+```bash
+python3 benchmarks/benchmark_runner.py
+```
+
+| Evaluation Track | Focus Metric | Passing Threshold |
+|---|---|---|
+| **Complexity Refactoring** | Cyclomatic complexity reduction on procedural code | $M \le 10$ and $\ge 50\%$ complexity reduction |
+| **CEGIS Convergence** | Rounds required to synthesize minimal patches under negative constraints | Converged within $\le 6$ iterative rounds |
+| **Token Economy** | Frontier cloud token savings via local subagent slot offloading | $\ge 70\%$ cloud token reduction |
+
+Read the full [**Benchmark Suite Guide (`benchmarks/README.md`)**](./benchmarks/README.md).
 
 ---
 
