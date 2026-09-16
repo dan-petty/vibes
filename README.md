@@ -97,7 +97,8 @@ vibes/
 │   ├── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
 │   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
 │   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
-│   └── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
+│   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
+│   └── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
@@ -134,6 +135,7 @@ The headline exhibition in `vibes` is drawn from the autonomous development of [
 | [**09. Mechanical AST Rewriting & Automated Refactoring Convergence**](./observations/devops-cli/09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md) | Deterministic structural refactoring (table dispatch, guard flattening, predicate extraction) consuming SDLC feedback to eliminate complexity traps without LLM hallucination. |
 | [**10. Negative Tool Contract Assertions & Prescriptive Prompt Synthesis**](./observations/devops-cli/10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md) | Eliminating agent parameter hallucination through JSON Schema negative assertions (`additionalProperties: false`) and prescriptive error prompts enabling zero-shot recovery. |
 | [**11. Assertion Density & Structural Tuple Consolidation**](./observations/devops-cli/11-assertion-density-and-structural-tuple-consolidation.md) | Resolving test suite cyclomatic complexity traps ($M \le 10$) by consolidating linear assertion sprawl into structural tuple equality checks without loss of pytest diagnostics. |
+| [**12. Polyglot CST Boundary Guards & Symlink Containment**](./observations/devops-cli/12-polyglot-cst-boundary-guards-and-symlink-containment.md) | Eliminating OOM crashes and circular symlink loops (`ELOOP`) during multi-language AST crawling with pre-flight file size caps ($\le 5$MB) and workspace boundary verification. |
 
 ---
 
@@ -209,6 +211,7 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**Tool Contract Verifier**](./examples/tool-contract-verifier/) | Formal JSON Schema Draft 2020-12 verification gate enforcing negative assertions against hallucinated parameters, type mismatches, and bounded string caps. | `pytest examples/tool-contract-verifier/test_verifier.py` |
 | [**Valkey L2 Repomap Cache & Drift Auditor**](./examples/valkey-l2-repomap-cache/) | High-throughput two-tier AST symbol caching with RESP protocol, content SHA-256 addressing, and cosine distance semantic drift auditing. | `pytest examples/valkey-l2-repomap-cache/test_repomap_cache.py` |
 | [**Ephemeral Container Sandbox**](./examples/ephemeral-container-sandbox/) | Hardened rootless container sandbox with CIS benchmark auditing, egress deny-all isolation, and bounded simulator fallback. | `pytest examples/ephemeral-container-sandbox/test_sandbox.py` |
+| [**Polyglot CST Ingestion Engine**](./examples/polyglot-cst-parser/) | Multi-language CST parser (Python, Rust, Go, TS, Bash) with language-agnostic complexity ($M$) and pre-flight boundary guards. | `pytest examples/polyglot-cst-parser/test_cst_parser.py` |
 
 ---
 

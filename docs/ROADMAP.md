@@ -106,9 +106,10 @@ High-density product roadmap, engineering milestones, and open-source curation s
   - Lightweight, isolated execution harness for executing untrusted agent-generated code inside unprivileged, rootless containers (`docker` / `podman`) with POSIX simulator fallback.
   - Hardened execution policies: CIS Rootless Container Security Benchmark auditing (8 controls), cgroups v2 resource caps (512MB RAM, 1 CPU, 100 PIDs), read-only root filesystems, ephemeral tmpfs scratch space, dropped capabilities (`CAP_DROP ALL`), zero-trust sanitized environment variables, and strict network egress deny-all policies (`--network none`).
   - Interactive containment matrix demo verifying safe execution, timeout termination, and output buffer bounding (CWE-400 mitigation).
-- [ ] **Polyglot CST Ingestion Engine (Tree-Sitter Multi-Language Parser)**:
-  - Unified Concrete Syntax Tree (CST) parser powered by Tree-Sitter supporting Python, Rust, Go, TypeScript, C++, and Bash.
-  - Language-agnostic cyclomatic complexity, nesting depth, and symbol dependency graph extractor.
+- [x] **Polyglot CST Ingestion Engine (`examples/polyglot-cst-parser/`)**:
+  - Unified Concrete Syntax Tree (CST) and AST parser supporting Python, Rust, Go, TypeScript/JavaScript, and Bash.
+  - Language-agnostic cyclomatic complexity ($M$) and block nesting depth calculation.
+  - Hardened pre-flight file size boundary guards (`MAX_FILE_SIZE_BYTES = 5MB`) mitigating OOM/DoS (CWE-400) and defensive symlink resolution preventing circular loops (`ELOOP`) and workspace traversal escapes.
 - [ ] **Automated Assertion Consolidation Engine (`tools/ast_refactorer.py`)**:
   - Mechanical AST rewriting transform identifying linear sequences of `ast.Assert` statements in test suites and compiling them into structural tuple equality checks (`assert actual == expected`) and collection predicates (`all(...)`).
   - Automatically mitigates test suite cyclomatic complexity traps ($M > 10$) without loss of pytest element-level diff diagnostics.
