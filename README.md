@@ -44,6 +44,7 @@ vibes/
 ├── docs/                              # Foundational theory, taxonomy, and curation standards
 │   ├── MANIFESTO.md                   # Beyond "Vibe Coding": The Disciplined Agentic Manifesto
 │   ├── TAXONOMY.md                    # Structured taxonomy of agentic architectures & failure modes
+│   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
 │   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
 │   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
 │
@@ -55,13 +56,21 @@ vibes/
 │   │   ├── 04-zero-trust-egress-and-sanitization.md
 │   │   ├── 05-harness-slots-and-subagent-offloading.md
 │   │   ├── 06-rate-limits-and-anti-brittle-heuristics.md
-│   │   └── 07-proactive-headroom-and-recursive-feedback-loops.md
+│   │   ├── 07-proactive-headroom-and-recursive-feedback-loops.md
+│   │   ├── 08-closed-loop-feedback-inversion-and-autonomous-quality-elevation.md
+│   │   ├── 09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md
+│   │   ├── 10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md
+│   │   ├── 11-assertion-density-and-structural-tuple-consolidation.md
+│   │   └── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
 │   ├── polyglot/                      # Cross-language agentic engineering observations
 │   │   ├── 01-rust-type-state-invariants.md
 │   │   └── 02-typescript-cst-and-type-gymnastics.md
 │   └── systems/                       # Distributed systems & observability field studies
 │       ├── 01-distributed-telemetry-and-agent-waterfalls.md
-│       └── 02-subprocess-test-harness-instrumentation-tax.md
+│       ├── 02-subprocess-test-harness-instrumentation-tax.md
+│       ├── 03-event-driven-file-watchers-and-continuous-invariant-loops.md
+│       ├── 04-content-addressed-two-tier-caching-and-embedding-drift-audits.md
+│       └── 05-rootless-container-sandboxing-and-process-group-containment.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── cegis-and-hypothesis-debugging.md
@@ -71,7 +80,8 @@ vibes/
 │   ├── zero-trust-sandboxing-and-observability.md
 │   ├── adaptive-headless-web-crawling.md
 │   ├── autonomous-sdlc-project-management.md
-│   └── iterative-resource-refinement-loop.md
+│   ├── iterative-resource-refinement-loop.md
+│   └── deterministic-oracles-and-feedback-inversion.md
 │
 ├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
 │   ├── prompts/
@@ -181,6 +191,7 @@ graph TD
 - [**Adaptive Headless Web Crawling**](./patterns/adaptive-headless-web-crawling.md): Two-tier dynamic escalation, SPA shell detection, noise/modal pruning, and persistent domain strategy memory.
 - [**Autonomous SDLC Project Management**](./patterns/autonomous-sdlc-project-management.md): Deterministic multi-dimensional prioritization, dependency graph cycle analysis, and prescriptive agent next-action dispatch.
 - [**Iterative Resource Refinement Loop**](./patterns/iterative-resource-refinement-loop.md): Closed-loop Scan -> Run -> Review -> Feedback -> Iterate engine generating actionable improvement feedback, backlog tasks, and delta tracking before commit.
+- [**Deterministic Mechanical Oracles & Feedback Inversion**](./patterns/deterministic-oracles-and-feedback-inversion.md): Binding stochastic LLM tokens to mechanical invariant gates (table dispatch, structural tuple assertions, negative tool schemas, process groups, boundary caps) and inverting feedback from reactive bug-fixing to proactive headroom elevation.
 
 ---
 

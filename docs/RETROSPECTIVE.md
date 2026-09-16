@@ -105,7 +105,7 @@ stateDiagram-v2
    - Decomposing functions operating near the complexity ceiling ($7 \le M \le 10$).
    - Filling public docstrings and missing parameter type annotations.
    - Reducing test suite latency by bypassing heavy workspace plugins.
-3. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./ROADMAP.md) and codified into [`AGENTS.md`](file:///workspaces/devops-cli/AGENTS.md), ensuring that hard-won operational insights become permanent systemic guardrails.
+3. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./ROADMAP.md) and codified into [`AGENTS.md`](../AGENTS.md), ensuring that hard-won operational insights become permanent systemic guardrails.
 
 ---
 

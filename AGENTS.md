@@ -141,4 +141,39 @@ To foster an autonomous, creative, and continuously self-improving engineering i
 3. **Closing the Positive Feedback Loop**:
    - Regularly run the Resource Iteration Workbench (`python3 tools/resource_iteration_workbench.py --export-backlog .data/sdlc_backlog.json`) and query the SDLC Project Manager (`python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json`) to convert roadmap items and feedback opportunities into actionable next steps, driving an unbroken recursive cycle of excellence.
 
+---
+
+## 10. The Five Mechanical Oracles & Defensive Engineering Invariants
+
+Stochastic language generation must always be bounded by deterministic mechanical oracles. AI agents operating in `vibes` must strictly comply with the following five mechanical breakthroughs:
+
+1. **Table-Driven Dictionary Dispatch (AST `elif` Flattening)**:
+   - Python's AST parser (`ast.If`) nests each `elif` inside the `orelse` block of the preceding branch, causing visual ladders to explode nesting depth ($depth > 8$).
+   - Multi-branch conditional dispatchers must be decomposed into module-level lookup dictionaries (`_<FN>_DISPATCH.get(key, fallback)`), collapsing complexity and depth to $1$.
+2. **Structural Tuple Equality Consolidation (Mitigating Assertion Sprawl)**:
+   - Under Python AST semantics, every `assert expr` statement compiles to `if not (expr): raise AssertionError`, adding $+1$ to McCabe complexity.
+   - When asserting multiple object attributes or properties in test suites, agents **MUST CONSOLIDATE LINEAR ASSERTIONS INTO STRUCTURAL TUPLE EQUALITY CHECKS** (`assert (actual_a, actual_b) == (expected_a, expected_b)`) or collection predicates (`assert all(...)`). This prevents linear test code from breaching $M \le 10$ while preserving Pytest element-level diff diagnostics.
+3. **Negative Tool Contract Assertions & Prescriptive Prompts**:
+   - Tool schemas must enforce strict parameter boundaries by forbidding undeclared arguments (`extra="forbid"` in Pydantic v2, `additionalProperties: false` in JSON Schema).
+   - On contract failure, verification handlers must synthesize prescriptive error prompts detailing allowable arguments to enable deterministic zero-shot self-correction.
+4. **POSIX Process Group Containment (`preexec_fn=os.setsid` & `os.killpg`)**:
+   - Subprocesses spawned via `subprocess.Popen` must never be killed with simple `proc.kill()`, which leaves child subshells or grandchild processes running as zombie leaks.
+   - Always isolate spawned processes into dedicated process groups (`preexec_fn=os.setsid`) and terminate via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM/SIGKILL)`.
+5. **Defensive Filesystem, Symlink & Resource Containment**:
+   - Always enforce pre-flight file size caps (`MAX_FILE_SIZE_BYTES` $\le 5$MB) before reading files into memory to mitigate denial-of-service from minified bundles or binary dumps (CWE-400).
+   - Always verify that resolved filesystem symlinks remain strictly confined within the workspace root (`resolved_path.is_relative_to(base_root)`), catching `(OSError, RuntimeError)` to prevent circular symlink recursion (`ELOOP`) and traversal escapes.
+
+---
+
+## 11. The Closed-Loop Feedback Inversion Dynamic
+
+When guided by continuous feedback tooling (`ResourceIterationWorkbench`, `SDLCProjectManager`):
+1. **Phase 1 (Reactive Remediation)**: When invariant violations or test failures exist, agents must focus 100% of priority on minimal, surgical fixes.
+2. **Phase 2 (Proactive Quality Elevation)**: As soon as blockers are cleared and repository health reaches 100.0/100, the feedback loop dynamically inverts to focus on proactive headroom:
+   - Decomposing functions operating near the complexity ceiling ($7 \le M \le 10$) down to safe headroom ($M \le 6$).
+   - Elevating public docstring coverage and parameter type annotations to 100%.
+   - Optimizing test execution latency (sub-second test runner execution).
+3. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codified into `AGENTS.md`.
+
+
 
