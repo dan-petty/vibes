@@ -102,12 +102,21 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [x] **Rust Memory & Type-State Benchmark Track (`benchmarks/rust/`)**:
   - Specialized benchmark suite evaluating agent capability to synthesize memory-safe, zero-cost abstractions using Rust's affine ownership types and type-state builders (`benchmarks/rust/src/lib.rs`).
   - Automated `cargo test` harness verifying `#![forbid(unsafe_code)]`, zero-sized type-state memory overhead (`size_of::<State>() == 0`), and compile-time rejection of invalid lifecycle transitions.
-- [ ] **Ephemeral Rootless Docker Sandbox Harness (`tools/sandbox/`)**:
-  - Lightweight, isolated execution harness for executing untrusted agent-generated code inside unprivileged, rootless containers.
-  - Hardened execution policies: seccomp system call filtering, cgroups v2 resource caps (CPU, memory, process limits), read-only root filesystems, and strict network egress deny-all policies (loopback only).
+- [x] **Ephemeral Rootless Docker Sandbox Harness (`examples/ephemeral-container-sandbox/`)**:
+  - Lightweight, isolated execution harness for executing untrusted agent-generated code inside unprivileged, rootless containers (`docker` / `podman`) with POSIX simulator fallback.
+  - Hardened execution policies: CIS Rootless Container Security Benchmark auditing (8 controls), cgroups v2 resource caps (512MB RAM, 1 CPU, 100 PIDs), read-only root filesystems, ephemeral tmpfs scratch space, dropped capabilities (`CAP_DROP ALL`), zero-trust sanitized environment variables, and strict network egress deny-all policies (`--network none`).
+  - Interactive containment matrix demo verifying safe execution, timeout termination, and output buffer bounding (CWE-400 mitigation).
 - [ ] **Polyglot CST Ingestion Engine (Tree-Sitter Multi-Language Parser)**:
   - Unified Concrete Syntax Tree (CST) parser powered by Tree-Sitter supporting Python, Rust, Go, TypeScript, C++, and Bash.
   - Language-agnostic cyclomatic complexity, nesting depth, and symbol dependency graph extractor.
+- [ ] **Automated Assertion Consolidation Engine (`tools/ast_refactorer.py`)**:
+  - Mechanical AST rewriting transform identifying linear sequences of `ast.Assert` statements in test suites and compiling them into structural tuple equality checks (`assert actual == expected`) and collection predicates (`all(...)`).
+  - Automatically mitigates test suite cyclomatic complexity traps ($M > 10$) without loss of pytest element-level diff diagnostics.
+- [ ] **Ephemeral Container Backend for CEGIS Patch Evaluation (`examples/cegis-debugging-workbench/`)**:
+  - Direct integration of `ContainerSandboxHarness` into the CEGIS debugging loop.
+  - Safely evaluates candidate patches inside isolated rootless containers with strict cgroup memory (512MB) and PID limits, preventing runaway candidate code from impacting host processes.
+- [ ] **Automated Seccomp BPF Profile Synthesizer**:
+  - Generates minimal, tool-specific Linux seccomp-bpf JSON filter profiles based on static symbol analysis and syscall trace profiling, restricting agent tool execution strictly to required system calls.
 
 ---
 
