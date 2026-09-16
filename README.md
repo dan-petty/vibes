@@ -94,7 +94,8 @@ vibes/
 │   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
 │   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
 │   ├── adaptive-web-crawler/          # Two-tier adaptive crawler with domain strategy memory
-│   └── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
+│   ├── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
+│   └── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
@@ -198,6 +199,7 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**Agent Waterfall Trace Generator**](./examples/agent-telemetry-trace-generator/) | OpenTelemetry distributed trace generator rendering ASCII waterfalls and tracking token spend across model tiers. | `pytest test_generator.py` |
 | [**Adaptive Web Crawler**](./examples/adaptive-web-crawler/) | Two-tier adaptive crawler detecting SPA shells, escalating to headless browsing, and persisting learned domain strategies. | `pytest test_crawler.py` |
 | [**Prompt Mutation Fuzzer**](./examples/prompt-mutation-fuzzer/) | Grammar-guided prompt perturbation engine evaluating agent code invariant resilience under noise, dilution, and injection escapes. | `pytest examples/prompt-mutation-fuzzer/test_fuzzer.py` |
+| [**Tool Contract Verifier**](./examples/tool-contract-verifier/) | Formal JSON Schema Draft 2020-12 verification gate enforcing negative assertions against hallucinated parameters, type mismatches, and bounded string caps. | `pytest examples/tool-contract-verifier/test_verifier.py` |
 
 ---
 

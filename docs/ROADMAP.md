@@ -86,9 +86,10 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [ ] **Valkey L2 Caching for AST Repomaps & Embedding Drift Auditor**:
   - High-throughput Valkey L2 caching tier storing AST symbol tables, file digest hashes, and embeddings across subagent invocations.
   - Embedding drift auditor monitoring semantic degradation and cosine distance shifts when refactoring source modules.
-- [ ] **Formal Tool Contract Verification Gates**:
-  - Pydantic v2 + JSON Schema (Draft 2020-12) validation engine for all agent tool inputs and outputs.
-  - Negative schema assertion harness detecting hallucinated parameters, undocumented flags, and unvalidated string inputs.
+- [x] **Formal Tool Contract Verification Gates (`examples/tool-contract-verifier/`)**:
+  - JSON Schema (Draft 2020-12 / OpenAPI compatible) validation engine for all agent tool inputs and outputs.
+  - Negative schema assertion harness detecting hallucinated parameters, missing required fields, type mismatches, and unvalidated string lengths (CWE-400).
+  - Structured corrective feedback emitting prescriptive error prompts back to the agent for deterministic zero-shot self-correction.
 
 ---
 
@@ -162,7 +163,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 |  | Autonomous Project Tooling (`tools/project_tooling.py`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 |  | Polyglot Case Studies (Rust & TypeScript) | Systems Engineering | High | Low | v0.2.0 | ✅ Completed |
 |  | Continuous File-Watcher Mode (`--watch`) | Python / inotify | High | Low | v0.3.0 | ✅ Completed |
-|  | Formal Tool Contract Verification Gates | Pydantic v2 / JSON Schema | High | Low | v0.3.0 | 📋 Scheduled |
+|  | Formal Tool Contract Verification Gates | Pydantic v2 / JSON Schema | High | Low | v0.3.0 | ✅ Completed |
 | **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest` / AST Analyzer | High | Medium | v0.3.0 | ✅ Completed |
 |  | OpenTelemetry Agent Waterfall Generator | OpenTelemetry / Python | High | Medium | v0.3.0 | ✅ Completed |
 |  | Interactive Prompt Mutation Suite & Invariant Fuzzer | Python / AST / Fuzzing | High | Medium | v0.3.0 | ✅ Completed |
