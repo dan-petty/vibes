@@ -184,10 +184,10 @@ graph TD
 
 ---
 
-## 📜 The Disciplined Agentic Manifesto
+## 📜 The Disciplined Agentic Manifesto & Retrospective
 
 What separates unstructured prompt tinkering from serious agentic engineering?  
-Read the full [**Manifesto**](./docs/MANIFESTO.md):
+Read the full [**Manifesto**](./docs/MANIFESTO.md) and [**Retrospective Analysis**](./docs/RETROSPECTIVE.md):
 
 1. **Tests are Executable Contracts, Not Afterthoughts.**
 2. **Architectural Invariants Must Be Mechanically Enforced.**
