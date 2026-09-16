@@ -17,3 +17,7 @@ env/
 .DS_Store
 *.swp
 *.bak*
+
+# Local data tier
+.data/
+
