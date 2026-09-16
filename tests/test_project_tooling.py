@@ -45,19 +45,20 @@ def test_parse_acceptance_criteria_mixed():
 def test_triage_issue_content_incomplete():
     body = "- [x] Step 1\n- [ ] Step 2"
     res = triage_issue_content(42, "New observation on rate limiting", body)
-    assert res.issue_number == 42
-    assert "observation" in res.matched_labels
-    assert res.total_criteria == 2
-    assert res.completed_criteria == 1
-    assert res.is_fully_certified is False
-    assert "Work in progress" in res.suggested_comment
+    assert (
+        res.issue_number,
+        "observation" in res.matched_labels,
+        res.total_criteria,
+        res.completed_criteria,
+        res.is_fully_certified,
+        "Work in progress" in res.suggested_comment,
+    ) == (42, True, 2, 1, False, True)
 
 
 def test_triage_issue_content_complete():
     body = "- [x] Step 1\n- [x] Step 2"
     res = triage_issue_content(101, "New pattern: CEGIS debugging", body)
-    assert res.is_fully_certified is True
-    assert "All acceptance criteria are marked complete" in res.suggested_comment
+    assert (res.is_fully_certified, "All acceptance criteria are marked complete" in res.suggested_comment) == (True, True)
 
 
 def test_audit_self_hardening_defect_without_agents_md_fails():
@@ -70,9 +71,11 @@ diff --git a/src/parser.py b/src/parser.py
 + fixed_line()
 """
     result = audit_self_hardening(diff, is_defect_fix=True)
-    assert result.is_compliant is False
-    assert result.agents_md_modified is False
-    assert "Recursive hardening violation" in result.summary
+    assert (
+        result.is_compliant,
+        result.agents_md_modified,
+        "Recursive hardening violation" in result.summary,
+    ) == (False, False, True)
 
 
 def test_audit_self_hardening_defect_with_agents_md_succeeds():
@@ -90,10 +93,12 @@ diff --git a/AGENTS.md b/AGENTS.md
 + - Mandatory Guardrail: Agents must always sanitize inputs before parsing.
 """
     result = audit_self_hardening(diff, is_defect_fix=True)
-    assert result.is_compliant is True
-    assert result.agents_md_modified is True
-    assert result.new_guardrails_detected >= 1
-    assert "Positive recursive hardening verified" in result.summary
+    assert (
+        result.is_compliant,
+        result.agents_md_modified,
+        result.new_guardrails_detected >= 1,
+        "Positive recursive hardening verified" in result.summary,
+    ) == (True, True, True, True)
 
 
 def test_audit_self_hardening_non_defect_always_compliant():

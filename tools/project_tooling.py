@@ -145,15 +145,17 @@ def triage_issue_content(issue_number: int, title: str, body: str) -> TriageResu
 GUARDRAIL_INDICATORS = ("mandate", "rule", "guardrail", "prohibited", "must always")
 
 
+def _is_guardrail_addition(line: str) -> bool:
+    """Check if a diff line represents an added guardrail indicator."""
+    if not line.startswith("+") or line.startswith("+++"):
+        return False
+    low = line.lower()
+    return any(term in low for term in GUARDRAIL_INDICATORS)
+
+
 def count_guardrail_lines(diff_text: str) -> int:
     """Count added lines containing architectural guardrail indicators."""
-    count = 0
-    for line in diff_text.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            low = line.lower()
-            if any(term in low for term in GUARDRAIL_INDICATORS):
-                count += 1
-    return count
+    return sum(1 for line in diff_text.splitlines() if _is_guardrail_addition(line))
 
 
 def generate_hardening_summary(is_defect_fix: bool, is_compliant: bool, new_guardrails: int) -> str:
