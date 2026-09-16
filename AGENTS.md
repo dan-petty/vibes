@@ -126,3 +126,19 @@ flowchart LR
 4. **Autonomous Review Thread Resolution**:
    - If the `pr-sentinel.yml` bot leaves a review comment or request for remediation, the agent must treat the sentinel feedback as an unyielding boundary condition, refactor the code to satisfy the metric, and re-push.
 
+---
+
+## 9. Autonomous Innovative Self-Improvement & Mandatory Roadmap Evolution
+
+To foster an autonomous, creative, and continuously self-improving engineering intelligence, AI agents operating in `vibes` must actively advance the repository's strategic roadmap:
+
+1. **Automatic Roadmap Ingestion for Issues, Struggles, Challenges & Insights**:
+   - Whenever encountering **any issue, struggle, friction point, debugging challenge, technical hurdle, cognitive barrier, or insight** during any task or interaction, AI agents **MUST AUTOMATICALLY ADD AN ITEM TO THE ROADMAP (`docs/ROADMAP.md`)** under the appropriate upcoming milestone or future research track.
+   - Document the underlying friction and the proposed engineering solution or architectural guardrail to transform real-world engineering hurdles into permanent systemic capabilities.
+2. **Automatic Roadmap Ingestion for Features, Suggestions & Integrations**:
+   - Whenever identifying **features, constructive suggestions, workflow automations, refactoring ideas, or third-party integrations** that could improve the codebase, AI agents **MUST AUTOMATICALLY ADD ITEMS TO THE ROADMAP (`docs/ROADMAP.md`)** to design, track, and implement them.
+   - Ground every innovative suggestion into measurable deliverables with clear Value vs. Effort positioning and acceptance criteria.
+3. **Closing the Positive Feedback Loop**:
+   - Regularly run the Resource Iteration Workbench (`python3 tools/resource_iteration_workbench.py --export-backlog .data/sdlc_backlog.json`) and query the SDLC Project Manager (`python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json`) to convert roadmap items and feedback opportunities into actionable next steps, driving an unbroken recursive cycle of excellence.
+
+
