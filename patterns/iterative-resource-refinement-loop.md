@@ -15,9 +15,9 @@ Without continuous **closed-loop verification**, agent development quickly devol
 
 ---
 
-## 2. Core Mechanics: The 4-Phase Iteration Engine
+## 2. Core Mechanics: The 5-Phase Iteration Engine
 
-The **Iterative Resource Refinement Loop** formalizes the agentic development cycle into four disciplined phases:
+The **Iterative Resource Refinement Loop** formalizes the agentic development cycle into five disciplined phases:
 
 ```mermaid
 flowchart LR
@@ -29,7 +29,7 @@ flowchart LR
     subgraph Phase 2: RUN
         AST --> Runner[Resource Runner]
         Sanitize --> Runner
-        Runner --> BoundedExec[Bounded Subprocess: pytest / sentinel]
+        Runner --> BoundedExec[Bounded Subprocess: pytest / benchmark]
         BoundedExec --> Telemetry[Capture ExitCode, Latency, Output]
     end
 
@@ -39,12 +39,20 @@ flowchart LR
         Reviewer --> Delta[Compare Against Baseline Deltas]
     end
 
-    subgraph Phase 4: ITERATE
-        Score --> Classifier{Health Status}
-        Delta --> Classifier
-        Classifier -->|CRITICAL / NEEDS_REMEDIATION| Remediate[Prescriptive Remediation Advice]
-        Classifier -->|HEALTHY| Certify[Certified: Safe to Commit]
-        Remediate -->|Agent Code Refactoring| Scan
+    subgraph Phase 4: FEEDBACK
+        Score --> Advisor[Feedback Analyzer]
+        Delta --> Advisor
+        Advisor --> Headroom[Refactoring Headroom Analysis]
+        Advisor --> Parity[Test Parity & Verification Coverage]
+        Advisor --> Quality[Docstrings & Type Annotations]
+        Advisor --> Speed[Fast-Feedback Latency Ceilings]
+        Advisor --> Praise[Positive Architectural Reinforcement]
+    end
+
+    subgraph Phase 5: ITERATE
+        Advisor --> Backlog[Autonomous SDLC Backlog Tasks]
+        Backlog --> Agent[Agent Dispatches Next Refactoring Cycle]
+        Agent --> Scan
     end
 ```
 
@@ -64,11 +72,18 @@ flowchart LR
   - Deductions: -20 per complexity violation, -25 per failed test, -15 per sanitization leak, -5 per deprecation warning.
 - Compares metrics against persistent baseline runs (`.data/iteration_baseline.json`) to track complexity deltas ($\Delta M$) and latency regressions ($\Delta t$).
 
-### 4. Phase 4: ITERATE (Prescriptive Agent Remediation)
-- If `HealthStatus` is `CRITICAL` or `NEEDS_REMEDIATION`, emits explicit, targeted recommendations:
-  - *"Decompose function `analyze` to reduce complexity from 12 to 10."*
-  - *"Remediate 2 failing tests in `tests/test_foo.py` before committing."*
-- Agent addresses root causes, re-triggers the scan, and repeats until the resource achieves `HEALTHY` status.
+### 4. Phase 4: FEEDBACK (Meaningful Improvement Analysis)
+Rather than going passive when code meets passing thresholds, the feedback engine actively probes for continuous improvement opportunities:
+- **Refactoring Headroom**: Warns on functions operating near thresholds ($7 \le M \le 10$ or nesting depth $\ge 4$) to encourage preventive modularization.
+- **Test Parity**: Flags non-test modules lacking companion test suites in `tests/test_<stem>.py`.
+- **Contract Completeness**: Identifies public functions missing descriptive docstrings or explicit type annotations.
+- **Latency Budget**: Flags test suites exceeding fast-feedback targets ($> 2.0$s) to protect agent iteration agility.
+- **Positive Reinforcement**: Certifies and highlights exemplary architectural patterns to guide peer agents.
+
+### 5. Phase 5: ITERATE / BACKLOG (Recursive Action Dispatch)
+- Ranks identified opportunities by priority (`HIGH`, `MEDIUM`, `LOW`, `INFO`).
+- Exports feedback directly to GitHub Projects / SDLC backlog tasks via `--export-backlog`.
+- Dispatches the highest priority improvement into the agent's next development cycle.
 
 ---
 

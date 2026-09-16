@@ -73,6 +73,9 @@ class ResourceScanMetrics:
     max_depth: int = 1
     complexity_violations: list[str] = field(default_factory=list)
     sanitization_violations: list[str] = field(default_factory=list)
+    near_threshold_functions: list[str] = field(default_factory=list)
+    functions_without_docstrings: list[str] = field(default_factory=list)
+    functions_without_type_hints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -121,6 +124,45 @@ class ReviewEvaluation:
         }
 
 
+class FeedbackCategory(str, Enum):
+    """Categorization of actionable feedback for recursive improvement."""
+    PROACTIVE_REFACTOR = "PROACTIVE_REFACTOR"
+    TEST_PARITY = "TEST_PARITY"
+    DOCUMENTATION = "DOCUMENTATION"
+    TYPE_SAFETY = "TYPE_SAFETY"
+    PERFORMANCE = "PERFORMANCE"
+    POSITIVE_REINFORCEMENT = "POSITIVE_REINFORCEMENT"
+
+
+class FeedbackPriority(str, Enum):
+    """Priority ranking of improvement feedback."""
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    INFO = "INFO"
+
+
+@dataclass
+class ImprovementFeedback:
+    """Meaningful feedback item driving the positive recursive improvement loop."""
+    category: FeedbackCategory
+    priority: FeedbackPriority
+    target: str
+    headline: str
+    prescriptive_guidance: str
+    suggested_action: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "category": self.category.value,
+            "priority": self.priority.value,
+            "target": self.target,
+            "headline": self.headline,
+            "prescriptive_guidance": self.prescriptive_guidance,
+            "suggested_action": self.suggested_action,
+        }
+
+
 @dataclass
 class IterationReport:
     """Top-level iteration report encompassing all evaluated resources."""
@@ -132,6 +174,7 @@ class IterationReport:
     total_failed_tests: int = 0
     total_complexity_violations: int = 0
     prescriptive_action: str = ""
+    improvement_feedback: list[ImprovementFeedback] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -143,6 +186,7 @@ class IterationReport:
             "total_complexity_violations": self.total_complexity_violations,
             "prescriptive_action": self.prescriptive_action,
             "resources_evaluated": [r.to_dict() for r in self.resources_evaluated],
+            "improvement_feedback": [f.to_dict() for f in self.improvement_feedback],
         }
 
 
@@ -214,6 +258,40 @@ class ASTMetricCalculator:
                         violations.append(f"Line {lineno}: Subdomain '{host}' detected. Use standard '{CANONICAL_MOCK_DOMAIN}'.")
 
 
+@dataclass
+class _FunctionAggregate:
+    """Helper accumulator for function-level AST metrics."""
+    max_complexity: int = 1
+    max_depth: int = 1
+    complexity_violations: list[str] = field(default_factory=list)
+    near_threshold_functions: list[str] = field(default_factory=list)
+    functions_without_docstrings: list[str] = field(default_factory=list)
+    functions_without_type_hints: list[str] = field(default_factory=list)
+
+    def update(
+        self,
+        c: int,
+        d: int,
+        c_viol: str | None,
+        d_viol: str | None,
+        near_thr: str | None,
+        miss_doc: str | None,
+        miss_type: str | None,
+    ) -> None:
+        self.max_complexity = max(self.max_complexity, c)
+        self.max_depth = max(self.max_depth, d)
+        if c_viol:
+            self.complexity_violations.append(c_viol)
+        if d_viol:
+            self.complexity_violations.append(d_viol)
+        if near_thr:
+            self.near_threshold_functions.append(near_thr)
+        if miss_doc:
+            self.functions_without_docstrings.append(miss_doc)
+        if miss_type:
+            self.functions_without_type_hints.append(miss_type)
+
+
 class ResourceScanner:
     """Scans repository files and computes structured baseline metrics."""
 
@@ -233,21 +311,9 @@ class ResourceScanner:
         func_nodes = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         class_nodes = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
 
-        max_complexity = 1
-        max_depth = 1
-        complexity_violations: list[str] = []
-
+        agg = _FunctionAggregate()
         for fn in func_nodes:
-            c = ASTMetricCalculator.calculate_complexity(fn)
-            d = ASTMetricCalculator.calculate_max_nesting(fn)
-            if c > max_complexity:
-                max_complexity = c
-            if d > max_depth:
-                max_depth = d
-            if c > MAX_ALLOWED_COMPLEXITY:
-                complexity_violations.append(f"{fn.name}:{fn.lineno} M={c} > {MAX_ALLOWED_COMPLEXITY}")
-            if d > MAX_ALLOWED_NESTING:
-                complexity_violations.append(f"{fn.name}:{fn.lineno} Depth={d} > {MAX_ALLOWED_NESTING}")
+            agg.update(*cls._inspect_function(fn))
 
         # Test suites often contain intentional mock IP strings to test sanitizers
         is_test = cls._classify_resource_type(path) == ResourceType.TEST_SUITE
@@ -259,11 +325,47 @@ class ResourceScanner:
             loc=loc,
             functions_count=len(func_nodes),
             classes_count=len(class_nodes),
-            max_complexity=max_complexity,
-            max_depth=max_depth,
-            complexity_violations=complexity_violations,
+            max_complexity=agg.max_complexity,
+            max_depth=agg.max_depth,
+            complexity_violations=agg.complexity_violations,
             sanitization_violations=sanitization_violations,
+            near_threshold_functions=agg.near_threshold_functions,
+            functions_without_docstrings=agg.functions_without_docstrings,
+            functions_without_type_hints=agg.functions_without_type_hints,
         )
+
+    @classmethod
+    def _inspect_function(
+        cls, fn: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> tuple[int, int, str | None, str | None, str | None, str | None, str | None]:
+        c = ASTMetricCalculator.calculate_complexity(fn)
+        d = ASTMetricCalculator.calculate_max_nesting(fn)
+        c_viol, d_viol, near_thr = cls._check_complexity_bounds(fn.name, fn.lineno, c, d)
+        miss_doc, miss_type = cls._check_function_contract(fn)
+        return c, d, c_viol, d_viol, near_thr, miss_doc, miss_type
+
+    @staticmethod
+    def _check_complexity_bounds(
+        name: str, lineno: int, c: int, d: int
+    ) -> tuple[str | None, str | None, str | None]:
+        c_viol = f"{name}:{lineno} M={c} > {MAX_ALLOWED_COMPLEXITY}" if c > MAX_ALLOWED_COMPLEXITY else None
+        d_viol = f"{name}:{lineno} Depth={d} > {MAX_ALLOWED_NESTING}" if d > MAX_ALLOWED_NESTING else None
+        is_near = (7 <= c <= MAX_ALLOWED_COMPLEXITY) or (4 <= d <= MAX_ALLOWED_NESTING)
+        near_thr = f"{name} (M={c}, Depth={d})" if is_near else None
+        return c_viol, d_viol, near_thr
+
+    @staticmethod
+    def _check_function_contract(
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> tuple[str | None, str | None]:
+        if fn.name.startswith("_"):
+            return None, None
+        miss_doc = fn.name if not ast.get_docstring(fn) else None
+        missing_annotation = fn.returns is None or any(
+            a.annotation is None for a in fn.args.args if a.arg not in ("self", "cls")
+        )
+        miss_type = fn.name if missing_annotation else None
+        return miss_doc, miss_type
 
     @classmethod
     def scan_directory(cls, root_dir: Path) -> list[ResourceScanMetrics]:
@@ -403,8 +505,179 @@ class OutputReviewer:
         return HealthStatus.HEALTHY
 
 
+class FeedbackAnalyzer:
+    """Analyzes scan metrics, test runs, and repository topology to generate feedback."""
+
+    @classmethod
+    def generate_feedback(
+        cls,
+        evaluations: list[ReviewEvaluation],
+        root_dir: Path,
+    ) -> list[ImprovementFeedback]:
+        feedback: list[ImprovementFeedback] = []
+        for eval_item in evaluations:
+            cls._analyze_refactoring_headroom(eval_item, feedback)
+            cls._analyze_documentation_and_typing(eval_item, feedback)
+            cls._analyze_execution_telemetry(eval_item, feedback)
+            cls._analyze_positive_reinforcement(eval_item, feedback)
+        cls._analyze_test_parity(evaluations, feedback)
+        return sorted(feedback, key=lambda f: (cls._priority_rank(f.priority), f.target))
+
+    @staticmethod
+    def _priority_rank(priority: FeedbackPriority) -> int:
+        rank_map = {
+            FeedbackPriority.HIGH: 0,
+            FeedbackPriority.MEDIUM: 1,
+            FeedbackPriority.LOW: 2,
+            FeedbackPriority.INFO: 3,
+        }
+        return rank_map.get(priority, 4)
+
+    @classmethod
+    def _analyze_refactoring_headroom(
+        cls,
+        item: ReviewEvaluation,
+        feedback: list[ImprovementFeedback],
+    ) -> None:
+        scan = item.scan_metrics
+        if not scan.near_threshold_functions:
+            return
+        funcs_str = ", ".join(scan.near_threshold_functions[:3])
+        feedback.append(
+            ImprovementFeedback(
+                category=FeedbackCategory.PROACTIVE_REFACTOR,
+                priority=FeedbackPriority.MEDIUM,
+                target=scan.file_path,
+                headline=f"Complexity/nesting near ceiling in {Path(scan.file_path).name}",
+                prescriptive_guidance=(
+                    f"Functions operating near threshold: {funcs_str}. "
+                    "Proactive decomposition prevents future invariant violations."
+                ),
+                suggested_action="Decompose branching logic into predicate helpers or table-driven dispatch.",
+            )
+        )
+
+    @classmethod
+    def _analyze_documentation_and_typing(
+        cls,
+        item: ReviewEvaluation,
+        feedback: list[ImprovementFeedback],
+    ) -> None:
+        scan = item.scan_metrics
+        if scan.resource_type == ResourceType.TEST_SUITE:
+            return
+
+        stem = Path(scan.file_path).name
+        if scan.functions_without_docstrings:
+            funcs = ", ".join(scan.functions_without_docstrings[:4])
+            feedback.append(
+                ImprovementFeedback(
+                    category=FeedbackCategory.DOCUMENTATION,
+                    priority=FeedbackPriority.LOW,
+                    target=scan.file_path,
+                    headline=f"{len(scan.functions_without_docstrings)} public function(s) in {stem} lack docstrings",
+                    prescriptive_guidance=f"Public functions without docstrings: {funcs}. Clear docstrings clarify contracts for peer agents.",
+                    suggested_action="Add descriptive docstrings with argument and return types.",
+                )
+            )
+
+        if scan.functions_without_type_hints:
+            funcs = ", ".join(scan.functions_without_type_hints[:4])
+            feedback.append(
+                ImprovementFeedback(
+                    category=FeedbackCategory.TYPE_SAFETY,
+                    priority=FeedbackPriority.LOW,
+                    target=scan.file_path,
+                    headline=f"{len(scan.functions_without_type_hints)} public function(s) in {stem} lack complete typing",
+                    prescriptive_guidance=f"Functions lacking return/param hints: {funcs}. Complete annotations enforce static guarantees.",
+                    suggested_action="Add explicit return types and parameter annotations across public functions.",
+                )
+            )
+
+    @classmethod
+    def _analyze_execution_telemetry(
+        cls,
+        item: ReviewEvaluation,
+        feedback: list[ImprovementFeedback],
+    ) -> None:
+        run = item.run_result
+        if not run:
+            return
+        if run.duration_seconds > 2.0:
+            stem = Path(item.resource_path).name
+            feedback.append(
+                ImprovementFeedback(
+                    category=FeedbackCategory.PERFORMANCE,
+                    priority=FeedbackPriority.MEDIUM,
+                    target=item.resource_path,
+                    headline=f"Test latency in {stem} ({run.duration_seconds:.2f}s) exceeds 2.0s fast-feedback ceiling",
+                    prescriptive_guidance="Fast feedback loops (< 1.5s) are vital for autonomous agent agility.",
+                    suggested_action="Profile slow fixtures, parallelize independent cases, or isolate mock timeouts.",
+                )
+            )
+
+    @classmethod
+    def _analyze_positive_reinforcement(
+        cls,
+        item: ReviewEvaluation,
+        feedback: list[ImprovementFeedback],
+    ) -> None:
+        scan = item.scan_metrics
+        if (
+            item.health_status == HealthStatus.HEALTHY
+            and item.quality_score == 100.0
+            and scan.max_complexity <= 5
+            and not scan.near_threshold_functions
+        ):
+            stem = Path(scan.file_path).name
+            feedback.append(
+                ImprovementFeedback(
+                    category=FeedbackCategory.POSITIVE_REINFORCEMENT,
+                    priority=FeedbackPriority.INFO,
+                    target=scan.file_path,
+                    headline=f"Architectural excellence in {stem}",
+                    prescriptive_guidance=f"Zero defects, compact complexity (M={scan.max_complexity}, depth={scan.max_depth}), and clean structure.",
+                    suggested_action="Preserve this structure and use as a reference design pattern for new resources.",
+                )
+            )
+
+    @classmethod
+    def _analyze_test_parity(
+        cls,
+        evaluations: list[ReviewEvaluation],
+        feedback: list[ImprovementFeedback],
+    ) -> None:
+        test_stems = {
+            Path(e.resource_path).stem.lower()
+            for e in evaluations
+            if e.scan_metrics.resource_type == ResourceType.TEST_SUITE
+        }
+
+        for item in evaluations:
+            scan = item.scan_metrics
+            if scan.resource_type not in (ResourceType.PYTHON_MODULE, ResourceType.SAMPLE_APP):
+                continue
+            stem = Path(scan.file_path).stem.lower()
+            has_test = (
+                f"test_{stem}" in test_stems
+                or f"{stem}_test" in test_stems
+                or any(stem in ts for ts in test_stems)
+            )
+            if not has_test:
+                feedback.append(
+                    ImprovementFeedback(
+                        category=FeedbackCategory.TEST_PARITY,
+                        priority=FeedbackPriority.HIGH,
+                        target=scan.file_path,
+                        headline=f"Missing companion test suite for {Path(scan.file_path).name}",
+                        prescriptive_guidance=f"Module '{scan.file_path}' does not have a matching test suite in tests/.",
+                        suggested_action=f"Create 'tests/test_{Path(scan.file_path).stem}.py' to expand automated verification.",
+                    )
+                )
+
+
 class ResourceIterationWorkbench:
-    """Coordinates the end-to-end Scan -> Run -> Review -> Iterate loop."""
+    """Coordinates the end-to-end Scan -> Run -> Review -> Feedback -> Iterate loop."""
 
     def __init__(self, root_dir: Path, baseline_path: Path | None = None) -> None:
         self.root_dir = root_dir
@@ -434,8 +707,13 @@ class ResourceIterationWorkbench:
             evaluation = OutputReviewer.evaluate(scan, run_res, base_entry)
             evaluations.append(evaluation)
 
-        # Phase 4: ITERATE
-        report = self._synthesize_report(evaluations, total_passed, total_failed, total_violations)
+        # Phase 4: FEEDBACK (Meaningful Improvement Analysis)
+        feedback_items = FeedbackAnalyzer.generate_feedback(evaluations, self.root_dir)
+
+        # Phase 5: ITERATE
+        report = self._synthesize_report(
+            evaluations, total_passed, total_failed, total_violations, feedback_items
+        )
         self._save_baseline(evaluations)
         return report
 
@@ -446,10 +724,22 @@ class ResourceIterationWorkbench:
         return [s for s in scans if regex.search(s.file_path)]
 
     def _synthesize_report(
-        self, evals: list[ReviewEvaluation], passed: int, failed: int, violations: int
+        self,
+        evals: list[ReviewEvaluation],
+        passed: int,
+        failed: int,
+        violations: int,
+        feedback: list[ImprovementFeedback] | None = None,
     ) -> IterationReport:
+        fb_list = feedback or []
         if not evals:
-            return IterationReport(time.strftime("%Y-%m-%dT%H:%M:%SZ"), HealthStatus.HEALTHY, 100.0, [])
+            return IterationReport(
+                time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                HealthStatus.HEALTHY,
+                100.0,
+                [],
+                improvement_feedback=fb_list,
+            )
 
         avg_score = round(sum(e.quality_score for e in evals) / len(evals), 1)
         any_critical = any(e.health_status == HealthStatus.CRITICAL for e in evals)
@@ -463,7 +753,7 @@ class ResourceIterationWorkbench:
             action = "Refactor modules with high nesting or warnings to reach 100% quality gate."
         else:
             overall_health = HealthStatus.HEALTHY
-            action = "All repository resources certified. Ready for push or release."
+            action = self._determine_healthy_action(fb_list)
 
         return IterationReport(
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -474,7 +764,16 @@ class ResourceIterationWorkbench:
             total_failed_tests=failed,
             total_complexity_violations=violations,
             prescriptive_action=action,
+            improvement_feedback=fb_list,
         )
+
+    @staticmethod
+    def _determine_healthy_action(feedback: list[ImprovementFeedback]) -> str:
+        actionable = [f for f in feedback if f.category != FeedbackCategory.POSITIVE_REINFORCEMENT]
+        if actionable:
+            top = actionable[0]
+            return f"Certified healthy. Positive feedback opportunity [{top.category.value}]: {top.headline}"
+        return "All repository resources certified. Ready for push or release."
 
     def render_report(self, report: IterationReport) -> str:
         lines = [
@@ -499,8 +798,26 @@ class ResourceIterationWorkbench:
             for rec in e.actionable_recommendations:
                 lines.append(f"    👉 {rec}")
 
+        if report.improvement_feedback:
+            lines.extend(self._render_feedback_section(report.improvement_feedback))
+
         lines.append("==========================================================================================")
         return "\n".join(lines)
+
+    @staticmethod
+    def _render_feedback_section(feedback: list[ImprovementFeedback]) -> list[str]:
+        lines = [
+            "------------------------------------------------------------------------------------------",
+            f"💡 POSITIVE FEEDBACK LOOP — MEANINGFUL IMPROVEMENT OPPORTUNITIES ({len(feedback)} IDENTIFIED)",
+            "------------------------------------------------------------------------------------------",
+        ]
+        for fb in feedback[:8]:
+            lines.append(f"[{fb.priority.value}] [{fb.category.value}] {Path(fb.target).name}")
+            lines.append(f"  Headline: {fb.headline}")
+            lines.append(f"  Guidance: {fb.prescriptive_guidance}")
+            lines.append(f"  Next Action: {fb.suggested_action}")
+            lines.append("")
+        return lines
 
     def _load_baseline(self) -> dict[str, Any]:
         if not self.baseline_path.is_file():
@@ -525,6 +842,35 @@ class ResourceIterationWorkbench:
         except OSError:
             pass
 
+    @staticmethod
+    def export_feedback_to_sdlc(feedback_items: list[ImprovementFeedback]) -> list[dict[str, Any]]:
+        """Converts improvement feedback into structured SDLC backlog tasks."""
+        tasks: list[dict[str, Any]] = []
+        priority_map = {
+            FeedbackPriority.HIGH: "P1_HIGH",
+            FeedbackPriority.MEDIUM: "P2_MEDIUM",
+            FeedbackPriority.LOW: "P3_LOW",
+            FeedbackPriority.INFO: "P3_LOW",
+        }
+        for idx, item in enumerate(feedback_items, start=1):
+            if item.category == FeedbackCategory.POSITIVE_REINFORCEMENT:
+                continue
+            tasks.append({
+                "resource_id": f"fb-{idx}",
+                "kind": "issue",
+                "number": 1000 + idx,
+                "title": f"[{item.category.value}] {item.headline}",
+                "labels": ["enhancement", item.category.value.lower()],
+                "lifecycle_state": "Backlog",
+                "priority": priority_map.get(item.priority, "P2_MEDIUM"),
+                "effort_points": 2 if item.priority == FeedbackPriority.LOW else 5,
+                "business_value": 8 if item.priority == FeedbackPriority.HIGH else 4,
+                "prescriptive_guidance": item.prescriptive_guidance,
+                "suggested_action": item.suggested_action,
+                "target": item.target,
+            })
+        return tasks
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Resource Iteration Workbench for AI Agents.")
@@ -532,6 +878,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pattern", "-p", type=str, default=None, help="Regex pattern to filter target files.")
     parser.add_argument("--skip-tests", action="store_true", help="Skip executing test suites.")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON report.")
+    parser.add_argument("--export-backlog", type=Path, default=None, help="Export feedback to SDLC backlog JSON.")
     return parser
 
 
@@ -541,6 +888,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     workbench = ResourceIterationWorkbench(root_dir=args.root)
     report = workbench.run_cycle(target_pattern=args.pattern, execute_tests=not args.skip_tests)
+
+    if args.export_backlog:
+        tasks = workbench.export_feedback_to_sdlc(report.improvement_feedback)
+        args.export_backlog.parent.mkdir(parents=True, exist_ok=True)
+        args.export_backlog.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+        print(f"Exported {len(tasks)} feedback items to {args.export_backlog}")
 
     if args.json:
         print(json.dumps(report.to_dict(), indent=2))

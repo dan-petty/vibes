@@ -10,13 +10,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 from resource_iteration_workbench import (
     ASTMetricCalculator,
+    FeedbackAnalyzer,
+    FeedbackCategory,
+    FeedbackPriority,
     HealthStatus,
+    ImprovementFeedback,
     OutputReviewer,
     ResourceIterationWorkbench,
     ResourceRunner,
     ResourceScanMetrics,
     ResourceScanner,
     ResourceType,
+    ReviewEvaluation,
     RunExecutionResult,
     main,
 )
@@ -156,3 +161,127 @@ def test_cli_main_entrypoint(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert "overall_health" in data
     assert "overall_score" in data
     assert "resources_evaluated" in data
+    assert "improvement_feedback" in data
+
+
+def test_feedback_analyzer_refactoring_headroom() -> None:
+    """Ensure FeedbackAnalyzer detects near-threshold complexity and nesting."""
+    scan = ResourceScanMetrics(
+        file_path="tools/analyzer.py",
+        resource_type=ResourceType.PYTHON_MODULE,
+        max_complexity=8,
+        max_depth=4,
+        near_threshold_functions=["route_packet (M=8, Depth=4)"],
+    )
+    eval_item = ReviewEvaluation(
+        resource_path="tools/analyzer.py",
+        health_status=HealthStatus.HEALTHY,
+        quality_score=100.0,
+        scan_metrics=scan,
+    )
+    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    refactors = [f for f in feedback if f.category == FeedbackCategory.PROACTIVE_REFACTOR]
+    assert len(refactors) == 1
+    assert refactors[0].priority == FeedbackPriority.MEDIUM
+    assert "route_packet" in refactors[0].prescriptive_guidance
+
+
+def test_feedback_analyzer_documentation_and_typing() -> None:
+    """Ensure FeedbackAnalyzer flags public functions missing docstrings or type hints."""
+    scan = ResourceScanMetrics(
+        file_path="tools/service.py",
+        resource_type=ResourceType.PYTHON_MODULE,
+        functions_without_docstrings=["start_engine"],
+        functions_without_type_hints=["start_engine"],
+    )
+    eval_item = ReviewEvaluation(
+        resource_path="tools/service.py",
+        health_status=HealthStatus.HEALTHY,
+        quality_score=100.0,
+        scan_metrics=scan,
+    )
+    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    docs = [f for f in feedback if f.category == FeedbackCategory.DOCUMENTATION]
+    types = [f for f in feedback if f.category == FeedbackCategory.TYPE_SAFETY]
+    assert len(docs) == 1
+    assert len(types) == 1
+    assert "start_engine" in docs[0].prescriptive_guidance
+    assert "start_engine" in types[0].prescriptive_guidance
+
+
+def test_feedback_analyzer_test_parity() -> None:
+    """Ensure FeedbackAnalyzer detects missing companion test suites."""
+    mod_scan = ResourceScanMetrics(
+        file_path="tools/orphan_module.py",
+        resource_type=ResourceType.PYTHON_MODULE,
+    )
+    eval_item = ReviewEvaluation(
+        resource_path="tools/orphan_module.py",
+        health_status=HealthStatus.HEALTHY,
+        quality_score=100.0,
+        scan_metrics=mod_scan,
+    )
+    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    parity = [f for f in feedback if f.category == FeedbackCategory.TEST_PARITY]
+    assert len(parity) == 1
+    assert parity[0].priority == FeedbackPriority.HIGH
+    assert "orphan_module" in parity[0].headline
+
+
+def test_feedback_analyzer_positive_reinforcement() -> None:
+    """Ensure clean, elegant modules receive positive reinforcement certifications."""
+    mod_scan = ResourceScanMetrics(
+        file_path="tools/elegant.py",
+        resource_type=ResourceType.PYTHON_MODULE,
+        max_complexity=3,
+        max_depth=2,
+    )
+    eval_item = ReviewEvaluation(
+        resource_path="tools/elegant.py",
+        health_status=HealthStatus.HEALTHY,
+        quality_score=100.0,
+        scan_metrics=mod_scan,
+    )
+    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    reinforce = [f for f in feedback if f.category == FeedbackCategory.POSITIVE_REINFORCEMENT]
+    assert len(reinforce) == 1
+    assert "elegant" in reinforce[0].headline
+
+
+def test_export_feedback_to_sdlc_tasks() -> None:
+    """Ensure feedback items are mapped to structured SDLC backlog tasks."""
+    feedback_items = [
+        ImprovementFeedback(
+            category=FeedbackCategory.PROACTIVE_REFACTOR,
+            priority=FeedbackPriority.MEDIUM,
+            target="tools/parser.py",
+            headline="Decompose complex parser",
+            prescriptive_guidance="M=9 approaching cap",
+            suggested_action="Refactor into helpers",
+        ),
+        ImprovementFeedback(
+            category=FeedbackCategory.POSITIVE_REINFORCEMENT,
+            priority=FeedbackPriority.INFO,
+            target="tools/clean.py",
+            headline="Elegance achieved",
+            prescriptive_guidance="Great design",
+            suggested_action="Preserve pattern",
+        ),
+    ]
+    tasks = ResourceIterationWorkbench.export_feedback_to_sdlc(feedback_items)
+    assert len(tasks) == 1
+    assert tasks[0]["priority"] == "P2_MEDIUM"
+    assert tasks[0]["kind"] == "issue"
+    assert "PROACTIVE_REFACTOR" in tasks[0]["title"]
+
+
+def test_cli_export_backlog_flag(tmp_path: Path) -> None:
+    """Ensure --export-backlog writes a valid backlog file via CLI."""
+    (tmp_path / "module.py").write_text("def run(): pass\n", encoding="utf-8")
+    backlog_path = tmp_path / "backlog.json"
+
+    exit_code = main(["--root", str(tmp_path), "--skip-tests", "--export-backlog", str(backlog_path)])
+    assert exit_code == 0
+    assert backlog_path.is_file()
+    data = json.loads(backlog_path.read_text(encoding="utf-8"))
+    assert isinstance(data, list)
