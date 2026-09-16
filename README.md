@@ -66,7 +66,9 @@ vibes/
 │   ├── fifo-pull-request-shepherding.md
 │   ├── root-cause-hardening.md
 │   ├── epistemic-hygiene-and-context-pruning.md
-│   └── zero-trust-sandboxing-and-observability.md
+│   ├── zero-trust-sandboxing-and-observability.md
+│   ├── adaptive-headless-web-crawling.md
+│   └── autonomous-sdlc-project-management.md
 │
 ├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
 │   ├── prompts/
@@ -95,11 +97,13 @@ vibes/
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
-│   └── project_tooling.py             # CLI for issue triage and self-hardening audits
+│   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
+│   └── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │
 └── tests/                             # Automated test suites for tools and harnesses
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
-    └── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
+    ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
+    └── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
 ```
 
 ---
@@ -155,6 +159,7 @@ graph TD
 - [**Epistemic Hygiene & Context Pruning**](./patterns/epistemic-hygiene-and-context-pruning.md): Human-like cognitive information foraging, multi-scale outlines, and bounded string caps ($\le 256$ chars).
 - [**Zero-Trust Sandboxing & Distributed Observability**](./patterns/zero-trust-sandboxing-and-observability.md): Defense-in-depth pairing rootless, capability-dropped sandboxes and SSRF egress blocking with real-time OTLP span streaming.
 - [**Adaptive Headless Web Crawling**](./patterns/adaptive-headless-web-crawling.md): Two-tier dynamic escalation, SPA shell detection, noise/modal pruning, and persistent domain strategy memory.
+- [**Autonomous SDLC Project Management**](./patterns/autonomous-sdlc-project-management.md): Deterministic multi-dimensional prioritization, dependency graph cycle analysis, and prescriptive agent next-action dispatch.
 
 ---
 
@@ -248,6 +253,7 @@ flowchart LR
 
 ### Tooling & Automated Workflows:
 - [**Project Tooling CLI (`tools/project_tooling.py`)**](./tools/project_tooling.py): Rate-managed client for issue classification, acceptance criteria parsing, and self-hardening audits.
+- [**SDLC Project Manager CLI (`tools/sdlc_project_manager.py`)**](./tools/sdlc_project_manager.py): Deterministic multi-dimensional priority scoring, dependency graph cycle detection, and agent next-action dispatch.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
 - [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Automated diff inspection blocking complexity creep and IP leaks.
