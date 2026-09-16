@@ -1,0 +1,48 @@
+name: CI Quality Gate & Invariant Certification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Verify Invariants & Test Suites
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio
+
+      - name: Execute Automated Unit & Concurrency Tests
+        run: |
+          pytest examples/ast-invariant-sentinel/test_sentinel.py \
+                 examples/fastmcp-token-bucket-gateway/test_gateway.py \
+                 examples/cegis-debugging-workbench/test_workbench.py \
+                 tests/test_project_tooling.py -v
+
+      - name: Run AST Invariant Sentinel Gates
+        run: |
+          python examples/ast-invariant-sentinel/sentinel.py examples
+          python examples/ast-invariant-sentinel/sentinel.py tools/project_tooling.py
+
+      - name: Validate FastMCP JSON Schema Manifests
+        run: |
+          python -m json.tool artifacts/schemas/fastmcp-agent-tool-manifest-spec.json > /dev/null

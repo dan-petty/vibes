@@ -28,6 +28,15 @@ Here you will find:
 
 ```
 vibes/
+├── .github/
+│   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
+│   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
+│   └── workflows/                     # Autonomous recursive CI/CD workflows
+│       ├── ci.yml                     # Multi-version test & AST invariant certification
+│       ├── autonomous-triage.yml      # Autonomous taxonomy labeling & onboarding
+│       ├── pr-sentinel.yml            # Automated PR diff invariant gate & certification
+│       └── recursive-hardening.yml    # Closed-loop AGENTS.md hardening audit
+│
 ├── AGENTS.md                          # Foundational agent operating instructions for vibes
 ├── LICENSE                            # Apache 2.0 open-source license
 ├── README.md                          # Repository homepage and exhibition tour (this file)
@@ -63,10 +72,16 @@ vibes/
 │   └── schemas/
 │       └── fastmcp-agent-tool-manifest-spec.json
 │
-└── examples/                          # Executable reference sample applications
-    ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
-    ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
-    └── cegis-debugging-workbench/     # Counterexample synthesis testbench
+├── examples/                          # Executable reference sample applications
+│   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
+│   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
+│   └── cegis-debugging-workbench/     # Counterexample synthesis testbench
+│
+├── tools/                             # Autonomous project management tooling
+│   └── project_tooling.py             # CLI for issue triage and self-hardening audits
+│
+└── tests/                             # Automated test suites for tools and harnesses
+    └── test_project_tooling.py        # Unit tests for autonomous project engine
 ```
 
 ---
@@ -138,6 +153,30 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 Follow our multi-milestone evolution from foundational case studies to polyglot testbeds, multi-agent benchmark suites, and autonomous self-curating swarms.
 
 - Read the full [**Strategic Roadmap (`docs/ROADMAP.md`)**](./docs/ROADMAP.md).
+
+---
+
+## 🤖 Autonomous Recursive Development Cycle & Tooling
+
+`vibes` operates on a **positive recursive development cycle** designed for autonomous operation with **zero required human manual intervention**:
+
+```mermaid
+flowchart LR
+    Issue[Issue / Goal] --> Triage["autonomous-triage.yml<br>(tools/project_tooling.py)"]
+    Triage --> Ground[Auto-Label & Ground Acceptance Criteria]
+    Ground --> AgentDev[Agent TDD Implementation]
+    AgentDev --> PRSentinel["pr-sentinel.yml<br>(AST Invariant Gate)"]
+    PRSentinel --> Merge[Merge PR]
+    Merge --> Hardening["recursive-hardening.yml<br>(AGENTS.md Audit)"]
+    Hardening --> Next[Self-Hardened Knowledge Base]
+```
+
+### Tooling & Automated Workflows:
+- [**Project Tooling CLI (`tools/project_tooling.py`)**](./tools/project_tooling.py): Rate-managed client for issue classification, acceptance criteria parsing, and self-hardening audits.
+- [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
+- [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
+- [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Automated diff inspection blocking complexity creep and IP leaks.
+- [**Recursive Self-Hardening (`.github/workflows/recursive-hardening.yml`)**](./.github/workflows/recursive-hardening.yml): Enforces the mandate that every defect fix must harden `AGENTS.md`.
 
 ---
 

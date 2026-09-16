@@ -1,0 +1,87 @@
+name: Autonomous Issue Triage & Project Grounding
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  triage:
+    name: Taxonomize & Ground Issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Autonomous Triage Tooling
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          cat << 'EOF' > /tmp/issue_body.md
+          ${{ github.event.issue.body }}
+          EOF
+
+          python tools/project_tooling.py triage-issue \
+            --number "${ISSUE_NUMBER}" \
+            --title "${ISSUE_TITLE}" \
+            --body-file /tmp/issue_body.md > /tmp/triage_plan.txt
+
+          cat /tmp/triage_plan.txt
+
+      - name: Apply Taxonomical Labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('/tmp/triage_plan.txt', 'utf8');
+            
+            // Extract labels line: '   Labels: ['...', '...']'
+            const match = plan.match(/Labels:\s*\[(.*?)\]/);
+            if (match && match[1]) {
+              const labels = match[1]
+                .split(',')
+                .map(s => s.replace(/['" ]/g, ''))
+                .filter(Boolean);
+              
+              if (labels.length > 0) {
+                console.log(`Applying labels: ${labels.join(', ')}`);
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: labels,
+                });
+              }
+            }
+
+      - name: Post Autonomous Onboarding Comment
+        if: github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('/tmp/triage_plan.txt', 'utf8');
+            
+            // Extract comment portion after header
+            const parts = plan.split('### 🤖 Autonomous Project Grounding');
+            if (parts.length > 1) {
+              const commentBody = '### 🤖 Autonomous Project Grounding' + parts[1].trim();
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }

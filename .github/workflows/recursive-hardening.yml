@@ -1,0 +1,75 @@
+name: Recursive Self-Hardening Feedback Loop
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  audit-hardening:
+    name: Verify Instruction Hardening on Merged Defect
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Inspect PR Labels for Defect Classification
+        id: classify
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const isDefect = labels.some(l => ['bug', 'defect', 'regression'].includes(l.toLowerCase()));
+            console.log(`PR #${context.payload.pull_request.number} isDefect: ${isDefect}`);
+            core.setOutput('is_defect', isDefect);
+
+      - name: Audit Self-Hardening in Diff
+        id: audit
+        if: steps.classify.outputs.is_defect == 'true'
+        run: |
+          git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.merge_commit_sha }} > /tmp/pr_diff.patch
+          
+          python tools/project_tooling.py verify-hardening \
+            --diff-file /tmp/pr_diff.patch \
+            --is-defect || echo "hardening_failed=true" >> $GITHUB_ENV
+
+      - name: Open Self-Hardening Issue if Hardening Missing
+        if: env.hardening_failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const issueTitle = `[Self-Hardening]: Codify preventative guardrails in AGENTS.md for PR #${pr.number}`;
+            const issueBody = `### 🔄 Positive Recursive Development: Missing AGENTS.md Hardening
+            
+            Pull request #${pr.number} resolved a defect (*"${pr.title}"*), but no preventative guardrails or rules were added to \`AGENTS.md\`.
+            
+            **Autonomous Rule Mandate**:
+            > *Whenever an agent or workflow fixes a bug, it must harden \`AGENTS.md\` with defensive rules to prevent recurrence.*
+            
+            **Action Required**:
+            - [ ] Review the root cause of PR #${pr.number}.
+            - [ ] Propose an update to \`AGENTS.md\` with a defensive pre-flight check or invariant rule.
+            - [ ] Open a PR linked to this issue.
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: ['hardening', 'triage-needed']
+            });

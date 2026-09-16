@@ -97,3 +97,32 @@ Every pattern under `patterns/` must provide an actionable operational playbook:
 
 - **Prompt Defect Tracking**: If an AI agent encounters a formatting error, broken link, or ambiguity while operating in `vibes`, the agent MUST immediately fix the underlying cause and update `AGENTS.md` with defensive instructions.
 - **Zero Zombie Code & Stale Artifacts**: Ruthlessly remove obsolete notes or broken links. Keep the repository clean, modern, and exemplary at all times.
+
+---
+
+## 8. Autonomous Recursive Development Protocol & Project Tooling
+
+To ensure the repository thrives with **zero required human manual intervention**, autonomous agents must follow the closed-loop recursive development lifecycle:
+
+```mermaid
+flowchart LR
+    Triage["1. tools/project_tooling.py triage-issue"] --> Dev["2. TDD & Invariant Implementation"]
+    Dev --> LocalSentinel["3. Local Sentinel Audit (Complexity <= 10)"]
+    LocalSentinel --> PR["4. Open PR -> pr-sentinel.yml Certifies"]
+    PR --> Merge["5. Merge & recursive-hardening.yml Audits"]
+    Merge --> Harden["6. Codify New Guardrail in AGENTS.md"]
+    Harden --> Triage
+```
+
+### Operational Rules for Agents:
+1. **Automated Issue Triage**:
+   - When handling an issue, run `python tools/project_tooling.py triage-issue --number <num> --title "<title>" --body-file <path>` to extract taxonomy labels and verify acceptance criteria.
+2. **Pre-Push Local Sentinel Certification**:
+   - Before opening a pull request, run `python examples/ast-invariant-sentinel/sentinel.py <modified_files>`.
+   - Verify that cyclomatic complexity remains $\le 10$, nesting depth $\le 5$, and zero RFC 1918 private IPs are exposed.
+3. **The Mandatory Self-Hardening Rule**:
+   - Whenever authoring a pull request that addresses an issue labeled `bug`, `defect`, or `regression`, the agent **MUST ALWAYS MODIFY `AGENTS.md`** to add a concrete preventative rule or guardrail.
+   - PRs addressing defects that do not touch `AGENTS.md` will fail the automated `recursive-hardening.yml` check.
+4. **Autonomous Review Thread Resolution**:
+   - If the `pr-sentinel.yml` bot leaves a review comment or request for remediation, the agent must treat the sentinel feedback as an unyielding boundary condition, refactor the code to satisfy the metric, and re-push.
+

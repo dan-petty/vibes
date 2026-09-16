@@ -45,7 +45,12 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [x] **AST Invariant Sentinel Reference App (`examples/ast-invariant-sentinel/`)**: Executable Python static analyzer checking cyclomatic complexity, nesting depth, and IP sanitization with automated `pytest` test suite.
 - [x] **FastMCP Token-Bucket Gateway Reference App (`examples/fastmcp-token-bucket-gateway/`)**: Asynchronous, client-side rate limiter and tool dispatcher with burst capacity and jittered backoff.
 - [x] **CEGIS Debugging Workbench Reference App (`examples/cegis-debugging-workbench/`)**: Executable simulation of hypothesis-driven counterexample accumulation and candidate patch convergence.
-- [ ] **Automated CI Validation Workflow (`.github/workflows/ci.yml`)**: Continuous verification of all sample app test suites (`pytest`) and markdown link integrity.
+- [x] **Automated CI Validation Workflow (`.github/workflows/ci.yml`)**: Continuous verification of all sample app test suites (`pytest`), AST Invariant Sentinel checks, and FastMCP schema integrity.
+- [x] **Autonomous GitHub Project Tooling (`tools/project_tooling.py`)**: Rate-managed CLI and library for issue classification, acceptance criteria tracking, and recursive self-hardening auditing.
+- [x] **Autonomous Workflow Suite (`.github/workflows/`)**:
+  - `autonomous-triage.yml`: Automatic taxonomy classification, labeling, and onboarding comments.
+  - `pr-sentinel.yml`: Invariant sentinel gating PRs with automatic feedback and certification labels.
+  - `recursive-hardening.yml`: Closed-loop self-hardening verification on merged defect fixes.
 - [ ] **Polyglot Case Studies (TypeScript & Rust)**: Expanding empirical observations to type-level compile-time guarantees in Rust and strict TypeScript AST visitors.
 
 ### Milestone 3: Multi-Agent Benchmark Suites & Telemetry Mesh (v0.3.0 - Future Vision)
@@ -69,7 +74,8 @@ High-density product roadmap, engineering milestones, and open-source curation s
 |---|---|---|---|---|---|---|
 | **Quick Wins** | Executable Sample Apps (`sentinel`, `gateway`, `workbench`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 |  | Strategic Product Roadmap (`docs/ROADMAP.md`) | Markdown / Planning | High | Low | v0.2.0 | ✅ Completed |
-|  | GitHub Actions CI Test Workflow | GitHub Workflows / `pytest` | High | Low | v0.2.0 | 📋 Scheduled |
+|  | GitHub Actions CI & Recursive Workflows | GitHub Workflows / `pytest` | High | Low | v0.2.0 | ✅ Completed |
+|  | Autonomous Project Tooling (`tools/`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 | **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest-benchmark` / LLM Harness | High | High | v0.3.0 | 💡 Future Vision |
 |  | Self-Curating PR Review & Invariant Bot | FastMCP / GitHub Actions | High | High | v1.0.0 | 💡 Future Vision |
 |  | OpenTelemetry Agent Waterfall Traces | OpenTelemetry / Jaeger | Medium | Medium | v0.3.0 | 💡 Future Vision |
