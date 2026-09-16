@@ -88,6 +88,7 @@ class SDLCResource:
     calculated_score: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize SDLC resource state to JSON-compatible dictionary."""
         data = asdict(self)
         data["kind"] = self.kind.value
         data["lifecycle_state"] = self.lifecycle_state.value
@@ -345,6 +346,7 @@ def load_resources_from_json(path: Path) -> list[SDLCResource]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Construct CLI argument parser for SDLC project manager."""
     parser = argparse.ArgumentParser(description="Autonomous SDLC Project Management & Prioritization Engine.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -390,6 +392,7 @@ def _handle_next(manager: SDLCProjectManager) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Execute SDLC project manager command line interface."""
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 

@@ -89,6 +89,7 @@ class FuzzSuiteReport:
     evaluations: list[InvariantEvaluation] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize fuzz suite scorecard to JSON-compatible dictionary."""
         return {
             "total_runs": self.total_runs,
             "clean_runs": self.clean_runs,
@@ -215,6 +216,7 @@ class InvariantAuditor:
 
     @classmethod
     def evaluate_code(cls, target_name: str, code_str: str) -> InvariantEvaluation:
+        """Evaluate Python code snippet against AST complexity, nesting, and sanitization bounds."""
         try:
             tree = ast.parse(code_str)
         except SyntaxError as err:
@@ -260,17 +262,17 @@ class InvariantAuditor:
     def _calculate_depth(cls, root: ast.AST) -> int:
         nesting_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith, ast.Try, ast.ExceptHandler)
 
-        def walk(node: ast.AST, depth: int) -> int:
+        def _walk(node: ast.AST, depth: int) -> int:
             cur = depth + 1 if isinstance(node, nesting_types) else depth
             deepest = cur
             for child in ast.iter_child_nodes(node):
-                sub = walk(child, cur)
+                sub = _walk(child, cur)
                 if sub > deepest:
                     deepest = sub
             return deepest
 
         body = getattr(root, "body", [])
-        return max((walk(stmt, 1) for stmt in body), default=0)
+        return max((_walk(stmt, 1) for stmt in body), default=0)
 
     @classmethod
     def _check_sanitization(cls, tree: ast.AST) -> list[str]:
@@ -324,6 +326,7 @@ class PromptMutationFuzzer:
         base_prompt: str,
         eval_cases: list[tuple[PerturbationKind, str]],
     ) -> FuzzSuiteReport:
+        """Evaluate prompt drift matrix and compile vulnerability breakdown scorecard."""
         evaluations: list[InvariantEvaluation] = []
         vulnerabilities: dict[str, int] = {k.value: 0 for k in PerturbationKind}
 
@@ -348,6 +351,7 @@ class PromptMutationFuzzer:
         )
 
     def render_report(self, report: FuzzSuiteReport) -> str:
+        """Format fuzz suite report into human-readable ASCII table scorecard."""
         lines = [
             "==========================================================================================",
             "⚡ PROMPT MUTATION SUITE & INVARIANT FUZZER — DRIFT SCORECARD",
@@ -367,6 +371,7 @@ class PromptMutationFuzzer:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Construct CLI argument parser for the prompt mutation fuzzer."""
     parser = argparse.ArgumentParser(description="Interactive Prompt Mutation Suite & Invariant Fuzzer.")
     parser.add_argument("--prompt-file", "-f", type=Path, default=None, help="Path to base system prompt file.")
     parser.add_argument("--intensity", "-i", type=float, default=0.5, help="Mutation intensity (0.0 to 1.0).")
@@ -375,6 +380,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Execute prompt mutation fuzzer CLI and return exit code."""
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 

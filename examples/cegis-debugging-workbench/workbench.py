@@ -140,6 +140,7 @@ class CEGISRunner:
 
 
 def main() -> None:
+    """Execute counterexample-guided inductive synthesis debugging loop demonstration."""
     print("🔬 CEGIS Debugging Workbench Demo\n")
 
     baseline = [

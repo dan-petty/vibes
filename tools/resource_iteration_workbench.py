@@ -78,6 +78,7 @@ class ResourceScanMetrics:
     functions_without_type_hints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize scan metrics to JSON-compatible dictionary."""
         data = asdict(self)
         data["resource_type"] = self.resource_type.value
         return data
@@ -98,6 +99,7 @@ class RunExecutionResult:
     score: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize run execution result to JSON-compatible dictionary."""
         return asdict(self)
 
 
@@ -113,6 +115,7 @@ class ReviewEvaluation:
     metric_deltas: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize review evaluation assessment to JSON-compatible dictionary."""
         return {
             "resource_path": self.resource_path,
             "health_status": self.health_status.value,
@@ -153,6 +156,7 @@ class ImprovementFeedback:
     suggested_action: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize improvement feedback item to JSON-compatible dictionary."""
         return {
             "category": self.category.value,
             "priority": self.priority.value,
@@ -177,6 +181,7 @@ class IterationReport:
     improvement_feedback: list[ImprovementFeedback] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize overall iteration report to JSON-compatible dictionary."""
         return {
             "timestamp": self.timestamp,
             "overall_health": self.overall_health.value,
@@ -223,18 +228,18 @@ class ASTMetricCalculator:
         """Calculate the deepest indentation nesting depth inside a function."""
         nesting_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith, ast.Try, ast.ExceptHandler)
 
-        def walk_depth(node: ast.AST, depth: int) -> int:
+        def _walk_depth(node: ast.AST, depth: int) -> int:
             cur_depth = depth + 1 if isinstance(node, nesting_types) else depth
             deepest = cur_depth
             for child in ast.iter_child_nodes(node):
-                sub_deep = walk_depth(child, cur_depth)
+                sub_deep = _walk_depth(child, cur_depth)
                 if sub_deep > deepest:
                     deepest = sub_deep
             return deepest
 
         max_seen = 0
         for stmt in getattr(root, "body", []):
-            d = walk_depth(stmt, 1)
+            d = _walk_depth(stmt, 1)
             if d > max_seen:
                 max_seen = d
         return max_seen
@@ -297,6 +302,7 @@ class _FunctionAggregate:
         miss_doc: str | None,
         miss_type: str | None,
     ) -> None:
+        """Accumulate single function AST metrics and bounds into aggregate."""
         self.max_complexity = max(self.max_complexity, c)
         self.max_depth = max(self.max_depth, d)
         if c_viol:
@@ -316,6 +322,7 @@ class ResourceScanner:
 
     @classmethod
     def scan_python_file(cls, path: Path) -> ResourceScanMetrics:
+        """Parse and extract AST metrics, contracts, and sanitization from a Python file."""
         try:
             content = path.read_text(encoding="utf-8")
             tree = ast.parse(content, filename=str(path))
@@ -388,6 +395,7 @@ class ResourceScanner:
 
     @classmethod
     def scan_directory(cls, root_dir: Path) -> list[ResourceScanMetrics]:
+        """Recursively scan directory for Python files and compute scan metrics."""
         results: list[ResourceScanMetrics] = []
         for py_path in sorted(root_dir.rglob("*.py")):
             if ".venv" in py_path.parts or "__pycache__" in py_path.parts:
@@ -413,6 +421,7 @@ class ResourceRunner:
 
     @classmethod
     def run_command(cls, command: list[str], target: str, cwd: Path, timeout: int = 30) -> RunExecutionResult:
+        """Execute subprocess command with bounded timeout and capture execution telemetry."""
         start_time = time.monotonic()
         try:
             proc = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, check=False)
@@ -445,6 +454,7 @@ class ResourceRunner:
 
     @classmethod
     def run_tests_for_resource(cls, resource_path: Path, cwd: Path) -> RunExecutionResult:
+        """Execute pytest test suite with optimized plugins and isolated cache."""
         cmd = [
             sys.executable,
             "-m",
@@ -455,6 +465,10 @@ class ResourceRunner:
             "no:logfire",
             "-p",
             "no:xdist",
+            "-p",
+            "no:anyio",
+            "-p",
+            "no:cacheprovider",
             "-o",
             "addopts=",
             str(resource_path),
@@ -517,6 +531,7 @@ class OutputReviewer:
         run: RunExecutionResult | None = None,
         baseline: dict[str, Any] | None = None,
     ) -> ReviewEvaluation:
+        """Evaluate scan metrics and test run results to produce quality score and health."""
         recs: list[str] = []
         deltas: dict[str, float] = {}
 
@@ -563,6 +578,7 @@ class FeedbackAnalyzer:
         evaluations: list[ReviewEvaluation],
         root_dir: Path,
     ) -> list[ImprovementFeedback]:
+        """Analyze review evaluations to generate prioritized improvement feedback."""
         feedback: list[ImprovementFeedback] = []
         for eval_item in evaluations:
             cls._analyze_refactoring_headroom(eval_item, feedback)
@@ -733,6 +749,7 @@ class ResourceIterationWorkbench:
         self.baseline_path = baseline_path or (root_dir / ".data" / "iteration_baseline.json")
 
     def run_cycle(self, target_pattern: str | None = None, execute_tests: bool = True) -> IterationReport:
+        """Execute full Scan -> Run -> Review -> Feedback -> Iterate cycle."""
         # Phase 1: SCAN
         all_scans = ResourceScanner.scan_directory(self.root_dir)
         filtered_scans = self._filter_scans(all_scans, target_pattern)
@@ -828,6 +845,7 @@ class ResourceIterationWorkbench:
         return "All repository resources certified. Ready for push or release."
 
     def render_report(self, report: IterationReport) -> str:
+        """Render iteration scorecard and feedback section into formatted ASCII table."""
         lines = [
             "==========================================================================================",
             "🔬 RESOURCE ITERATION WORKBENCH — SCORECARD & METRICS",
@@ -925,6 +943,7 @@ class ResourceIterationWorkbench:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Construct CLI argument parser for resource iteration workbench."""
     parser = argparse.ArgumentParser(description="Resource Iteration Workbench for AI Agents.")
     parser.add_argument("--root", "-r", type=Path, default=Path("."), help="Repository root directory.")
     parser.add_argument("--pattern", "-p", type=str, default=None, help="Regex pattern to filter target files.")
@@ -935,6 +954,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Execute resource iteration workbench CLI runner."""
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 

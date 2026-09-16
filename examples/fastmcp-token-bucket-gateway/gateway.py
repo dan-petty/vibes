@@ -156,6 +156,7 @@ class RateLimitExceededException(Exception):
 
 # Demonstration CLI
 async def demo() -> None:
+    """Demonstrate concurrent rate-limited tool execution via FastMCP gateway."""
     print("🚀 FastMCP Token-Bucket Gateway Demo")
     config = RateLimitConfig(tokens_per_second=10.0, burst_capacity=5.0)
     gateway = FastMCPGateway(config)
@@ -164,6 +165,7 @@ async def demo() -> None:
     call_counter = 0
 
     async def mock_gh_pr_get(pr_number: int) -> dict[str, Any]:
+        """Simulate GitHub PR fetch with transient rate limits."""
         nonlocal call_counter
         call_counter += 1
         # Simulate transient 429 on every 4th call

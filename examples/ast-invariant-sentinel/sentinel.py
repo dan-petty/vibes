@@ -54,6 +54,7 @@ class AuditReport:
 
     @property
     def is_clean(self) -> bool:
+        """Return True if zero architectural invariant violations were detected."""
         return len(self.violations) == 0
 
 
@@ -76,10 +77,12 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.violations: list[Violation] = []
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Audit synchronous function definition for complexity and nesting depth."""
         self._audit_function(node)
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Audit asynchronous function definition for complexity and nesting depth."""
         self._audit_function(node)
         self.generic_visit(node)
 
@@ -127,11 +130,11 @@ class ComplexityVisitor(ast.NodeVisitor):
             ast.ExceptHandler,
         )
 
-        def walk_depth(node: ast.AST, current_depth: int) -> int:
+        def _walk_depth(node: ast.AST, current_depth: int) -> int:
             sub_depth = current_depth + 1 if isinstance(node, nesting_node_types) else current_depth
             deepest = sub_depth
             for child in ast.iter_child_nodes(node):
-                child_deepest = walk_depth(child, sub_depth)
+                child_deepest = _walk_depth(child, sub_depth)
                 if child_deepest > deepest:
                     deepest = child_deepest
             return deepest
@@ -139,7 +142,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         # Root function itself is level 0, immediate statements inside are level 1
         max_seen = 0
         for statement in getattr(root, "body", []):
-            depth = walk_depth(statement, 1)
+            depth = _walk_depth(statement, 1)
             if depth > max_seen:
                 max_seen = depth
         return max_seen
@@ -179,6 +182,7 @@ class SanitizationVisitor(ast.NodeVisitor):
         self.violations: list[Violation] = []
 
     def visit_Constant(self, node: ast.Constant) -> None:
+        """Scan string literal constant for private IPs and non-standard mock domains."""
         if isinstance(node.value, str):
             self._check_ip_leakage(node.value, node.lineno)
             self._check_mock_domain(node.value, node.lineno)
