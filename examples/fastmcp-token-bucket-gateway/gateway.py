@@ -103,22 +103,35 @@ class FastMCPGateway:
 
         return await self._invoke_with_backoff(handler, **kwargs)
 
+    async def _handle_rate_limit_retry(self, attempt: int, err: RateLimitExceededException) -> None:
+        """Handle rate limit backoff sleep or re-raise on final retry attempt."""
+        if attempt == self.config.max_retries - 1:
+            self.telemetry.failed_invocations += 1
+            raise err
+
+        sleep_duration = self._calculate_jittered_backoff(attempt, err.retry_after)
+        await asyncio.sleep(sleep_duration)
+
+    async def _attempt_invoke(
+        self, handler: Callable[..., Coroutine[Any, Any, Any]], attempt: int, **kwargs: Any
+    ) -> tuple[bool, Any]:
+        """Attempt single handler invocation, handling rate limit retry backoff if encountered."""
+        try:
+            result = await handler(**kwargs)
+            self.telemetry.successful_invocations += 1
+            return True, result
+        except RateLimitExceededException as err:
+            await self._handle_rate_limit_retry(attempt, err)
+            return False, None
+
     async def _invoke_with_backoff(
         self, handler: Callable[..., Coroutine[Any, Any, Any]], **kwargs: Any
     ) -> Any:
         """Execute handler with bounded exponential backoff and jitter on rate limits."""
         for attempt in range(self.config.max_retries):
-            try:
-                result = await handler(**kwargs)
-                self.telemetry.successful_invocations += 1
+            success, result = await self._attempt_invoke(handler, attempt, **kwargs)
+            if success:
                 return result
-            except RateLimitExceededException as err:
-                if attempt == self.config.max_retries - 1:
-                    self.telemetry.failed_invocations += 1
-                    raise
-
-                sleep_duration = self._calculate_jittered_backoff(attempt, err.retry_after)
-                await asyncio.sleep(sleep_duration)
 
         raise RuntimeError("Exceeded maximum retry attempts without resolution.")
 
