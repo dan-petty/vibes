@@ -39,9 +39,9 @@ flowchart TD
     File["Target Source File / Path"] --> SymlinkCheck{"Symlink Resolution"}
     SymlinkCheck -->|Circular / ELOOP / Error| Skip1["[SKIPPED] Symlink resolution failed"]
     SymlinkCheck -->|Success| BoundaryCheck{"Target within base_root?"}
-    BoundaryCheck -->|No (Path Traversal Escape)| Skip2["[SKIPPED] File points outside workspace root"]
+    BoundaryCheck -->|"No (Path Traversal Escape)"| Skip2["[SKIPPED] File points outside workspace root"]
     BoundaryCheck -->|Yes| SizeCheck{"File Size <= 5MB?"}
-    SizeCheck -->|No (CWE-400 Risk)| Skip3["[SKIPPED] Size exceeds maximum limit"]
+    SizeCheck -->|"No (CWE-400 Risk)"| Skip3["[SKIPPED] Size exceeds maximum limit"]
     SizeCheck -->|Yes| Parse["Parse Content & Extract Symbols"]
     Parse --> Metrics["Compute Language-Agnostic Complexity & Depth"]
     Metrics --> Node["PolyglotFileNode"]

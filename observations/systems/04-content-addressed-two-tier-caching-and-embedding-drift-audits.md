@@ -27,10 +27,10 @@ flowchart TD
     HASH --> KEY["Generate Content-Addressed Key: repomap:<sha256>"]
 
     KEY --> L1{"L1 Fast Memory Cache<br/>(In-Process LRU)"}
-    L1 -->|L1 Hit (< 0.1ms)| Serve["Serve RepomapRecord & Symbols"]
+    L1 -->|"L1 Hit (< 0.1ms)"| Serve["Serve RepomapRecord & Symbols"]
     L1 -->|L1 Miss| L2{"L2 Distributed Cache<br/>(Valkey / Redis RESP)"}
 
-    L2 -->|L2 Hit (< 2ms)| Hydrate["Hydrate Record -> Populate L1"] --> Serve
+    L2 -->|"L2 Hit (< 2ms)"| Hydrate["Hydrate Record -> Populate L1"] --> Serve
     L2 -->|L2 Miss| Compute["Parse AST & Extract Symbols"]
 
     Compute --> Embed["Compute 8-Dim Structural Feature Vector"]
@@ -38,8 +38,8 @@ flowchart TD
 
     Serve --> Drift{"Refactoring Drift Auditor"}
     Drift --> Cosine["Compute Cosine Distance: Dc = 1.0 - (u · v)"]
-    Cosine -->|Dc <= 0.05| OK["Verdict: PRESERVED (Safe Refactoring)"]
-    Cosine -->|Dc > 0.15| Warn["Verdict: SIGNIFICANT_DRIFT (Review Invariants)"]
+    Cosine -->|"Dc <= 0.05"| OK["Verdict: PRESERVED (Safe Refactoring)"]
+    Cosine -->|"Dc > 0.15"| Warn["Verdict: SIGNIFICANT_DRIFT (Review Invariants)"]
 ```
 
 ### 1. Content-Addressed Keying (`repomap:<sha256>`)

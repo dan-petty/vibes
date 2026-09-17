@@ -6,7 +6,7 @@
 
 ---
 
-```markdown
+````markdown
 # Task: [Issue Number] - [Task Title]
 
 - **Status**: [Todo | In Progress | Review | Done]
@@ -50,4 +50,4 @@ A concise statement of the problem, background, and business/engineering justifi
 uv run pytest tests/test_example.py -v
 # Output summary: 14 passed in 0.42s
 ```
-```
+````

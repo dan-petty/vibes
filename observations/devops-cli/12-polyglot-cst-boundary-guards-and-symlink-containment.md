@@ -26,11 +26,11 @@ During autonomous DevSecOps audits of `devops-cli` ([Issue #119](https://github.
 flowchart TD
     CandidateFile["Discovered Polyglot Source File"] --> Resolve["Defensive Symlink Resolution: path.resolve()"]
     Resolve --> TrapErr{"Symlink Error / ELOOP?"}
-    TrapErr -->|Yes (OSError, RuntimeError)| Skip1["[SKIPPED] Log Structured Warning & Continue"]
+    TrapErr -->|"Yes (OSError, RuntimeError)"| Skip1["[SKIPPED] Log Structured Warning & Continue"]
     TrapErr -->|No| RelCheck{"resolved.is_relative_to(base_root)?"}
-    RelCheck -->|False (Workspace Escape)| Skip2["[SKIPPED] Log Boundary Violation Warning"]
+    RelCheck -->|"False (Workspace Escape)"| Skip2["[SKIPPED] Log Boundary Violation Warning"]
     RelCheck -->|True| StatCheck{"st.st_size <= MAX_REPOMAP_FILE_SIZE_BYTES?"}
-    StatCheck -->|False (> 5MB)| Skip3["[SKIPPED] Log Oversized File Warning (CWE-400)"]
+    StatCheck -->|"False (> 5MB)"| Skip3["[SKIPPED] Log Oversized File Warning (CWE-400)"]
     StatCheck -->|True| Parse["Invoke Tree-Sitter / CST Engine"]
     Parse --> Success["Return Clean FileMapNode / PolyglotSymbol"]
 ```

@@ -18,9 +18,9 @@ This reference implementation combines:
 flowchart TD
     Req["Source File / Diff Input"] --> HASH["Compute Content SHA-256 Digest"]
     HASH --> L1{"Check L1 Memory Cache"}
-    L1 -->|L1 Hit (< 0.1ms)| Ret["Return Cached Repomap"]
+    L1 -->|"L1 Hit (< 0.1ms)"| Ret["Return Cached Repomap"]
     L1 -->|L1 Miss| L2{"Check L2 Valkey Cache"}
-    L2 -->|L2 Hit (< 2ms)| Hydrate["Hydrate Record -> Populate L1"] --> Ret
+    L2 -->|"L2 Hit (< 2ms)"| Hydrate["Hydrate Record -> Populate L1"] --> Ret
     L2 -->|L2 Miss| Parse["Parse AST & Extract Symbols"]
     Parse --> Vector["Compute Normalized Structural Embedding"]
     Vector --> Store["Write to L1 & L2 (TTL=86400s)"] --> Ret

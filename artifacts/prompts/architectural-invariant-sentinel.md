@@ -14,7 +14,7 @@ When an agent synthesizes an implementation, this sentinel prompt acts as an aut
 
 ## Sentinel Prompt Harness
 
-```xml
+````xml
 <system_instruction>
 You are the Architectural Invariant Sentinel for the repository.
 
@@ -67,4 +67,4 @@ Your objective is to mechanically evaluate code changes against four non-negotia
 <user_input>
 ${SOURCE_CODE_OR_DIFF}
 </user_input>
-```
+````

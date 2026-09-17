@@ -116,12 +116,21 @@ High-density product roadmap, engineering milestones, and open-source curation s
 - [x] **Ephemeral Container Backend for CEGIS Patch Evaluation (`examples/cegis-debugging-workbench/`)**:
   - Direct integration of `ContainerSandboxHarness` into the CEGIS debugging loop.
   - Safely evaluates candidate patches inside isolated rootless containers with strict cgroup memory (512MB) and PID limits, preventing runaway candidate code from impacting host processes.
+- [x] **Zero-Dependency Markdown Syntax & Link Integrity Validator (`tools/docs_validator.py`)**:
+  - Standalone, zero-external-dependency validation engine verifying CommonMark nested code fence parity, Mermaid diagram AST headers, markdown table column and delimiter alignment, relative link targets, and paired HTML tags.
+  - Native integration with `ResourceIterationWorkbench` (`ResourceType.DOCUMENTATION`) enforcing automated documentation quality gates across 56+ repository documents.
+- [ ] **Automated Documentation Self-Healing & Relative Path Normalizer (`tools/docs_validator.py --fix`)**:
+  - Mechanical remediation engine auto-correcting CommonMark code fence unclosed blocks, unescaped pipe syntax in table cells, and normalizing IDE absolute paths (`file:///...`) into verified relative links with accurate directory traversal depths.
 - [ ] **Automated Seccomp BPF Profile Synthesizer**:
   - Generates minimal, tool-specific Linux seccomp-bpf JSON filter profiles based on static symbol analysis and syscall trace profiling, restricting agent tool execution strictly to required system calls.
 
 ---
 
 ### Milestone 5: Autonomous Swarm Orchestration & Self-Healing (v0.5.0 - Planned)
+- [ ] **Closed-Loop PR Review Thread Synchronizer & Atomic Resolver (`tools/pr_thread_sync.py`)**:
+  - Automated PR shepherd querying unresolved GitHub GraphQL review discussion threads, correlating review comments to source AST nodes, orchestrating mechanical fixes with invariant oracles, and atomically posting structured review replies with thread resolution.
+- [ ] **Continuous SDLC Backlog & Automated Lifecycle Transition Daemon (`tools/sdlc_project_manager.py --watch`)**:
+  - Event-driven background daemon synchronizing `.data/sdlc_backlog.json` state transitions in real time as resources and invariants are validated by `ResourceIterationWorkbench`, auto-advancing ready items and closing resolved defect cards.
 - [ ] **Closed-Loop PR Triage & Invariant Review Bot**:
   - GitHub App / Action orchestrating the Multi-Persona Code Reviewer (`security`, `architecture`, `devops`, `qa`) against incoming pull requests.
   - Automated inline review comments, structured GitHub check runs, and AST Invariant Sentinel gating before pull request merges.
@@ -178,7 +187,8 @@ Upcoming field observations, empirical studies, and architectural investigations
 |  | Autonomous Project Tooling (`tools/project_tooling.py`) | Python Standard Library | High | Low | v0.2.0 | ✅ Completed |
 |  | Polyglot Case Studies (Rust & TypeScript) | Systems Engineering | High | Low | v0.2.0 | ✅ Completed |
 |  | Continuous File-Watcher Mode (`--watch`) | Python / inotify | High | Low | v0.3.0 | ✅ Completed |
-|  | Formal Tool Contract Verification Gates | Pydantic v2 / JSON Schema | High | Low | v0.3.0 | ✅ Completed |
+|  | Zero-Dependency Markdown Syntax & Link Integrity Validator | Python Standard Library | High | Low | v0.4.0 | ✅ Completed |
+|  | Automated Documentation Self-Healing & Relative Path Normalizer | Python Standard Library | High | Low | v0.4.0 | 📋 Scheduled |
 | **Major Projects** | Multi-Agent Benchmark Suite (`benchmarks/`) | `pytest` / AST Analyzer | High | Medium | v0.3.0 | ✅ Completed |
 |  | OpenTelemetry Agent Waterfall Generator | OpenTelemetry / Python | High | Medium | v0.3.0 | ✅ Completed |
 |  | Interactive Prompt Mutation Suite & Invariant Fuzzer | Python / AST / Fuzzing | High | Medium | v0.3.0 | ✅ Completed |
@@ -192,6 +202,8 @@ Upcoming field observations, empirical studies, and architectural investigations
 |  | Go Concurrency & Goroutine Leak Sentinel | Go 1.23 / `pprof` | High | Medium | v0.4.0 | ✅ Completed |
 |  | Automated Assertion Consolidation Engine | Python AST Transformer | High | Medium | v0.4.0 | ✅ Completed |
 |  | Ephemeral Container Backend for CEGIS | Docker / cgroups v2 | High | High | v0.4.0 | ✅ Completed |
+|  | Closed-Loop PR Review Thread Synchronizer & Atomic Resolver | Python / GraphQL / AST | High | Medium | v0.5.0 | 📋 Scheduled |
+|  | Continuous SDLC Backlog & Automated Lifecycle Transition Daemon | Python / Watcher / JSON | High | Medium | v0.5.0 | 📋 Scheduled |
 |  | Closed-Loop PR Triage & Invariant Review Bot | FastMCP / GitHub Actions | High | High | v0.5.0 | 📋 Scheduled |
 |  | Autonomous Conversation Synthesizer | Python / NLP / Metrics | High | High | v0.5.0 | 📋 Scheduled |
 |  | Live Multi-Model Leaderboard & Cost Index | Python / GitHub Pages | High | High | v0.5.0 | 📋 Scheduled |

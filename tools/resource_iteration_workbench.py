@@ -52,6 +52,7 @@ class ResourceType(str, Enum):
     SAMPLE_APP = "sample_app"
     BENCHMARK = "benchmark"
     MANIFEST = "manifest"
+    DOCUMENTATION = "documentation"
 
 
 class HealthStatus(str, Enum):
@@ -394,13 +395,41 @@ class ResourceScanner:
         return miss_doc, miss_type
 
     @classmethod
-    def scan_directory(cls, root_dir: Path) -> list[ResourceScanMetrics]:
-        """Recursively scan directory for Python files and compute scan metrics."""
+    def scan_doc_file(cls, path: Path) -> ResourceScanMetrics:
+        """Scan a markdown document for syntax, fences, tables, and link integrity."""
+        from docs_validator import DocsValidator
+        validator = DocsValidator()
+        findings = validator.validate_file(path)
+        content = path.read_text(encoding="utf-8", errors="replace")
+        violations = [
+            f"{f.line_number}: [{f.category}] {f.message}"
+            for f in findings
+            if f.severity == "error"
+        ]
+        return ResourceScanMetrics(
+            file_path=str(path),
+            resource_type=ResourceType.DOCUMENTATION,
+            loc=len(content.splitlines()),
+            functions_count=0,
+            classes_count=0,
+            max_complexity=1,
+            max_depth=1,
+            complexity_violations=violations,
+        )
+
+    @classmethod
+    def scan_directory(cls, root_dir: Path, include_docs: bool = True) -> list[ResourceScanMetrics]:
+        """Recursively scan directory for Python files and markdown documentation."""
         results: list[ResourceScanMetrics] = []
         for py_path in sorted(root_dir.rglob("*.py")):
             if ".venv" in py_path.parts or "__pycache__" in py_path.parts:
                 continue
             results.append(cls.scan_python_file(py_path))
+        if include_docs:
+            for doc_path in sorted(root_dir.rglob("*.md")):
+                if ".venv" in doc_path.parts or any(p.startswith(".") for p in doc_path.parts):
+                    continue
+                results.append(cls.scan_doc_file(doc_path))
         return results
 
     @staticmethod
@@ -453,8 +482,39 @@ class ResourceRunner:
         )
 
     @classmethod
+    def _validate_doc_resource(cls, doc_path: Path) -> RunExecutionResult:
+        """Validate markdown documentation in-process for fast feedback."""
+        from docs_validator import DocsValidator
+        findings = DocsValidator().validate_file(doc_path)
+        errors = [f for f in findings if f.severity == "error"]
+        if not errors:
+            return RunExecutionResult(
+                target=str(doc_path),
+                command=["docs_validator", str(doc_path)],
+                exit_code=0,
+                duration_seconds=0.001,
+                stdout=f"✓ Documentation file {doc_path.name} passed validation.",
+                stderr="",
+                passed_count=1,
+                failed_count=0,
+            )
+        return RunExecutionResult(
+            target=str(doc_path),
+            command=["docs_validator", str(doc_path)],
+            exit_code=1,
+            duration_seconds=0.001,
+            stdout="",
+            stderr="\n".join(f.message for f in errors),
+            passed_count=0,
+            failed_count=len(errors),
+        )
+
+    @classmethod
     def run_tests_for_resource(cls, resource_path: Path, cwd: Path) -> RunExecutionResult:
-        """Execute pytest test suite with optimized plugins and isolated cache."""
+        """Execute pytest test suite or documentation validator with bounded timeout."""
+        if resource_path.suffix == ".md":
+            return cls._validate_doc_resource(resource_path)
+
         cmd = [
             sys.executable,
             "-m",
@@ -477,6 +537,12 @@ class ResourceRunner:
 
     @staticmethod
     def _parse_pytest_counts(output: str) -> tuple[int, int, int]:
+        if "✓ All " in output:
+            return 1, 0, 0
+        if "✗ Found " in output:
+            match = re.search(r"Found (\d+) issues", output)
+            return 0, int(match.group(1)) if match else 1, 0
+
         p_match = PYTEST_PASSED_RE.search(output)
         f_match = PYTEST_FAILED_RE.search(output)
         w_match = PYTEST_WARNINGS_RE.search(output)
@@ -632,6 +698,22 @@ class FeedbackAnalyzer:
         if scan.resource_type == ResourceType.TEST_SUITE:
             return
 
+        if scan.resource_type == ResourceType.DOCUMENTATION:
+            if scan.complexity_violations:
+                count = len(scan.complexity_violations)
+                stem = Path(scan.file_path).name
+                feedback.append(
+                    ImprovementFeedback(
+                        category=FeedbackCategory.DOCUMENTATION,
+                        priority=FeedbackPriority.HIGH,
+                        target=scan.file_path,
+                        headline=f"Documentation syntax / link issues in {stem} ({count} finding(s))",
+                        prescriptive_guidance=f"Violations: {'; '.join(scan.complexity_violations[:3])}",
+                        suggested_action=f"Run python3 tools/docs_validator.py {scan.file_path}",
+                    )
+                )
+            return
+
         stem = Path(scan.file_path).name
         if scan.functions_without_docstrings:
             funcs = ", ".join(scan.functions_without_docstrings[:4])
@@ -748,10 +830,15 @@ class ResourceIterationWorkbench:
         self.root_dir = root_dir
         self.baseline_path = baseline_path or (root_dir / ".data" / "iteration_baseline.json")
 
-    def run_cycle(self, target_pattern: str | None = None, execute_tests: bool = True) -> IterationReport:
+    def run_cycle(
+        self,
+        target_pattern: str | None = None,
+        execute_tests: bool = True,
+        include_docs: bool = True,
+    ) -> IterationReport:
         """Execute full Scan -> Run -> Review -> Feedback -> Iterate cycle."""
         # Phase 1: SCAN
-        all_scans = ResourceScanner.scan_directory(self.root_dir)
+        all_scans = ResourceScanner.scan_directory(self.root_dir, include_docs=include_docs)
         filtered_scans = self._filter_scans(all_scans, target_pattern)
         baseline = self._load_baseline()
 
@@ -763,7 +850,7 @@ class ResourceIterationWorkbench:
         # Phase 2 & 3: RUN & REVIEW
         for scan in filtered_scans:
             run_res = None
-            if execute_tests and scan.resource_type == ResourceType.TEST_SUITE:
+            if execute_tests and scan.resource_type in (ResourceType.TEST_SUITE, ResourceType.DOCUMENTATION):
                 run_res = ResourceRunner.run_tests_for_resource(Path(scan.file_path), cwd=self.root_dir)
                 total_passed += run_res.passed_count
                 total_failed += run_res.failed_count
@@ -1030,6 +1117,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--watch", "-w", action="store_true", help="Run in continuous file-watcher mode.")
     parser.add_argument("--watch-interval", type=float, default=1.0, help="Watch mode polling interval in seconds.")
     parser.add_argument("--max-ticks", type=int, default=None, help="Maximum watch ticks before exiting.")
+    parser.add_argument("--audit-docs", action="store_true", default=True, help="Include documentation files in scan and review.")
+    parser.add_argument("--no-audit-docs", dest="audit_docs", action="store_false", help="Exclude documentation files from scan.")
     return parser
 
 
@@ -1053,7 +1142,11 @@ def _handle_watch_mode(workbench: ResourceIterationWorkbench, args: argparse.Nam
 
 def _handle_single_run(workbench: ResourceIterationWorkbench, args: argparse.Namespace) -> int:
     """Handle standard single-cycle iteration execution."""
-    report = workbench.run_cycle(target_pattern=args.pattern, execute_tests=not args.skip_tests)
+    report = workbench.run_cycle(
+        target_pattern=args.pattern,
+        execute_tests=not args.skip_tests,
+        include_docs=getattr(args, "audit_docs", True),
+    )
     if args.export_backlog:
         tasks = workbench.export_feedback_to_sdlc(report.improvement_feedback)
         args.export_backlog.parent.mkdir(parents=True, exist_ok=True)

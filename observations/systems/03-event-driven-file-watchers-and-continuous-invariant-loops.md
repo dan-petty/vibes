@@ -54,7 +54,7 @@ flowchart TD
 
 ## 4. Remediation & Pattern: The Lightweight `ResourceWatcher`
 
-To achieve sub-second continuous invariant feedback without external dependencies, we implemented `ResourceWatcher` in [`tools/resource_iteration_workbench.py`](file:///workspaces/devops-cli/repos/dan-petty/vibes/tools/resource_iteration_workbench.py):
+To achieve sub-second continuous invariant feedback without external dependencies, we implemented `ResourceWatcher` in [`tools/resource_iteration_workbench.py`](../../tools/resource_iteration_workbench.py):
 
 ### 1. Pure Standard Library Topology Snapshotting
 Using `pathlib.Path.rglob("*.py")` and `os.stat().st_mtime`, `ResourceWatcher` builds an in-memory dictionary mapping file paths to modification timestamps while cleanly filtering non-source paths:

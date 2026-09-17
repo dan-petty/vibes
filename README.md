@@ -119,13 +119,17 @@ vibes/
 ├── tools/                             # Autonomous project management tooling
 │   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
-│   └── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
+│   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
+│   ├── ast_refactorer.py              # Automated AST conditional refactorer
+│   └── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │
 └── tests/                             # Automated test suites for tools and harnesses
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
     ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
-    └── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
+    ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
+    ├── test_ast_refactorer.py         # Unit tests for AST conditional refactoring engine
+    └── test_docs_validator.py         # Unit tests for documentation syntax and link validation
 ```
 
 ---
@@ -298,6 +302,7 @@ flowchart LR
 - [**SDLC Project Manager CLI (`tools/sdlc_project_manager.py`)**](./tools/sdlc_project_manager.py): Deterministic multi-dimensional priority scoring, dependency graph cycle detection, and agent next-action dispatch.
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
 - [**Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**](./tools/ast_refactorer.py): Mechanical AST rewriting engine auto-decomposing branching ladders ($M \ge 7$) and nesting depth into table dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples with round-trip safety verification.
+- [**Documentation Syntax & Link Validator (`tools/docs_validator.py`)**](./tools/docs_validator.py): High-performance documentation validator checking nested code fences, Mermaid AST, markdown table column alignments, local anchor slugs, and embedded snippet syntax.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
 - [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Automated diff inspection blocking complexity creep and IP leaks.

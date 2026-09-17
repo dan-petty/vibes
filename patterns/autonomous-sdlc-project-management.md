@@ -31,7 +31,7 @@ flowchart TD
     
     ActionEngine -->|Open PR with Failing Checks| Act1[Priority 1: REMEDIATE_PR_CHECKS]
     ActionEngine -->|Open PR with Unresolved Comments| Act2[Priority 2: RESOLVE_REVIEW_THREADS]
-    ActionEngine -->|Top Unblocked Issue in Ready/Backlog| Act3[Priority 3: IMPLEMENT_ISSUE (TDD)]
+    ActionEngine -->|Top Unblocked Issue in Ready/Backlog| Act3["Priority 3: IMPLEMENT_ISSUE (TDD)"]
     
     Act1 --> AgentLoop[Autonomous Agent Execution]
     Act2 --> AgentLoop

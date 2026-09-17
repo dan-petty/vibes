@@ -64,7 +64,7 @@ When `subprocess.run([sys.executable, "-m", "pytest", str(test_path)])` was exec
 
 In full CI verification (`devops ci`), running 800+ tests across the entire codebase benefits enormously from `xdist` parallelization and `pytest-cov` enforcement. However, in **micro-iterative single-file loops**, running with those plugins is an anti-pattern.
 
-We updated `ResourceRunner.run_tests_for_resource` in [`tools/resource_iteration_workbench.py`](file:///workspaces/devops-cli/repos/dan-petty/vibes/tools/resource_iteration_workbench.py) to explicitly disable the heavy instrumentation plugins and strip inherited multi-worker options:
+We updated `ResourceRunner.run_tests_for_resource` in [`tools/resource_iteration_workbench.py`](../../tools/resource_iteration_workbench.py) to explicitly disable the heavy instrumentation plugins and strip inherited multi-worker options:
 
 ```python
 @classmethod

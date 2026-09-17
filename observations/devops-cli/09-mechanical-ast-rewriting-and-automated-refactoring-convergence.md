@@ -76,8 +76,8 @@ flowchart TD
     T3 --> Verify
     T4 --> Verify
 
-    Verify -->|Valid Syntax & Delta M >= 0| Apply["Emit Unified Diff / Write Code"]
-    Verify -->|Syntax Error or Metric Regression| Reject["Safe Rejection (Preserve Original)"]
+    Verify -->|"Valid Syntax & Delta M >= 0"| Apply["Emit Unified Diff / Write Code"]
+    Verify -->|"Syntax Error or Metric Regression"| Reject["Safe Rejection (Preserve Original)"]
 ```
 
 ### Strategy 1: Table-Driven Dictionary Dispatch (`TABLE_DISPATCH`)
