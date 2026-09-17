@@ -281,7 +281,7 @@ class ContainerSandboxHarness:
                 stderr=subprocess.PIPE,
                 text=True,
                 env=env,
-                preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+                start_new_session=True,
             )
             stdout_raw, stderr_raw = proc.communicate(timeout=self.policy.timeout_seconds)
             exit_code = proc.returncode
@@ -358,7 +358,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--simulator", action="store_true", help="Force local simulator runtime instead of container")
     args = parser.parse_args(argv)
 
-    policy = SandboxSecurityPolicy(timeout_seconds=0.5 if args.demo else 5.0)
+    policy = SandboxSecurityPolicy(timeout_seconds=0.15 if args.demo else 5.0)
 
     if args.audit or not args.demo:
         report = CISPolicyAuditor.audit(policy)

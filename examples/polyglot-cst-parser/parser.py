@@ -139,21 +139,29 @@ class BoundaryGuard:
         return True, resolved, ""
 
     @staticmethod
-    def _verify_containment(target_path: Path, base_root: Path | None) -> tuple[bool, Path | None, str]:
+    def _check_root_containment(resolved: Path, base_root: Path) -> tuple[bool, str]:
+        """Verify resolved path stays within workspace base root."""
+        try:
+            resolved_base = base_root.resolve()
+            if not resolved.is_relative_to(resolved_base):
+                return False, f"File points outside workspace root ({resolved})"
+        except (OSError, RuntimeError) as err:
+            return False, f"Workspace boundary verification error ({str(err)[:200]})"
+        return True, ""
+
+    @classmethod
+    def _verify_containment(cls, target_path: Path, base_root: Path | None) -> tuple[bool, Path | None, str]:
+        """Resolve target path symlinks and verify boundary containment."""
         try:
             resolved = target_path.resolve()
         except (OSError, RuntimeError) as err:
             return False, None, f"Symlink resolution failed ({str(err)[:200]})"
 
-        if base_root is not None:
-            try:
-                resolved_base = base_root.resolve()
-                if not resolved.is_relative_to(resolved_base):
-                    return False, resolved, f"File points outside workspace root ({resolved})"
-            except (OSError, RuntimeError) as err:
-                return False, resolved, f"Workspace boundary verification error ({str(err)[:200]})"
+        if base_root is None:
+            return True, resolved, ""
 
-        return True, resolved, ""
+        ok, err = cls._check_root_containment(resolved, base_root)
+        return ok, (resolved if ok else resolved), err
 
     @staticmethod
     def _verify_size(resolved: Path, max_size_bytes: int) -> tuple[bool, str]:
@@ -234,15 +242,13 @@ class PolyglotComplexityCalculator:
 
     @staticmethod
     def _calculate_brace_nesting(content: str) -> int:
+        """Calculate maximum brace nesting depth using flattened delta accumulator."""
         max_depth = 1
         current = 0
         for ch in content:
-            if ch == "{":
-                current += 1
-                if current > max_depth:
-                    max_depth = current
-            elif ch == "}":
-                current = max(0, current - 1)
+            current += (ch == "{") - (ch == "}")
+            current = max(0, current)
+            max_depth = max(max_depth, current)
         return max_depth
 
 

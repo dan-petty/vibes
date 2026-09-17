@@ -154,10 +154,10 @@ def test_simulator_safe_execution() -> None:
 
 def test_simulator_timeout_containment() -> None:
     """Verify runaway executions are terminated within the bounded timeout."""
-    fast_timeout_policy = SandboxSecurityPolicy(timeout_seconds=0.3)
+    fast_timeout_policy = SandboxSecurityPolicy(timeout_seconds=0.1)
     harness = ContainerSandboxHarness(policy=fast_timeout_policy, force_simulator=True)
     result: SandboxExecutionResult = harness.run_python_code(
-        "import time\ntime.sleep(2.0)\nprint('escaped')",
+        "import time\ntime.sleep(1.0)\nprint('escaped')",
     )
     assert result.timed_out is True
     assert result.exit_code != 0

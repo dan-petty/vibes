@@ -57,7 +57,7 @@ flowchart TD
 1. **Table-Driven Dictionary Dispatch**: Decomposes `if/elif` equality ladders into module-level constant dictionaries (`_<FN>_DISPATCH.get(key, fallback)`), collapsing cyclomatic complexity from $M \ge 8$ to $M = 1$ and nesting depth from $8$ to $1$.
 2. **Structural Tuple Equality Consolidation**: Replaces 10 sequential scalar assertions with a single structural tuple comparison (`assert (a, b, c) == (x, y, z)`), collapsing decision branches from $M = 11$ to $M = 1$ while fully preserving Pytest element-level diff diagnostics.
 3. **Negative Schema Assertions & Prescriptive Prompts**: Configures tool schemas with strict parameter boundaries (`additionalProperties: false` or Pydantic v2 `extra="forbid"`). On violation, the oracle synthesizes prescriptive error feedback detailing allowable parameters for deterministic zero-shot self-correction.
-4. **POSIX Process Group Containment**: Spawns untrusted subprocesses with `preexec_fn=os.setsid` and terminates the entire tree via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM/SIGKILL)`, eliminating orphaned grandchild processes.
+4. **POSIX Process Group Containment**: Spawns untrusted subprocesses with `start_new_session=True` (avoiding `preexec_fn=os.setsid` fork-deadlocks in multithreaded runtimes) and terminates the entire tree via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM/SIGKILL)`, eliminating orphaned grandchild processes.
 5. **Pre-Flight File Size Caps & Defensive Symlink Verification**: Enforces an $O(1)$ size guard (`MAX_FILE_SIZE_BYTES = 5MB`) before reading file buffers and verifies `path.resolve().is_relative_to(base_root)` to reject circular symlinks and workspace traversal escapes.
 
 ### The Feedback Inversion Dynamic
@@ -109,7 +109,7 @@ def run_isolated_command(cmd: list[str], timeout_s: float = 10.0) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        preexec_fn=os.setsid,  # Create a new POSIX session and process group
+        start_new_session=True,  # Create a new POSIX session and process group (fork-safe)
     )
     try:
         stdout, _ = proc.communicate(timeout=timeout_s)
@@ -130,7 +130,7 @@ def run_isolated_command(cmd: list[str], timeout_s: float = 10.0) -> str:
 | **Prompt-Only Invariants** | Relying on system prompts to keep functions simple. LLMs drift under context noise. | Enforce AST complexity ($M \le 10$) and nesting ($\le 5$) via mechanical pre-push gates. |
 | **Operating at the Ceiling** | Leaving functions at $M = 9$ or $10$. Any future 1-line edit breaks CI. | Enforce proactive headroom optimization to $M \le 6$ during Phase 2. |
 | **Loose Tool Schemas** | Permissive schemas (`additionalProperties: true`) allow hallucinated tool args. | Enforce `extra="forbid"` and synthesize prescriptive error prompts. |
-| **Simple `proc.kill()`** | Leaves grandchild workers running indefinitely on host nodes. | Enforce `preexec_fn=os.setsid` and `os.killpg(pgid, SIGKILL)`. |
+| **Simple `proc.kill()`** | Leaves grandchild workers running indefinitely on host nodes. | Enforce `start_new_session=True` and `os.killpg(pgid, SIGKILL)`. |
 | **Unbounded File Ingestion** | Ingesting minified bundles crashes agent tools with OOM (CWE-400). | Enforce pre-flight `st_size <= 5MB` check before reading into memory. |
 
 ---

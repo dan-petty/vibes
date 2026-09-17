@@ -76,7 +76,7 @@ flowchart TD
 
 ### 4. Process Tree Orphan Escapes
 - **The Pitfall**: When agents execute test suites or untrusted commands via `subprocess.Popen`, invoking `proc.kill()` terminates only the top-level parent process. Grandchild processes (e.g. subshells, background workers) are adopted by PID 1 and persist as zombie resource leaks.
-- **The Breakthrough**: Ephemeral Rootless Container Sandbox (`examples/ephemeral-container-sandbox/`). Isolates executions into POSIX process groups (`preexec_fn=os.setsid`) and terminates entire process trees via `os.killpg(SIGTERM/SIGKILL)`, backed by 100% CIS Rootless Container Security controls (`--read-only`, `--network none`, `--cap-drop ALL`, `--user 1000:1000`).
+- **The Breakthrough**: Ephemeral Rootless Container Sandbox (`examples/ephemeral-container-sandbox/`). Isolates executions into POSIX process groups (`start_new_session=True` on `subprocess.Popen`, avoiding `preexec_fn=os.setsid` fork-deadlocks) and terminates entire process trees via `os.killpg(SIGTERM/SIGKILL)`, backed by 100% CIS Rootless Container Security controls (`--read-only`, `--network none`, `--cap-drop ALL`, `--user 1000:1000`).
 
 ### 5. Minified Polyglot Bundles & Circular Symlink Recursion
 - **The Pitfall**: In multi-language repositories, crawling file trees without pre-flight guards causes agents to ingest 25MB minified bundles (`dist/bundle.js`) or follow circular symlinks (`a -> b -> a`), triggering memory exhaustion (CWE-400) and `ELOOP` recursion crashes.

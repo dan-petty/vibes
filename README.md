@@ -64,7 +64,8 @@ vibes/
 │   │   └── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
 │   ├── polyglot/                      # Cross-language agentic engineering observations
 │   │   ├── 01-rust-type-state-invariants.md
-│   │   └── 02-typescript-cst-and-type-gymnastics.md
+│   │   ├── 02-typescript-cst-and-type-gymnastics.md
+│   │   └── 03-go-goroutine-leakage-and-context-lifecycles.md
 │   └── systems/                       # Distributed systems & observability field studies
 │       ├── 01-distributed-telemetry-and-agent-waterfalls.md
 │       ├── 02-subprocess-test-harness-instrumentation-tax.md
@@ -108,7 +109,8 @@ vibes/
 │   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
 │   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
 │   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
-│   └── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
+│   ├── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
+│   └── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
@@ -159,6 +161,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 |---|---|---|
 | [**Rust Type-State Invariants**](./observations/polyglot/01-rust-type-state-invariants.md) | Rust (Affine Types) | How the type-state pattern and zero-sized marker types eliminate 90%+ invalid state bugs at compile time. |
 | [**TypeScript CST & Type Gymnastics**](./observations/polyglot/02-typescript-cst-and-type-gymnastics.md) | TypeScript (CST & Generics) | Taming deep conditional types and enforcing zero-`any` / zero-`@ts-ignore` invariant gates. |
+| [**Go Goroutine Leakage & Context Lifecycles**](./observations/polyglot/03-go-goroutine-leakage-and-context-lifecycles.md) | Go Concurrency & Memory | Diagnosing orphaned goroutines, unbuffered channel deadlocks, and leaking context lifecycles via runtime stack analysis. |
 | [**Distributed Telemetry & Agent Waterfalls**](./observations/systems/01-distributed-telemetry-and-agent-waterfalls.md) | Distributed Systems (OTel) | Eliminating the agent black box with W3C traceparent propagation, semantic tokens, and waterfall analysis. |
 | [**Subprocess Test Harness Instrumentation Tax**](./observations/systems/02-subprocess-test-harness-instrumentation-tax.md) | Systems & DevEx | How unpruned workspace test plugins (xdist/cov/logfire) create 10x latency traps in iterative agent feedback loops, and how selective bypass restores sub-second velocity. |
 | [**Event-Driven File Watchers & Continuous Invariant Loops**](./observations/systems/03-event-driven-file-watchers-and-continuous-invariant-loops.md) | Systems & DevEx | Pure standard-library file watching and subprocess flag optimization providing sub-second change detection and continuous delta telemetry. |
@@ -223,6 +226,7 @@ Runnable, zero-dependency reference implementations demonstrating core agentic e
 | [**Valkey L2 Repomap Cache & Drift Auditor**](./examples/valkey-l2-repomap-cache/) | High-throughput two-tier AST symbol caching with RESP protocol, content SHA-256 addressing, and cosine distance semantic drift auditing. | `pytest examples/valkey-l2-repomap-cache/test_repomap_cache.py` |
 | [**Ephemeral Container Sandbox**](./examples/ephemeral-container-sandbox/) | Hardened rootless container sandbox with CIS benchmark auditing, egress deny-all isolation, and bounded simulator fallback. | `pytest examples/ephemeral-container-sandbox/test_sandbox.py` |
 | [**Polyglot CST Ingestion Engine**](./examples/polyglot-cst-parser/) | Multi-language CST parser (Python, Rust, Go, TS, Bash) with language-agnostic complexity ($M$) and pre-flight boundary guards. | `pytest examples/polyglot-cst-parser/test_cst_parser.py` |
+| [**Go Goroutine Leak Sentinel**](./examples/go-leak-sentinel/) | Go concurrency leak harness and runtime trace analyzer detecting unbuffered channel hangs, abandoned contexts, and orphan goroutines. | `pytest examples/go-leak-sentinel/test_go_leak_sentinel.py` |
 
 ---
 
