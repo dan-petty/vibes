@@ -1,0 +1,38 @@
+# Minimum Python version
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: local
+    hooks:
+      - id: ast-invariant-sentinel
+        name: AST Invariant Sentinel (M≤10, depth≤5, zero RFC 1918 IPs)
+        language: python
+        entry: python examples/ast-invariant-sentinel/sentinel.py
+        files: \.py$
+        pass_filenames: true
+        additional_dependencies: []
+
+      - id: docs-validator
+        name: Docs Validator (fences, Mermaid, tables, links)
+        language: python
+        entry: python tools/docs_validator.py
+        files: \.(md|markdown)$
+        pass_filenames: false
+        additional_dependencies: [markdown-it-py, pyyaml]
+
+      - id: pytest-collection-check
+        name: Pytest Collection Sanity Check
+        language: python
+        entry: pytest --collect-only -q
+        pass_filenames: false
+        stages: [pre-push]
+        additional_dependencies: [pytest, pytest-asyncio]
+
+      - id: json-schema-lint
+        name: JSON Schema Lint (FastMCP Manifests)
+        language: python
+        entry: python -m json.tool
+        files: artifacts/schemas/.*\.json$
+        pass_filenames: true
+        args: ["--no-ensure-ascii"]

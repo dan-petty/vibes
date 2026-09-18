@@ -14,6 +14,7 @@ from docs_validator import (
     DocFinding,
     DocValidationReport,
     DocsValidator,
+    OBSERVATION_REQUIRED_SECTION_COUNT,
     main as docs_validator_main,
 )
 from resource_iteration_workbench import ResourceScanner, ResourceType
@@ -263,4 +264,73 @@ def test_docs_validator_thread_safety() -> None:
         t.join()
 
     assert (len(errors), errors) == (0, [])
+
+
+_FULL_OBSERVATION = """\
+# Streaming Reasoning Token Parsers
+
+## 1. Executive Context & Baseline
+devops-cli production context.
+
+## 2. The Observed Phenomenon
+<think> tags leaked into terminal output.
+
+## 3. The Underlying Failure Mode or Catalyst
+Missing boundary buffer in streaming FSM.
+
+## 4. Remediation & Architectural Pattern
+Introduced bounded prefix accumulator.
+
+## 5. Verifiable Impact & Key Takeaways
+100% containment rate.
+"""
+
+
+def test_observation_structure_valid(tmp_path: Path) -> None:
+    """Observation with all 5 sections passes with zero structure findings."""
+    obs_dir = tmp_path / "observations" / "devops-cli"
+    obs_dir.mkdir(parents=True)
+    doc = obs_dir / "13-streaming-reasoning.md"
+    doc.write_text(_FULL_OBSERVATION, encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "observation_structure"]
+    assert (len(findings), findings) == (0, [])
+
+
+def test_observation_structure_missing_sections(tmp_path: Path) -> None:
+    """Observation with only ## 1. reports sections 2-5 as missing."""
+    obs_dir = tmp_path / "observations" / "devops-cli"
+    obs_dir.mkdir(parents=True)
+    doc = obs_dir / "99-incomplete.md"
+    doc.write_text("# Incomplete\n\n## 1. Executive Context & Baseline\nSome context.\n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "observation_structure"]
+    missing_numbers = {int(f.message.split("## ")[1].split(".")[0]) for f in findings}
+    expected = set(range(2, OBSERVATION_REQUIRED_SECTION_COUNT + 1))
+    assert (len(findings), missing_numbers) == (OBSERVATION_REQUIRED_SECTION_COUNT - 1, expected)
+
+
+def test_observation_structure_non_observation_file(tmp_path: Path) -> None:
+    """Non-observation files (patterns/, docs/) are exempt from section structure checks."""
+    doc = tmp_path / "patterns" / "some-pattern.md"
+    doc.parent.mkdir(parents=True)
+    doc.write_text("# Pattern\n\nNo required sections here.\n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "observation_structure"]
+    assert (len(findings), findings) == (0, [])
+
+
+def test_observation_structure_real_repo_compliance() -> None:
+    """All existing observation documents in observations/ pass the 5-section structure check."""
+    repo_root = Path(__file__).resolve().parent.parent
+    obs_root = repo_root / "observations"
+    validator = DocsValidator()
+    violations: list[str] = []
+    for obs_file in sorted(obs_root.rglob("*.md")):
+        if obs_file.name == "README.md":
+            continue
+        findings = [f for f in validator.validate_file(obs_file) if f.category == "observation_structure"]
+        violations.extend(f"{obs_file.name}: {f.message}" for f in findings)
+    assert (len(violations), violations) == (0, [])
+
 

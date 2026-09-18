@@ -59,6 +59,9 @@ PAIRED_HTML_TAGS: Final[frozenset[str]] = frozenset(
 )
 VOID_HTML_TAGS: Final[frozenset[str]] = frozenset({"br", "hr", "img", "input"})
 
+# Observations must have numbered sections 1–5 (## 1. ... through ## 5. ...)
+OBSERVATION_REQUIRED_SECTION_COUNT: Final[int] = 5
+
 _FENCE_RE: Final[re.Pattern[str]] = re.compile(r"^(`{3,}|~{3,})(.*)$")
 _SPACE_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]+)\]\s+\(([^)]+)\)")
 _MARKDOWN_LINK_RE: Final[re.Pattern[str]] = re.compile(r"!?\[([^\]]*)\]\(([^)]+)\)")
@@ -800,6 +803,65 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     return findings
 
 
+_OBSERVATION_FILENAME_RE: Final[re.Pattern[str]] = re.compile(r"^\d+-.+\.md$")
+
+
+def _is_observation_file(file_path: Path) -> bool:
+    """Predicate: true if file is a numbered observation doc under observations/."""
+    return (
+        "observations" in file_path.parts
+        and _OBSERVATION_FILENAME_RE.match(file_path.name) is not None
+    )
+
+
+_OBSERVATION_NUMBERED_SECTION_RE: Final[re.Pattern[str]] = re.compile(r"^##\s+(\d+)\.")
+
+
+def _extract_numbered_sections(lines: Sequence[str]) -> set[int]:
+    """Extract numbered section indices (## N. ...) from markdown outside fences."""
+    found: set[int] = set()
+    in_fence = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = _OBSERVATION_NUMBERED_SECTION_RE.match(stripped)
+        if m:
+            found.add(int(m.group(1)))
+    return found
+
+
+def _missing_numbered_sections(found: set[int]) -> list[int]:
+    """Return required section numbers (1–N) absent from the found set."""
+    return [n for n in range(1, OBSERVATION_REQUIRED_SECTION_COUNT + 1) if n not in found]
+
+
+def check_observation_structure(
+    lines: Sequence[str], file_path: Path
+) -> list[DocFinding]:
+    """Verify that observation documents contain numbered sections ## 1. through ## 5."""
+    if not _is_observation_file(file_path):
+        return []
+    found = _extract_numbered_sections(lines)
+    missing = _missing_numbered_sections(found)
+    return [
+        DocFinding(
+            file_path=str(file_path),
+            line_number=1,
+            category="observation_structure",
+            message=(
+                f"Observation document missing required numbered section '## {n}.'. "
+                f"Sections ## 1. through ## {OBSERVATION_REQUIRED_SECTION_COUNT}. are mandatory."
+            ),
+            severity="error",
+        )
+        for n in missing
+    ]
+
+
 def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[Path]:
     """Discover markdown files while pruning hidden directories and caches."""
     md_files: list[Path] = []
@@ -979,6 +1041,7 @@ class DocsValidator:
         findings.extend(check_markdown_links(lines, file_path, known_anchors))
         findings.extend(check_embedded_snippets(lines, file_path))
         findings.extend(check_html_tags(lines, file_path))
+        findings.extend(check_observation_structure(lines, file_path))
 
         return sorted(findings, key=lambda f: (f.line_number, f.category))
 
@@ -997,6 +1060,7 @@ class DocsValidator:
         findings.extend(check_markdown_links(lines, file_path, known_anchors))
         findings.extend(check_embedded_snippets(lines, file_path))
         findings.extend(check_html_tags(lines, file_path))
+        findings.extend(check_observation_structure(lines, file_path))
         return sorted(findings, key=lambda f: (f.line_number, f.category))
 
     def check_code_fences(
@@ -1037,6 +1101,12 @@ class DocsValidator:
     ) -> list[DocFinding]:
         """Validate HTML tag pairing and balance in content or lines."""
         return check_html_tags(self._to_lines(content), file_path)
+
+    def check_observation_structure(
+        self, content: str | Sequence[str], file_path: Path = Path("observations/doc.md")
+    ) -> list[DocFinding]:
+        """Verify mandatory 5-section structure of observation documents."""
+        return check_observation_structure(self._to_lines(content), file_path)
 
     def validate_directory(
         self,
