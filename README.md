@@ -30,75 +30,56 @@ Here you will find:
 flowchart TD
     Root["vibes/"]
 
-    subgraph Meta[".github/ & Root Manifests"]
+    subgraph Tier1["1. Governance & Manifests"]
+        direction TB
         GH[".github/<br><sub>Workflows, Issue & PR Templates</sub>"]
         Agents["AGENTS.md<br><sub>Foundational Agent Operating Instructions</sub>"]
         Lic["LICENSE<br><sub>Apache 2.0 Open-Source License</sub>"]
         Read["README.md<br><sub>Repository Homepage & Exhibition Tour</sub>"]
     end
 
-    subgraph Docs["docs/ — Theory & Standards"]
-        D_Man["MANIFESTO.md<br><sub>The Disciplined Agentic Manifesto</sub>"]
-        D_Tax["TAXONOMY.md<br><sub>Structured Taxonomy of Architectures & Failure Modes</sub>"]
-        D_Ret["RETROSPECTIVE.md<br><sub>Empirical Retrospective & Mechanical Oracles</sub>"]
-        D_Cur["CURATION_GUIDELINES.md<br><sub>Sanitization & Submission Standards</sub>"]
-        D_Road["ROADMAP.md<br><sub>Strategic High-Density Product Roadmap</sub>"]
+    subgraph Tier2["2. Foundational Theory & Standards"]
+        direction TB
+        D_Man["docs/MANIFESTO.md<br><sub>The Disciplined Agentic Manifesto</sub>"]
+        D_Tax["docs/TAXONOMY.md<br><sub>Structured Taxonomy & Failure Modes</sub>"]
+        D_Ret["docs/RETROSPECTIVE.md<br><sub>Empirical Retrospective & Mechanical Oracles</sub>"]
+        D_Cur["docs/CURATION_GUIDELINES.md<br><sub>Sanitization & Submission Standards</sub>"]
+        D_Road["docs/ROADMAP.md<br><sub>Strategic High-Density Product Roadmap</sub>"]
     end
 
-    subgraph Obs["observations/ — Empirical Field Studies"]
-        O_Read["README.md<br><sub>Consolidated Field Observations & Architectural Synthesis</sub>"]
-        O_DevOps["devops-cli/<br><sub>12 Case Studies: TDD, Invariants, Governance, Egress, Subagents, Headroom</sub>"]
-        O_Poly["polyglot/<br><sub>3 Case Studies: Rust Type-State, TypeScript CST, Go Goroutine Leaks</sub>"]
-        O_Sys["systems/<br><sub>6 Case Studies: OTel, Harness Tax, File Watchers, Valkey Cache, Rootless Sandboxing, Swarm Concurrency</sub>"]
+    subgraph Tier3["3. Empirical Field Studies (21 Case Studies)"]
+        direction TB
+        O_Read["observations/README.md<br><sub>Master Index & Cross-Domain Synthesis</sub>"]
+        O_DevOps["observations/devops-cli/<br><sub>12 Studies: TDD, Invariants, Governance, Egress, Headroom</sub>"]
+        O_Poly["observations/polyglot/<br><sub>3 Studies: Rust Type-State, TypeScript CST, Go Leaks</sub>"]
+        O_Sys["observations/systems/<br><sub>6 Studies: OTel, Harnesses, Watchers, Valkey, Sandboxing, Swarms</sub>"]
     end
 
-    subgraph Patterns["patterns/ — Operational Playbooks"]
-        P_List["patterns/<br><sub>CEGIS Debugging, FIFO PR Shepherding, Root-Cause Hardening, Epistemic Hygiene, Zero-Trust Sandboxing, Headless Crawling, SDLC Management, Refinement Loop, Mechanical Oracles, Multi-Agent Concurrency</sub>"]
+    subgraph Tier4["4. Operational Playbooks (10 Patterns)"]
+        direction TB
+        P_Patterns["patterns/<br><sub>CEGIS, FIFO Shepherding, Root-Cause Hardening, Epistemic Hygiene,<br>Zero-Trust Sandboxing, Headless Crawling, SDLC Management,<br>Refinement Loop, Mechanical Oracles, Multi-Agent Concurrency</sub>"]
     end
 
-    subgraph Artifacts["artifacts/ — Prompts & Specifications"]
-        A_Prompts["prompts/<br><sub>multi-persona-code-reviewer.md, architectural-invariant-sentinel.md</sub>"]
-        A_Tasks["task-harnesses/<br><sub>structured-task-spec-template.md, sample-completed-task-spec.md</sub>"]
-        A_Schemas["schemas/<br><sub>fastmcp-agent-tool-manifest-spec.json</sub>"]
+    subgraph Tier5["5. Executable Assets, Infrastructure & Benchmarks"]
+        direction TB
+        Artifacts["artifacts/<br><sub>prompts/, task-harnesses/, schemas/</sub>"]
+        Resources["resources/<br><sub>observability/, k8s/, docker-compose/</sub>"]
+        Examples["examples/<br><sub>11 Reference Apps (Sentinels, Gateways, Fuzzers, Caches)</sub>"]
+        Benchmarks["benchmarks/<br><sub>Multi-Agent Benchmark Suite & Runner</sub>"]
     end
 
-    subgraph Resources["resources/ — Infrastructure & Telemetry"]
-        R_Obs["observability/<br><sub>OTel Collector, Prometheus Alerts, Grafana Dashboard</sub>"]
-        R_K8s["k8s/<br><sub>Hardened Sandbox Pod, NetworkPolicy, ResourceQuota, Valkey</sub>"]
-        R_Compose["docker-compose/<br><sub>Turnkey 6-Service Local Evaluation Mesh</sub>"]
+    subgraph Tier6["6. Autonomous SDLC Tooling & Verification"]
+        direction TB
+        Tools["tools/<br><sub>sdlc_project_manager, resource_iteration_workbench, ast_refactorer, docs_validator</sub>"]
+        Tests["tests/<br><sub>Unit & Invariant Verification Test Suites</sub>"]
     end
 
-    subgraph Examples["examples/ — 11 Reference Applications"]
-        E_List["examples/<br><sub>AST Sentinel, Token-Bucket Gateway, CEGIS Workbench, OTel Trace Generator, Adaptive Crawler, Prompt Mutation Fuzzer, Tool Contract Verifier, Valkey Cache, Ephemeral Sandbox, Polyglot CST Parser, Go Leak Sentinel</sub>"]
-    end
-
-    subgraph Benchmarks["benchmarks/ — Multi-Agent Testbench"]
-        B_Runner["benchmark_runner.py<br><sub>Standardized Benchmark Suite</sub>"]
-        B_Tests["test_benchmark_runner.py<br><sub>Automated Benchmark Certification</sub>"]
-    end
-
-    subgraph Tools["tools/ — Autonomous SDLC Engines"]
-        T_Proj["project_tooling.py<br><sub>Autonomous Project Tooling</sub>"]
-        T_SDLC["sdlc_project_manager.py<br><sub>SDLC Resource Prioritizer & Kanban</sub>"]
-        T_Work["resource_iteration_workbench.py<br><sub>Automated Scan-Run-Review-Iterate Workbench</sub>"]
-        T_AST["ast_refactorer.py<br><sub>Automated AST Conditional Refactorer</sub>"]
-        T_Docs["docs_validator.py<br><sub>Documentation Syntax & Link Validator</sub>"]
-    end
-
-    subgraph Tests["tests/ — Invariant & Resource Suites"]
-        Test_Suites["tests/<br><sub>Unit Test Suites for Tools, Manifests, Refactorers, & Validators</sub>"]
-    end
-
-    Root --> Meta
-    Root --> Docs
-    Root --> Obs
-    Root --> Patterns
-    Root --> Artifacts
-    Root --> Resources
-    Root --> Examples
-    Root --> Benchmarks
-    Root --> Tools
-    Root --> Tests
+    Root --> Tier1
+    Tier1 --> Tier2
+    Tier2 --> Tier3
+    Tier3 --> Tier4
+    Tier4 --> Tier5
+    Tier5 --> Tier6
 ```
 
 ---

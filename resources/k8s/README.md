@@ -10,20 +10,22 @@ Production-grade Kubernetes manifests designed for isolated multi-agent executio
 flowchart TD
     K8s["k8s/"]
 
-    subgraph Sandbox["agent-sandbox/"]
+    subgraph Sandbox["1. agent-sandbox/ (Runtime Isolation)"]
+        direction TB
         P_Pod["sandbox-pod.yaml<br><sub>Non-root, read-only rootfs, dropped capabilities, seccomp</sub>"]
         P_Net["network-policy.yaml<br><sub>Zero-trust egress: blocks private RFC 1918 & metadata</sub>"]
         P_Quota["resource-quota.yaml<br><sub>Namespace ResourceQuota and LimitRange caps</sub>"]
     end
 
-    subgraph Obs["observability/"]
+    subgraph Obs["2. observability/ (In-Cluster Telemetry)"]
+        direction TB
         O_OTel["otel-collector-deployment.yaml<br><sub>OTel Collector Deployment, ConfigMap, & Service</sub>"]
         O_Jaeger["jaeger-deployment.yaml<br><sub>Distributed tracing UI & OTLP endpoint</sub>"]
         O_Valkey["valkey-statefulset.yaml<br><sub>In-cluster Valkey L2 AST & embedding cache</sub>"]
     end
 
     K8s --> Sandbox
-    K8s --> Obs
+    Sandbox --> Obs
 ```
 
 ---

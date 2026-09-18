@@ -100,13 +100,23 @@ func CleanContextLoop(ctx context.Context, wg *sync.WaitGroup) {
 ```mermaid
 flowchart TD
     Root["examples/go-leak-sentinel/"]
-    
-    Root --> F_Mod["go.mod<br><sub>Go module specification (example.com/go-leak-sentinel)</sub>"]
-    Root --> F_Go["sentinel.go<br><sub>Native Go sentinel library & leak demonstration patterns</sub>"]
-    Root --> F_GoTest["sentinel_test.go<br><sub>Go unit tests verifying leak detection</sub>"]
-    Root --> F_Py["go_leak_sentinel.py<br><sub>Python runtime stack dump parser & concurrency scoring engine</sub>"]
-    Root --> F_PyTest["test_go_leak_sentinel.py<br><sub>Automated test suite (6 passing unit tests)</sub>"]
-    Root --> F_Readme["README.md<br><sub>Architecture, failure mode guide & usage (this file)</sub>"]
+
+    subgraph GoPkg["1. Go Sentinel Implementation"]
+        direction TB
+        F_Mod["go.mod<br><sub>Go module specification (example.com/go-leak-sentinel)</sub>"]
+        F_Go["sentinel.go<br><sub>Native Go sentinel library & leak demonstration patterns</sub>"]
+        F_GoTest["sentinel_test.go<br><sub>Go unit tests verifying leak detection</sub>"]
+    end
+
+    subgraph PyPkg["2. Python Parser & Documentation"]
+        direction TB
+        F_Py["go_leak_sentinel.py<br><sub>Python runtime stack dump parser & scoring engine</sub>"]
+        F_PyTest["test_go_leak_sentinel.py<br><sub>Automated test suite (6 passing unit tests)</sub>"]
+        F_Readme["README.md<br><sub>Architecture, failure mode guide & usage (this file)</sub>"]
+    end
+
+    Root --> GoPkg
+    GoPkg --> PyPkg
 ```
 
 ---
