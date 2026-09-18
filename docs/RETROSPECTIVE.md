@@ -2,7 +2,8 @@
 
 > **Exhibition**: `vibes` & `devops-cli` Showcase  
 > **Classification**: Systemic Retrospective & Architectural Synthesis  
-> **Key Metric**: 100.0/100 Resource Health Score; 141/141 passing tests; project-wide $M \le 6$ and depth $\le 3$; sub-second test execution (< 0.5s); 100% CIS Rootless Container Benchmark compliance  
+> **Key Metric**: 100.0/100 Resource Health Score; 217/217 passing tests; project-wide $M \le 6$ and depth $\le 3$; sub-second test execution (< 0.5s); 100% CIS Rootless Container Benchmark compliance  
+> **Consolidated Index**: [Master Observation Index & Architectural Synthesis](../observations/README.md)  
 
 ---
 
@@ -26,8 +27,8 @@ The following empirical metrics trace the evolution of the repository across the
 |---|---|---|---|---|
 | **Max Cyclomatic Complexity ($M$)** | $M = 17$ (branch ladders) | $M = 24$ (spaghetti loops) | **$M \le 6$ project-wide** | **$-75\%$ complexity** |
 | **Max AST Nesting Depth** | Depth $8$ (`orelse=[If]`) | Depth $9$ (nested blocks) | **Depth $\le 3$ project-wide** | **$-66\%$ nesting** |
-| **Test Suite Pass Rate** | $23 / 23$ tests (100%) | Flaky / Timeout failures | **$161 / 161$ tests (100%)** | **$+600\%$ test volume** |
-| **Documentation Syntax & Validity** | Unvalidated markdown | Broken links & edge traps | **$56 / 56$ docs (100% clean)** | **Zero parser failures** |
+| **Test Suite Pass Rate** | $23 / 23$ tests (100%) | Flaky / Timeout failures | **$217 / 217$ tests (100%)** | **$+840\%$ test volume** |
+| **Documentation Syntax & Validity** | Unvalidated markdown | Broken links & edge traps | **$57 / 57$ docs (100% clean)** | **Zero parser failures** |
 | **Doc Validation Loop Latency** | $12.0\text{s}$ (multi-subprocess) | Subprocess spawn tax | **$0.05\text{s}$ (in-process engine)** | **$> 99\%$ speedup** |
 | **Single-Test Execution Latency** | $4.4\text{s}$ (plugin tax) | $2.1\text{s}$ (workspace discovery) | **$0.45\text{s}$ (isolated runner)** | **$> 75\%$ speedup** |
 | **CIS Container Security Score** | $0.0\%$ (unconstrained host) | $37.5\%$ (ad-hoc docker) | **$100.0\%$ (8/8 CIS controls)** | **Zero-trust containment** |

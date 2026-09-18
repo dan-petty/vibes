@@ -318,6 +318,16 @@ class _FunctionAggregate:
             self.functions_without_type_hints.append(miss_type)
 
 
+def _load_docs_validator_cls() -> type[Any]:
+    """Dynamically load DocsValidator supporting both direct script and module imports."""
+    try:
+        from docs_validator import DocsValidator
+        return DocsValidator
+    except ModuleNotFoundError:
+        from tools.docs_validator import DocsValidator  # type: ignore[no-redef]
+        return DocsValidator
+
+
 class ResourceScanner:
     """Scans repository files and computes structured baseline metrics."""
 
@@ -397,8 +407,8 @@ class ResourceScanner:
     @classmethod
     def scan_doc_file(cls, path: Path) -> ResourceScanMetrics:
         """Scan a markdown document for syntax, fences, tables, and link integrity."""
-        from docs_validator import DocsValidator
-        validator = DocsValidator()
+        validator_cls = _load_docs_validator_cls()
+        validator = validator_cls()
         findings = validator.validate_file(path)
         content = path.read_text(encoding="utf-8", errors="replace")
         violations = [
@@ -484,8 +494,8 @@ class ResourceRunner:
     @classmethod
     def _validate_doc_resource(cls, doc_path: Path) -> RunExecutionResult:
         """Validate markdown documentation in-process for fast feedback."""
-        from docs_validator import DocsValidator
-        findings = DocsValidator().validate_file(doc_path)
+        validator_cls = _load_docs_validator_cls()
+        findings = validator_cls().validate_file(doc_path)
         errors = [f for f in findings if f.severity == "error"]
         if not errors:
             return RunExecutionResult(

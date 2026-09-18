@@ -49,6 +49,7 @@ vibes/
 │   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
 │
 ├── observations/                      # Empirical field studies & engineering breakthroughs
+│   ├── README.md                      # Consolidated field observations & architectural synthesis
 │   ├── devops-cli/                    # In-depth case studies from the devops-cli project
 │   │   ├── 01-tdd-as-living-contract.md
 │   │   ├── 02-architectural-invariants-and-complexity-caps.md
@@ -137,6 +138,8 @@ vibes/
 ## 🔬 Featured Case Study: The `devops-cli` Laboratory
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
+
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 20 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
