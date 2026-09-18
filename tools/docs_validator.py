@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -113,6 +115,20 @@ def slugify_heading(heading_text: str) -> str:
     return re.sub(r"[\s_]+", "-", clean).strip("-")
 
 
+def _extract_heading_slug(line: str) -> str | None:
+    """Extract and slugify markdown heading text if line matches heading grammar."""
+    m = re.match(r"^(#{1,6})\s+(.*)$", line)
+    return slugify_heading(m.group(2).strip()) if m else None
+
+
+def _extract_html_anchors(line: str) -> list[str]:
+    """Extract explicit HTML anchor name and id attributes from line."""
+    return [
+        m.group(1)
+        for m in re.finditer(r'<a\s+[^>]*(?:name|id)=["\']([^"\']+)["\']', line, re.I)
+    ]
+
+
 def extract_heading_anchors(content: str) -> set[str]:
     """Extract all heading anchor slugs and explicit HTML anchors from markdown."""
     anchors: set[str] = set()
@@ -124,31 +140,35 @@ def extract_heading_anchors(content: str) -> set[str]:
             continue
         if in_fence:
             continue
-        m = re.match(r"^(#{1,6})\s+(.*)$", stripped)
-        if m:
-            slug = slugify_heading(m.group(2).strip())
-            if slug:
-                anchors.add(slug)
-        for anchor_match in re.finditer(r'<a\s+[^>]*(?:name|id)=["\']([^"\']+)["\']', line, re.I):
-            anchors.add(anchor_match.group(1))
+        slug = _extract_heading_slug(stripped)
+        if slug:
+            anchors.add(slug)
+        anchors.update(_extract_html_anchors(line))
     return anchors
+
+
+def _evaluate_fence_token(token: Any, file_str: str) -> DocFinding | None:
+    """Evaluate individual token for suspicious empty or unclosed fence."""
+    if token.type != "fence" or not token.map:
+        return None
+    start_l, end_l = token.map
+    if not token.info and (end_l - start_l <= 1):
+        return DocFinding(
+            file_path=file_str,
+            line_number=start_l + 1,
+            category="code_fence",
+            message=f"Suspicious unclosed or empty code fence at lines {start_l+1}-{end_l}",
+        )
+    return None
 
 
 def _check_token_fences(tokens: Sequence[Any], file_str: str) -> list[DocFinding]:
     """Scan parsed tokens for malformed or empty code fences."""
     findings: list[DocFinding] = []
     for token in tokens:
-        if token.type == "fence" and token.map:
-            start_l, end_l = token.map
-            if not token.info and (end_l - start_l <= 1):
-                findings.append(
-                    DocFinding(
-                        file_path=file_str,
-                        line_number=start_l + 1,
-                        category="code_fence",
-                        message=f"Suspicious unclosed or empty code fence at lines {start_l+1}-{end_l}",
-                    )
-                )
+        finding = _evaluate_fence_token(token, file_str)
+        if finding:
+            findings.append(finding)
     return findings
 
 
@@ -165,7 +185,10 @@ def _process_fence_line(
     char_type, curr_len = chars[0], len(chars)
     if not in_fence:
         state[:] = [True, char_type, curr_len, idx]
-    elif char_type == fence_char and info and curr_len >= fence_len:
+        return
+    if char_type != fence_char or curr_len < fence_len:
+        return
+    if info:
         findings.append(
             DocFinding(
                 file_path=file_str,
@@ -174,7 +197,7 @@ def _process_fence_line(
                 message=f"Nested code fence at line {idx} inside a {fence_len}-backtick block requires 4+ backticks",
             )
         )
-    elif char_type == fence_char and curr_len >= fence_len:
+    else:
         state[0] = False
 
 
@@ -380,19 +403,19 @@ def _check_local_anchor(
 
 def _check_path_target(path_part: str, file_path: Path, line_no: int) -> DocFinding | None:
     """Validate relative target path on filesystem."""
-    resolved = (file_path.parent / path_part).resolve()
-    if not resolved.exists():
-        # Fallback relative to repository root if testing from subdirectories
-        repo_root_fallback = (file_path.cwd() / path_part.lstrip("./")).resolve()
-        if repo_root_fallback.exists():
-            return None
-        return DocFinding(
-            file_path=str(file_path),
-            line_number=line_no,
-            category="link",
-            message=f"Target path does not exist: '{path_part}'",
-        )
-    return None
+    target_path = file_path.parent / path_part
+    if target_path.exists():
+        return None
+    # Fallback relative to repository root if testing from subdirectories
+    repo_root_fallback = file_path.cwd() / path_part.lstrip("./")
+    if repo_root_fallback.exists():
+        return None
+    return DocFinding(
+        file_path=str(file_path),
+        line_number=line_no,
+        category="link",
+        message=f"Target path does not exist: '{path_part}'",
+    )
 
 
 def _validate_link_target(
@@ -613,6 +636,19 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     return findings
 
 
+def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[Path]:
+    """Discover markdown files while pruning hidden directories and caches."""
+    md_files: list[Path] = []
+    ext_set = {ext.lower() for ext in extensions}
+    for root, dirs, files in os.walk(dir_path):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in (".venv", "node_modules", "__pycache__")]
+        for f in files:
+            p = Path(root) / f
+            if p.suffix.lower() in ext_set:
+                md_files.append(p)
+    return sorted(md_files)
+
+
 class DocsValidator:
     """Markdown documentation syntax, link integrity, and snippet validator for Vibes."""
 
@@ -715,16 +751,17 @@ class DocsValidator:
     ) -> DocValidationReport:
         """Scan and validate all markdown files in directory recursively."""
         start_time = time.monotonic()
-        md_files = [
-            f for f in sorted(dir_path.rglob("*"))
-            if f.is_file() and f.suffix.lower() in extensions and not any(p.startswith(".") for p in f.parts)
-        ]
+        md_files = _discover_markdown_files(dir_path, extensions)
 
         known_anchors = {f: extract_heading_anchors(f.read_text(encoding="utf-8")) for f in md_files}
         all_findings: list[DocFinding] = []
 
-        for f in md_files:
-            all_findings.extend(self.validate_file(f, known_anchors=known_anchors))
+        with ThreadPoolExecutor() as executor:
+            findings_lists = list(
+                executor.map(lambda f: self.validate_file(f, known_anchors=known_anchors), md_files)
+            )
+        for f_list in findings_lists:
+            all_findings.extend(f_list)
 
         elapsed = time.monotonic() - start_time
         errors = sum(1 for f in all_findings if f.severity == "error")
