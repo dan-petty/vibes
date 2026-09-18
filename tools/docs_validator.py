@@ -284,6 +284,28 @@ def _check_mermaid_edge_label(line: str, line_no: int, file_str: str) -> list[Do
     return findings
 
 
+def _validate_mermaid_header(
+    m_lines: list[str], m_start: int, file_str: str
+) -> DocFinding | None:
+    """Validate that the first non-comment line of a mermaid block specifies a known diagram type."""
+    first = next(
+        (
+            line_text.strip()
+            for line_text in m_lines
+            if line_text.strip() and not line_text.strip().startswith("%%")
+        ),
+        "",
+    )
+    if first and not any(first.lower().startswith(vt) for vt in VALID_MERMAID_TYPES):
+        return DocFinding(
+            file_path=file_str,
+            line_number=m_start,
+            category="mermaid",
+            message=f"Unrecognized Mermaid diagram type: '{first}'",
+        )
+    return None
+
+
 def check_mermaid_diagrams(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Inspect all mermaid diagrams for syntax structure and unquoted characters."""
     file_str = str(file_path)
@@ -297,16 +319,9 @@ def check_mermaid_diagrams(lines: Sequence[str], file_path: Path) -> list[DocFin
             continue
         if in_mermaid and stripped.startswith("```"):
             in_mermaid = False
-            first = next((line_text.strip() for line_text in m_lines if line_text.strip() and not line_text.strip().startswith("%%")), "")
-            if first and not any(first.lower().startswith(vt) for vt in VALID_MERMAID_TYPES):
-                findings.append(
-                    DocFinding(
-                        file_path=file_str,
-                        line_number=m_start,
-                        category="mermaid",
-                        message=f"Unrecognized Mermaid diagram type: '{first}'",
-                    )
-                )
+            header_finding = _validate_mermaid_header(m_lines, m_start, file_str)
+            if header_finding:
+                findings.append(header_finding)
             continue
         if in_mermaid:
             m_lines.append(line)
@@ -315,22 +330,50 @@ def check_mermaid_diagrams(lines: Sequence[str], file_path: Path) -> list[DocFin
     return findings
 
 
-def _split_table_row(line: str) -> list[str]:
-    """Split a markdown table row by pipes while ignoring pipes inside backticks."""
+def _mask_table_code_pipes(line: str) -> str:
+    """Mask pipe characters inside backtick blocks with null bytes."""
     masked: list[str] = []
     in_code = False
     for ch in line:
         if ch == "`":
             in_code = not in_code
-            masked.append(ch)
-        elif ch == "|" and in_code:
-            masked.append("\x00")
-        else:
-            masked.append(ch)
-    parts = re.split(r"(?<!\\)\|", "".join(masked))
+        is_masked_pipe = ch == "|" and in_code
+        masked.append("\x00" if is_masked_pipe else ch)
+    return "".join(masked)
+
+
+def _split_table_row(line: str) -> list[str]:
+    """Split a markdown table row by pipes while ignoring pipes inside backticks."""
+    masked = _mask_table_code_pipes(line)
+    parts = re.split(r"(?<!\\)\|", masked)
     if len(parts) >= 2 and parts[0].strip() == "" and parts[-1].strip() == "":
         parts = parts[1:-1]
     return [p.replace("\x00", "|").strip() for p in parts]
+
+
+def _is_table_delimiter_row(cells: Sequence[str]) -> bool:
+    """Predicate determining if row cells represent a markdown table header delimiter."""
+    return bool(cells) and all(re.match(r"^:?-+:?$", c) for c in cells)
+
+
+def _process_table_line(
+    raw_cells: list[str],
+    in_table: bool,
+    header_cols: int,
+    line_no: int,
+    file_str: str,
+) -> tuple[bool, int, DocFinding | None]:
+    """Process a single table line, tracking header column state and reporting mismatches."""
+    if _is_table_delimiter_row(raw_cells):
+        return True, len(raw_cells), None
+    if in_table and len(raw_cells) != header_cols:
+        return True, header_cols, DocFinding(
+            file_path=file_str,
+            line_number=line_no,
+            category="table",
+            message=f"Table row column count mismatch: expected {header_cols}, found {len(raw_cells)}",
+        )
+    return in_table, header_cols, None
 
 
 def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
@@ -349,18 +392,11 @@ def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFind
             continue
 
         raw_cells = _split_table_row(stripped)
-        is_delimiter = len(raw_cells) > 0 and all(re.match(r"^:?-+:?$", c) for c in raw_cells)
-        if is_delimiter:
-            in_table, header_cols = True, len(raw_cells)
-        elif in_table and len(raw_cells) != header_cols:
-            findings.append(
-                DocFinding(
-                    file_path=file_str,
-                    line_number=idx,
-                    category="table",
-                    message=f"Table row column count mismatch: expected {header_cols}, found {len(raw_cells)}",
-                )
-            )
+        in_table, header_cols, finding = _process_table_line(
+            raw_cells, in_table, header_cols, idx, file_str
+        )
+        if finding:
+            findings.append(finding)
     return findings
 
 
@@ -437,6 +473,31 @@ def _validate_link_target(
     return None
 
 
+def _check_line_links(
+    line: str,
+    line_no: int,
+    file_path: Path,
+    file_str: str,
+    effective_anchors: dict[Path, set[str]],
+) -> list[DocFinding]:
+    """Inspect a single markdown line for whitespace malformations and target link targets."""
+    line_findings: list[DocFinding] = []
+    if _SPACE_LINK_RE.search(line):
+        line_findings.append(
+            DocFinding(
+                file_path=file_str,
+                line_number=line_no,
+                category="link",
+                message=f"Malformed link with whitespace between brackets: '{line.strip()}'",
+            )
+        )
+    for match in _MARKDOWN_LINK_RE.finditer(line):
+        finding = _validate_link_target(match.group(2).strip(), file_path, line_no, effective_anchors)
+        if finding:
+            line_findings.append(finding)
+    return line_findings
+
+
 def check_markdown_links(
     lines: Sequence[str],
     file_path: Path,
@@ -458,21 +519,7 @@ def check_markdown_links(
             continue
         if in_fence:
             continue
-
-        if _SPACE_LINK_RE.search(line):
-            findings.append(
-                DocFinding(
-                    file_path=file_str,
-                    line_number=idx,
-                    category="link",
-                    message=f"Malformed link with whitespace between brackets: '{line.strip()}'",
-                )
-            )
-
-        for match in _MARKDOWN_LINK_RE.finditer(line):
-            finding = _validate_link_target(match.group(2).strip(), file_path, idx, effective_anchors)
-            if finding:
-                findings.append(finding)
+        findings.extend(_check_line_links(line, idx, file_path, file_str, effective_anchors))
     return findings
 
 
@@ -555,6 +602,23 @@ def _validate_single_snippet(
     return validator("\n".join(code_lines), start_line, file_str)
 
 
+def _handle_fence_transition(
+    m_fence: re.Match[str],
+    in_fence: bool,
+    fence_lang: str,
+    start_line: int,
+    block_lines: list[str],
+    line_no: int,
+    file_str: str,
+) -> tuple[bool, str, int, list[str], DocFinding | None]:
+    """Handle state transition when entering or exiting a fenced code block."""
+    if not in_fence:
+        info = m_fence.group(2).strip().split()
+        return True, info[0].lower() if info else "", line_no, [], None
+    finding = _validate_single_snippet(fence_lang, block_lines, start_line, file_str)
+    return False, "", 0, [], finding
+
+
 def check_embedded_snippets(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Syntactically parse embedded code blocks in supported languages."""
     file_str = str(file_path)
@@ -564,18 +628,13 @@ def check_embedded_snippets(lines: Sequence[str], file_path: Path) -> list[DocFi
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()
         m_fence = _FENCE_RE.match(stripped)
-        if m_fence and not in_fence:
-            in_fence, start_line, block_lines = True, idx, []
-            info = m_fence.group(2).strip().split()
-            fence_lang = info[0].lower() if info else ""
-            continue
-        if m_fence and in_fence:
-            in_fence = False
-            finding = _validate_single_snippet(fence_lang, block_lines, start_line, file_str)
+        if m_fence:
+            in_fence, fence_lang, start_line, block_lines, finding = _handle_fence_transition(
+                m_fence, in_fence, fence_lang, start_line, block_lines, idx, file_str
+            )
             if finding:
                 findings.append(finding)
-            continue
-        if in_fence:
+        elif in_fence:
             block_lines.append(line)
     return findings
 
@@ -602,6 +661,24 @@ def _process_html_tag(
     return None
 
 
+def _extract_line_html_findings(
+    line: str,
+    line_no: int,
+    file_str: str,
+    stack: list[tuple[str, int]],
+) -> list[DocFinding]:
+    """Scan unquoted text on a line for HTML tags and evaluate against tag stack."""
+    clean = re.sub(r"`[^`]*`", "", re.sub(r"<!--.*?-->", "", line))
+    findings: list[DocFinding] = []
+    for match in _HTML_TAG_RE.finditer(clean):
+        is_closing, tag = bool(match.group(1)), match.group(2).lower()
+        if tag not in VOID_HTML_TAGS and tag in PAIRED_HTML_TAGS:
+            finding = _process_html_tag(is_closing, tag, line_no, file_str, stack)
+            if finding:
+                findings.append(finding)
+    return findings
+
+
 def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Check pairing and nesting of structural HTML tags outside code blocks."""
     file_str = str(file_path)
@@ -615,14 +692,7 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
             continue
         if in_fence:
             continue
-
-        clean = re.sub(r"`[^`]*`", "", re.sub(r"<!--.*?-->", "", line))
-        for match in _HTML_TAG_RE.finditer(clean):
-            is_closing, tag = bool(match.group(1)), match.group(2).lower()
-            if tag not in VOID_HTML_TAGS and tag in PAIRED_HTML_TAGS:
-                finding = _process_html_tag(is_closing, tag, idx, file_str, stack)
-                if finding:
-                    findings.append(finding)
+        findings.extend(_extract_line_html_findings(line, idx, file_str, stack))
 
     for tag, tag_line in stack:
         findings.append(
