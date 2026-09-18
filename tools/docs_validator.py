@@ -22,6 +22,7 @@ from pathlib import Path
 import re
 import sys
 import textwrap
+import threading
 import time
 from typing import Any, Callable, Final, Sequence
 import urllib.parse
@@ -64,6 +65,7 @@ _MARKDOWN_LINK_RE: Final[re.Pattern[str]] = re.compile(r"!?\[([^\]]*)\]\(([^)]+)
 _MERMAID_NODE_RE: Final[re.Pattern[str]] = re.compile(r"([A-Za-z0-9_]+)\[([^\]]+)\]")
 _MERMAID_EDGE_RE: Final[re.Pattern[str]] = re.compile(r"(-->|-\.->|==>)\|([^|]+)\|")
 _HTML_TAG_RE: Final[re.Pattern[str]] = re.compile(r"<(/)?([a-zA-Z0-9]+)(?:\s+[^>]*)?>")
+_FILE_URI_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]*)\]\(file://(/[^)#\s]+)(#[^)\s]*)?\)")
 
 
 @dataclass(frozen=True)
@@ -809,11 +811,143 @@ def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[
     return sorted(md_files)
 
 
+def _fix_mermaid_line(line: str) -> tuple[str, int]:
+    """Quote node and edge labels containing special characters in a single mermaid line."""
+    fixes = 0
+    new_line = line
+    for match in _MERMAID_NODE_RE.finditer(line):
+        node_id, label = match.group(1), match.group(2)
+        if _is_unquoted_parens_node_label(label):
+            target = f"{node_id}[{label}]"
+            replacement = f'{node_id}["{label}"]'
+            new_line = new_line.replace(target, replacement, 1)
+            fixes += 1
+    for match in _MERMAID_EDGE_RE.finditer(new_line):
+        arrow, label = match.group(1), match.group(2)
+        if _is_unquoted_special_edge_label(label.strip()):
+            target = f"{arrow}|{label}|"
+            replacement = f'{arrow}|"{label.strip()}"|'
+            new_line = new_line.replace(target, replacement, 1)
+            fixes += 1
+    return new_line, fixes
+
+
+def _process_mermaid_line(
+    line: str, in_mermaid: bool
+) -> tuple[str, bool, int]:
+    """Process a single markdown line and apply Mermaid fixes if inside diagram."""
+    stripped = line.strip()
+    if stripped.startswith("```mermaid"):
+        return line, True, 0
+    if in_mermaid and stripped.startswith("```"):
+        return line, False, 0
+    if in_mermaid:
+        fixed_line, count = _fix_mermaid_line(line)
+        return fixed_line, True, count
+    return line, False, 0
+
+
+def _fix_mermaid_blocks(lines: list[str]) -> tuple[list[str], int]:
+    """Fix unquoted Mermaid node and edge labels across all mermaid blocks."""
+    in_mermaid = False
+    total_fixes = 0
+    result_lines: list[str] = []
+    for line in lines:
+        fixed_line, in_mermaid, count = _process_mermaid_line(line, in_mermaid)
+        total_fixes += count
+        result_lines.append(fixed_line)
+    return result_lines, total_fixes
+
+
+def _track_fence_marker(line: str, current_fence: str | None) -> str | None:
+    """Update current unclosed fence marker based on line."""
+    match = _FENCE_RE.match(line.strip())
+    if not match:
+        return current_fence
+    marker = match.group(1)
+    if current_fence is None:
+        return marker
+    if marker.startswith(current_fence[:3]):
+        return None
+    return current_fence
+
+
+def _fix_unclosed_fences(lines: list[str]) -> tuple[list[str], int]:
+    """Close any unclosed code fence at document end."""
+    open_fence = None
+    for line in lines:
+        open_fence = _track_fence_marker(line, open_fence)
+    if open_fence is not None:
+        return [*lines, open_fence], 1
+    return lines, 0
+
+
+def _fix_absolute_links(content: str, doc_path: Path) -> tuple[str, int]:
+    """Convert absolute file:/// links to relative markdown links."""
+    fixes = 0
+    doc_dir = doc_path.resolve().parent
+
+    def _replace_uri(match: re.Match[str]) -> str:
+        nonlocal fixes
+        text, abs_path_str, anchor = match.group(1), match.group(2), match.group(3) or ""
+        target_path = Path(abs_path_str)
+        try:
+            rel = os.path.relpath(target_path, doc_dir)
+            fixes += 1
+            return f"[{text}]({rel}{anchor})"
+        except ValueError:
+            return match.group(0)
+
+    fixed_content = _FILE_URI_LINK_RE.sub(_replace_uri, content)
+    return fixed_content, fixes
+
+
+def auto_fix_content(content: str, doc_path: Path = Path("document.md")) -> tuple[str, int]:
+    """Remediate fixable documentation issues in markdown string."""
+    lines = content.splitlines()
+    lines, fence_fixes = _fix_unclosed_fences(lines)
+    lines, mermaid_fixes = _fix_mermaid_blocks(lines)
+    reconstituted = "\n".join(lines)
+    if content.endswith("\n") and not reconstituted.endswith("\n"):
+        reconstituted += "\n"
+    final_content, link_fixes = _fix_absolute_links(reconstituted, doc_path)
+    return final_content, fence_fixes + mermaid_fixes + link_fixes
+
+
+def auto_fix_file(file_path: Path) -> int:
+    """Read file, apply automated remediations, and write back if modified."""
+    if not file_path.is_file():
+        return 0
+    content = file_path.read_text(encoding="utf-8")
+    fixed_content, total_fixes = auto_fix_content(content, file_path)
+    if total_fixes > 0 and fixed_content != content:
+        file_path.write_text(fixed_content, encoding="utf-8")
+    return total_fixes
+
+
 class DocsValidator:
     """Markdown documentation syntax, link integrity, and snippet validator for Vibes."""
 
     def __init__(self) -> None:
-        self.parser = MarkdownIt("commonmark")
+        self._local = threading.local()
+
+    @property
+    def parser(self) -> MarkdownIt:
+        """Thread-isolated parser instance avoiding concurrent state corruption."""
+        if not hasattr(self._local, "parser"):
+            self._local.parser = MarkdownIt("commonmark")
+        return self._local.parser
+
+    def fix_file(self, file_path: Path) -> int:
+        """Remediate documentation issues in file in-place."""
+        return auto_fix_file(file_path)
+
+    def fix_directory(
+        self, dir_path: Path, extensions: Sequence[str] = (".md", ".markdown")
+    ) -> int:
+        """Remediate documentation issues across directory in-place."""
+        md_files = _discover_markdown_files(dir_path, extensions)
+        return sum(auto_fix_file(f) for f in md_files)
 
     @staticmethod
     def _to_lines(content: str | Sequence[str]) -> list[str]:
@@ -990,11 +1124,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Vibes Documentation Syntax & Link Validator")
     parser.add_argument("path", nargs="?", default=".", help="File or directory path to validate")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as errors")
+    parser.add_argument("--fix", action="store_true", help="Automatically remediate fixable documentation issues")
     parser.add_argument("--json", action="store_true", help="Emit report as JSON")
     parser.add_argument("--rule", help="Filter findings by category rule")
     args = parser.parse_args(argv)
 
-    report = _resolve_report(Path(args.path).resolve(), DocsValidator())
+    target = Path(args.path).resolve()
+    validator = DocsValidator()
+
+    if args.fix:
+        fixes = validator.fix_file(target) if target.is_file() else validator.fix_directory(target)
+        if fixes > 0:
+            print(f"🔧 Applied {fixes} automatic remediation fix(es) to documentation.")
+
+    report = _resolve_report(target, validator)
     _filter_report_by_rule(report, args.rule)
 
     if args.json:

@@ -61,7 +61,10 @@ Here you will find:
 │   │   ├── 09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md
 │   │   ├── 10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md
 │   │   ├── 11-assertion-density-and-structural-tuple-consolidation.md
-│   │   └── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
+│   │   ├── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
+│   │   ├── 13-streaming-reasoning-token-parsers-and-think-block-sanitization.md
+│   │   ├── 14-binary-search-ast-context-packing-and-token-budgeting.md
+│   │   └── 15-llm-structured-output-repair-and-schema-reconciliation.md
 │   ├── polyglot/                      # Cross-language agentic engineering observations
 │   │   ├── 01-rust-type-state-invariants.md
 │   │   ├── 02-typescript-cst-and-type-gymnastics.md
@@ -72,7 +75,8 @@ Here you will find:
 │       ├── 03-event-driven-file-watchers-and-continuous-invariant-loops.md
 │       ├── 04-content-addressed-two-tier-caching-and-embedding-drift-audits.md
 │       ├── 05-rootless-container-sandboxing-and-process-group-containment.md
-│       └── 06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md
+│       ├── 06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md
+│       └── 07-agentic-ide-protocols-and-lsp-mcp-convergence.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── cegis-and-hypothesis-debugging.md
@@ -84,7 +88,10 @@ Here you will find:
 │   ├── autonomous-sdlc-project-management.md
 │   ├── iterative-resource-refinement-loop.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
-│   └── multi-agent-codebase-concurrency.md
+│   ├── multi-agent-codebase-concurrency.md
+│   ├── streaming-reasoning-isolation-and-token-budgeting.md
+│   ├── binary-search-context-packing.md
+│   └── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
 │
 ├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
 │   ├── prompts/
@@ -112,7 +119,10 @@ Here you will find:
 │   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
 │   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
 │   ├── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
-│   └── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
+│   ├── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
+│   ├── streaming-reasoning-sanitizer/ # Streaming reasoning FSM parser & bounded stream sanitizer
+│   ├── binary-search-context-packer/  # Binary search AST prompt context packer
+│   └── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)

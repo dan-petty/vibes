@@ -196,3 +196,71 @@ def test_all_vibes_documentation_clean() -> None:
     validator = DocsValidator()
     report = validator.validate_directory(vibes_root)
     assert (report.is_valid, report.error_count, report.total_files >= 50) == (True, 0, True)
+
+
+def test_docs_validator_auto_fix(tmp_path: Path) -> None:
+    """Ensure auto-fixing repairs unclosed code fences, mermaid labels, and absolute URIs."""
+    target_file = tmp_path / "target.md"
+    target_file.write_text("# Target\nClean doc.", encoding="utf-8")
+
+    broken = tmp_path / "broken.md"
+    content = (
+        "# Title\n\n"
+        f"Link to [Target](file://{target_file.resolve()})\n\n"
+        "```mermaid\n"
+        "flowchart TD\n"
+        "    A[Node (Unquoted)] -->|Yes (Condition)| B\n"
+        "```\n\n"
+        "```python\n"
+        "print('unclosed')\n"
+    )
+    broken.write_text(content, encoding="utf-8")
+
+    validator = DocsValidator()
+    fixes = validator.fix_file(broken)
+    remediated = broken.read_text(encoding="utf-8")
+
+    # Verify that the unclosed fence was closed, mermaid was quoted, and absolute link was converted
+    assert (
+        fixes >= 3,
+        'A["Node (Unquoted)"]' in remediated,
+        '|"(Condition)"|' in remediated or '|"Yes (Condition)"|' in remediated,
+        "target.md" in remediated,
+        remediated.endswith("```\n") or remediated.endswith("```"),
+    ) == (True, True, True, True, True)
+
+
+def _run_concurrent_validations(
+    validator: DocsValidator, doc_content: str, repetitions: int = 10
+) -> Exception | None:
+    """Helper running repeated validations in a single thread, returning any caught exception."""
+    try:
+        for _ in range(repetitions):
+            findings = validator.validate_content(doc_content)
+            assert len(findings) == 0
+        return None
+    except Exception as exc:  # noqa: BLE001
+        return exc
+
+
+def test_docs_validator_thread_safety() -> None:
+    """Ensure concurrent calls to DocsValidator do not crash or corrupt parser state."""
+    import threading
+
+    validator = DocsValidator()
+    doc_content = "# Title\n\nHere is [link](#title).\n\n```python\nx = 1\n```\n"
+    errors: list[Exception] = []
+
+    def _worker() -> None:
+        err = _run_concurrent_validations(validator, doc_content)
+        if err is not None:
+            errors.append(err)
+
+    threads = [threading.Thread(target=_worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert (len(errors), errors) == (0, [])
+
