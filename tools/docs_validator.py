@@ -135,7 +135,7 @@ def extract_heading_anchors(content: str) -> set[str]:
     in_fence = False
     for line in content.splitlines():
         stripped = line.strip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
+        if stripped.startswith(("```", "~~~")):
             in_fence = not in_fence
             continue
         if in_fence:
@@ -244,12 +244,19 @@ def check_code_fences(
     return sorted(findings, key=lambda f: (f.line_number, f.category))
 
 
+def _is_unquoted_parens_node_label(label: str) -> bool:
+    """Predicate checking if node label contains unquoted parentheses."""
+    if label.startswith('"') and label.endswith('"'):
+        return False
+    return ("(" in label) or (")" in label)
+
+
 def _check_mermaid_node_label(line: str, line_no: int, file_str: str) -> list[DocFinding]:
     """Validate that node shape labels with parentheses are properly quoted."""
     findings: list[DocFinding] = []
     for match in _MERMAID_NODE_RE.finditer(line):
         node_id, label = match.group(1), match.group(2)
-        if not (label.startswith('"') and label.endswith('"')) and ("(" in label or ")" in label):
+        if _is_unquoted_parens_node_label(label):
             findings.append(
                 DocFinding(
                     file_path=file_str,
@@ -264,12 +271,19 @@ def _check_mermaid_node_label(line: str, line_no: int, file_str: str) -> list[Do
     return findings
 
 
+def _is_unquoted_special_edge_label(label: str) -> bool:
+    """Predicate checking if edge label contains unquoted special characters."""
+    if label.startswith('"') and label.endswith('"'):
+        return False
+    return any(c in label for c in ("(", ")", ">", "<"))
+
+
 def _check_mermaid_edge_label(line: str, line_no: int, file_str: str) -> list[DocFinding]:
     """Validate that edge labels with parentheses or special characters are properly quoted."""
     findings: list[DocFinding] = []
     for match in _MERMAID_EDGE_RE.finditer(line):
         label = match.group(2).strip()
-        if not (label.startswith('"') and label.endswith('"')) and any(c in label for c in ("(", ")", ">", "<")):
+        if _is_unquoted_special_edge_label(label):
             findings.append(
                 DocFinding(
                     file_path=file_str,
@@ -306,27 +320,56 @@ def _validate_mermaid_header(
     return None
 
 
+def _is_mermaid_start(stripped: str, in_block: bool) -> bool:
+    """Check if line starts a mermaid block."""
+    return not in_block and stripped.startswith("```mermaid")
+
+
+def _extract_mermaid_blocks(lines: Sequence[str]) -> list[tuple[int, list[tuple[int, str]]]]:
+    """Extract mermaid code blocks as (start_line, [(line_no, line_content)])."""
+    blocks: list[tuple[int, list[tuple[int, str]]]] = []
+    current: list[tuple[int, str]] = []
+    start_line = 0
+    in_block = False
+
+    for idx, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if _is_mermaid_start(stripped, in_block):
+            in_block, start_line, current = True, idx, []
+            continue
+        if not in_block:
+            continue
+        if stripped.startswith("```"):
+            blocks.append((start_line, current))
+            in_block = False
+            continue
+        current.append((idx, line))
+    return blocks
+
+
+def _validate_single_mermaid_block(
+    start_line: int,
+    block_lines: Sequence[tuple[int, str]],
+    file_str: str,
+) -> list[DocFinding]:
+    """Validate header, node labels, and edge labels within a single mermaid block."""
+    raw_lines = [text for _, text in block_lines]
+    findings: list[DocFinding] = []
+    header_err = _validate_mermaid_header(raw_lines, start_line, file_str)
+    if header_err:
+        findings.append(header_err)
+    for line_no, text in block_lines:
+        findings.extend(_check_mermaid_node_label(text, line_no, file_str))
+        findings.extend(_check_mermaid_edge_label(text, line_no, file_str))
+    return findings
+
+
 def check_mermaid_diagrams(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Inspect all mermaid diagrams for syntax structure and unquoted characters."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    in_mermaid, m_start, m_lines = False, 0, []
-
-    for idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if stripped.startswith("```mermaid"):
-            in_mermaid, m_start, m_lines = True, idx, []
-            continue
-        if in_mermaid and stripped.startswith("```"):
-            in_mermaid = False
-            header_finding = _validate_mermaid_header(m_lines, m_start, file_str)
-            if header_finding:
-                findings.append(header_finding)
-            continue
-        if in_mermaid:
-            m_lines.append(line)
-            findings.extend(_check_mermaid_node_label(line, idx, file_str))
-            findings.extend(_check_mermaid_edge_label(line, idx, file_str))
+    for start_line, block_lines in _extract_mermaid_blocks(lines):
+        findings.extend(_validate_single_mermaid_block(start_line, block_lines, file_str))
     return findings
 
 
@@ -376,6 +419,20 @@ def _process_table_line(
     return in_table, header_cols, None
 
 
+def _evaluate_table_line(
+    stripped: str,
+    in_table: bool,
+    header_cols: int,
+    line_no: int,
+    file_str: str,
+) -> tuple[bool, int, DocFinding | None]:
+    """Evaluate candidate table line and return updated state and optional finding."""
+    if "|" not in stripped:
+        return False, header_cols, None
+    raw_cells = _split_table_row(stripped)
+    return _process_table_line(raw_cells, in_table, header_cols, line_no, file_str)
+
+
 def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Verify table row column counts match the table header definition."""
     file_str = str(file_path)
@@ -384,16 +441,14 @@ def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFind
 
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
+        if stripped.startswith(("```", "~~~")):
             in_fence, in_table = not in_fence, False
             continue
-        if in_fence or "|" not in stripped:
+        if in_fence:
             in_table = False
             continue
-
-        raw_cells = _split_table_row(stripped)
-        in_table, header_cols, finding = _process_table_line(
-            raw_cells, in_table, header_cols, idx, file_str
+        in_table, header_cols, finding = _evaluate_table_line(
+            stripped, in_table, header_cols, idx, file_str
         )
         if finding:
             findings.append(finding)
@@ -498,6 +553,18 @@ def _check_line_links(
     return line_findings
 
 
+def _resolve_effective_anchors(
+    file_path: Path,
+    lines: Sequence[str],
+    known_anchors: dict[Path, set[str]] | None,
+) -> dict[Path, set[str]]:
+    """Resolve known anchors map, populating local document anchors if missing."""
+    anchors = dict(known_anchors) if known_anchors is not None else {}
+    if file_path not in anchors:
+        anchors[file_path] = extract_heading_anchors("\n".join(lines))
+    return anchors
+
+
 def check_markdown_links(
     lines: Sequence[str],
     file_path: Path,
@@ -507,19 +574,15 @@ def check_markdown_links(
     file_str = str(file_path)
     findings: list[DocFinding] = []
     in_fence = False
-
-    effective_anchors = dict(known_anchors) if known_anchors is not None else {}
-    if file_path not in effective_anchors:
-        effective_anchors[file_path] = extract_heading_anchors("\n".join(lines))
+    effective_anchors = _resolve_effective_anchors(file_path, lines, known_anchors)
 
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
+        if stripped.startswith(("```", "~~~")):
             in_fence = not in_fence
             continue
-        if in_fence:
-            continue
-        findings.extend(_check_line_links(line, idx, file_path, file_str, effective_anchors))
+        if not in_fence:
+            findings.extend(_check_line_links(line, idx, file_path, file_str, effective_anchors))
     return findings
 
 
@@ -542,15 +605,21 @@ def _validate_python_snippet(code: str, start_line: int, file_str: str) -> DocFi
         )
 
 
+def _is_json_container(text: str) -> bool:
+    """Predicate checking if text is enclosed in braces or brackets."""
+    if text.startswith("{"):
+        return text.endswith("}")
+    if text.startswith("["):
+        return text.endswith("]")
+    return False
+
+
 def _validate_json_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
     """Validate syntax of an embedded JSON code block."""
     dedented = textwrap.dedent(code).strip()
     if re.search(r"//|/\*|#|\.\.\.|<[a-zA-Z0-9_-]+>|\$\{", dedented):
         return None
-    if not (
-        (dedented.startswith("{") and dedented.endswith("}"))
-        or (dedented.startswith("[") and dedented.endswith("]"))
-    ):
+    if not _is_json_container(dedented):
         return None
     try:
         json.loads(dedented)
@@ -619,23 +688,36 @@ def _handle_fence_transition(
     return False, "", 0, [], finding
 
 
+def _process_snippet_line(
+    line: str,
+    idx: int,
+    file_str: str,
+    state: list[Any],
+    findings: list[DocFinding],
+) -> None:
+    """Process a single line for embedded code snippets."""
+    stripped = line.strip()
+    m_fence = _FENCE_RE.match(stripped)
+    in_fence, fence_lang, start_line, block_lines = state
+    if m_fence:
+        in_f, f_lang, s_line, b_lines, finding = _handle_fence_transition(
+            m_fence, in_fence, fence_lang, start_line, block_lines, idx, file_str
+        )
+        state[:] = [in_f, f_lang, s_line, b_lines]
+        if finding:
+            findings.append(finding)
+    elif in_fence:
+        block_lines.append(line)
+
+
 def check_embedded_snippets(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Syntactically parse embedded code blocks in supported languages."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    in_fence, fence_lang, start_line, block_lines = False, "", 0, []
+    state: list[Any] = [False, "", 0, []]
 
     for idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        m_fence = _FENCE_RE.match(stripped)
-        if m_fence:
-            in_fence, fence_lang, start_line, block_lines, finding = _handle_fence_transition(
-                m_fence, in_fence, fence_lang, start_line, block_lines, idx, file_str
-            )
-            if finding:
-                findings.append(finding)
-        elif in_fence:
-            block_lines.append(line)
+        _process_snippet_line(line, idx, file_str, state, findings)
     return findings
 
 
@@ -661,6 +743,19 @@ def _process_html_tag(
     return None
 
 
+def _evaluate_html_match(
+    match: re.Match[str],
+    line_no: int,
+    file_str: str,
+    stack: list[tuple[str, int]],
+) -> DocFinding | None:
+    """Evaluate a single HTML tag regex match against void/paired sets."""
+    is_closing, tag = bool(match.group(1)), match.group(2).lower()
+    if tag in VOID_HTML_TAGS or tag not in PAIRED_HTML_TAGS:
+        return None
+    return _process_html_tag(is_closing, tag, line_no, file_str, stack)
+
+
 def _extract_line_html_findings(
     line: str,
     line_no: int,
@@ -671,11 +766,9 @@ def _extract_line_html_findings(
     clean = re.sub(r"`[^`]*`", "", re.sub(r"<!--.*?-->", "", line))
     findings: list[DocFinding] = []
     for match in _HTML_TAG_RE.finditer(clean):
-        is_closing, tag = bool(match.group(1)), match.group(2).lower()
-        if tag not in VOID_HTML_TAGS and tag in PAIRED_HTML_TAGS:
-            finding = _process_html_tag(is_closing, tag, line_no, file_str, stack)
-            if finding:
-                findings.append(finding)
+        finding = _evaluate_html_match(match, line_no, file_str, stack)
+        if finding:
+            findings.append(finding)
     return findings
 
 
@@ -687,12 +780,11 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
 
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
+        if stripped.startswith(("```", "~~~")):
             in_fence = not in_fence
             continue
-        if in_fence:
-            continue
-        findings.extend(_extract_line_html_findings(line, idx, file_str, stack))
+        if not in_fence:
+            findings.extend(_extract_line_html_findings(line, idx, file_str, stack))
 
     for tag, tag_line in stack:
         findings.append(
@@ -712,10 +804,8 @@ def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[
     ext_set = {ext.lower() for ext in extensions}
     for root, dirs, files in os.walk(dir_path):
         dirs[:] = [d for d in dirs if not d.startswith(".") and d not in (".venv", "node_modules", "__pycache__")]
-        for f in files:
-            p = Path(root) / f
-            if p.suffix.lower() in ext_set:
-                md_files.append(p)
+        matching = [Path(root) / f for f in files if (Path(root) / f).suffix.lower() in ext_set]
+        md_files.extend(matching)
     return sorted(md_files)
 
 
@@ -886,6 +976,15 @@ def _render_console_report(report: DocValidationReport) -> None:
         print(f"  {f.file_path}:{f.line_number} [{f.category}] {f.message}")
 
 
+def _determine_exit_code(report: DocValidationReport, strict: bool) -> int:
+    """Determine CLI exit code based on report validity and strict flag."""
+    if not report.is_valid:
+        return 1
+    if strict and report.warning_count > 0:
+        return 1
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint for standalone vibes doc validator."""
     parser = argparse.ArgumentParser(description="Vibes Documentation Syntax & Link Validator")
@@ -903,9 +1002,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1 if not report.is_valid else 0
 
     _render_console_report(report)
-    if not report.is_valid or (args.strict and report.warning_count > 0):
-        return 1
-    return 0
+    return _determine_exit_code(report, args.strict)
 
 
 if __name__ == "__main__":

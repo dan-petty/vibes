@@ -1,9 +1,9 @@
 # Consolidated Field Observations & Architectural Synthesis
 
-> **Exhibition**: `vibes` Empirical Knowledge Base  
-> **Classification**: Master Observation Index & Cross-Domain Synthesis  
-> **Scope**: 20 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
-> **Key Metric**: 100.0/100 Resource Health Score; 217/217 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance  
+> **Exhibition**: `vibes` Empirical Knowledge Base
+> **Classification**: Master Observation Index & Cross-Domain Synthesis
+> **Scope**: 20 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
+> **Key Metric**: 100.0/100 Resource Health Score; 217/217 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance
 
 ---
 

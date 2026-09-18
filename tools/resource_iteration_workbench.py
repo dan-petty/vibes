@@ -328,6 +328,20 @@ def _load_docs_validator_cls() -> type[Any]:
         return DocsValidator
 
 
+def _is_excluded_py_path(path: Path) -> bool:
+    """Predicate determining if Python path is in virtual environment or cache."""
+    parts = path.parts
+    return (".venv" in parts) or ("__pycache__" in parts)
+
+
+def _is_excluded_doc_path(path: Path) -> bool:
+    """Predicate determining if markdown documentation path should be excluded."""
+    parts = path.parts
+    if ".venv" in parts:
+        return True
+    return any(p.startswith(".") for p in parts)
+
+
 class ResourceScanner:
     """Scans repository files and computes structured baseline metrics."""
 
@@ -430,16 +444,12 @@ class ResourceScanner:
     @classmethod
     def scan_directory(cls, root_dir: Path, include_docs: bool = True) -> list[ResourceScanMetrics]:
         """Recursively scan directory for Python files and markdown documentation."""
-        results: list[ResourceScanMetrics] = []
-        for py_path in sorted(root_dir.rglob("*.py")):
-            if ".venv" in py_path.parts or "__pycache__" in py_path.parts:
-                continue
-            results.append(cls.scan_python_file(py_path))
-        if include_docs:
-            for doc_path in sorted(root_dir.rglob("*.md")):
-                if ".venv" in doc_path.parts or any(p.startswith(".") for p in doc_path.parts):
-                    continue
-                results.append(cls.scan_doc_file(doc_path))
+        py_files = [p for p in sorted(root_dir.rglob("*.py")) if not _is_excluded_py_path(p)]
+        results = [cls.scan_python_file(p) for p in py_files]
+        if not include_docs:
+            return results
+        doc_files = [p for p in sorted(root_dir.rglob("*.md")) if not _is_excluded_doc_path(p)]
+        results.extend(cls.scan_doc_file(p) for p in doc_files)
         return results
 
     @staticmethod
@@ -453,6 +463,11 @@ class ResourceScanner:
         if "examples" in parts:
             return ResourceType.SAMPLE_APP
         return ResourceType.PYTHON_MODULE
+
+
+def _extract_int_group(match: re.Match[str] | None, default: int = 0) -> int:
+    """Extract first matched integer group or return default."""
+    return int(match.group(1)) if match else default
 
 
 class ResourceRunner:
@@ -551,15 +566,11 @@ class ResourceRunner:
             return 1, 0, 0
         if "✗ Found " in output:
             match = re.search(r"Found (\d+) issues", output)
-            return 0, int(match.group(1)) if match else 1, 0
+            return 0, _extract_int_group(match, default=1), 0
 
-        p_match = PYTEST_PASSED_RE.search(output)
-        f_match = PYTEST_FAILED_RE.search(output)
-        w_match = PYTEST_WARNINGS_RE.search(output)
-
-        passed = int(p_match.group(1)) if p_match else 0
-        failed = int(f_match.group(1)) if f_match else 0
-        warnings = int(w_match.group(1)) if w_match else 0
+        passed = _extract_int_group(PYTEST_PASSED_RE.search(output))
+        failed = _extract_int_group(PYTEST_FAILED_RE.search(output))
+        warnings = _extract_int_group(PYTEST_WARNINGS_RE.search(output))
         return passed, failed, warnings
 
 
