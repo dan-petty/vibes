@@ -57,7 +57,7 @@ flowchart TD
 
 ## Quick Start
 
-### 1. Run CIS Policy Security Audit
+### Run CIS Policy Security Audit
 ```bash
 python3 examples/ephemeral-container-sandbox/sandbox.py --audit
 ```
@@ -79,7 +79,7 @@ Compliance Score: 100.0% | Passed: 8/8
 ==========================================================================
 ```
 
-### 2. Run Interactive Containment Matrix Demo
+### Run Interactive Containment Matrix Demo
 ```bash
 python3 examples/ephemeral-container-sandbox/sandbox.py --demo --simulator
 ```

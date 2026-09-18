@@ -1,13 +1,13 @@
 # Go Concurrency & Goroutine Leak Sentinel
 
-> **Sample Application**: Concurrency Verification & Goroutine Leak Sentinel  
-> **Classification**: Polyglot Systems Invariant Enforcement  
-> **Source Project**: [`vibes`](https://github.com/dan-petty/vibes)  
-> **Primary Tech**: Go 1.22+, `runtime/pprof`, Python 3.12+  
+> **Sample Application**: Concurrency Verification & Goroutine Leak Sentinel
+> **Classification**: Polyglot Systems Invariant Enforcement
+> **Source Project**: [`vibes`](https://github.com/dan-petty/vibes)
+> **Primary Tech**: Go 1.22+, `runtime/pprof`, Python 3.12+
 
 ---
 
-## 1. Overview & Problem Statement
+## Overview & Problem Statement
 
 In concurrent Go applications, autonomous AI coding assistants frequently introduce subtle **goroutine leaks**—background goroutines that block indefinitely on channel operations, system calls, or synchronization locks, silently accumulating memory and thread table entries until the process exhausts resources.
 
@@ -16,9 +16,9 @@ Because Go lacks compile-time affine lifetime checks like Rust, concurrency inva
 ```mermaid
 flowchart TD
     subgraph LLMConcurrenyTraps["Stochastic Go Concurrency Failure Modes"]
-        T1["1. Unbuffered Channel Deadlock (ch <- val with no active reader)"]
-        T2["2. Context Abandonment (infinite loop omitting ctx.Done())"]
-        T3["3. Fire-and-Forget Goroutines (no sync.WaitGroup or errgroup)"]
+        T1["Unbuffered Channel Deadlock (ch <- val with no active reader)"]
+        T2["Context Abandonment (infinite loop omitting ctx.Done())"]
+        T3["Fire-and-Forget Goroutines (no sync.WaitGroup or errgroup)"]
     end
 
     subgraph Oracle["Goroutine Leak Sentinel (Mechanical Oracle)"]
@@ -41,7 +41,7 @@ flowchart TD
 
 ---
 
-## 2. The 3 Common Concurrency Traps & Fixes
+## Common Concurrency Traps & Fixes
 
 ### Trap 1: Unbuffered Channel Send Hang
 ```go
@@ -95,33 +95,22 @@ func CleanContextLoop(ctx context.Context, wg *sync.WaitGroup) {
 
 ---
 
-## 3. Directory Layout & Architecture
+## Directory Layout & Architecture
 
 ```mermaid
-flowchart TD
+flowchart LR
     Root["examples/go-leak-sentinel/"]
-
-    subgraph GoPkg["1. Go Sentinel Implementation"]
-        direction TB
-        F_Mod["go.mod<br><sub>Go module specification (example.com/go-leak-sentinel)</sub>"]
-        F_Go["sentinel.go<br><sub>Native Go sentinel library & leak demonstration patterns</sub>"]
-        F_GoTest["sentinel_test.go<br><sub>Go unit tests verifying leak detection</sub>"]
-    end
-
-    subgraph PyPkg["2. Python Parser & Documentation"]
-        direction TB
-        F_Py["go_leak_sentinel.py<br><sub>Python runtime stack dump parser & scoring engine</sub>"]
-        F_PyTest["test_go_leak_sentinel.py<br><sub>Automated test suite (6 passing unit tests)</sub>"]
-        F_Readme["README.md<br><sub>Architecture, failure mode guide & usage (this file)</sub>"]
-    end
-
-    Root --> GoPkg
-    GoPkg --> PyPkg
+    Root --> F1["go.mod"]
+    Root --> F2["sentinel.go"]
+    Root --> F3["sentinel_test.go"]
+    Root --> F4["go_leak_sentinel.py"]
+    Root --> F5["test_go_leak_sentinel.py"]
+    Root --> F6["README.md"]
 ```
 
 ---
 
-## 4. Quickstart & CLI Usage
+## Quickstart & CLI Usage
 
 ### Run the Interactive Demonstration
 ```bash

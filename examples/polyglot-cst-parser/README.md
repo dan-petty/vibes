@@ -55,7 +55,7 @@ flowchart TD
 
 ## Quick Start
 
-### 1. Run the Multi-Language Demonstration
+### Run the Multi-Language Demonstration
 ```bash
 python3 examples/polyglot-cst-parser/parser.py --demo
 ```
@@ -75,7 +75,7 @@ Bash           | bash           | 1          | 2
 ==========================================================================
 ```
 
-### 2. Scan a Single Source File
+### Scan a Single Source File
 ```bash
 python3 examples/polyglot-cst-parser/parser.py --scan path/to/file.ts
 ```

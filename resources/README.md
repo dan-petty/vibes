@@ -7,34 +7,31 @@ This directory contains production-grade infrastructure manifests, observability
 ## Directory Organization
 
 ```mermaid
-flowchart TD
+flowchart LR
     Res["resources/"]
 
-    subgraph Obs["1. observability/ (Agent Telemetry & Mesh)"]
-        direction TB
-        O_Readme["README.md<br><sub>Guide to agent semantic conventions & trace topology</sub>"]
-        O_Collector["otel-collector-config.yaml<br><sub>OpenTelemetry Collector configuration with batching & scrubbing</sub>"]
-        O_Alerts["prometheus-agent-alerts.yaml<br><sub>Alerting rules for token burn spikes, invariant gates, & CEGIS stalls</sub>"]
-        O_Dashboard["grafana/agent-telemetry-dashboard.json<br><sub>Grafana dashboard tracking agent token spend & latency</sub>"]
-    end
+    Res --> Obs["observability/"]
+    Obs --> O1["README.md"]
+    Obs --> O2["otel-collector-config.yaml"]
+    Obs --> O3["prometheus-agent-alerts.yaml"]
+    Obs --> Grafana["grafana/"]
+    Grafana --> G1["agent-telemetry-dashboard.json"]
 
-    subgraph K8s["2. k8s/ (Cluster Sandboxes & Isolation)"]
-        direction TB
-        K_Readme["README.md<br><sub>Kubernetes security invariants & deployment guide</sub>"]
-        K_Sandbox["agent-sandbox/<br><sub>Restricted pods, NetworkPolicies, & ResourceQuotas</sub>"]
-        K_Obs["observability/<br><sub>In-cluster OTel Collector, Jaeger UI, & Valkey StatefulSet</sub>"]
-    end
+    Res --> K8s["k8s/"]
+    K8s --> K1["README.md"]
+    K8s --> Sandbox["agent-sandbox/"]
+    Sandbox --> S1["sandbox-pod.yaml"]
+    Sandbox --> S2["network-policy.yaml"]
+    Sandbox --> S3["resource-quota.yaml"]
+    K8s --> KObs["observability/"]
+    KObs --> KO1["otel-collector-deployment.yaml"]
+    KObs --> KO2["jaeger-deployment.yaml"]
+    KObs --> KO3["valkey-statefulset.yaml"]
 
-    subgraph Compose["3. docker-compose/ (Local Evaluation Stack)"]
-        direction TB
-        C_Readme["README.md<br><sub>Local developer evaluation & smoke-testing guide</sub>"]
-        C_Yaml["docker-compose.yml<br><sub>Turnkey 6-service local observability & sandbox stack</sub>"]
-        C_Env[".env.example<br><sub>Standardized environment variables (Zero-Trust compliant)</sub>"]
-    end
-
-    Res --> Obs
-    Obs --> K8s
-    K8s --> Compose
+    Res --> Compose["docker-compose/"]
+    Compose --> C1["README.md"]
+    Compose --> C2["docker-compose.yml"]
+    Compose --> C3[".env.example"]
 ```
 
 ---

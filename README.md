@@ -27,59 +27,83 @@ Here you will find:
 ## 🧭 Directory Map
 
 ```mermaid
-flowchart TD
+flowchart LR
     Root["vibes/"]
 
-    subgraph Tier1["1. Governance & Manifests"]
-        direction TB
-        GH[".github/<br><sub>Workflows, Issue & PR Templates</sub>"]
-        Agents["AGENTS.md<br><sub>Foundational Agent Operating Instructions</sub>"]
-        Lic["LICENSE<br><sub>Apache 2.0 Open-Source License</sub>"]
-        Read["README.md<br><sub>Repository Homepage & Exhibition Tour</sub>"]
-    end
+    Root --> GH[".github/"]
+    GH --> GH_W["workflows/"]
+    GH --> GH_T["PULL_REQUEST_TEMPLATE.md"]
 
-    subgraph Tier2["2. Foundational Theory & Standards"]
-        direction TB
-        D_Man["docs/MANIFESTO.md<br><sub>The Disciplined Agentic Manifesto</sub>"]
-        D_Tax["docs/TAXONOMY.md<br><sub>Structured Taxonomy & Failure Modes</sub>"]
-        D_Ret["docs/RETROSPECTIVE.md<br><sub>Empirical Retrospective & Mechanical Oracles</sub>"]
-        D_Cur["docs/CURATION_GUIDELINES.md<br><sub>Sanitization & Submission Standards</sub>"]
-        D_Road["docs/ROADMAP.md<br><sub>Strategic High-Density Product Roadmap</sub>"]
-    end
+    Root --> Agents["AGENTS.md"]
+    Root --> Lic["LICENSE"]
+    Root --> Readme["README.md"]
 
-    subgraph Tier3["3. Empirical Field Studies (21 Case Studies)"]
-        direction TB
-        O_Read["observations/README.md<br><sub>Master Index & Cross-Domain Synthesis</sub>"]
-        O_DevOps["observations/devops-cli/<br><sub>12 Studies: TDD, Invariants, Governance, Egress, Headroom</sub>"]
-        O_Poly["observations/polyglot/<br><sub>3 Studies: Rust Type-State, TypeScript CST, Go Leaks</sub>"]
-        O_Sys["observations/systems/<br><sub>6 Studies: OTel, Harnesses, Watchers, Valkey, Sandboxing, Swarms</sub>"]
-    end
+    Root --> Docs["docs/"]
+    Docs --> D1["MANIFESTO.md"]
+    Docs --> D2["TAXONOMY.md"]
+    Docs --> D3["RETROSPECTIVE.md"]
+    Docs --> D4["CURATION_GUIDELINES.md"]
+    Docs --> D5["ROADMAP.md"]
 
-    subgraph Tier4["4. Operational Playbooks (10 Patterns)"]
-        direction TB
-        P_Patterns["patterns/<br><sub>CEGIS, FIFO Shepherding, Root-Cause Hardening, Epistemic Hygiene,<br>Zero-Trust Sandboxing, Headless Crawling, SDLC Management,<br>Refinement Loop, Mechanical Oracles, Multi-Agent Concurrency</sub>"]
-    end
+    Root --> Obs["observations/"]
+    Obs --> O1["README.md"]
+    Obs --> O2["devops-cli/"]
+    Obs --> O3["polyglot/"]
+    Obs --> O4["systems/"]
 
-    subgraph Tier5["5. Executable Assets, Infrastructure & Benchmarks"]
-        direction TB
-        Artifacts["artifacts/<br><sub>prompts/, task-harnesses/, schemas/</sub>"]
-        Resources["resources/<br><sub>observability/, k8s/, docker-compose/</sub>"]
-        Examples["examples/<br><sub>11 Reference Apps (Sentinels, Gateways, Fuzzers, Caches)</sub>"]
-        Benchmarks["benchmarks/<br><sub>Multi-Agent Benchmark Suite & Runner</sub>"]
-    end
+    Root --> Patterns["patterns/"]
+    Patterns --> P01["cegis-and-hypothesis-debugging.md"]
+    Patterns --> P02["fifo-pull-request-shepherding.md"]
+    Patterns --> P03["root-cause-hardening.md"]
+    Patterns --> P04["epistemic-hygiene-and-context-pruning.md"]
+    Patterns --> P05["zero-trust-sandboxing-and-observability.md"]
+    Patterns --> P06["adaptive-headless-web-crawling.md"]
+    Patterns --> P07["autonomous-sdlc-project-management.md"]
+    Patterns --> P08["iterative-resource-refinement-loop.md"]
+    Patterns --> P09["deterministic-oracles-and-feedback-inversion.md"]
+    Patterns --> P10["multi-agent-codebase-concurrency.md"]
 
-    subgraph Tier6["6. Autonomous SDLC Tooling & Verification"]
-        direction TB
-        Tools["tools/<br><sub>sdlc_project_manager, resource_iteration_workbench, ast_refactorer, docs_validator</sub>"]
-        Tests["tests/<br><sub>Unit & Invariant Verification Test Suites</sub>"]
-    end
+    Root --> Artifacts["artifacts/"]
+    Artifacts --> A1["prompts/"]
+    Artifacts --> A2["task-harnesses/"]
+    Artifacts --> A3["schemas/"]
 
-    Root --> Tier1
-    Tier1 --> Tier2
-    Tier2 --> Tier3
-    Tier3 --> Tier4
-    Tier4 --> Tier5
-    Tier5 --> Tier6
+    Root --> Resources["resources/"]
+    Resources --> R1["observability/"]
+    Resources --> R2["k8s/"]
+    Resources --> R3["docker-compose/"]
+
+    Root --> Examples["examples/"]
+    Examples --> E01["ast-invariant-sentinel/"]
+    Examples --> E02["fastmcp-token-bucket-gateway/"]
+    Examples --> E03["cegis-debugging-workbench/"]
+    Examples --> E04["agent-telemetry-trace-generator/"]
+    Examples --> E05["adaptive-web-crawler/"]
+    Examples --> E06["prompt-mutation-fuzzer/"]
+    Examples --> E07["tool-contract-verifier/"]
+    Examples --> E08["valkey-l2-repomap-cache/"]
+    Examples --> E09["ephemeral-container-sandbox/"]
+    Examples --> E10["polyglot-cst-parser/"]
+    Examples --> E11["go-leak-sentinel/"]
+
+    Root --> Benchmarks["benchmarks/"]
+    Benchmarks --> B1["benchmark_runner.py"]
+    Benchmarks --> B2["test_benchmark_runner.py"]
+
+    Root --> Tools["tools/"]
+    Tools --> T1["project_tooling.py"]
+    Tools --> T2["sdlc_project_manager.py"]
+    Tools --> T3["resource_iteration_workbench.py"]
+    Tools --> T4["ast_refactorer.py"]
+    Tools --> T5["docs_validator.py"]
+
+    Root --> Tests["tests/"]
+    Tests --> TS1["test_project_tooling.py"]
+    Tests --> TS2["test_resources_validation.py"]
+    Tests --> TS3["test_sdlc_project_manager.py"]
+    Tests --> TS4["test_resource_iteration_workbench.py"]
+    Tests --> TS5["test_ast_refactorer.py"]
+    Tests --> TS6["test_docs_validator.py"]
 ```
 
 ---
