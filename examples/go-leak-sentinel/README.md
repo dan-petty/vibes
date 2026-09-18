@@ -97,14 +97,16 @@ func CleanContextLoop(ctx context.Context, wg *sync.WaitGroup) {
 
 ## 3. Directory Layout & Architecture
 
-```
-examples/go-leak-sentinel/
-├── go.mod                  # Go module specification (example.com/go-leak-sentinel)
-├── sentinel.go             # Native Go sentinel library & leak demonstration patterns
-├── sentinel_test.go        # Go unit tests verifying leak detection
-├── go_leak_sentinel.py     # Python runtime stack dump parser & concurrency scoring engine
-├── test_go_leak_sentinel.py # Automated test suite (6 passing unit tests in < 0.2s)
-└── README.md               # Architecture, failure mode guide & usage (this file)
+```mermaid
+flowchart TD
+    Root["examples/go-leak-sentinel/"]
+    
+    Root --> F_Mod["go.mod<br><sub>Go module specification (example.com/go-leak-sentinel)</sub>"]
+    Root --> F_Go["sentinel.go<br><sub>Native Go sentinel library & leak demonstration patterns</sub>"]
+    Root --> F_GoTest["sentinel_test.go<br><sub>Go unit tests verifying leak detection</sub>"]
+    Root --> F_Py["go_leak_sentinel.py<br><sub>Python runtime stack dump parser & concurrency scoring engine</sub>"]
+    Root --> F_PyTest["test_go_leak_sentinel.py<br><sub>Automated test suite (6 passing unit tests)</sub>"]
+    Root --> F_Readme["README.md<br><sub>Architecture, failure mode guide & usage (this file)</sub>"]
 ```
 
 ---

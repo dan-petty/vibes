@@ -6,7 +6,7 @@
 [![Pillars: 5](https://img.shields.io/badge/Disciplined%20Pillars-5-purple.svg)](./docs/MANIFESTO.md)
 [![Case Study: devops--cli](https://img.shields.io/badge/Exhibition-devops--cli-orange.svg)](./observations/devops-cli/)
 
-> *"Vibe coding"* was coined to describe casual, prompt-and-pray programming.  
+> *"Vibe coding"* was coined to describe casual, prompt-and-pray programming.
 > **`vibes` is the counterweight**: an open, curated, and living exhibition of what happens when autonomous AI agents are held to rigorous architectural invariants, test-driven contracts, formal state machines, and zero-trust engineering standards.
 
 ---
@@ -26,111 +26,79 @@ Here you will find:
 
 ## 🧭 Directory Map
 
-```
-vibes/
-├── .github/
-│   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
-│   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
-│   └── workflows/                     # Autonomous recursive CI/CD workflows
-│       ├── ci.yml                     # Multi-version test & AST invariant certification
-│       ├── autonomous-triage.yml      # Autonomous taxonomy labeling & onboarding
-│       ├── pr-sentinel.yml            # Automated PR diff invariant gate & certification
-│       └── recursive-hardening.yml    # Closed-loop AGENTS.md hardening audit
-│
-├── AGENTS.md                          # Foundational agent operating instructions for vibes
-├── LICENSE                            # Apache 2.0 open-source license
-├── README.md                          # Repository homepage and exhibition tour (this file)
-│
-├── docs/                              # Foundational theory, taxonomy, and curation standards
-│   ├── MANIFESTO.md                   # Beyond "Vibe Coding": The Disciplined Agentic Manifesto
-│   ├── TAXONOMY.md                    # Structured taxonomy of agentic architectures & failure modes
-│   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
-│   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
-│   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
-│
-├── observations/                      # Empirical field studies & engineering breakthroughs
-│   ├── README.md                      # Consolidated field observations & architectural synthesis
-│   ├── devops-cli/                    # In-depth case studies from the devops-cli project
-│   │   ├── 01-tdd-as-living-contract.md
-│   │   ├── 02-architectural-invariants-and-complexity-caps.md
-│   │   ├── 03-autonomous-project-governance.md
-│   │   ├── 04-zero-trust-egress-and-sanitization.md
-│   │   ├── 05-harness-slots-and-subagent-offloading.md
-│   │   ├── 06-rate-limits-and-anti-brittle-heuristics.md
-│   │   ├── 07-proactive-headroom-and-recursive-feedback-loops.md
-│   │   ├── 08-closed-loop-feedback-inversion-and-autonomous-quality-elevation.md
-│   │   ├── 09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md
-│   │   ├── 10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md
-│   │   ├── 11-assertion-density-and-structural-tuple-consolidation.md
-│   │   └── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
-│   ├── polyglot/                      # Cross-language agentic engineering observations
-│   │   ├── 01-rust-type-state-invariants.md
-│   │   ├── 02-typescript-cst-and-type-gymnastics.md
-│   │   └── 03-go-goroutine-leakage-and-context-lifecycles.md
-│   └── systems/                       # Distributed systems & observability field studies
-│       ├── 01-distributed-telemetry-and-agent-waterfalls.md
-│       ├── 02-subprocess-test-harness-instrumentation-tax.md
-│       ├── 03-event-driven-file-watchers-and-continuous-invariant-loops.md
-│       ├── 04-content-addressed-two-tier-caching-and-embedding-drift-audits.md
-│       └── 05-rootless-container-sandboxing-and-process-group-containment.md
-│
-├── patterns/                          # Operational playbooks for human-agent collaboration
-│   ├── cegis-and-hypothesis-debugging.md
-│   ├── fifo-pull-request-shepherding.md
-│   ├── root-cause-hardening.md
-│   ├── epistemic-hygiene-and-context-pruning.md
-│   ├── zero-trust-sandboxing-and-observability.md
-│   ├── adaptive-headless-web-crawling.md
-│   ├── autonomous-sdlc-project-management.md
-│   ├── iterative-resource-refinement-loop.md
-│   └── deterministic-oracles-and-feedback-inversion.md
-│
-├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
-│   ├── prompts/
-│   │   ├── multi-persona-code-reviewer.md
-│   │   └── architectural-invariant-sentinel.md
-│   ├── task-harnesses/
-│   │   ├── structured-task-spec-template.md
-│   │   └── sample-completed-task-spec.md
-│   └── schemas/
-│       └── fastmcp-agent-tool-manifest-spec.json
-│
-├── resources/                         # Infrastructure & Observability configurations
-│   ├── observability/                 # OTel Collector, Prometheus alerts, Grafana dashboard
-│   ├── k8s/                           # Hardened sandbox pod, NetworkPolicy, OTel manifests
-│   └── docker-compose/                # Turnkey 6-service local evaluation environment
-│
-├── examples/                          # Executable reference sample applications
-│   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
-│   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
-│   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
-│   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
-│   ├── adaptive-web-crawler/          # Two-tier adaptive crawler with domain strategy memory
-│   ├── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
-│   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
-│   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
-│   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
-│   ├── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
-│   └── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
-│
-├── benchmarks/                        # Multi-agent benchmark suite
-│   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
-│   └── test_benchmark_runner.py       # Automated benchmark certification tests
-│
-├── tools/                             # Autonomous project management tooling
-│   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
-│   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
-│   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
-│   ├── ast_refactorer.py              # Automated AST conditional refactorer
-│   └── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
-│
-└── tests/                             # Automated test suites for tools and harnesses
-    ├── test_project_tooling.py        # Unit tests for autonomous project engine
-    ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
-    ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
-    ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
-    ├── test_ast_refactorer.py         # Unit tests for AST conditional refactoring engine
-    └── test_docs_validator.py         # Unit tests for documentation syntax and link validation
+```mermaid
+flowchart TD
+    Root["vibes/"]
+
+    subgraph Meta[".github/ & Root Manifests"]
+        GH[".github/<br><sub>Workflows, Issue & PR Templates</sub>"]
+        Agents["AGENTS.md<br><sub>Foundational Agent Operating Instructions</sub>"]
+        Lic["LICENSE<br><sub>Apache 2.0 Open-Source License</sub>"]
+        Read["README.md<br><sub>Repository Homepage & Exhibition Tour</sub>"]
+    end
+
+    subgraph Docs["docs/ — Theory & Standards"]
+        D_Man["MANIFESTO.md<br><sub>The Disciplined Agentic Manifesto</sub>"]
+        D_Tax["TAXONOMY.md<br><sub>Structured Taxonomy of Architectures & Failure Modes</sub>"]
+        D_Ret["RETROSPECTIVE.md<br><sub>Empirical Retrospective & Mechanical Oracles</sub>"]
+        D_Cur["CURATION_GUIDELINES.md<br><sub>Sanitization & Submission Standards</sub>"]
+        D_Road["ROADMAP.md<br><sub>Strategic High-Density Product Roadmap</sub>"]
+    end
+
+    subgraph Obs["observations/ — Empirical Field Studies"]
+        O_Read["README.md<br><sub>Consolidated Field Observations & Architectural Synthesis</sub>"]
+        O_DevOps["devops-cli/<br><sub>12 Case Studies: TDD, Invariants, Governance, Egress, Subagents, Headroom</sub>"]
+        O_Poly["polyglot/<br><sub>3 Case Studies: Rust Type-State, TypeScript CST, Go Goroutine Leaks</sub>"]
+        O_Sys["systems/<br><sub>6 Case Studies: OTel, Harness Tax, File Watchers, Valkey Cache, Rootless Sandboxing, Swarm Concurrency</sub>"]
+    end
+
+    subgraph Patterns["patterns/ — Operational Playbooks"]
+        P_List["patterns/<br><sub>CEGIS Debugging, FIFO PR Shepherding, Root-Cause Hardening, Epistemic Hygiene, Zero-Trust Sandboxing, Headless Crawling, SDLC Management, Refinement Loop, Mechanical Oracles, Multi-Agent Concurrency</sub>"]
+    end
+
+    subgraph Artifacts["artifacts/ — Prompts & Specifications"]
+        A_Prompts["prompts/<br><sub>multi-persona-code-reviewer.md, architectural-invariant-sentinel.md</sub>"]
+        A_Tasks["task-harnesses/<br><sub>structured-task-spec-template.md, sample-completed-task-spec.md</sub>"]
+        A_Schemas["schemas/<br><sub>fastmcp-agent-tool-manifest-spec.json</sub>"]
+    end
+
+    subgraph Resources["resources/ — Infrastructure & Telemetry"]
+        R_Obs["observability/<br><sub>OTel Collector, Prometheus Alerts, Grafana Dashboard</sub>"]
+        R_K8s["k8s/<br><sub>Hardened Sandbox Pod, NetworkPolicy, ResourceQuota, Valkey</sub>"]
+        R_Compose["docker-compose/<br><sub>Turnkey 6-Service Local Evaluation Mesh</sub>"]
+    end
+
+    subgraph Examples["examples/ — 11 Reference Applications"]
+        E_List["examples/<br><sub>AST Sentinel, Token-Bucket Gateway, CEGIS Workbench, OTel Trace Generator, Adaptive Crawler, Prompt Mutation Fuzzer, Tool Contract Verifier, Valkey Cache, Ephemeral Sandbox, Polyglot CST Parser, Go Leak Sentinel</sub>"]
+    end
+
+    subgraph Benchmarks["benchmarks/ — Multi-Agent Testbench"]
+        B_Runner["benchmark_runner.py<br><sub>Standardized Benchmark Suite</sub>"]
+        B_Tests["test_benchmark_runner.py<br><sub>Automated Benchmark Certification</sub>"]
+    end
+
+    subgraph Tools["tools/ — Autonomous SDLC Engines"]
+        T_Proj["project_tooling.py<br><sub>Autonomous Project Tooling</sub>"]
+        T_SDLC["sdlc_project_manager.py<br><sub>SDLC Resource Prioritizer & Kanban</sub>"]
+        T_Work["resource_iteration_workbench.py<br><sub>Automated Scan-Run-Review-Iterate Workbench</sub>"]
+        T_AST["ast_refactorer.py<br><sub>Automated AST Conditional Refactorer</sub>"]
+        T_Docs["docs_validator.py<br><sub>Documentation Syntax & Link Validator</sub>"]
+    end
+
+    subgraph Tests["tests/ — Invariant & Resource Suites"]
+        Test_Suites["tests/<br><sub>Unit Test Suites for Tools, Manifests, Refactorers, & Validators</sub>"]
+    end
+
+    Root --> Meta
+    Root --> Docs
+    Root --> Obs
+    Root --> Patterns
+    Root --> Artifacts
+    Root --> Resources
+    Root --> Examples
+    Root --> Benchmarks
+    Root --> Tools
+    Root --> Tests
 ```
 
 ---
@@ -209,7 +177,7 @@ graph TD
 
 ## 📜 The Disciplined Agentic Manifesto & Retrospective
 
-What separates unstructured prompt tinkering from serious agentic engineering?  
+What separates unstructured prompt tinkering from serious agentic engineering?
 Read the full [**Manifesto**](./docs/MANIFESTO.md) and [**Retrospective Analysis**](./docs/RETROSPECTIVE.md):
 
 1. **Tests are Executable Contracts, Not Afterthoughts.**

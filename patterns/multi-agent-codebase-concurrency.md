@@ -1,8 +1,8 @@
 # Pattern: Multi-Agent Codebase Concurrency
 
-> **Pattern Type**: Swarm Orchestration & Concurrency Architecture  
-> **Target Audience**: Multi-Agent Frameworks, Autonomous Swarms & Platform Engineers  
-> **Source Project**: `devops-cli` & `vibes`  
+> **Pattern Type**: Swarm Orchestration & Concurrency Architecture
+> **Target Audience**: Multi-Agent Frameworks, Autonomous Swarms & Platform Engineers
+> **Source Project**: `devops-cli` & `vibes`
 
 ---
 
@@ -32,7 +32,7 @@ flowchart TD
         T1 --> W1["Git Worktree: worktrees/task-a/"]
         T2 --> W2["Git Worktree: worktrees/task-b/"]
         T3 --> W3["Git Worktree: worktrees/task-c/"]
-        
+
         W1 --> D1["Data Tier: .data/agent/task-a/"]
         W2 --> D2["Data Tier: .data/agent/task-b/"]
         W3 --> D3["Data Tier: .data/agent/task-c/"]
@@ -140,3 +140,4 @@ devops pr check-readiness <pr-number> --dry-rebase
 | **Unordered PR Rebasing** | Agents racing to rebase onto `main`, causing exponential rebase churn and PR starvation. | Strict FIFO pull request processing queue (oldest PR processed first). |
 | **Unthrottled GPU Inference** | Multiple agents issuing parallel generation requests to Ollama, causing VRAM thrashing and timeouts. | Token-bucket rate limiting, concurrency semaphores, and model prewarming. |
 | **Zombie Process Leaks** | Terminating subprocesses with simple `proc.kill()`, leaking background daemons to PID 1. | POSIX process group isolation (`start_new_session=True`) and `os.killpg`. |
+

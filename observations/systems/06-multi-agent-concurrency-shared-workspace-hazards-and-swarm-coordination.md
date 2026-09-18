@@ -1,8 +1,8 @@
 # Observation 06 (Systems): Multi-Agent Concurrency, Shared Workspace Hazards & Swarm Coordination
 
-> **Project**: `devops-cli` & `vibes`  
-> **Topic**: Concurrency Hazards, Working Tree Isolation, SQLite Cache Contention, and Swarm Merge Serialization  
-> **Key Metric**: Zero working tree collisions; 100% elimination of SQLite coverage file unlinking corruption; zero live-lock rebase storms; sub-second shared L2 cache coordination  
+> **Project**: `devops-cli` & `vibes`
+> **Topic**: Concurrency Hazards, Working Tree Isolation, SQLite Cache Contention, and Swarm Merge Serialization
+> **Key Metric**: Zero working tree collisions; 100% elimination of SQLite coverage file unlinking corruption; zero live-lock rebase storms; sub-second shared L2 cache coordination
 
 ---
 
@@ -200,3 +200,4 @@ Comparing uncoordinated multi-agent execution against the hardened coordination 
 3. **Rule of Resource Pacing**: External APIs and local GPU inference endpoints MUST be gated by token-bucket rate limiters and concurrency semaphores.
 4. **Rule of FIFO Queue Governance**: Pull requests MUST be shepherded in strict chronological order from oldest to newest to prevent branch starvation and rebase live-locks.
 5. **Rule of the Mechanical Oracle**: No agent may bypass the centralized invariant gatekeeper. Merge readiness requires 100% passing status across all deterministic quality gates.
+

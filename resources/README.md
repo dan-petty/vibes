@@ -6,28 +6,42 @@ This directory contains production-grade infrastructure manifests, observability
 
 ## Directory Organization
 
-```text
-resources/
-├── observability/
-│   ├── README.md                           # Guide to agent semantic conventions and trace topology
-│   ├── otel-collector-config.yaml          # OpenTelemetry Collector configuration with batching & scrubbing
-│   ├── prometheus-agent-alerts.yaml        # Alerting rules for token burn spikes, invariant gates, and CEGIS stalls
-│   └── grafana/
-│       └── agent-telemetry-dashboard.json  # Complete Grafana dashboard tracking agent token spend & latency
-├── k8s/
-│   ├── README.md                           # Kubernetes security invariants and deployment guide
-│   ├── agent-sandbox/
-│   │   ├── sandbox-pod.yaml                # Hardened Pod Security Standard ('Restricted') worker pod
-│   │   ├── network-policy.yaml             # Zero-trust egress policy: blocks private RFC 1918 IPs & metadata
-│   │   └── resource-quota.yaml             # Namespace ResourceQuota and LimitRange protection
-│   └── observability/
-│       ├── otel-collector-deployment.yaml  # In-cluster OpenTelemetry Collector deployment and service
-│       ├── jaeger-deployment.yaml          # Distributed tracing collector and UI deployment
-│       └── valkey-statefulset.yaml         # High-performance L2 AST repomap cache StatefulSet
-└── docker-compose/
-    ├── README.md                           # Local developer evaluation and smoke-testing guide
-    ├── docker-compose.yml                  # Turnkey 6-service local observability and sandbox stack
-    └── .env.example                        # Standardized environment variables (Zero-Trust compliant)
+```mermaid
+flowchart TD
+    Res["resources/"]
+
+    subgraph Obs["observability/"]
+        O_Readme["README.md<br><sub>Guide to agent semantic conventions & trace topology</sub>"]
+        O_Collector["otel-collector-config.yaml<br><sub>OpenTelemetry Collector configuration with batching & scrubbing</sub>"]
+        O_Alerts["prometheus-agent-alerts.yaml<br><sub>Alerting rules for token burn spikes, invariant gates, & CEGIS stalls</sub>"]
+        subgraph Grafana["grafana/"]
+            O_Dashboard["agent-telemetry-dashboard.json<br><sub>Grafana dashboard tracking agent token spend & latency</sub>"]
+        end
+    end
+
+    subgraph K8s["k8s/"]
+        K_Readme["README.md<br><sub>Kubernetes security invariants & deployment guide</sub>"]
+        subgraph K_Sandbox["agent-sandbox/"]
+            K_Pod["sandbox-pod.yaml<br><sub>Hardened Pod Security Standard worker pod</sub>"]
+            K_Net["network-policy.yaml<br><sub>Zero-trust egress: blocks RFC 1918 & metadata</sub>"]
+            K_Quota["resource-quota.yaml<br><sub>Namespace ResourceQuota & LimitRange protection</sub>"]
+        end
+        subgraph K_Obs["observability/"]
+            K_OTel["otel-collector-deployment.yaml<br><sub>In-cluster OTel Collector deployment & service</sub>"]
+            K_Jaeger["jaeger-deployment.yaml<br><sub>Distributed tracing collector & UI deployment</sub>"]
+            K_Valkey["valkey-statefulset.yaml<br><sub>High-performance L2 AST cache StatefulSet</sub>"]
+        end
+    end
+
+    subgraph Compose["docker-compose/"]
+        C_Readme["README.md<br><sub>Local developer evaluation & smoke-testing guide</sub>"]
+        C_Yaml["docker-compose.yml<br><sub>Turnkey 6-service local observability & sandbox stack</sub>"]
+        C_Env[".env.example<br><sub>Standardized environment variables (Zero-Trust compliant)</sub>"]
+    end
+
+    Res --> Obs
+    Res --> K8s
+    Res --> Compose
 ```
 
 ---
