@@ -26,84 +26,112 @@ Here you will find:
 
 ## 🧭 Directory Map
 
-```mermaid
-flowchart LR
-    Root["vibes/"]
-
-    Root --> GH[".github/"]
-    GH --> GH_W["workflows/"]
-    GH --> GH_T["PULL_REQUEST_TEMPLATE.md"]
-
-    Root --> Agents["AGENTS.md"]
-    Root --> Lic["LICENSE"]
-    Root --> Readme["README.md"]
-
-    Root --> Docs["docs/"]
-    Docs --> D1["MANIFESTO.md"]
-    Docs --> D2["TAXONOMY.md"]
-    Docs --> D3["RETROSPECTIVE.md"]
-    Docs --> D4["CURATION_GUIDELINES.md"]
-    Docs --> D5["ROADMAP.md"]
-
-    Root --> Obs["observations/"]
-    Obs --> O1["README.md"]
-    Obs --> O2["devops-cli/"]
-    Obs --> O3["polyglot/"]
-    Obs --> O4["systems/"]
-
-    Root --> Patterns["patterns/"]
-    Patterns --> P01["cegis-and-hypothesis-debugging.md"]
-    Patterns --> P02["fifo-pull-request-shepherding.md"]
-    Patterns --> P03["root-cause-hardening.md"]
-    Patterns --> P04["epistemic-hygiene-and-context-pruning.md"]
-    Patterns --> P05["zero-trust-sandboxing-and-observability.md"]
-    Patterns --> P06["adaptive-headless-web-crawling.md"]
-    Patterns --> P07["autonomous-sdlc-project-management.md"]
-    Patterns --> P08["iterative-resource-refinement-loop.md"]
-    Patterns --> P09["deterministic-oracles-and-feedback-inversion.md"]
-    Patterns --> P10["multi-agent-codebase-concurrency.md"]
-
-    Root --> Artifacts["artifacts/"]
-    Artifacts --> A1["prompts/"]
-    Artifacts --> A2["task-harnesses/"]
-    Artifacts --> A3["schemas/"]
-
-    Root --> Resources["resources/"]
-    Resources --> R1["observability/"]
-    Resources --> R2["k8s/"]
-    Resources --> R3["docker-compose/"]
-
-    Root --> Examples["examples/"]
-    Examples --> E01["ast-invariant-sentinel/"]
-    Examples --> E02["fastmcp-token-bucket-gateway/"]
-    Examples --> E03["cegis-debugging-workbench/"]
-    Examples --> E04["agent-telemetry-trace-generator/"]
-    Examples --> E05["adaptive-web-crawler/"]
-    Examples --> E06["prompt-mutation-fuzzer/"]
-    Examples --> E07["tool-contract-verifier/"]
-    Examples --> E08["valkey-l2-repomap-cache/"]
-    Examples --> E09["ephemeral-container-sandbox/"]
-    Examples --> E10["polyglot-cst-parser/"]
-    Examples --> E11["go-leak-sentinel/"]
-
-    Root --> Benchmarks["benchmarks/"]
-    Benchmarks --> B1["benchmark_runner.py"]
-    Benchmarks --> B2["test_benchmark_runner.py"]
-
-    Root --> Tools["tools/"]
-    Tools --> T1["project_tooling.py"]
-    Tools --> T2["sdlc_project_manager.py"]
-    Tools --> T3["resource_iteration_workbench.py"]
-    Tools --> T4["ast_refactorer.py"]
-    Tools --> T5["docs_validator.py"]
-
-    Root --> Tests["tests/"]
-    Tests --> TS1["test_project_tooling.py"]
-    Tests --> TS2["test_resources_validation.py"]
-    Tests --> TS3["test_sdlc_project_manager.py"]
-    Tests --> TS4["test_resource_iteration_workbench.py"]
-    Tests --> TS5["test_ast_refactorer.py"]
-    Tests --> TS6["test_docs_validator.py"]
+```text
+├── .github/
+│   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
+│   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
+│   └── workflows/                     # Autonomous recursive CI/CD workflows
+│       ├── ci.yml                     # Multi-version test & AST invariant certification
+│       ├── autonomous-triage.yml      # Autonomous taxonomy labeling & onboarding
+│       ├── pr-sentinel.yml            # Automated PR diff invariant gate & certification
+│       └── recursive-hardening.yml    # Closed-loop AGENTS.md hardening audit
+│
+├── AGENTS.md                          # Foundational agent operating instructions for vibes
+├── LICENSE                            # Apache 2.0 open-source license
+├── README.md                          # Repository homepage and exhibition tour (this file)
+│
+├── docs/                              # Foundational theory, taxonomy, and curation standards
+│   ├── MANIFESTO.md                   # Beyond "Vibe Coding": The Disciplined Agentic Manifesto
+│   ├── TAXONOMY.md                    # Structured taxonomy of agentic architectures & failure modes
+│   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
+│   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
+│   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
+│
+├── observations/                      # Empirical field studies & engineering breakthroughs
+│   ├── README.md                      # Consolidated field observations & architectural synthesis
+│   ├── devops-cli/                    # In-depth case studies from the devops-cli project
+│   │   ├── 01-tdd-as-living-contract.md
+│   │   ├── 02-architectural-invariants-and-complexity-caps.md
+│   │   ├── 03-autonomous-project-governance.md
+│   │   ├── 04-zero-trust-egress-and-sanitization.md
+│   │   ├── 05-harness-slots-and-subagent-offloading.md
+│   │   ├── 06-rate-limits-and-anti-brittle-heuristics.md
+│   │   ├── 07-proactive-headroom-and-recursive-feedback-loops.md
+│   │   ├── 08-closed-loop-feedback-inversion-and-autonomous-quality-elevation.md
+│   │   ├── 09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md
+│   │   ├── 10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md
+│   │   ├── 11-assertion-density-and-structural-tuple-consolidation.md
+│   │   └── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
+│   ├── polyglot/                      # Cross-language agentic engineering observations
+│   │   ├── 01-rust-type-state-invariants.md
+│   │   ├── 02-typescript-cst-and-type-gymnastics.md
+│   │   └── 03-go-goroutine-leakage-and-context-lifecycles.md
+│   └── systems/                       # Distributed systems & observability field studies
+│       ├── 01-distributed-telemetry-and-agent-waterfalls.md
+│       ├── 02-subprocess-test-harness-instrumentation-tax.md
+│       ├── 03-event-driven-file-watchers-and-continuous-invariant-loops.md
+│       ├── 04-content-addressed-two-tier-caching-and-embedding-drift-audits.md
+│       ├── 05-rootless-container-sandboxing-and-process-group-containment.md
+│       └── 06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md
+│
+├── patterns/                          # Operational playbooks for human-agent collaboration
+│   ├── cegis-and-hypothesis-debugging.md
+│   ├── fifo-pull-request-shepherding.md
+│   ├── root-cause-hardening.md
+│   ├── epistemic-hygiene-and-context-pruning.md
+│   ├── zero-trust-sandboxing-and-observability.md
+│   ├── adaptive-headless-web-crawling.md
+│   ├── autonomous-sdlc-project-management.md
+│   ├── iterative-resource-refinement-loop.md
+│   ├── deterministic-oracles-and-feedback-inversion.md
+│   └── multi-agent-codebase-concurrency.md
+│
+├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
+│   ├── prompts/
+│   │   ├── multi-persona-code-reviewer.md
+│   │   └── architectural-invariant-sentinel.md
+│   ├── task-harnesses/
+│   │   ├── structured-task-spec-template.md
+│   │   └── sample-completed-task-spec.md
+│   └── schemas/
+│       └── fastmcp-agent-tool-manifest-spec.json
+│
+├── resources/                         # Infrastructure & Observability configurations
+│   ├── observability/                 # OTel Collector, Prometheus alerts, Grafana dashboard
+│   ├── k8s/                           # Hardened sandbox pod, NetworkPolicy, OTel manifests
+│   └── docker-compose/                # Turnkey 6-service local evaluation environment
+│
+├── examples/                          # Executable reference sample applications
+│   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
+│   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
+│   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
+│   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
+│   ├── adaptive-web-crawler/          # Two-tier adaptive crawler with domain strategy memory
+│   ├── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
+│   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
+│   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
+│   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
+│   ├── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
+│   └── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
+│
+├── benchmarks/                        # Multi-agent benchmark suite
+│   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
+│   └── test_benchmark_runner.py       # Automated benchmark certification tests
+│
+├── tools/                             # Autonomous project management tooling
+│   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
+│   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
+│   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
+│   ├── ast_refactorer.py              # Automated AST conditional refactorer
+│   └── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
+│
+└── tests/                             # Automated test suites for tools and harnesses
+    ├── test_project_tooling.py        # Unit tests for autonomous project engine
+    ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
+    ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
+    ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
+    ├── test_ast_refactorer.py         # Unit tests for AST conditional refactoring engine
+    └── test_docs_validator.py         # Unit tests for documentation syntax and link validation
 ```
 
 ---

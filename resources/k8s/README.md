@@ -6,19 +6,15 @@ Production-grade Kubernetes manifests designed for isolated multi-agent executio
 
 ## Directory Structure
 
-```mermaid
-flowchart LR
-    K8s["k8s/"]
-
-    K8s --> Sandbox["agent-sandbox/"]
-    Sandbox --> P1["sandbox-pod.yaml"]
-    Sandbox --> P2["network-policy.yaml"]
-    Sandbox --> P3["resource-quota.yaml"]
-
-    K8s --> Obs["observability/"]
-    Obs --> O1["otel-collector-deployment.yaml"]
-    Obs --> O2["jaeger-deployment.yaml"]
-    Obs --> O3["valkey-statefulset.yaml"]
+```text
+├── agent-sandbox/
+│   ├── sandbox-pod.yaml        # Non-root, read-only rootfs, dropped capabilities, seccomp RuntimeDefault
+│   ├── network-policy.yaml     # Zero-trust egress policy: blocks private RFC 1918 IPs & cloud metadata
+│   └── resource-quota.yaml     # Namespace ResourceQuota and LimitRange caps
+└── observability/
+    ├── otel-collector-deployment.yaml  # OTel Collector Deployment, ConfigMap, and Service
+    ├── jaeger-deployment.yaml          # Distributed tracing UI & OTLP endpoint
+    └── valkey-statefulset.yaml         # In-cluster Valkey L2 AST & embedding cache
 ```
 
 ---

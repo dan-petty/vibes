@@ -6,32 +6,27 @@ This directory contains production-grade infrastructure manifests, observability
 
 ## Directory Organization
 
-```mermaid
-flowchart LR
-    Res["resources/"]
-
-    Res --> Obs["observability/"]
-    Obs --> O1["README.md"]
-    Obs --> O2["otel-collector-config.yaml"]
-    Obs --> O3["prometheus-agent-alerts.yaml"]
-    Obs --> Grafana["grafana/"]
-    Grafana --> G1["agent-telemetry-dashboard.json"]
-
-    Res --> K8s["k8s/"]
-    K8s --> K1["README.md"]
-    K8s --> Sandbox["agent-sandbox/"]
-    Sandbox --> S1["sandbox-pod.yaml"]
-    Sandbox --> S2["network-policy.yaml"]
-    Sandbox --> S3["resource-quota.yaml"]
-    K8s --> KObs["observability/"]
-    KObs --> KO1["otel-collector-deployment.yaml"]
-    KObs --> KO2["jaeger-deployment.yaml"]
-    KObs --> KO3["valkey-statefulset.yaml"]
-
-    Res --> Compose["docker-compose/"]
-    Compose --> C1["README.md"]
-    Compose --> C2["docker-compose.yml"]
-    Compose --> C3[".env.example"]
+```text
+├── observability/
+│   ├── README.md                           # Guide to agent semantic conventions and trace topology
+│   ├── otel-collector-config.yaml          # OpenTelemetry Collector configuration with batching & scrubbing
+│   ├── prometheus-agent-alerts.yaml        # Alerting rules for token burn spikes, invariant gates, and CEGIS stalls
+│   └── grafana/
+│       └── agent-telemetry-dashboard.json  # Complete Grafana dashboard tracking agent token spend & latency
+├── k8s/
+│   ├── README.md                           # Kubernetes security invariants and deployment guide
+│   ├── agent-sandbox/
+│   │   ├── sandbox-pod.yaml                # Hardened Pod Security Standard ('Restricted') worker pod
+│   │   ├── network-policy.yaml             # Zero-trust egress policy: blocks private RFC 1918 IPs & metadata
+│   │   └── resource-quota.yaml             # Namespace ResourceQuota and LimitRange protection
+│   └── observability/
+│       ├── otel-collector-deployment.yaml  # In-cluster OpenTelemetry Collector deployment and service
+│       ├── jaeger-deployment.yaml          # Distributed tracing collector and UI deployment
+│       └── valkey-statefulset.yaml         # High-performance L2 AST repomap cache StatefulSet
+└── docker-compose/
+    ├── README.md                           # Local developer evaluation and smoke-testing guide
+    ├── docker-compose.yml                  # Turnkey 6-service local observability and sandbox stack
+    └── .env.example                        # Standardized environment variables (Zero-Trust compliant)
 ```
 
 ---
