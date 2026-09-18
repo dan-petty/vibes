@@ -2,7 +2,7 @@
 
 > **Exhibition**: `vibes` Empirical Knowledge Base
 > **Classification**: Master Observation Index & Cross-Domain Synthesis
-> **Scope**: 20 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
+> **Scope**: 21 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
 > **Key Metric**: 100.0/100 Resource Health Score; 217/217 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance
 
 ---
@@ -11,7 +11,7 @@
 
 The `observations/` directory records the empirical reality of autonomous software engineering performed by AI coding assistants. Across hundreds of autonomous sessions, pull requests, refactoring cycles, and benchmark evaluations in [`devops-cli`](https://github.com/dan-petty/devops-cli) and [`vibes`](https://github.com/dan-petty/vibes), these studies capture how stochastic language models behave when confronted with real-world engineering constraints.
 
-The fundamental insight across all 20 observations is simple yet profound:
+The fundamental insight across all 21 observations is simple yet profound:
 
 > **Stochastic token generation without mechanical boundary oracles collapses into structural entropy. Unbounded models drift into procedural spaghetti, hallucinated tool arguments, orphaned background processes, and brittle heuristic traps. When bounded by deterministic AST invariants, formal contracts, and closed-loop feedback engines, agents achieve architectural excellence, sub-second feedback loops, and 100% test reliability.**
 
@@ -98,12 +98,13 @@ The 20 empirical case studies are organized into three complementary domains:
 | [**03**](./systems/03-event-driven-file-watchers-and-continuous-invariant-loops.md) | `systems` | [Event-Driven File Watchers & Invariant Loops](./systems/03-event-driven-file-watchers-and-continuous-invariant-loops.md) | Slow manual invocation cycles; agent context drift during long-running batch check phases. | Real-time inotify file watcher daemon (`ResourceWatcher`) evaluating on file save. | Sub-second reactive feedback loop; zero cognitive drift between edits. |
 | [**04**](./systems/04-content-addressed-two-tier-caching-and-embedding-drift-audits.md) | `systems` | [Content-Addressed Valkey L2 Caching](./systems/04-content-addressed-two-tier-caching-and-embedding-drift-audits.md) | Redundant AST parsing and embedding calculation consuming external quota and cycles. | Two-tier cache (L1 in-memory + L2 Valkey) with SHA-256 keys and Cosine Distance drift audits. | $> 90\%$ cache hit rate; instant semantic drift detection upon code refactoring. |
 | [**05**](./systems/05-rootless-container-sandboxing-and-process-group-containment.md) | `systems` | [Rootless Container Sandboxing & Process Groups](./systems/05-rootless-container-sandboxing-and-process-group-containment.md) | Standard `proc.kill()` leaving grandchild processes running as PID 1 zombie leaks; host credential exposure. | POSIX process group isolation (`start_new_session=True` & `os.killpg`) and CIS rootless container sandbox. | 100% CIS Rootless Benchmark score (8/8); sub-millisecond process tree kill; zero leaks. |
+| [**06**](./systems/06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md) | `systems` | [Multi-Agent Concurrency & Workspace Hazards](./systems/06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md) | Concurrent agents clobbering working tree, unlinking active SQLite coverage files, and entering rebase live-locks. | Mandatory POSIX git worktrees, partitioned `.data/agent/<id>`, Valkey L2 mutexes, and FIFO PR shepherding. | Zero working tree collisions; 100% immunity to SQLite coverage corruption; $7\times$ swarm throughput. |
 
 ---
 
-## 🔬 The Four Unifying Architectural Theses
+## 🔬 The Five Unifying Architectural Theses
 
-When analyzed collectively, the 20 empirical case studies coalesce into four core engineering theses that define disciplined agentic software development:
+When analyzed collectively, the 21 empirical case studies coalesce into five core engineering theses that define disciplined agentic software development:
 
 ### 1. Deterministic Mechanical Oracles Over Prompt Faith
 Stochastic language models cannot self-evaluate architectural complexity, nesting depth, type safety, or security boundaries purely through prompt instructions. Relying on "be careful not to write complex code" invariably fails.
@@ -127,6 +128,12 @@ Static linting is historically reactive—it barks only after rules are violated
 - **Phase 1 (Reactive Remediation)**: Fix active blockers, failing tests, and syntax errors with 100% priority.
 - **Phase 2 (Proactive Quality Elevation)**: When health reaches 100.0/100, the engine shifts focus to proactive headroom ($M \in [7, 10] \to M \le 6$), complete docstring/type coverage, and test latency optimization.
 - **Phase 3 (Continuous Self-Hardening)**: Every struggle, friction point, or defect is systematically codified into [`AGENTS.md`](../AGENTS.md) and [`docs/ROADMAP.md`](../docs/ROADMAP.md), eliminating recurrent failure modes across future sessions.
+
+### 5. Multi-Agent Concurrency & Worktree Spatial Isolation
+Running multiple agents concurrently against a shared codebase creates catastrophic workspace contention, SQLite unlink races, and rebase live-locks unless guarded by strict architectural separation:
+- **Spatial Isolation**: Mandatory POSIX git worktrees (`git worktree add`) guarantee that concurrent file edits never cross-contaminate peer test runs.
+- **Partitioned Data Tiers**: Scoping cache directories (`.data/agent/<id>`) isolates SQLite coverage databases, eliminating file unlinking races during parallel test execution.
+- **FIFO Pull Request Shepherding**: Processing PRs in strict chronological order eliminates thundering herd rebase live-locks and ensures equitable review throughput.
 
 ---
 

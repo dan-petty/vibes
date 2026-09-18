@@ -139,7 +139,7 @@ vibes/
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 20 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 21 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -174,6 +174,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Event-Driven File Watchers & Continuous Invariant Loops**](./observations/systems/03-event-driven-file-watchers-and-continuous-invariant-loops.md) | Systems & DevEx | Pure standard-library file watching and subprocess flag optimization providing sub-second change detection and continuous delta telemetry. |
 | [**Content-Addressed Caching & Embedding Drift Audits**](./observations/systems/04-content-addressed-two-tier-caching-and-embedding-drift-audits.md) | Distributed Caching & Math | Content-addressed SHA-256 caching (L1 memory + L2 Valkey RESP) and 8-dimensional structural embedding cosine distance ($D_C \le 0.05$) drift verification. |
 | [**Rootless Container Sandboxing & Process Group Containment**](./observations/systems/05-rootless-container-sandboxing-and-process-group-containment.md) | Container Security & POSIX | Hardened rootless container execution with 100% CIS benchmark compliance, POSIX process group isolation (`os.setsid`/`os.killpg`), and bounded stream buffers. |
+| [**Multi-Agent Concurrency & Workspace Hazards**](./observations/systems/06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md) | Concurrency & Swarm Dynamics | Eliminating working tree clobbering, SQLite coverage DB unlinking corruption, and cascading rebase live-locks with git worktrees, scoped data tiers, and FIFO PR shepherding. |
 
 ---
 
@@ -202,6 +203,7 @@ graph TD
 - [**Autonomous SDLC Project Management**](./patterns/autonomous-sdlc-project-management.md): Deterministic multi-dimensional prioritization, dependency graph cycle analysis, and prescriptive agent next-action dispatch.
 - [**Iterative Resource Refinement Loop**](./patterns/iterative-resource-refinement-loop.md): Closed-loop Scan -> Run -> Review -> Feedback -> Iterate engine generating actionable improvement feedback, backlog tasks, and delta tracking before commit.
 - [**Deterministic Mechanical Oracles & Feedback Inversion**](./patterns/deterministic-oracles-and-feedback-inversion.md): Binding stochastic LLM tokens to mechanical invariant gates (table dispatch, structural tuple assertions, negative tool schemas, process groups, boundary caps) and inverting feedback from reactive bug-fixing to proactive headroom elevation.
+- [**Multi-Agent Codebase Concurrency**](./patterns/multi-agent-codebase-concurrency.md): Architectural spatial isolation, partitioned data tiers, and centralized resource arbitration enabling collision-free multi-agent swarm collaboration on a single codebase.
 
 ---
 
