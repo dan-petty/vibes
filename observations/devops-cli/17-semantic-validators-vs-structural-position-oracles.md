@@ -1,7 +1,7 @@
 # Observation 17: Semantic Validators vs. Structural Position Oracles
 
-> **Project**: `vibes` — `tools/docs_validator.py`  
-> **Topic**: Keyword Matching Brittleness in Document Structure Validators; Structural Enumeration as the Correct Oracle  
+> **Project**: `vibes` — `tools/docs_validator.py`
+> **Topic**: Keyword Matching Brittleness in Document Structure Validators; Structural Enumeration as the Correct Oracle
 > **Key Metric**: First implementation rejected 26 valid observation files; structural position oracle passed all 25 existing documents and immediately caught 1 genuine defect
 
 ---
@@ -171,3 +171,4 @@ def test_observation_structure_real_repo_compliance() -> None:
 > The lesson: when validating document structure, the content of sections belongs to the author. The presence and count of required numbered positions belongs to the validator. Confusing the two produces an oracle that enforces style while ignoring structure.
 
 **Generalized principle**: Whenever building a validator for a schema with a fixed number of required structural slots (database columns, API response fields, report sections), validate **slot presence by position or key name** — never by inferring slot identity from the semantic content of the value.
+

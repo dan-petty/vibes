@@ -1,8 +1,8 @@
 # Pattern: Structural Position Oracles — Validating Schema Slots by Position, Not Semantic Content
 
-> **Pattern Class**: Documentation & Schema Validation  
-> **Problem**: Keyword matching against required section content fails on organically-varied vocabulary  
-> **Solution**: Validate required structural slots by position or key index, never by inferring identity from value content  
+> **Pattern Class**: Documentation & Schema Validation
+> **Problem**: Keyword matching against required section content fails on organically-varied vocabulary
+> **Solution**: Validate required structural slots by position or key index, never by inferring identity from value content
 > **Reference Implementation**: [`tools/docs_validator.py`](../tools/docs_validator.py) — `check_observation_structure`
 
 ---
@@ -127,3 +127,4 @@ This pattern applies beyond document validation anywhere a schema requires a set
 - **[Observation 17](../observations/devops-cli/17-semantic-validators-vs-structural-position-oracles.md)**: The empirical case study that originated this pattern.
 - **[Observation 06](../observations/devops-cli/06-rate-limits-and-anti-brittle-heuristics.md)**: The root prohibition on brittle partial pattern subsets.
 - **[`tools/docs_validator.py`](../tools/docs_validator.py)**: Reference implementation of `check_observation_structure`.
+

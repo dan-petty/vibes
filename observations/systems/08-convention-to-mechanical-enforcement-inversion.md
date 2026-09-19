@@ -1,7 +1,7 @@
 # Observation 08: Convention-to-Mechanical Enforcement Inversion
 
-> **Project**: `vibes` — Pre-Commit Hook Infrastructure  
-> **Topic**: The Compliance Gap Between Documented Mandates and Mechanical Enforcement; Converting Social Convention into Invariant Gates  
+> **Project**: `vibes` — Pre-Commit Hook Infrastructure
+> **Topic**: The Compliance Gap Between Documented Mandates and Mechanical Enforcement; Converting Social Convention into Invariant Gates
 > **Key Metric**: Zero prior mechanical enforcement of pre-push quality standards despite explicit `AGENTS.md §8` mandate; `.pre-commit-config.yaml` closes gap with 4 automated gates, zero human compliance overhead
 
 ---
@@ -10,8 +10,8 @@
 
 `vibes` maintained detailed agent operating instructions in `AGENTS.md §8`, including a clear pre-push mandate:
 
-> **§8.2. Pre-Push Local Sentinel Certification**:  
-> Before opening a pull request, run `python examples/ast-invariant-sentinel/sentinel.py <modified_files>`.  
+> **§8.2. Pre-Push Local Sentinel Certification**:
+> Before opening a pull request, run `python examples/ast-invariant-sentinel/sentinel.py <modified_files>`.
 > Verify that cyclomatic complexity remains ≤ 10, nesting depth ≤ 5, and zero RFC 1918 private IPs are exposed.
 
 This rule existed as a social convention: an instruction to agents and contributors, enforced only by reading and voluntary compliance. The repository had no `.pre-commit-config.yaml`, no git hook, and no mechanism to prevent a non-compliant commit from reaching a pull request or `main`.
@@ -148,3 +148,4 @@ This inversion — from post-push CI correction to pre-commit prevention — is 
 > Instructions in documentation are aspirations. Invariants in pre-commit hooks are guarantees. The distance between them is the compliance gap — and in agentic environments, every inch of that gap is an opportunity for entropy to accumulate silently.
 
 **The pattern to replicate**: For every quality gate documented in `AGENTS.md` or `CONTRIBUTING.md`, ask: "Is this enforced mechanically, or only by convention?" If only by convention, add a git hook, CI step, or automated validator. A mandate that can be skipped will eventually be skipped.
+

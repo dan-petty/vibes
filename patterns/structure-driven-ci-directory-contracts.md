@@ -1,8 +1,8 @@
 # Pattern: Structure-Driven CI — Generic Directory Contracts Over File Enumeration
 
-> **Pattern Class**: CI/CD Quality Assurance  
-> **Problem**: Explicit test file enumeration in CI configurations silently excludes new test suites as a repository grows  
-> **Solution**: Generic directory/glob contracts bound by the repository's own file system structure  
+> **Pattern Class**: CI/CD Quality Assurance
+> **Problem**: Explicit test file enumeration in CI configurations silently excludes new test suites as a repository grows
+> **Solution**: Generic directory/glob contracts bound by the repository's own file system structure
 > **Reference Implementation**: [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py) + [`tools/docs_validator.py`](../tools/docs_validator.py)
 
 ---
@@ -103,3 +103,4 @@ flowchart TD
 - **[Observation 16](../observations/devops-cli/16-ci-staleness-and-milestone-freeze-anti-pattern.md)**: The Milestone Freeze anti-pattern that motivated this pattern.
 - **[Observation 06](../observations/devops-cli/06-rate-limits-and-anti-brittle-heuristics.md)**: The prohibition on brittle partial pattern subsets — same principle applied to CI file enumeration.
 - **[`AGENTS.md §1`](../AGENTS.md)**: "Matching against a limited or arbitrary subset of a larger or unknown list of possible values is strictly prohibited."
+

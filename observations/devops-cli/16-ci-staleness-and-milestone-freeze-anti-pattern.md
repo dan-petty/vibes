@@ -1,7 +1,7 @@
 # Observation 16: The CI Milestone Freeze Anti-Pattern
 
-> **Project**: `vibes`  
-> **Topic**: CI Configuration Staleness, Codelist Enumeration, and Generic Test Runner Contracts  
+> **Project**: `vibes`
+> **Topic**: CI Configuration Staleness, Codelist Enumeration, and Generic Test Runner Contracts
 > **Key Metric**: `ci.yml` coverage expanded from 5 hardcoded test files (Milestone 2) to 192 tests across 21 suites; zero manual test list maintenance required going forward
 
 ---
@@ -132,3 +132,4 @@ The same expansion applied to sentinel and docs validation:
 > A CI configuration that enumerates test files by name is not CI coverage — it is a curated whitelist with a decaying validity half-life. Structure-driven discovery (`pytest tests/ examples/ benchmarks/`) is the only correct contract for a living repository.
 
 **The anti-pattern to prohibit**: Any CI `run:` step that lists specific `*.py` test files by path belongs to the same class of brittle pattern subsets prohibited by `AGENTS.md §1` — an arbitrary selection from an open, unbounded set. Use directory contracts, glob patterns, or `pytest.ini` `testpaths` instead.
+
