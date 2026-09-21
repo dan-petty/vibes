@@ -17,6 +17,20 @@ High-density product roadmap, engineering milestones, and open-source curation s
 
 ## Release Milestones (Chronological Order)
 
+```mermaid
+timeline
+    title Milestone arc, foundations to living standard
+    section Shipped
+        v0.1.0 : Foundations and the devops-cli retrospective
+        v0.2.0 : Interactive testbeds and executable sample apps
+    section In flight
+        v0.3.0 : Multi-agent benchmark suites and observability mesh
+        v0.4.0 : Polyglot invariant harnesses and ephemeral sandboxes
+    section Ahead
+        v0.5.0 : Autonomous swarm orchestration and self-healing
+        v1.0.0 : Enterprise governance, AIBOM and living standard
+```
+
 ### Milestone 1: Foundations & The `devops-cli` Retrospective (v0.1.0 - Completed)
 - [x] **Repository Architecture & Manifest**: Established four-tier directory structure (`docs/`, `observations/`, `patterns/`, `artifacts/`), Apache 2.0 open-source licensing, and flagship `README.md`.
 - [x] **Agent Operating Instructions (`AGENTS.md`)**: Codified strict curation protocols, zero-trust sanitization checklists, and five-part observation authoring standards.
@@ -195,6 +209,30 @@ Upcoming field observations, empirical studies, and architectural investigations
 ---
 
 ## Value vs. Effort Prioritization Matrix
+
+Every item still open, placed by the same value and effort judgements the table records. The rejected anti-patterns are plotted alongside deliberately — a roadmap is defined as much by what it refuses as by what it schedules:
+
+```mermaid
+quadrantChart
+    title Open deliverables and rejected anti-patterns
+    x-axis "Low effort" --> "High effort"
+    y-axis "Low value" --> "High value"
+    quadrant-1 "Major projects"
+    quadrant-2 "Quick wins"
+    quadrant-3 "Fill-ins"
+    quadrant-4 "Anti-patterns"
+    "PR review thread synchronizer": [0.45, 0.82]
+    "SDLC backlog daemon": [0.54, 0.74]
+    "PR triage and invariant bot": [0.70, 0.88]
+    "Conversation synthesizer": [0.80, 0.76]
+    "Multi-model leaderboard": [0.88, 0.68]
+    "AIBOM supply-chain scanner": [0.74, 0.94]
+    "Certified living standard": [0.92, 0.84]
+    "Prompt injection scanner": [0.50, 0.50]
+    "Toy chat-with-your-code demos": [0.86, 0.12]
+    "Unsanitized transcript dumps": [0.16, 0.10]
+    "Ad-hoc pattern matching subsets": [0.46, 0.20]
+```
 
 | Priority Category | Feature / Deliverable | Primary Tech / Tools | Value | Effort | Target Milestone | Status |
 |---|---|---|---|---|---|---|

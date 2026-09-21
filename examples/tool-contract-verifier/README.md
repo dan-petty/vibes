@@ -16,6 +16,34 @@ In agentic software engineering and tool-use architectures (e.g. FastMCP, OpenAI
 
 The **Formal Tool Contract Verification Gate** sits directly in the execution path, rejecting malformed calls *before* execution and emitting structured, prescriptive error prompts that allow the LLM to zero-shot self-correct in the next turn.
 
+```mermaid
+flowchart LR
+    classDef failure fill:#b3261e,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+
+    Model["LLM emits tool call"] --> Gate{"Validate against<br/>JSON Schema 2020-12"}:::accent
+    Gate -->|"Valid"| Exec["Handler executes"]:::success
+    Exec --> Out{"Response matches<br/>output contract?"}:::accent
+    Out -->|"Yes"| Return["Result to agent"]:::success
+    Out -->|"No"| Drift["OUTPUT_CONTRACT_DRIFT"]:::failure
+
+    Gate -->|"Unknown key"| H["HALLUCINATED_PARAM"]:::failure
+    Gate -->|"Absent key"| M["MISSING_REQUIRED_PARAM"]:::failure
+    Gate -->|"Wrong type"| T["TYPE_MISMATCH"]:::failure
+    Gate -->|"Over 256 chars"| L["LENGTH_BOUND_EXCEEDED"]:::failure
+
+    H --> Prompt["Prescriptive error prompt:<br/>names the violation and<br/>enumerates allowed parameters"]:::accent
+    M --> Prompt
+    T --> Prompt
+    L --> Prompt
+    Drift --> Prompt
+    Prompt -.->|"zero-shot self-correction<br/>on the next turn"| Model
+```
+
+> [!NOTE]
+> The rejection is the cheap half. A gate that returns `invalid arguments` teaches the model nothing and buys another malformed call; one that returns the exact allowed parameter list closes the loop in a single turn.
+
 ---
 
 ## Contract Violation Taxonomy

@@ -19,6 +19,26 @@ When an autonomous AI agent encounters a bug, the default behavior is often sing
 4. **Sandboxed Patch Evaluation (`SandboxedPatchEvaluator`)**: Untrusted candidate patches are executed inside isolated rootless containers (`ContainerSandboxHarness` / POSIX process groups) with cgroup memory and bounded timeout containment, preventing runaway loops (`while True: pass`) from hanging host execution.
 5. **Convergence**: Only declare completion when all constraints are certified green.
 
+```mermaid
+flowchart TD
+    classDef failure fill:#b3261e,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+
+    Bug["Observed defect"]:::failure --> Hyp["Formulate falsifiable hypothesis"]
+    Hyp --> Spec["Author executable counterexample<br/>(ConstraintSpec)"]:::accent
+    Spec --> Patch["Synthesize candidate patch"]
+    Patch --> Sandbox["Evaluate in rootless sandbox<br/>(cgroup memory, bounded timeout)"]:::accent
+    Sandbox --> Oracle{"All specs green:<br/>baseline and every<br/>accumulated counterexample?"}
+    Oracle -->|"No"| Add["Add failing case to the<br/>constraint set — it is never removed"]:::failure
+    Add --> Patch
+    Oracle -->|"Yes"| Done["Converged"]:::success
+
+    Add -.->|"the set only grows, so a later patch<br/>cannot silently reintroduce an earlier bug"| Oracle
+```
+
+Trial-and-error also loops. The difference is the accumulating constraint set: a naive retry loop forgets every failure it has already seen, so it can cycle forever between two patches that each fix what the other breaks.
+
 ---
 
 ## Quick Start

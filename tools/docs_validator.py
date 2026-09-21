@@ -72,6 +72,7 @@ _FILE_URI_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]*)\]\(file://(/
 _MERMAID_FILL_RE: Final[re.Pattern[str]] = re.compile(r"fill:\s*(#[0-9a-fA-F]{3,6})")
 _MERMAID_TEXT_COLOR_RE: Final[re.Pattern[str]] = re.compile(r"(?<![\w-])color:\s*(#[0-9a-fA-F]{3,6})")
 _LEGACY_MERMAID_HEADER_RE: Final[re.Pattern[str]] = re.compile(r"^graph\s+(?:TB|TD|BT|RL|LR)\b")
+_SEQUENCE_STATEMENT_RE: Final[re.Pattern[str]] = re.compile(r"^(?:\s*[Nn]ote\s|[^:]*(?:->>|-->>|-\)|--\)|-x|--x|->|-->))[^:]*:(.+)$")
 
 # WCAG 2.1 AA contrast floor for normal text; mermaid renders node labels at body size.
 MIN_MERMAID_CONTRAST_RATIO: Final[float] = 4.5
@@ -369,6 +370,25 @@ def _check_mermaid_style_line(line: str, line_no: int, file_str: str) -> list[Do
     return []
 
 
+def _check_sequence_semicolon(line: str, line_no: int, file_str: str) -> list[DocFinding]:
+    """Reject semicolons in sequence diagram text, where they terminate the statement."""
+    match = _SEQUENCE_STATEMENT_RE.match(line)
+    if not match or ";" not in match.group(1):
+        return []
+    return [
+        DocFinding(
+            file_path=file_str,
+            line_number=line_no,
+            category="mermaid",
+            message=(
+                "Semicolon in sequence diagram text. Mermaid treats ';' as a statement separator, "
+                "so the message or note is truncated at that point and the remainder fails to parse. "
+                "Use a comma or a full stop."
+            ),
+        )
+    ]
+
+
 def _check_legacy_mermaid_header(first: str, m_start: int, file_str: str) -> DocFinding | None:
     """Reject the legacy `graph` declaration in favour of modern `flowchart`."""
     if not _LEGACY_MERMAID_HEADER_RE.match(first):
@@ -455,10 +475,13 @@ def _validate_single_mermaid_block(
         )
         if finding
     )
+    is_sequence = first.lower().startswith("sequencediagram")
     for line_no, text in block_lines:
         findings.extend(_check_mermaid_node_label(text, line_no, file_str))
         findings.extend(_check_mermaid_edge_label(text, line_no, file_str))
         findings.extend(_check_mermaid_style_line(text, line_no, file_str))
+        if is_sequence:
+            findings.extend(_check_sequence_semicolon(text, line_no, file_str))
     return findings
 
 

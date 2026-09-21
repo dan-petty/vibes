@@ -13,6 +13,31 @@ As autonomous AI agents execute multi-step workflows (such as architectural plan
 
 The **Agent Waterfall Trace Generator** models this lifecycle using standard OpenTelemetry semantic conventions and renders clean waterfall timelines.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant F as Frontier model
+    participant S as Subagent slot (local)
+    participant T as Tools
+    participant O as OTLP collector
+
+    F->>O: span start: agent.turn (traceparent)
+    F->>S: delegate AST symbol catalog
+    activate S
+    S->>T: parse repository
+    T-->>S: 412 symbols
+    S-->>F: compact catalog
+    deactivate S
+    S->>O: span: agent.tokens.prompt / completion,<br/>agent.persona, agent.cache_hit
+
+    F->>T: apply patch
+    T-->>F: diff applied
+    F->>O: span: agent.verification_result
+    F->>O: span end: agent.turn
+
+    Note over F,S: The offload is the point: the wide, token-heavy<br/>exploration runs on the local tier, and only the<br/>compacted result crosses into the frontier context.
+```
+
 ---
 
 ## Quick Start

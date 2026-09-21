@@ -24,6 +24,10 @@ python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmar
 # Validate all documentation files
 python tools/docs_validator.py
 
+# Verify every Mermaid diagram actually renders (authoritative gate, also run in CI)
+npm install --no-save mermaid@11 jsdom
+node tools/verify_mermaid.mjs .
+
 # Self-healing: auto-fix Mermaid label quoting and unclosed fences
 python tools/docs_validator.py --fix
 ```
@@ -83,6 +87,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | **AST invariant sentinel** | `sentinel.py` | Cyclomatic complexity ≤10, nesting ≤5 |
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors |
 | **Observation structure** | `docs_validator.py --rule observation_structure` | All 5 sections present |
+| **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
 | **JSON schema lint** | `python -m json.tool` | Valid JSON |
 
 The PR sentinel ([`.github/workflows/pr-sentinel.yml`](.github/workflows/pr-sentinel.yml)) audits only your **changed Python files** and posts prescriptive feedback on invariant violations. Passing earns the `certified-by-sentinel` label.

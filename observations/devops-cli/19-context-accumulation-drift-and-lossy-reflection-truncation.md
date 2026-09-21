@@ -10,6 +10,17 @@ These three mechanisms — pipeline context accumulation, memory auto-summarizat
 
 **2a. Pipeline Context Bloat Without Truncation**: In sequential pipeline mode (`pipeline.py:196-199`), accumulated context from earlier agent stages is linearly appended turn by turn. A 5-stage pipeline where each agent generates 4,000 tokens of output accumulates 20,000 tokens of pipeline context before the final stage begins. No token truncation or summarization is applied between pipeline stages — the context grows monotonically until it either exceeds the model's window or displaces the original system instructions from the model's effective attention range.
 
+Nothing in the pipeline reduces this; each stage only adds:
+
+```mermaid
+xychart-beta
+    title "Accumulated pipeline context, 5 stages at 4,000 tokens each"
+    x-axis ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5"]
+    y-axis "Context tokens carried into the stage" 0 --> 24000
+    bar [4000, 8000, 12000, 16000, 20000]
+    line [4000, 8000, 12000, 16000, 20000]
+```
+
 **2b. System Instruction Eviction Under Multi-Turn Drift**: As tool call outputs, code snippets, test tracebacks, and conversation history accumulate in a long session, the model's attention to initial system prompt instructions (such as `AGENTS.md` rules) progressively degrades. This manifests as:
 - Complexity constraints ($M \le 10$, depth $\le 5$) being ignored after 15+ turns
 - Security sanitization rules (RFC 1918 prohibition) being forgotten after context exceeds 64K tokens
@@ -18,6 +29,30 @@ These three mechanisms — pipeline context accumulation, memory auto-summarizat
 The `AgentMemory` auto-summarization at 96K characters is the correct defensive instinct, but summarization is lossy: the summarizer compresses older turns into bullets, discarding the precise wording of invariant constraints that the model needs verbatim.
 
 **2c. Lossy Error Reflection Limiting Self-Correction**: When the model emits malformed JSON that fails Pydantic validation, the retry engine in `structured.py` truncates the validation error to 256 characters (`err_msg[:253] + "..."`). Complex nested validation errors — for example, a list of 5 invalid items each with field locators and type mismatch descriptions — are cut off mid-diagnostic, leaving the model with an incomplete error signal. The model then "fixes" the wrong field or applies a generic structural change rather than targeting the specific validation failure.
+
+Each of the three mechanisms is individually defensible. They compound because each one discards precisely what the next one needs:
+
+```mermaid
+flowchart TD
+    classDef accent fill:#4527a0,color:#fff
+    classDef failure fill:#b3261e,color:#fff
+
+    subgraph Defensible["Individually sound engineering decisions"]
+        M1["Pipeline appends stage output<br/>(no truncation)"]:::accent
+        M2["Memory summarizes at 96K chars,<br/>keeps 10 recent turns"]:::accent
+        M3["Error detail capped at 256 chars<br/>(CWE-209, CWE-400)"]:::accent
+    end
+
+    M1 -->|"window fills with<br/>intermediate output"| Evict["System instructions fall out of<br/>effective attention range"]:::failure
+    M2 -->|"compresses invariants<br/>into paraphrase"| Evict
+    Evict --> Violate["Complexity and sanitization<br/>rules silently abandoned"]:::failure
+    Violate --> Invalid["Model emits malformed output"]
+    Invalid --> M3
+    M3 -->|"diagnostic cut mid-locator"| Wrong["Model repairs the wrong field"]:::failure
+    Wrong --> Invalid
+
+    Wrong -.->|"retry budget burns while<br/>the real error stays unseen"| Evict
+```
 
 ## 3. The Underlying Failure Mode or Catalyst
 

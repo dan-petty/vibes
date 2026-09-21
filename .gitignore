@@ -25,3 +25,6 @@ env/
 target/
 Cargo.lock
 
+# Node tooling for the Mermaid render gate (installed transiently)
+node_modules/
+package-lock.json

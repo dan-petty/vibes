@@ -17,6 +17,33 @@ The **FastMCP Token-Bucket Gateway** solves this by inserting a local, async-saf
 - Bounded exponential backoff with randomized jitter.
 - Detailed telemetry on throttled requests and wait durations.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Agent loop
+    participant B as Token bucket
+    participant API as Downstream API
+
+    A->>B: acquire (burst of 5)
+    B-->>A: 5 tokens, bucket empty
+    A->>API: 5 concurrent calls
+    API-->>A: 200 OK
+
+    A->>B: acquire (6th call)
+    B-->>A: wait 0.4s for refill
+    Note over B: Pacing happens locally, before<br/>the request is ever sent.
+
+    A->>API: 6th call
+    API-->>A: 429 Too Many Requests
+    A->>B: register backoff
+    B-->>A: sleep 1s + jitter
+
+    Note over A,API: Jitter decorrelates retries across<br/>concurrent agents. Without it, every<br/>client retries on the same tick and<br/>rebuilds the spike that caused the 429.
+
+    A->>API: retry
+    API-->>A: 200 OK
+```
+
 ---
 
 ## Quick Start

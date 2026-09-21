@@ -21,6 +21,34 @@ When a model tier becomes unavailable, the failover cascade (`gateway.py:67-73`)
 
 **2b. One-Way Embedding Batch Degradation**: The embedding engine's adaptive batching (`embeddings.py:266-279`) halves `self._current_batch_size` whenever a request exceeds 2.0s latency. However, there is no corresponding mechanism to increase batch size when latency returns to normal. A single transient network spike permanently ratchets batch size from 32 down to 16, then 8, then 4, then 2, then 1 — and stays there until the process restarts. This transforms a momentary infrastructure blip into permanent throughput degradation.
 
+The ratchet is best read by what is missing from it — every arrow points one way, and the only edge leaving `batch = 1` is a process restart:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> B32
+    B32: batch = 32
+    B16: batch = 16
+    B8: batch = 8
+    B4: batch = 4
+    B2: batch = 2
+    B1: batch = 1 (floor)
+
+    B32 --> B16: one request over 2.0s
+    B16 --> B8: one request over 2.0s
+    B8 --> B4: one request over 2.0s
+    B4 --> B2: one request over 2.0s
+    B2 --> B1: one request over 2.0s
+    B1 --> B1: healthy latency changes nothing
+    B1 --> [*]: process restart, the only exit
+
+    note right of B1
+        No transition returns leftward.
+        A 30-second network blip costs
+        32x throughput until redeploy.
+    end note
+```
+
 **2c. Hardcoded Model Identity in Scaling Engine**: The vLLM scaling function (`gateway.py:415-454`) hardcodes the served model as `"casperhansen/llama-3.3-70b-instruct-awq"` and assumes $TP=2$ with 24GB VRAM per GPU. If the cluster runs FP8, BF16, DeepSeek, or Mistral models, the scaling arithmetic produces incorrect VRAM estimates and the deployment command targets a phantom model.
 
 ## 3. The Underlying Failure Mode or Catalyst
@@ -48,6 +76,30 @@ The one-way batch ratchet exhibits a different but related pattern: **asymmetric
 - **Tier 3 (Chat)**: Documentation, summarization, simple Q&A → any model
 
 If the failover target's tier is below the task's minimum requirement, reject the failover and return an explicit error rather than silently routing to a model that will produce hallucinated output.
+
+```mermaid
+flowchart TD
+    classDef failure fill:#b3261e,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+    classDef neutral fill:#37474f,color:#fff
+
+    Task["Task arrives: multi-file refactor"] --> Primary{"devops-reasoning (70B) available?"}
+    Primary -->|"Yes"| Execute["Correct execution"]:::success
+    Primary -->|"No"| Gate{"Capability gate: does the next tier<br/>meet the task's 30B+ minimum?"}:::accent
+
+    Gate -->|"No (14B coder)"| Refuse["Explicit CapabilityFloor error<br/>surfaced to the caller"]:::success
+    Gate -->|"Yes"| Failover["Route to next tier"]:::neutral
+    Failover --> Execute
+
+    Primary -.->|"Ungated cascade (observed)"| Cliff["Routed to 14B because it is next in line"]
+    Cliff --> Hallucinate["Confident hallucination:<br/>instructions dropped, output plausible"]:::failure
+
+    Hallucinate -.->|"indistinguishable from success<br/>until a human reads the diff"| Task
+```
+
+> [!IMPORTANT]
+> The gate does not make the failure go away — it converts an **undetectable** failure into a **loud** one. A `CapabilityFloor` error costs one retry; a confidently hallucinated refactor costs a review cycle and whatever it silently broke.
 
 **4b. Exponential Backoff Batch Recovery**: Replace the one-way halving ratchet with a bidirectional adaptation strategy:
 

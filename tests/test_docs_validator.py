@@ -223,6 +223,29 @@ def test_legacy_graph_declaration_is_flagged() -> None:
     assert "flowchart TD" in findings[0].message
 
 
+def test_sequence_diagram_semicolon_is_flagged() -> None:
+    """A semicolon terminates a sequence statement, truncating the message silently."""
+    validator = DocsValidator()
+    content = "```mermaid\nsequenceDiagram\n    A->>B: do this; then that\n```\n"
+    findings = validator.validate_content(content, Path("doc.md"))
+    assert [f.category for f in findings] == ["mermaid"]
+    assert "statement separator" in findings[0].message
+
+
+def test_sequence_diagram_note_semicolon_is_flagged() -> None:
+    """Notes carry the same separator semantics as messages."""
+    validator = DocsValidator()
+    content = "```mermaid\nsequenceDiagram\n    Note over A,B: first clause; second clause\n```\n"
+    assert [f.category for f in validator.validate_content(content, Path("doc.md"))] == ["mermaid"]
+
+
+def test_semicolon_outside_sequence_diagram_is_permitted() -> None:
+    """Flowchart labels have no statement-separator semantics for ';'."""
+    validator = DocsValidator()
+    content = '```mermaid\nflowchart TD\n    A["first; second"] --> B["done"]\n```\n'
+    assert validator.validate_content(content, Path("doc.md")) == []
+
+
 def test_docs_validator_cli_accepts_multiple_paths(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

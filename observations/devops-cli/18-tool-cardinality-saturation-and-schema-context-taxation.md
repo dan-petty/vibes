@@ -14,6 +14,15 @@ Three empirically grounded failure modes emerge as tool cardinality scales:
 
 **2b. Schema Token Budget Displacement**: A conservative estimate of 80 tokens per tool schema (name, description, parameters, required fields) means 100 tools consume ~8,000 tokens of context window before any code, conversation, or instructions are loaded. For models with 32K context windows, this represents a 25% fixed overhead. The `SkillSlot` cap of 20 skills (`slots.py:150`) implicitly acknowledges this budget ceiling but applies it only to skills, not tools.
 
+At 80 tokens per schema, the tool surface claims a quarter of a 32K window before the agent has read a line of the user's code:
+
+```mermaid
+pie showData
+    title 32K context window, allocated before the first user token
+    "Tool schemas (100 tools x 80 tokens)" : 8000
+    "Remaining for instructions, code, history" : 24000
+```
+
 **2c. Pretraining Prior Override**: Models override explicit schema parameter names in favor of pretraining priors. The `devops-cli` tool `review_path` requires `path` as a parameter, but models frequently hallucinate `file_path`, `filepath`, or `target` — names more common in pretraining corpora. The negative schema assertion (`additionalProperties: false` / `extra="forbid"`) from Observation 10 catches these at validation time, but the root cause is attention dilution across too many competing schema definitions.
 
 ## 3. The Underlying Failure Mode or Catalyst
@@ -38,6 +47,34 @@ This is compounded by **semantic namespace collision**. When 7 tools share the `
 **4c. Schema Compression via Structural Minimization**: Strip verbose `description` fields from tool schemas after the initial hydration turn. Models retain tool semantics from the first exposure; subsequent turns need only the structural skeleton (parameter names, types, required flags). This can reduce per-tool token cost from ~80 to ~30 tokens.
 
 **4d. Negative Namespace Disambiguation**: For tools with overlapping prefixes, inject a concise disambiguation preamble: `"scan_trivy: CVE vulnerabilities. scan_semgrep: SAST code patterns. scan_gitleaks: leaked secrets."` This costs ~50 tokens total but eliminates the vacillation failure mode by providing a dense discriminative signal.
+
+Together these invert the hydration order: the window pays for the namespace the agent is actually working in, not for every namespace it might.
+
+```mermaid
+flowchart LR
+    classDef failure fill:#b3261e,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+
+    subgraph Eager["Observed: eager hydration"]
+        direction TB
+        E1["Session opens"] --> E2["All 100+ schemas serialized"]:::failure
+        E2 --> E3["~8,000 tokens spent"]
+        E3 --> E4["User states the task"]
+    end
+
+    subgraph Lazy["Remediated: domain-gated hydration"]
+        direction TB
+        L1["Session opens"] --> L2["~12 core schemas"]:::success
+        L2 --> L3["User states the task"]
+        L3 --> L4{"Trajectory enters<br/>a namespace?"}:::accent
+        L4 -->|"k8s"| L5["Hydrate k8s_* only"]:::success
+        L4 -->|"scan"| L6["Hydrate scan_* only"]:::success
+        L4 -->|"No"| L7["Nothing further loaded"]
+    end
+
+    Eager -.->|"invert the order:<br/>pay per namespace entered"| Lazy
+```
 
 See pattern: [tool-cardinality-budget-management](../../patterns/tool-cardinality-budget-management.md)
 

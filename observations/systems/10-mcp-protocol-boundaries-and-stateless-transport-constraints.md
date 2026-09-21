@@ -12,6 +12,35 @@ However, MCP's design philosophy of stateless, request-response tool calls intro
 
 This statelessness is by design — it simplifies tool implementation and eliminates server-side session management — but it forces the agent to maintain all workflow state in its own context window, which compounds the context accumulation problem from Observation 19.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Agent
+    participant S as MCP Server
+    participant I as Cloud Infrastructure
+
+    A->>S: tf_plan
+    S->>I: read current state
+    I-->>S: 14 resources to add
+    S-->>A: plan summary (held only in agent context)
+
+    Note over A,S: No session handle, no transaction id.<br/>The server has already forgotten the plan.
+
+    A->>S: tf_apply
+    S->>I: create 1..14
+    I-->>S: failed at resource 9
+    S-->>A: error string
+
+    Note over S,I: 8 resources created, 6 not.<br/>No protocol-level rollback exists.
+
+    A->>S: tf_state_list
+    S->>I: read current state
+    I-->>S: partial state
+    S-->>A: agent reconstructs what happened,<br/>paying full context cost a second time
+```
+
+The protocol has no place to put the fact that a transaction is in flight. The agent's context window is the only durable store in the system, which is why the transaction journal in section 4 below is agent-side rather than server-side.
+
 **2b. Tool Discovery Scalability Pressure**: When an MCP client connects to a server exposing 100+ tools, the `tools/list` response serializes every tool's JSON Schema into a single response payload. For `devops-cli`'s tool surface, this payload exceeds 30,000 tokens. The client must either:
 
 1. Inject all schemas into the model's context (consuming 25%+ of the window), or
@@ -22,6 +51,39 @@ The MCP specification supports both eager and lazy loading, and `devops-cli` exp
 **2c. Resource Underutilization**: MCP Resources provide URI-addressable, cacheable, subscription-capable data endpoints (e.g., `resource://ai/research/mental_model`, `resource://dashboard/k8s`). Unlike Tools, Resources are designed for read-heavy, stable data that changes infrequently — perfect for configuration, status dashboards, and cached analysis results. Yet in practice, agent frameworks default to dynamic Tool calling for every data access, even when a Resource would provide cheaper, cached, deterministic results. The `devops-cli` roadmap defines 20+ planned MCP Resources across milestones v0.2.20-v0.2.23, but current implementations rely almost exclusively on Tools.
 
 **2d. Security Surface of Tool Return Strings**: MCP tool responses are untyped text strings returned to the agent's context. An attacker who controls tool output (e.g., via a compromised git repository, a malicious web page fetched by `read_url_content`, or a poisoned dependency) can inject instructions that the agent interprets as system-level directives — a form of **indirect prompt injection** through the tool response channel. The MCP protocol provides no mechanism for marking tool output as "untrusted user data" versus "trusted system instructions."
+
+```mermaid
+flowchart LR
+    classDef failure fill:#b3261e,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+    classDef neutral fill:#37474f,color:#fff
+
+    subgraph Untrusted["Attacker-influenced surface"]
+        Repo["Cloned repository"]
+        Page["Fetched web page"]
+        Dep["Poisoned dependency"]
+    end
+
+    subgraph Server["MCP server"]
+        Tool["read_url_content<br/>returns str"]:::neutral
+    end
+
+    subgraph Context["Agent context window"]
+        Sys["System instructions"]:::accent
+        Out["Tool output"]:::failure
+    end
+
+    Repo --> Tool
+    Page --> Tool
+    Dep --> Tool
+    Tool -->|"untyped text, no provenance"| Out
+    Out -.->|"same token stream,<br/>no trust boundary"| Sys
+
+    Sys --> Act["Agent acts"]
+    Out --> Act
+```
+
+Both arrows into `Agent acts` carry equal authority. The trust boundary that exists in every other part of the stack — between data and code — has no representation in the token stream.
 
 ## 3. The Underlying Failure Mode or Catalyst
 

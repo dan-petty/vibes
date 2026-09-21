@@ -13,6 +13,35 @@ The **Prompt Mutation Suite & Invariant Fuzzer** provides an automated, determin
 2. **Evaluates Candidate Code Invariants**: Uses an AST-based auditor to verify whether generated code adheres to complexity caps ($M \le 10$), nesting ceilings ($\le 5$), and zero-trust sanitization.
 3. **Calculates Resilience Metrics**: Computes an Invariant Resilience Score ($0.0\%$ to $100.0\%$) and pinpoints specific failure vulnerabilities.
 
+```mermaid
+flowchart LR
+    classDef failure fill:#b3261e,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+
+    Base["Pristine system prompt"] --> Mut["Grammar-guided mutation"]:::accent
+    Mut --> P1["DILUTION"]
+    Mut --> P2["DISTRACTION"]
+    Mut --> P3["INJECTION_ESCAPE"]
+    Mut --> P4["TRUNCATION"]
+    Mut --> P5["REORDERING"]
+
+    P1 --> Gen["Agent generates code"]
+    P2 --> Gen
+    P3 --> Gen
+    P4 --> Gen
+    P5 --> Gen
+
+    Gen --> Audit{"AST auditor:<br/>M and depth caps,<br/>zero-trust sanitization"}:::accent
+    Audit -->|"Invariants held"| Hold["Resilient under this perturbation"]:::success
+    Audit -->|"Invariants broken"| Drift["Vulnerability located:<br/>this perturbation class,<br/>this invariant"]:::failure
+
+    Hold --> Score["Invariant Resilience Score"]
+    Drift --> Score
+```
+
+The auditor is deterministic, which is what makes the score meaningful: the only variable between runs is the perturbation, so a drop in the score localizes to a specific perturbation class rather than to sampling noise.
+
 ---
 
 ## Perturbation Taxonomy

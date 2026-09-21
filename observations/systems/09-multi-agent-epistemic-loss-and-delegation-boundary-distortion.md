@@ -18,6 +18,27 @@ This is observable in the `SubAgents.delegate_task` implementation (`workflow.py
 2. **Hallucinated extrapolation**: The parent interpolates between two subagent results, generating plausible-sounding synthesis that neither subagent actually claimed
 3. **Silent failure absorption**: A subagent returns an error or empty result, and the parent generates a confident response as if the delegation succeeded — because the error signal was not structured enough to trigger explicit failure handling
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant P as Parent agent
+    participant C1 as Child: API audit
+    participant C2 as Child: refactor
+
+    U->>P: refactor module, preserve public API
+    P->>C1: "check which symbols are public"
+    C1-->>P: "" (empty, budget exhausted)
+    P->>C2: "refactor the module"
+
+    Note over P,C2: The API constraint never reaches C2.<br/>An empty string is not an error signal.
+
+    C2-->>P: refactored, 3 symbols renamed
+    P-->>U: "Refactoring complete, public API preserved."
+
+    Note over U,P: The claim is unsupported by anything<br/>in the transcript, and reads exactly like<br/>a claim that is.
+```
+
 **2c. Mocked Tiered Execution Masking Real Delegation Gaps**: The `execute_tiered` protocol in `slots.py:775-831` claims to implement "Big decides, small types, big checks" — but the researcher confirmed that Tier 1 (frontier decision) and Tier 3 (frontier verification) are fabricated via string template interpolation without contacting any model API. The `SubAgentSlot` methods (`offload_ast_search`, `offload_file_scout`, `offload_symbol_catalog`) execute pure Python AST code in-process and compute "token savings" using `len(text) // 4` heuristics. The architecture is structurally correct — the slot boundaries exist — but the execution paths are stubs, meaning the real delegation failure modes remain untested.
 
 **2d. Background Process Output Contract Violation**: The shell execution model (`shell.py:188-211`) spawns background commands with `subprocess.Popen` and `stdout=subprocess.PIPE, stderr=subprocess.PIPE`. However, `check_command` (`shell.py:203-211`) only calls `proc.poll()` — the pipes are never drained. If a background subprocess generates more than 64KB of output (the OS pipe buffer size), the write blocks and the process deadlocks. The output contract — "Report status and accumulated output" — silently breaks, and the agent loses access to the subagent's results entirely.
@@ -26,16 +47,24 @@ This is observable in the `SubAgents.delegate_task` implementation (`workflow.py
 
 The fundamental problem is **epistemic loss at delegation boundaries**. Every time information crosses from one agent to another — whether through prompt decomposition, tool invocation, or result synthesis — it undergoes a lossy transformation:
 
-```
-User Intent (100% fidelity)
-    ↓ prompt decomposition (-15% constraints lost)
-Parent Agent Context (85%)
-    ↓ subagent delegation (-20% nuance lost)
-Child Agent Context (65%)
-    ↓ tool execution (-5% edge cases dropped)
-Tool Result (60%)
-    ↓ result synthesis (-10% warnings ignored)
-Parent's Synthesized Response (50%)
+```mermaid
+flowchart TD
+    classDef full fill:#1b5e20,color:#fff
+    classDef fading fill:#f2b705,color:#000
+    classDef lost fill:#b3261e,color:#fff
+
+    U["User intent<br/>100% fidelity"]:::full
+    P["Parent agent context<br/>85%"]:::fading
+    C["Child agent context<br/>65%"]:::fading
+    T["Tool result<br/>60%"]:::fading
+    R["Synthesized response<br/>50%"]:::lost
+
+    U -->|"prompt decomposition<br/>-15% constraints stripped"| P
+    P -->|"subagent delegation<br/>-20% nuance flattened"| C
+    C -->|"tool execution<br/>-5% edge cases dropped"| T
+    T -->|"result synthesis<br/>-10% warnings ignored"| R
+
+    R -.->|"every intermediate step<br/>read as plausible and complete"| U
 ```
 
 At each boundary, the transformation is "plausible" — the compressed version reads naturally and appears complete. But accumulated losses compound multiplicatively. A 3-layer delegation stack with 15% loss per layer retains only $0.85^3 \approx 61\%$ of the original intent's fidelity. The remaining 39% manifests as subtle constraint violations, missing edge case handling, and confident responses to questions the system never fully understood.
