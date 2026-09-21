@@ -246,6 +246,82 @@ def test_semicolon_outside_sequence_diagram_is_permitted() -> None:
     assert validator.validate_content(content, Path("doc.md")) == []
 
 
+def _write_map(tmp_path: Path, tree: str) -> Path:
+    """Write a README whose directory map describes tmp_path."""
+    doc = tmp_path / "README.md"
+    doc.write_text(f"# Map\n\n```text\n{tree}```\n", encoding="utf-8")
+    return doc
+
+
+def test_directory_map_flags_vanished_path(tmp_path: Path) -> None:
+    """A mapped path that no longer exists is silent drift no other gate can see."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "kept.md").write_text("x", encoding="utf-8")
+    doc = _write_map(tmp_path, "├── docs/\n│   ├── kept.md\n│   └── deleted.md\n")
+
+    findings = DocsValidator().validate_file(doc)
+    assert [f.category for f in findings] == ["directory_map"]
+    assert "deleted.md" in findings[0].message
+
+
+def test_directory_map_flags_unlisted_sibling(tmp_path: Path) -> None:
+    """A directory the map enumerates must be enumerated completely."""
+    (tmp_path / "docs").mkdir()
+    for name in ("listed.md", "added-later.md"):
+        (tmp_path / "docs" / name).write_text("x", encoding="utf-8")
+    doc = _write_map(tmp_path, "├── docs/\n│   └── listed.md\n")
+
+    findings = DocsValidator().validate_file(doc)
+    assert [f.category for f in findings] == ["directory_map"]
+    assert "added-later.md" in findings[0].message
+
+
+def test_directory_map_respects_ellipsis_as_partial_listing(tmp_path: Path) -> None:
+    """An explicit ellipsis marks the listing partial and waives completeness."""
+    (tmp_path / "docs").mkdir()
+    for name in ("listed.md", "unlisted.md"):
+        (tmp_path / "docs" / name).write_text("x", encoding="utf-8")
+    doc = _write_map(tmp_path, "├── docs/\n│   ├── listed.md\n│   └── ...\n")
+
+    assert DocsValidator().validate_file(doc) == []
+
+
+def test_directory_map_ignores_non_map_box_drawing_art(tmp_path: Path) -> None:
+    """Trace waterfalls use the same glyphs and must not be read as a filesystem map."""
+    doc = tmp_path / "README.md"
+    trace = (
+        "[0.000s - 4.820s] root_task: Refactor (4820ms)\n"
+        "  ├── [0.050s - 1.250s] subagent: Planning (1200ms)\n"
+        "  └── [1.300s - 3.450s] subagent: Synthesize (2150ms)\n"
+    )
+    doc.write_text(f"# Trace\n\n```text\n{trace}```\n", encoding="utf-8")
+
+    assert DocsValidator().validate_file(doc) == []
+
+
+def test_directory_map_tolerates_dot_directories_and_caches(tmp_path: Path) -> None:
+    """Hidden entries and bytecode caches are never expected in a map."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x", encoding="utf-8")
+    (tmp_path / "src" / "__pycache__").mkdir()
+    (tmp_path / ".hidden").write_text("x", encoding="utf-8")
+    doc = _write_map(tmp_path, "├── src/\n│   └── app.py\n")
+
+    assert DocsValidator().validate_file(doc) == []
+
+
+def test_validate_file_and_validate_content_run_identical_rules(tmp_path: Path) -> None:
+    """Both entry points must share one rule registry; parallel lists silently diverge."""
+    doc = tmp_path / "obs.md"
+    content = "# Doc\n\n```mermaid\ngraph TD\n    A --> B\n```\n"
+    doc.write_text(content, encoding="utf-8")
+
+    validator = DocsValidator()
+    from_file = [(f.category, f.line_number) for f in validator.validate_file(doc)]
+    from_content = [(f.category, f.line_number) for f in validator.validate_content(content, doc)]
+    assert from_file == from_content != []
+
+
 def test_docs_validator_cli_accepts_multiple_paths(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

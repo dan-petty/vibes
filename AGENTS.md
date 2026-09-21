@@ -51,7 +51,8 @@ Every contribution to `vibes` must fit cleanly into one of four core categories:
 | **Artifacts** | `artifacts/<type>/` | Concrete, verifiable assets (prompt harnesses, JSON schemas, task specs, diff snapshots). |
 
 ### Rules of Placement
-- Never scatter loose files in the root directory. Only `README.md`, `LICENSE`, and `AGENTS.md` reside in the root.
+- Never scatter loose files in the root directory. The root holds exactly the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pytest.ini`, `.pre-commit-config.yaml`, `.gitignore`). Everything else belongs in one of the four category directories.
+- The directory map in [`README.md`](./README.md) is mechanically diffed against the filesystem by `docs_validator.py` (`directory_map` rule): every mapped path must exist, and any directory the map enumerates must be enumerated completely. Add new files to the map in the same commit, or mark a deliberately partial listing with an `...` entry.
 - All new observations must reside in a project-specific subdirectory under `observations/` (e.g., `observations/devops-cli/`).
 - Filenames must be lowercase with hyphens (kebab-case), descriptive, and self-explanatory. Number prefixes (`01-`, `02-`) are encouraged for curated reading sequences.
 
@@ -236,7 +237,10 @@ When guided by continuous feedback tooling (`ResourceIterationWorkbench`, `SDLCP
    - Elevating public docstring coverage and parameter type annotations to 100%.
    - Optimizing test execution latency (sub-second test runner execution).
 3. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codified into `AGENTS.md`.
-4. **Oracle Measurement Validity (Never Measure the Harness Instead of the Work)**:
+4. **One Registry Per Gate (Parallel Check Lists Always Diverge)**:
+   - A validator with two entry points must register its rules in exactly one place. `docs_validator.py` kept separate check lists in `validate_file` and `validate_content`, so a rule added to one ran in tests and not in the CLI — a gate that passes because it never executed the rule.
+   - When adding a rule, add it to the shared registry and assert that every entry point reports identically for the same input.
+5. **Oracle Measurement Validity (Never Measure the Harness Instead of the Work)**:
    - A mechanical oracle must measure the artifact under judgement, never the scaffolding that invokes it. Subprocess wall-clock around `python -m pytest <file>` charges every suite a fixed ~1.7s of interpreter boot, plugin loading, and collection, which silently dominates any sub-second test body and manufactures permanent, unfixable "slow test" defects.
    - Always prefer the tool's own self-reported metric (pytest's `N passed in X.XXs` summary line, parsed via `PYTEST_SUMMARY_DURATION_RE`) over externally observed process duration, and fall back to wall-clock only when no self-report exists.
    - Before acting on any feedback item, agents MUST confirm the metric is actionable: if no possible change to the target file can satisfy the threshold, the defect is in the oracle, not in the resource. Fix the oracle.

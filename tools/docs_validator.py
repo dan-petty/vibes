@@ -73,6 +73,12 @@ _MERMAID_FILL_RE: Final[re.Pattern[str]] = re.compile(r"fill:\s*(#[0-9a-fA-F]{3,
 _MERMAID_TEXT_COLOR_RE: Final[re.Pattern[str]] = re.compile(r"(?<![\w-])color:\s*(#[0-9a-fA-F]{3,6})")
 _LEGACY_MERMAID_HEADER_RE: Final[re.Pattern[str]] = re.compile(r"^graph\s+(?:TB|TD|BT|RL|LR)\b")
 _SEQUENCE_STATEMENT_RE: Final[re.Pattern[str]] = re.compile(r"^(?:\s*[Nn]ote\s|[^:]*(?:->>|-->>|-\)|--\)|-x|--x|->|-->))[^:]*:(.+)$")
+_TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(r"^(?P<indent>(?:[\u2502]   |    )*)(?:\u251c\u2500\u2500|\u2514\u2500\u2500) (?P<name>\S+)")
+
+# Filesystem entries a directory map is never expected to enumerate.
+TREE_IGNORED_NAMES: Final[frozenset[str]] = frozenset({"__pycache__", "node_modules"})
+# A tree line consisting of an ellipsis marks the listing as deliberately partial.
+TREE_ELLIPSIS: Final[frozenset[str]] = frozenset({"...", "\u2026"})
 
 # WCAG 2.1 AA contrast floor for normal text; mermaid renders node labels at body size.
 MIN_MERMAID_CONTRAST_RATIO: Final[float] = 4.5
@@ -310,6 +316,143 @@ def _check_mermaid_edge_label(line: str, line_no: int, file_str: str) -> list[Do
     return findings
 
 
+@dataclass(frozen=True)
+class TreeEntry:
+    """A single path declared by an embedded directory map."""
+
+    line_number: int
+    path: Path
+    is_directory: bool
+
+
+def _parse_tree_line(line: str) -> tuple[int, str, bool] | None:
+    """Return (depth, name, is_directory) for a tree line, or None if it is not one."""
+    match = _TREE_ENTRY_RE.match(line)
+    if not match:
+        return None
+    name = match.group("name")
+    return len(match.group("indent")) // 4, name.rstrip("/"), name.endswith("/")
+
+
+def _tree_entries(block: Sequence[tuple[int, str]], root: Path) -> list[TreeEntry]:
+    """Resolve an embedded tree into filesystem paths, or [] if the listing is partial."""
+    entries: list[TreeEntry] = []
+    ancestors: dict[int, Path] = {}
+    for line_no, text in block:
+        parsed = _parse_tree_line(text)
+        if not parsed:
+            continue
+        depth, name, is_directory = parsed
+        if name in TREE_ELLIPSIS:
+            return []
+        path = ancestors.get(depth - 1, root) / name
+        ancestors[depth] = path
+        entries.append(TreeEntry(line_no, path, is_directory))
+    return entries
+
+
+def _is_directory_map(entries: Sequence[TreeEntry]) -> bool:
+    """Distinguish a filesystem map from other art drawn with the same box characters.
+
+    Trace waterfalls and AST dumps use the identical `\u251c\u2500\u2500` glyphs. A map is
+    identified structurally: it marks at least one child as a directory with a trailing
+    slash, and most of what it names exists on disk. A map whose every single entry has
+    vanished is indistinguishable from unrelated art without guessing, and is not reported.
+    """
+    if not entries or not any(entry.is_directory for entry in entries):
+        return False
+    resolved = sum(1 for entry in entries if entry.path.exists())
+    return resolved * 2 >= len(entries)
+
+
+def _check_tree_entry_exists(entry: TreeEntry, root: Path, file_str: str) -> DocFinding | None:
+    """Verify a mapped path still exists on disk with the declared kind."""
+    if entry.path.is_dir() if entry.is_directory else entry.path.is_file():
+        return None
+    kind = "directory" if entry.is_directory else "file"
+    return DocFinding(
+        file_path=file_str,
+        line_number=entry.line_number,
+        category="directory_map",
+        message=(
+            f"Directory map lists {kind} '{entry.path.relative_to(root)}', which does not exist. "
+            "A text tree breaks no link and fails no test, so it drifts silently — regenerate it."
+        ),
+    )
+
+
+def _undeclared_children(parent: Path, declared: set[str], kinds: set[bool]) -> list[str]:
+    """Return on-disk children of the kinds the map enumerates that the map omits."""
+    candidates = (
+        child
+        for child in sorted(parent.iterdir())
+        if not child.name.startswith(".")
+        and child.name not in TREE_IGNORED_NAMES
+        and child.is_dir() in kinds
+    )
+    return [child.name for child in candidates if child.name not in declared]
+
+
+def _check_tree_completeness(
+    entries: Sequence[TreeEntry], root: Path, file_str: str
+) -> list[DocFinding]:
+    """Report children absent from a map that already enumerates that kind of sibling."""
+    children: dict[Path, list[TreeEntry]] = {}
+    for entry in entries:
+        children.setdefault(entry.path.parent, []).append(entry)
+    findings: list[DocFinding] = []
+    for parent, listed in children.items():
+        if not parent.is_dir():
+            continue
+        declared = {entry.path.name for entry in listed}
+        missing = _undeclared_children(parent, declared, {entry.is_directory for entry in listed})
+        findings.extend(
+            _missing_child_finding(parent, root, name, listed[0].line_number, file_str)
+            for name in missing
+        )
+    return findings
+
+
+def _missing_child_finding(
+    parent: Path, root: Path, name: str, line_number: int, file_str: str
+) -> DocFinding:
+    """Build a finding for a filesystem entry the map claims to enumerate but omits."""
+    location = parent.relative_to(root) if parent != root else Path(".")
+    return DocFinding(
+        file_path=file_str,
+        line_number=line_number,
+        category="directory_map",
+        message=(
+            f"Directory map enumerates '{location}' but omits '{name}'. Either list it or mark the "
+            "listing partial with an ellipsis entry."
+        ),
+    )
+
+
+def check_directory_maps(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
+    """Diff every embedded text directory tree against the filesystem it describes."""
+    root = file_path.parent.resolve()
+    if not root.is_dir():
+        return []
+    findings: list[DocFinding] = []
+    for block in _extract_text_blocks(lines):
+        entries = _tree_entries(block, root)
+        if not _is_directory_map(entries):
+            continue
+        findings.extend(
+            finding
+            for finding in (_check_tree_entry_exists(entry, root, str(file_path)) for entry in entries)
+            if finding
+        )
+        findings.extend(_check_tree_completeness(entries, root, str(file_path)))
+    return findings
+
+
+def _extract_text_blocks(lines: Sequence[str]) -> list[list[tuple[int, str]]]:
+    """Extract fenced `text` blocks as (line_no, content) pairs."""
+    return [body for _, body in _extract_fenced_blocks(lines, "text")]
+
+
 def _expand_hex_color(hex_color: str) -> tuple[int, int, int]:
     """Expand a 3- or 6-digit hex color into its 8-bit RGB channels."""
     digits = hex_color.lstrip("#")
@@ -431,31 +574,34 @@ def _validate_mermaid_header(
     return None
 
 
-def _is_mermaid_start(stripped: str, in_block: bool) -> bool:
-    """Check if line starts a mermaid block."""
-    return not in_block and stripped.startswith("```mermaid")
+def _closing_fence_index(lines: Sequence[str], start: int) -> int:
+    """Return the index of the fence closing the block opened at start, or end of input."""
+    closers = (idx for idx in range(start + 1, len(lines)) if lines[idx].strip().startswith("```"))
+    return next(closers, len(lines))
+
+
+def _extract_fenced_blocks(
+    lines: Sequence[str], info: str
+) -> list[tuple[int, list[tuple[int, str]]]]:
+    """Extract every fenced block carrying the given info string.
+
+    Returns (1-based opening line, [(1-based line number, raw text)]). Shared by the
+    Mermaid and directory-map rules: two hand-rolled fence state machines previously
+    drifted apart, and each one nested an elif ladder deep enough to strain the caps.
+    """
+    blocks: list[tuple[int, list[tuple[int, str]]]] = []
+    consumed = -1
+    for start, line in enumerate(lines):
+        if start <= consumed or not line.strip().startswith(f"```{info}"):
+            continue
+        consumed = _closing_fence_index(lines, start)
+        blocks.append((start + 1, [(idx + 1, lines[idx]) for idx in range(start + 1, consumed)]))
+    return blocks
 
 
 def _extract_mermaid_blocks(lines: Sequence[str]) -> list[tuple[int, list[tuple[int, str]]]]:
     """Extract mermaid code blocks as (start_line, [(line_no, line_content)])."""
-    blocks: list[tuple[int, list[tuple[int, str]]]] = []
-    current: list[tuple[int, str]] = []
-    start_line = 0
-    in_block = False
-
-    for idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if _is_mermaid_start(stripped, in_block):
-            in_block, start_line, current = True, idx, []
-            continue
-        if not in_block:
-            continue
-        if stripped.startswith("```"):
-            blocks.append((start_line, current))
-            in_block = False
-            continue
-        current.append((idx, line))
-    return blocks
+    return _extract_fenced_blocks(lines, "mermaid")
 
 
 def _validate_single_mermaid_block(
@@ -1148,18 +1294,7 @@ class DocsValidator:
             ]
 
         content = file_path.read_text(encoding="utf-8")
-        lines = content.splitlines()
-
-        findings: list[DocFinding] = []
-        findings.extend(check_code_fences(lines, file_path, self.parser))
-        findings.extend(check_mermaid_diagrams(lines, file_path))
-        findings.extend(check_markdown_tables(lines, file_path))
-        findings.extend(check_markdown_links(lines, file_path, known_anchors))
-        findings.extend(check_embedded_snippets(lines, file_path))
-        findings.extend(check_html_tags(lines, file_path))
-        findings.extend(check_observation_structure(lines, file_path))
-
-        return sorted(findings, key=lambda f: (f.line_number, f.category))
+        return self._run_all_checks(content.splitlines(), file_path, known_anchors)
 
     def validate_content(
         self,
@@ -1168,15 +1303,30 @@ class DocsValidator:
         known_anchors: dict[Path, set[str]] | None = None,
     ) -> list[DocFinding]:
         """Validate markdown content directly from string."""
-        lines = content.splitlines()
-        findings: list[DocFinding] = []
-        findings.extend(check_code_fences(lines, file_path, self.parser))
-        findings.extend(check_mermaid_diagrams(lines, file_path))
-        findings.extend(check_markdown_tables(lines, file_path))
-        findings.extend(check_markdown_links(lines, file_path, known_anchors))
-        findings.extend(check_embedded_snippets(lines, file_path))
-        findings.extend(check_html_tags(lines, file_path))
-        findings.extend(check_observation_structure(lines, file_path))
+        return self._run_all_checks(content.splitlines(), file_path, known_anchors)
+
+    def _run_all_checks(
+        self,
+        lines: Sequence[str],
+        file_path: Path,
+        known_anchors: dict[Path, set[str]] | None,
+    ) -> list[DocFinding]:
+        """Run every validation rule. The single place a new rule is registered.
+
+        `validate_file` and `validate_content` previously kept parallel lists, so a rule
+        added to one silently did not run on the other — including the CLI path.
+        """
+        checks: tuple[Callable[[], list[DocFinding]], ...] = (
+            lambda: check_code_fences(lines, file_path, self.parser),
+            lambda: check_mermaid_diagrams(lines, file_path),
+            lambda: check_markdown_tables(lines, file_path),
+            lambda: check_markdown_links(lines, file_path, known_anchors),
+            lambda: check_embedded_snippets(lines, file_path),
+            lambda: check_html_tags(lines, file_path),
+            lambda: check_observation_structure(lines, file_path),
+            lambda: check_directory_maps(lines, file_path),
+        )
+        findings = [finding for check in checks for finding in check()]
         return sorted(findings, key=lambda f: (f.line_number, f.category))
 
     def check_code_fences(

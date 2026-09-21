@@ -37,8 +37,11 @@ Here you will find:
 │       └── recursive-hardening.yml    # Closed-loop AGENTS.md hardening audit
 │
 ├── AGENTS.md                          # Foundational agent operating instructions for vibes
+├── CHANGELOG.md                       # Structured release history
+├── CONTRIBUTING.md                    # Contributor entry point, local gates, and conventions
 ├── LICENSE                            # Apache 2.0 open-source license
 ├── README.md                          # Repository homepage and exhibition tour (this file)
+├── pytest.ini                         # Isolated test config preventing parent plugin discovery
 │
 ├── docs/                              # Foundational theory, taxonomy, and curation standards
 │   ├── MANIFESTO.md                   # Beyond "Vibe Coding": The Disciplined Agentic Manifesto
@@ -138,6 +141,7 @@ Here you will find:
 │   └── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
+│   ├── README.md                      # Benchmark suite overview and scoring methodology
 │   ├── benchmark_runner.py            # Standardized runner (Complexity, CEGIS, Token Economy)
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
@@ -146,7 +150,8 @@ Here you will find:
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
-│   └── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
+│   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
+│   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
