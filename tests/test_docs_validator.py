@@ -578,3 +578,16 @@ def test_sanitization_waiver_requires_a_justification(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert validator.validate_file(justified) == []
+
+
+def test_directory_map_ignores_build_artifacts(tmp_path: Path) -> None:
+    """A map describes what a reader navigates, not what a build produced."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1", encoding="utf-8")
+    (tmp_path / "pkg.egg-info").mkdir()
+    (tmp_path / "pkg.egg-info" / "PKG-INFO").write_text("meta", encoding="utf-8")
+    (tmp_path / "build").mkdir()
+    doc = tmp_path / "README.md"
+    doc.write_text("# Map\n\n```text\n├── src/\n│   └── app.py\n```\n", encoding="utf-8")
+
+    assert DocsValidator().validate_file(doc) == []

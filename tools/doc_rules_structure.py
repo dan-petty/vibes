@@ -22,8 +22,11 @@ _TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(
     r"^(?P<indent>(?:[\u2502]   |    )*)(?:\u251c\u2500\u2500|\u2514\u2500\u2500) (?P<name>\S+)"
 )
 
-# Filesystem entries a directory map is never expected to enumerate.
-TREE_IGNORED_NAMES: Final[frozenset[str]] = frozenset({"__pycache__", "node_modules"})
+# Filesystem entries a directory map is never expected to enumerate: caches and build
+# artifacts that exist only because someone ran a tool. Dot-prefixed entries are skipped
+# separately. A map should describe what a reader navigates, not what a build produced.
+TREE_IGNORED_NAMES: Final[frozenset[str]] = frozenset({"__pycache__", "node_modules", "build", "dist"})
+TREE_IGNORED_SUFFIXES: Final[tuple[str, ...]] = (".egg-info",)
 # A tree line consisting of an ellipsis marks the listing as deliberately partial.
 TREE_ELLIPSIS: Final[frozenset[str]] = frozenset({"...", "\u2026"})
 
@@ -155,6 +158,7 @@ def _undeclared_children(parent: Path, declared: set[str], kinds: set[bool]) -> 
         for child in sorted(parent.iterdir())
         if not child.name.startswith(".")
         and child.name not in TREE_IGNORED_NAMES
+        and not child.name.endswith(TREE_IGNORED_SUFFIXES)
         and child.is_dir() in kinds
     )
     return [child.name for child in candidates if child.name not in declared]
