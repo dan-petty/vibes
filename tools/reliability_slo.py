@@ -238,23 +238,70 @@ def measure_report(report: dict[str, Any]) -> dict[str, SliMeasurement]:
     return {name: measure(report) for name, measure in SLI_REGISTRY.items()}
 
 
-def load_history(path: Path) -> list[dict[str, Any]]:
-    """Load the bounded iteration history, tolerating a missing or corrupt ledger."""
+def _read_json(path: Path) -> Any:
+    """Read JSON, treating any unreadable or malformed ledger as absent.
+
+    The ledger is telemetry, not a source of truth. A corrupt file must degrade the
+    window, never halt the loop that was about to record a fresh measurement into it.
+    """
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return []
-    return data if isinstance(data, list) else []
+        return None
+
+
+def _shard_entries(directory: Path) -> list[dict[str, Any]]:
+    """Read every iteration shard in a directory, oldest first by filename."""
+    entries = (_read_json(shard) for shard in sorted(directory.glob("*.json")))
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def load_history(path: Path) -> list[dict[str, Any]]:
+    """Load the bounded iteration history from a single ledger or a shard directory."""
+    if path.is_dir():
+        return _shard_entries(path)[-MAX_HISTORY_ITERATIONS:]
+    data = _read_json(path)
+    return data[-MAX_HISTORY_ITERATIONS:] if isinstance(data, list) else []
+
+
+def _shard_name(entry: dict[str, Any], existing: int) -> str:
+    """Name a shard so filename order is chronological order."""
+    stamp = str(entry.get("timestamp", "")).replace(":", "").replace("-", "") or f"{existing:05d}"
+    return f"{stamp}-{existing:05d}.json"
+
+
+def _write_shard(entry: dict[str, Any], directory: Path) -> None:
+    """Write one iteration to its own file and prune beyond the retention window.
+
+    One file per iteration rather than one shared ledger: concurrent branches each add a
+    distinct path, so git merges them without conflict. A single appended array would
+    conflict on every parallel iteration, which is the failure this repository already
+    decomposed task tracking to avoid.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    shards = sorted(directory.glob("*.json"))
+    (directory / _shard_name(entry, len(shards))).write_text(
+        json.dumps(entry, indent=2), encoding="utf-8"
+    )
+    for stale in sorted(directory.glob("*.json"))[:-MAX_HISTORY_ITERATIONS]:
+        stale.unlink(missing_ok=True)
 
 
 def record_iteration(report: dict[str, Any], path: Path) -> list[dict[str, Any]]:
-    """Append one iteration's measurements to the history, bounded to the retention window."""
+    """Record one iteration's measurements, bounded to the retention window.
+
+    A path that is a directory (or names no file extension) is treated as a shard
+    directory; anything else is a single JSON ledger.
+    """
     entry = {
         "timestamp": report.get("timestamp", ""),
         "measurements": {
             name: [m.good_events, m.valid_events] for name, m in measure_report(report).items()
         },
     }
+    if path.is_dir() or not path.suffix:
+        _write_shard(entry, path)
+        return load_history(path)
     history = [*load_history(path), entry][-MAX_HISTORY_ITERATIONS:]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(history, indent=2), encoding="utf-8")
@@ -280,20 +327,51 @@ def _consumed_fraction(observed: float, target: float) -> float:
     return min((1.0 - observed) / budget, 1.0) if observed < 1.0 else 0.0
 
 
-def _budget_status(
-    consumed: float, burn_rate: float, window_full: bool, iterations: int, valid_events: int,
-    min_valid_events: int,
-) -> BudgetStatus:
+@dataclass(frozen=True)
+class BudgetSample:
+    """The evidence a status classification is drawn from."""
+
+    consumed: float
+    burn_rate: float
+    iterations: int
+    valid_events: int
+    min_valid_events: int
+    window_full: bool
+
+    @property
+    def is_undersampled(self) -> bool:
+        """Too few events for the ratio to mean anything."""
+        return self.valid_events < self.min_valid_events
+
+    @property
+    def is_exhausted(self) -> bool:
+        """The whole budget has been spent."""
+        return self.consumed >= 1.0
+
+    @property
+    def is_burning(self) -> bool:
+        """Spending faster than the window elapses, on enough iterations to believe it."""
+        return self.burn_rate > CRITICAL_BURN_RATE and self.iterations >= MIN_BURN_RATE_ITERATIONS
+
+    @property
+    def is_unspent(self) -> bool:
+        """A full window closed without the budget being touched."""
+        return self.window_full and self.consumed <= SLACK_BUDGET_THRESHOLD
+
+
+# Ordered predicates: the first match wins, so precedence is the list order and nothing else.
+_STATUS_RULES: Final[tuple[tuple[str, BudgetStatus], ...]] = (
+    ("is_undersampled", BudgetStatus.INSUFFICIENT_DATA),
+    ("is_exhausted", BudgetStatus.EXHAUSTED),
+    ("is_burning", BudgetStatus.BURNING),
+    ("is_unspent", BudgetStatus.UNSPENT),
+)
+
+
+def _budget_status(sample: BudgetSample) -> BudgetStatus:
     """Classify budget health from consumption, burn rate, sample size, and window maturity."""
-    if valid_events < min_valid_events:
-        return BudgetStatus.INSUFFICIENT_DATA
-    if consumed >= 1.0:
-        return BudgetStatus.EXHAUSTED
-    if burn_rate > CRITICAL_BURN_RATE and iterations >= MIN_BURN_RATE_ITERATIONS:
-        return BudgetStatus.BURNING
-    if window_full and consumed <= SLACK_BUDGET_THRESHOLD:
-        return BudgetStatus.UNSPENT
-    return BudgetStatus.HEALTHY
+    matches = (status for predicate, status in _STATUS_RULES if getattr(sample, predicate))
+    return next(matches, BudgetStatus.HEALTHY)
 
 
 def evaluate_objective(
@@ -314,7 +392,14 @@ def evaluate_objective(
         consumed=consumed,
         burn_rate=burn_rate,
         status=_budget_status(
-            consumed, burn_rate, window_full, iterations, valid, objective.min_valid_events
+            BudgetSample(
+                consumed=consumed,
+                burn_rate=burn_rate,
+                iterations=iterations,
+                valid_events=valid,
+                min_valid_events=objective.min_valid_events,
+                window_full=window_full,
+            )
         ),
     )
 

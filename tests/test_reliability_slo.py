@@ -183,3 +183,48 @@ def test_zero_budget_objective_overrides_the_sample_floor() -> None:
         BudgetStatus.EXHAUSTED,
         LoopPhase.REACTIVE_REMEDIATION,
     )
+
+
+def test_sharded_history_writes_one_file_per_iteration(tmp_path: Path) -> None:
+    """One file per iteration is what lets concurrent branches merge without conflict."""
+    shards = tmp_path / "iterations"
+    for _ in range(3):
+        history = record_iteration(_report([_resource()]), shards)
+
+    assert (len(sorted(shards.glob("*.json"))), len(history)) == (3, 3)
+
+
+def test_sharded_history_is_read_in_chronological_order(tmp_path: Path) -> None:
+    """Filename order must be iteration order, or the rolling window slices the wrong end."""
+    shards = tmp_path / "iterations"
+    for index in range(3):
+        report = _report([_resource()])
+        report["timestamp"] = f"2026-01-0{index + 1}T00:00:00Z"
+        record_iteration(report, shards)
+
+    assert [entry["timestamp"] for entry in load_history(shards)] == [
+        "2026-01-01T00:00:00Z",
+        "2026-01-02T00:00:00Z",
+        "2026-01-03T00:00:00Z",
+    ]
+
+
+def test_sharded_history_prunes_beyond_the_retention_window(tmp_path: Path, monkeypatch) -> None:
+    """The ledger is a rolling window, not an archive."""
+    import reliability_slo
+
+    monkeypatch.setattr(reliability_slo, "MAX_HISTORY_ITERATIONS", 3)
+    shards = tmp_path / "iterations"
+    for _ in range(6):
+        record_iteration(_report([_resource()]), shards)
+
+    assert len(sorted(shards.glob("*.json"))) == 3
+
+
+def test_corrupt_shard_is_skipped_rather_than_halting_the_loop(tmp_path: Path) -> None:
+    """Telemetry degrades the window; it never blocks the measurement about to be taken."""
+    shards = tmp_path / "iterations"
+    record_iteration(_report([_resource()]), shards)
+    (shards / "99999999T000000Z-00099.json").write_text("{not json", encoding="utf-8")
+
+    assert len(load_history(shards)) == 1

@@ -240,9 +240,11 @@ When guided by continuous feedback tooling (`ResourceIterationWorkbench`, `SDLCP
 
 ```bash
 python3 tools/resource_iteration_workbench.py --json > .data/iteration_report.json
-python3 tools/reliability_slo.py record .data/iteration_report.json
-python3 tools/reliability_slo.py status     # exits non-zero when remediation is owed
+python3 tools/reliability_slo.py record .data/iteration_report.json --history docs/reliability/iterations
+python3 tools/reliability_slo.py status --history docs/reliability/iterations   # non-zero when remediation is owed
 ```
+
+Record into [`docs/reliability/iterations/`](./docs/reliability/iterations/) — the **committed** ledger — in the same commit as the work it measures. A budget lives on a rolling window of iterations, so a ledger kept only in gitignored `.data/` starts empty in every clone and every CI run, never matures, and quietly degrades the policy back to judging one iteration alone. The ledger is sharded one file per iteration so concurrent branches merge without conflict, and holds nothing but aggregate counts.
 
 1. **Phase 1 (Reactive Remediation)** — entered when any objective's budget is `EXHAUSTED`, or is `BURNING` faster than its window elapses across at least three iterations. Focus 100% of priority on minimal, surgical fixes until the budget recovers. `invariant_compliance` carries a 1.0 target and therefore *no* budget: a single invariant breach enters this phase immediately, by design.
 2. **Phase 2 (Proactive Quality Elevation)** — the default while budgets are `HEALTHY`. Spending budget below target is normal operation, not an incident:
