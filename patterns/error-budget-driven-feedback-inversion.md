@@ -116,7 +116,7 @@ Toil earns a fifth indicator with no golden-signal counterpart. `toil_containmen
 ## Guardrails & Anti-Patterns
 
 > [!WARNING]
-> **Not every objective should block a release.** An indicator about how effort is spent — toil, backlog composition, review latency — steers what the loop works on next. Wiring it to the build means a team with a healthy but automatable backlog cannot ship, which discredits the whole instrument the first time it fires. Mark such objectives as steering: they move the phase, and the release verdict is computed from the gating ones alone.
+> **Not every objective should block a release.** Ask of each one: does a breach mean *this must not ship*, or *we should work on this next*? Only defect indicators answer the first. Latency, saturation and toil all answer the second — a slow suite, a function near the complexity ceiling, and an automatable backlog are worth prioritising and none makes the artifact unfit. Wiring them to the build means a healthy repository cannot ship, which discredits the instrument the first time it fires. Mark them steering: they move the phase, and the release verdict comes from the gating ones alone. Beware in particular any indicator whose measurement depends on the machine that took it.
 
 > [!WARNING]
 > **An objective nobody can breach is decoration.** Setting every target to 1.0 reproduces the binary check with more machinery. Reserve zero-budget objectives for invariants that genuinely admit no failure, and give everything else room to be spent.

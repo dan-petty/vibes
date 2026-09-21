@@ -263,7 +263,21 @@ def test_gating_objective_blocks_release(tmp_path: Path, capsys: pytest.CaptureF
     assert "Release gate: BLOCKED" in capsys.readouterr().out
 
 
-def test_default_objectives_declare_exactly_one_steering_indicator() -> None:
-    """Toil is the only indicator about effort rather than artifact fitness."""
-    steering = [o.sli for o in DEFAULT_OBJECTIVES if not o.gating]
-    assert steering == ["toil_containment"]
+def test_only_defect_indicators_gate_the_release() -> None:
+    """A breach must mean "this must not ship", not "we should work on this next"."""
+    gating = {o.sli for o in DEFAULT_OBJECTIVES if o.gating}
+    steering = {o.sli for o in DEFAULT_OBJECTIVES if not o.gating}
+
+    assert gating == {"invariant_compliance", "gate_pass_rate"}
+    assert steering == {"feedback_latency", "headroom_saturation", "toil_containment"}
+
+
+def test_near_ceiling_complexity_does_not_block_a_release() -> None:
+    """Sitting near the ceiling is Phase 2 elevation work; crossing it is what gates."""
+    from reliability_slo import gating_states
+
+    saturation = next(o for o in DEFAULT_OBJECTIVES if o.sli == "headroom_saturation")
+    states = [evaluate_objective(saturation, _history("headroom_saturation", [(50, 100)] * 10))]
+
+    assert states[0].status is BudgetStatus.EXHAUSTED
+    assert gating_states(states) == []

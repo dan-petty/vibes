@@ -274,7 +274,7 @@ Record into [`docs/reliability/iterations/`](./docs/reliability/iterations/) —
 4. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codified into `AGENTS.md`.
 
 > [!IMPORTANT]
-> **Gating objectives are not steering objectives.** `invariant_compliance`, `gate_pass_rate`, `feedback_latency` and `headroom_saturation` describe whether the artifact is fit to ship, and breaching one fails the build. `toil_containment` describes how the loop should spend effort: it moves the phase, but never blocks a release. "Too much of your backlog is automatable" is a prioritisation signal, and a repository whose backlog is healthy but automatable must still be able to ship.
+> **Gating objectives are not steering objectives.** The test is whether a breach means *this must not ship* or *we should work on this next*. Only defect indicators gate: `invariant_compliance` (a violated invariant) and `gate_pass_rate` (a resource failing its own gate). `feedback_latency`, `headroom_saturation` and `toil_containment` steer — they move the loop phase and never block a release. A slow suite, a function at $M = 8$, and an automatable backlog are all worth working on and none of them makes the artifact unfit. `feedback_latency` is additionally host-sensitive: `is_dir()` measured 0.764ms on a bind mount against 0.001ms on tmpfs, so gating on it would block releases for the speed of whichever machine ran them.
 >
 > An objective with too few valid events reports `INSUFFICIENT_DATA` rather than a ratio, because `0/1` and `0/1000` are the same number and entirely different facts.
 >

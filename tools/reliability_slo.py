@@ -94,8 +94,12 @@ class ServiceLevelObjective:
     min_valid_events: int = 10
     # Gating objectives describe whether the artifact is fit to ship, and failing one
     # fails the build. A steering objective describes how the loop should spend effort;
-    # it moves the phase but must never block a release. "Too much of your backlog is
-    # automatable" is a prioritisation signal, not a release criterion.
+    # it moves the phase but must never block a release.
+    #
+    # The test is whether a breach means "this must not ship" or "we should work on this
+    # next". Only defects gate: a violated invariant, or a resource failing its own gate.
+    # Slow tests, near-ceiling complexity and an automatable backlog are all real signals
+    # about where effort should go, and none of them makes the artifact unfit.
     gating: bool = True
 
 
@@ -222,12 +226,21 @@ DEFAULT_OBJECTIVES: Final[tuple[ServiceLevelObjective, ...]] = (
         target=0.95,
         window_iterations=20,
         rationale="Agent agility depends on the tail, so one slow suite in twenty is the affordable limit.",
+        # Steering: a slow suite is a loop-agility problem, not an unfit artifact. It is also
+        # host-sensitive — is_dir() measured 0.764ms on a bind mount against 0.001ms on tmpfs,
+        # and load swings readings three to fivefold. Gating on it would block releases for
+        # the speed of whatever machine happened to run them.
+        gating=False,
     ),
     ServiceLevelObjective(
         sli="headroom_saturation",
         target=0.90,
         window_iterations=20,
         rationale="Functions may sit near the ceiling briefly; a tenth of the tree doing so permanently is drift.",
+        # Steering: sitting near the ceiling is exactly the proactive elevation work of
+        # Phase 2, not a defect. Crossing the ceiling is a defect, and invariant_compliance
+        # already gates that at a zero-budget target.
+        gating=False,
     ),
     ServiceLevelObjective(
         sli="toil_containment",
