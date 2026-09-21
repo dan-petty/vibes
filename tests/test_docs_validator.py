@@ -1,5 +1,7 @@
 """Tests for the Vibes Documentation Syntax, Code Fence, Mermaid, and Link Validator."""
 
+# sentinel: allow[ZeroTrustSanitization] — fixtures asserting the prose sanitization rule fires
+
 from __future__ import annotations
 
 import json
@@ -528,3 +530,51 @@ def test_pattern_header_rule_ignores_non_pattern_documents(tmp_path: Path) -> No
     doc = tmp_path / "notes.md"
     doc.write_text("# Notes\n\nNo metadata block here.\n", encoding="utf-8")
     assert DocsValidator().validate_file(doc) == []
+
+
+def test_documentation_sanitization_flags_a_concrete_private_address(tmp_path: Path) -> None:
+    """Markdown was never checked for RFC 1918 addresses; only Python was."""
+    doc = tmp_path / "notes.md"
+    doc.write_text("Point the agent at http://192.168.1.50:11434 to reproduce.\n", encoding="utf-8")
+
+    findings = DocsValidator().validate_file(doc)
+    assert [f.category for f in findings] == ["sanitization"]
+    assert "192.168.1.50" in findings[0].message
+
+
+def test_documentation_sanitization_permits_cidr_ranges_stating_the_rule(tmp_path: Path) -> None:
+    """A range is how the policy is written down; a host address is somebody's machine."""
+    doc = tmp_path / "policy.md"
+    doc.write_text("Never publish 10.0.0.0/8, 172.16.0.0/12 or 192.168.0.0/16.\n", encoding="utf-8")
+    assert DocsValidator().validate_file(doc) == []
+
+
+def test_documentation_sanitization_permits_rfc5737_and_metadata_constants(tmp_path: Path) -> None:
+    """Flagging the mandated documentation ranges would forbid following the policy."""
+    doc = tmp_path / "examples.md"
+    doc.write_text(
+        "Use 192.0.2.1, 198.51.100.7 or 203.0.113.9. Block 169.254.169.254.\n", encoding="utf-8"
+    )
+    assert DocsValidator().validate_file(doc) == []
+
+
+def test_documentation_sanitization_flags_internal_hostnames(tmp_path: Path) -> None:
+    """A `.lan` hostname names a real machine as surely as its address does."""
+    doc = tmp_path / "setup.md"
+    doc.write_text("Deploy to node1.homelab.lan and verify.\n", encoding="utf-8")
+    assert [f.category for f in DocsValidator().validate_file(doc)] == ["sanitization"]
+
+
+def test_sanitization_waiver_requires_a_justification(tmp_path: Path) -> None:
+    """An unexplained waiver is how a real leak gets silenced."""
+    validator = DocsValidator()
+    bare = tmp_path / "bare.md"
+    bare.write_text("<!-- docs: allow[sanitization] -->\n\nSee 10.0.0.5 here.\n", encoding="utf-8")
+    assert [f.category for f in validator.validate_file(bare)] == ["sanitization"]
+
+    justified = tmp_path / "justified.md"
+    justified.write_text(
+        "<!-- docs: allow[sanitization] — quotes a detector fixture by design -->\n\nSee 10.0.0.5 here.\n",
+        encoding="utf-8",
+    )
+    assert validator.validate_file(justified) == []

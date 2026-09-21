@@ -28,3 +28,8 @@ Cargo.lock
 # Node tooling for the Mermaid render gate (installed transiently)
 node_modules/
 package-lock.json
+
+# Local secrets: ignore every .env variant, keep the committed template
+.env
+.env.*
+!.env.example

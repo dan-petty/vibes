@@ -39,6 +39,10 @@ exporters:
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
+      # Plaintext is deliberate and bounded: this hop never leaves the compose network
+      # or the cluster namespace, and the stack publishes only to 127.0.0.1. Any
+      # deployment that crosses a node or trust boundary must supply ca_file/cert_file
+      # and set insecure: false.
       insecure: true
 
   prometheus:

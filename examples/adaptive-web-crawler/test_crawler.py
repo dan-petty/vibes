@@ -4,6 +4,7 @@
 
 from pathlib import Path
 import pytest
+import crawler
 from crawler import (
     AdaptiveWebCrawler,
     DomainStrategyStore,
@@ -213,3 +214,46 @@ def test_domain_strategy_persistence(tmp_path: Path) -> None:
     assert strat.preferred_tier == ExtractionTier.HEADLESS_BROWSER
     assert strat.requires_js is True
     assert strat.rate_limit_delay > 0.5
+
+
+def test_hostname_resolving_to_private_address_is_denied(monkeypatch):
+    """The ordinary shape of an SSRF: the attacker controls DNS, not the URL text."""
+    import socket as socket_module
+
+    def _fake_getaddrinfo(host, *args, **kwargs):
+        return [(socket_module.AF_INET, None, None, "", ("10.0.0.5", 0))]
+
+    monkeypatch.setattr(crawler.socket, "getaddrinfo", _fake_getaddrinfo)
+    with pytest.raises(ValueError, match="SSRF violation"):
+        crawler.validate_url_security("http://internal-service.example.com/admin")
+
+
+def test_unresolvable_hostname_is_denied_not_allowed(monkeypatch):
+    """Failure to resolve is not permission to proceed."""
+
+    def _raise(host, *args, **kwargs):
+        raise OSError("name resolution failed")
+
+    monkeypatch.setattr(crawler.socket, "getaddrinfo", _raise)
+    with pytest.raises(ValueError, match="SSRF violation"):
+        crawler.validate_url_security("http://nonexistent.example.com/")
+
+
+def test_cloud_metadata_endpoint_is_denied():
+    """Link-local is the single highest-value SSRF target in any cloud environment."""
+    with pytest.raises(ValueError, match="SSRF violation"):
+        crawler.validate_url_security("http://169.254.169.254/latest/meta-data/")
+
+
+def test_loopback_is_reachable_in_both_address_families(monkeypatch):
+    """An IPv4-only allowlist silently denies localhost once resolution is performed."""
+    import socket as socket_module
+
+    def _dual_stack(host, *args, **kwargs):
+        return [
+            (socket_module.AF_INET6, None, None, "", ("::1", 0, 0, 0)),
+            (socket_module.AF_INET, None, None, "", ("127.0.0.1", 0)),
+        ]
+
+    monkeypatch.setattr(crawler.socket, "getaddrinfo", _dual_stack)
+    assert crawler.validate_url_security("http://localhost:8080/")[1] == "localhost"

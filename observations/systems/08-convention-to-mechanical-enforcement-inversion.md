@@ -56,7 +56,7 @@ flowchart LR
 
 The invariant sentinel only ran in CI at **pull request open time** — after code was already pushed to a remote branch. A developer or agent could:
 
-1. Write code with $M = 15$ or a private IP `10.0.0.5` hardcoded.
+1. Write code with $M = 15$, or a hardcoded RFC 1918 address.
 2. Run `git push origin feature-branch`.
 3. Open a PR. *Only now* does the sentinel run and post a violation comment.
 

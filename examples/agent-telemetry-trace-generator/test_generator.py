@@ -6,7 +6,10 @@ import pytest
 
 from generator import (
     AgentTraceSession,
+    STATUS_ERROR,
+    STATUS_UNSET,
     Span,
+    _format_otlp_status,
     build_synthetic_agent_session,
     export_otlp_http,
     main,
@@ -98,3 +101,25 @@ def test_main_cli_export_otlp(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("generator.export_otlp_http", lambda s, endpoint: True)
     exit_code = main(["--export-otlp", "http://localhost:4318/v1/traces"])
     assert exit_code == 0
+
+
+def test_span_status_defaults_to_unset_not_ok():
+    """UNSET means no judgement was recorded; exporting OK by default asserts a lie."""
+    span = Span(
+        name="unjudged", trace_id="t", span_id="s", parent_span_id=None,
+        start_time_ms=0.0, end_time_ms=1.0,
+    )
+    assert _format_otlp_status(span) == {"code": STATUS_UNSET}
+
+
+def test_error_status_is_exported_with_its_message():
+    """A failed span reporting success is the one thing a trace must never do."""
+    span = Span(
+        name="failed", trace_id="t", span_id="s", parent_span_id=None,
+        start_time_ms=0.0, end_time_ms=1.0,
+        status_code=STATUS_ERROR, status_message="tool call rejected by contract gate",
+    )
+    assert _format_otlp_status(span) == {
+        "code": STATUS_ERROR,
+        "message": "tool call rejected by contract gate",
+    }

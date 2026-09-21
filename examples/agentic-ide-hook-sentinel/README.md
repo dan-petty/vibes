@@ -1,5 +1,7 @@
 # Agentic IDE Lifecycle Hook Sentinel & Zero-Trust Execution Guard
 
+<!-- docs: allow[sanitization] — the blocked-egress example must name a private address to demonstrate the block -->
+
 Reference implementation of a zero-trust lifecycle interception engine for Agentic IDE control planes (VS Code, Google Antigravity, Cursor). Intercepts tool execution calls, file writes, and compiler diagnostics to enforce deterministic safety boundaries around autonomous coding assistants.
 
 ---
@@ -55,7 +57,7 @@ sentinel = IdeHookSentinel(workspace_root=workspace_dir)
 # 1. Intercept pre-tool execution
 tool_eval = sentinel.evaluate_tool_call(
     tool_name="http_request",
-    arguments={"url": "http://10.0.0.1:8080/api"},
+    arguments={"url": "http://10.0.0.1:8080/api"},  # blocked: RFC 1918 destination
 )
 if tool_eval.decision == HookDecision.DENY:
     print(f"Blocked dangerous tool call: {tool_eval.reason}")

@@ -55,10 +55,25 @@ spec:
       labels:
         app.kubernetes.io/name: opentelemetry-collector
     spec:
+      # Pod-level baseline: the collector needs no host identity and no privileges.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       containers:
         - name: collector
-          image: otel/opentelemetry-collector-contrib:latest
+          image: otel/opentelemetry-collector-contrib:0.112.0
           args: ["--config=/etc/otelcol/collector.yaml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: "100m"

@@ -14,6 +14,7 @@ from html.parser import HTMLParser
 import ipaddress
 import json
 import logging
+import socket
 from pathlib import Path
 import re
 import time
@@ -23,11 +24,16 @@ from urllib.parse import urldefrag, urljoin, urlparse
 logger = logging.getLogger(__name__)
 
 # RFC 5737 Documentation blocks and loopback allowed for testing
+# RFC 5737 documentation ranges plus loopback, in both families. A hostname resolves to
+# every family the host supports, so an IPv4-only allowlist denies `localhost` the moment
+# resolution is performed: ::1 matches no entry and the whole hostname is refused.
 ALLOWED_TEST_NETWORKS = [
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
     ipaddress.ip_network("203.0.113.0/24"),
     ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("2001:db8::/32"),
 ]
 
 DEFAULT_BROWSER_HEADERS = {
@@ -273,13 +279,38 @@ class DomainStrategyStore:
             logger.warning("Could not load strategies from %s: %s", self.persistence_path, err)
 
 
-def _is_disallowed_private_ip(hostname: str) -> bool:
-    """Return True if hostname resolves to a private IP not in allowed test networks."""
+def _is_disallowed_address(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True for any address the crawler must never reach."""
+    blocked = ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved
+    allowed = any(
+        ip_obj in net for net in ALLOWED_TEST_NETWORKS if net.version == ip_obj.version
+    )
+    return blocked and not allowed
+
+
+def _resolved_addresses(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Return every address a hostname resolves to, or the literal address it already is.
+
+    Checking the hostname string alone only defends against a literal IP in the URL.
+    A name resolving to an RFC 1918 address passes such a check untouched, which is the
+    ordinary shape of an SSRF: the attacker controls DNS, not the URL text.
+    """
     try:
-        ip_obj = ipaddress.ip_address(hostname)
-        return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS)
+        return [ipaddress.ip_address(hostname)]
     except ValueError:
-        return False
+        pass
+    try:
+        infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError):
+        # Unresolvable is not permission to proceed; the caller treats this as denied.
+        return []
+    return [ipaddress.ip_address(info[4][0]) for info in infos]
+
+
+def _is_disallowed_private_ip(hostname: str) -> bool:
+    """Return True if the hostname is, or resolves to, an address the crawler may not reach."""
+    addresses = _resolved_addresses(hostname)
+    return not addresses or any(_is_disallowed_address(ip) for ip in addresses)
 
 
 def validate_url_security(url: str) -> tuple[str, str]:
@@ -293,7 +324,9 @@ def validate_url_security(url: str) -> tuple[str, str]:
         raise ValueError("URL must include a valid hostname.")
 
     if _is_disallowed_private_ip(hostname):
-        raise ValueError(f"SSRF violation: connection to private IP '{hostname}' denied.")
+        raise ValueError(
+            f"SSRF violation: '{hostname}' is, or resolves to, a non-public address."
+        )
 
     return parsed.scheme, hostname
 

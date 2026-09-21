@@ -254,3 +254,15 @@ def test_missing_target_fails_instead_of_certifying_nothing(tmp_path):
     report = audit_targets([tmp_path / "does_not_exist.py"])
     assert (report.files_checked, report.is_clean) == (0, False)
     assert report.violations[0].invariant == "TargetIntegrity"
+
+
+def test_cloud_metadata_address_is_nameable(tmp_path):
+    """A rule that forbids naming the metadata endpoint forbids defending against it."""
+    module = _write_module(tmp_path, "guard.py", 'BLOCKED = "169.254.169.254"\n')
+    assert audit_file(module) == []
+
+
+def test_surrounding_link_local_range_is_still_flagged(tmp_path):
+    """Only the well-known constant is exempt, not the autoconfigured network around it."""
+    module = _write_module(tmp_path, "leak.py", 'HOST = "169.254.12.34"\n')
+    assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]

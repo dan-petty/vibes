@@ -1,13 +1,13 @@
 services:
   # Distributed Tracing UI & OTLP Ingest
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.62.0
     container_name: vibes-jaeger
     restart: unless-stopped
     ports:
-      - "16686:16686" # Web UI
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - "127.0.0.1:16686:16686" # Web UI
+      - "127.0.0.1:4317:4317"   # OTLP gRPC
+      - "127.0.0.1:4318:4318"   # OTLP HTTP
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
@@ -20,15 +20,15 @@ services:
 
   # OpenTelemetry Collector Contrib
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.112.0
     container_name: vibes-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ../observability/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - "8889:8889"   # Prometheus metrics exporter
-      - "13133:13133" # Health check
+      - "127.0.0.1:8889:8889"   # Prometheus metrics exporter
+      - "127.0.0.1:13133:13133" # Health check
     depends_on:
       jaeger:
         condition: service_started
@@ -37,11 +37,11 @@ services:
 
   # Prometheus Metric Store & Alerts
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.0
     container_name: vibes-prometheus
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ../observability/prometheus-agent-alerts.yaml:/etc/prometheus/alerts.yaml:ro
     command:
@@ -52,19 +52,17 @@ services:
 
   # Valkey L2 AST & Tool Caching
   valkey:
-    image: valkey/valkey:latest
+    image: valkey/valkey:8.0.1
     container_name: vibes-valkey
     restart: unless-stopped
     command:
       - valkey-server
-      - "--protected-mode"
-      - "no"
       - "--maxmemory"
       - "256mb"
       - "--maxmemory-policy"
       - "allkeys-lru"
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
       - agent-mesh
     healthcheck:
@@ -75,14 +73,16 @@ services:
 
   # Grafana Dashboard & Visualizations
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.3.0
     container_name: vibes-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      # Required, with no default: an unset password fails the stack at startup rather
+      # than silently standing up a known-credential dashboard.
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ../observability/grafana/agent-telemetry-dashboard.json:/var/lib/grafana/dashboards/agent-telemetry-dashboard.json:ro

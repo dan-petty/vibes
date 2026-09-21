@@ -54,7 +54,7 @@ docker compose up -d
 ### 3. Verify Health & Service Endpoints
 - **Jaeger Tracing Waterfall**: [http://localhost:16686](http://localhost:16686)
 - **Prometheus Metrics & Alerts**: [http://localhost:9090](http://localhost:9090)
-- **Grafana Dashboards**: [http://localhost:3000](http://localhost:3000) (Credentials: `admin` / `admin`)
+- **Grafana Dashboards**: [http://localhost:3000](http://localhost:3000) (user `admin`; password from `GF_SECURITY_ADMIN_PASSWORD` in your `.env`, which has no default)
 - **Valkey L2 Cache**: `valkey-cli -p 6379 ping` -> `PONG`
 
 ### 4. Pipe Agent Waterfall Traces into Live Jaeger

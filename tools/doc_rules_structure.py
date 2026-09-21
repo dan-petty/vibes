@@ -9,6 +9,7 @@ diffs it.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,25 @@ _OBSERVATION_NUMBERED_SECTION_RE: Final[re.Pattern[str]] = re.compile(r"^##\s+(\
 # A pattern declares this metadata block so a reader can judge applicability before
 # reading the body. Three competing vocabularies (Pattern Type, Category, prose subtitle)
 # had accumulated across 19 files before this was made mechanical.
+_HOST_IPV4_RE: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b(?!/\d)")
+# Closed domain of addresses documentation is expected to name. Python's ipaddress marks
+# the RFC 5737 documentation blocks as private, so without this the rule would flag the
+# exact ranges the sanitization policy mandates. The link-local metadata address is a
+# well-known public constant, not anybody's machine, and every SSRF discussion names it.
+_DOCUMENTABLE_NETWORKS: Final[tuple[ipaddress.IPv4Network, ...]] = (
+    ipaddress.ip_network("192.0.2.0/24"),
+    ipaddress.ip_network("198.51.100.0/24"),
+    ipaddress.ip_network("203.0.113.0/24"),
+    ipaddress.ip_network("169.254.169.254/32"),
+)
+_INTERNAL_HOSTNAME_RE: Final[re.Pattern[str]] = re.compile(r"\b[a-z0-9-]+\.(?:lan|local|internal|home)\b", re.I)
+# A waiver for documents that must quote the thing they warn about. The justification is
+# required, not decorative: an unexplained waiver is how a real leak gets silenced.
+_SANITIZATION_WAIVER_RE: Final[re.Pattern[str]] = re.compile(
+    r"<!--\s*docs:\s*allow\[sanitization\]\s*[-—:]*\s*(?P<reason>\S[^>]*?)\s*-->"
+)
+MIN_SANITIZATION_WAIVER_CHARS: Final[int] = 12
+
 PATTERN_REQUIRED_FIELDS: Final[tuple[str, ...]] = ("Pattern Class", "Problem", "Solution")
 _PATTERN_PATH_RE: Final[re.Pattern[str]] = re.compile(r"(^|/)patterns/[a-z0-9-]+\.md$")
 
@@ -230,6 +250,54 @@ def _extract_numbered_sections(lines: Sequence[str]) -> set[int]:
 def _missing_numbered_sections(found: set[int]) -> list[int]:
     """Return required section numbers (1–N) absent from the found set."""
     return [n for n in range(1, OBSERVATION_REQUIRED_SECTION_COUNT + 1) if n not in found]
+
+
+def _private_host_addresses(text: str) -> list[str]:
+    """Return concrete RFC 1918 host addresses, ignoring CIDR ranges.
+
+    A CIDR range is how the sanitization rule itself is written down; a bare host address
+    is someone's actual machine. Only the second leaks, so only the second is reported.
+    """
+    found = []
+    for match in _HOST_IPV4_RE.finditer(text):
+        try:
+            address = ipaddress.ip_address(match.group(0))
+        except ValueError:
+            continue
+        documentable = any(address in net for net in _DOCUMENTABLE_NETWORKS)
+        if address.is_private and not address.is_loopback and not documentable:
+            found.append(match.group(0))
+    return found
+
+
+def check_documentation_sanitization(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
+    """Flag concrete private addresses and internal hostnames in prose.
+
+    The AST sentinel enforces this for Python and always has. Markdown was never checked,
+    which is how a concrete LAN address and port survived in an observation *about* egress
+    sanitization, and another in the taxonomy entry defining information leakage.
+    """
+    content = "\n".join(lines)
+    waiver = _SANITIZATION_WAIVER_RE.search(content)
+    if waiver and len(waiver.group("reason")) >= MIN_SANITIZATION_WAIVER_CHARS:
+        return []
+    findings: list[DocFinding] = []
+    for number, line in enumerate(lines, 1):
+        leaks = _private_host_addresses(line) + _INTERNAL_HOSTNAME_RE.findall(line)
+        findings.extend(
+            DocFinding(
+                file_path=str(file_path),
+                line_number=number,
+                category="sanitization",
+                message=(
+                    f"Concrete private address or internal hostname '{leak}' in documentation. "
+                    "Use an RFC 5737 range, `example.com`, or an abstract placeholder. A CIDR "
+                    "range stating the rule is fine; a host address is somebody's machine."
+                ),
+            )
+            for leak in leaks
+        )
+    return findings
 
 
 def _is_pattern_file(file_path: Path) -> bool:

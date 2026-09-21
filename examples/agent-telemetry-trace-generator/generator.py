@@ -18,6 +18,11 @@ import urllib.error
 import urllib.request
 
 
+STATUS_UNSET = 0
+STATUS_OK = 1
+STATUS_ERROR = 2
+
+
 @dataclass
 class Span:
     """Represents a single OpenTelemetry distributed trace span."""
@@ -30,6 +35,11 @@ class Span:
     end_time_ms: float
     attributes: dict[str, Any] = field(default_factory=dict)
     events: list[dict[str, Any]] = field(default_factory=list)
+    # OTLP status: 0 UNSET, 1 OK, 2 ERROR. UNSET is what the specification means by
+    # "no explicit judgement recorded". Exporting a hard-coded OK made every failed span
+    # read as successful, which is the one thing a trace exists to tell you.
+    status_code: int = STATUS_UNSET
+    status_message: str = ""
 
     @property
     def duration_ms(self) -> float:
@@ -101,6 +111,7 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "agent.persona": "architect",
             "agent.cache_hit": True,
         },
+        status_code=STATUS_OK,
     )
 
     # 3. Sub-Agent Offloaded AST Symbol Exploration (Local Tier)
@@ -124,6 +135,7 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "agent.tool.call_name": "ast_symbol_extractor",
             "agent.cache_hit": False,
         },
+        status_code=STATUS_OK,
     )
 
     # 4. CEGIS Defect Synthesis Loop
@@ -147,6 +159,7 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "agent.tool.call_name": "cegis_synthesizer",
             "agent.verification_result": "PASS",
         },
+        status_code=STATUS_OK,
     )
 
     # 5. AST Sentinel Invariant Gate
@@ -167,6 +180,7 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "agent.tool.call_name": "ast_invariant_sentinel",
             "agent.verification_result": "APPROVED",
         },
+        status_code=STATUS_OK,
     )
 
     # Root span encompasses all children
@@ -181,6 +195,7 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
             "session.goal": goal,
             "session.status": "COMPLETED",
         },
+        status_code=STATUS_OK,
     )
 
     session.spans = [root_span, plan_span, ast_span, cegis_span, gate_span]
@@ -239,6 +254,14 @@ def _format_otlp_attribute_value(val: Any) -> dict[str, Any]:
     return {"stringValue": str(val)}
 
 
+def _format_otlp_status(span: Span) -> dict[str, Any]:
+    """Render a span's status, omitting the message when none was recorded."""
+    status: dict[str, Any] = {"code": span.status_code}
+    if span.status_message:
+        status["message"] = span.status_message
+    return status
+
+
 def _format_otlp_span(span: Span) -> dict[str, Any]:
     """Convert an internal Span into an OTLP-compliant span dictionary."""
     start_nano = str(int(span.start_time_ms * 1_000_000))
@@ -257,7 +280,7 @@ def _format_otlp_span(span: Span) -> dict[str, Any]:
         "startTimeUnixNano": start_nano,
         "endTimeUnixNano": end_nano,
         "attributes": attrs,
-        "status": {"code": 1},
+        "status": _format_otlp_status(span),
     }
     if span.parent_span_id:
         otlp_span["parentSpanId"] = span.parent_span_id

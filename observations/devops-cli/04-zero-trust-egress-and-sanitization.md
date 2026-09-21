@@ -9,7 +9,7 @@
 ## 1. Executive Context & Baseline
 
 When autonomous agents are granted terminal access to local workstations, dev containers, and private cloud clusters, they inevitably encounter sensitive runtime context:
-- Private IP addresses (`192.168.1.x`, `10.0.x.x`).
+- Private IP addresses from any RFC 1918 range.
 - Internal network DNS names (`*.lan`, `*.local`, physical machine hostnames).
 - Real infrastructure mount points (`/mnt/nvme0n1/`, `/dev/sdX`).
 - Local user account paths and shell environment variables.
@@ -21,7 +21,7 @@ If left unchecked, agents will casually copy-paste real environment details into
 ## 2. The Observed Phenomenon
 
 During initial experiments with autonomous documentation generation and test creation, the agent naturally used whatever strings it saw in the active environment:
-- Unit tests hardcoded URLs like `http://192.168.1.150:11434` or `http://vault.internal.lan`.
+- Unit tests hardcoded URLs pointing at a concrete LAN address and port, and at an internal `*.lan` hostname.
 - Markdown tasks recorded actual workstation hostnames and file system paths.
 - Dummy test endpoints used arbitrary random domains (e.g., `http://mytestapp.com`, `http://fake-vault.io`), which risked collision with real external domains or leaking intent.
 
@@ -34,7 +34,7 @@ In an open-source project, this is a severe security and operational hazard (CWE
 ### The Context Mimicry Trap
 LLMs are contextual mimicry engines:
 - They prioritize immediate token context over abstract security boundaries.
-- If a terminal output contains `node1.homelab.lan:30500`, the LLM considers that string high-relevance and recycles it when writing examples or mock fixtures.
+- If a terminal output contains a concrete internal hostname and NodePort (`<worker-node>:<nodeport>`), the LLM considers that string high-relevance and recycles it when writing examples or mock fixtures.
 - The LLM does not distinguish between ephemeral workstation reality and committed public repository artifacts unless strictly commanded by an immutable rule.
 
 ---

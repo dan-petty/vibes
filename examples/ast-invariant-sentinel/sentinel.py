@@ -28,6 +28,11 @@ ALLOWED_DOCUMENTATION_NETWORKS = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
     ipaddress.ip_network("203.0.113.0/24"),
+    # The cloud metadata endpoint is a well-known public constant, not anybody's machine.
+    # Any SSRF guard or egress test must name it to block it, and a rule that forbids
+    # naming it forbids defending against it. Scoped to the single address, not the
+    # surrounding link-local /16, which is still somebody's autoconfigured network.
+    ipaddress.ip_network("169.254.169.254/32"),
 )
 
 # Standard dummy mock domain; subdomains are strictly prohibited

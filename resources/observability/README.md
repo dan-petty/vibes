@@ -79,4 +79,4 @@ docker compose up -d
 
 - Jaeger UI: [http://localhost:16686](http://localhost:16686)
 - Prometheus Engine: [http://localhost:9090](http://localhost:9090)
-- Grafana Dashboard: [http://localhost:3000](http://localhost:3000) (Default login: `admin` / `admin`)
+- Grafana Dashboard: [http://localhost:3000](http://localhost:3000) (user `admin`; password from `GF_SECURITY_ADMIN_PASSWORD` in your `.env`, which has no default)

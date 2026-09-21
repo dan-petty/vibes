@@ -1,5 +1,7 @@
 # Pattern: Gate Integrity & Total Input Coverage — Making "Nothing Was Checked" Impossible to Confuse With "Everything Passed"
 
+<!-- docs: allow[sanitization] — quotes a sentinel fixture whose purpose is to contain a private address -->
+
 > **Pattern Class**: Mechanical Enforcement & Verification Infrastructure
 > **Problem**: Quality gates default to success when they audit nothing, silently certifying code they never opened
 > **Solution**: Account for every supplied input, measure the artifact rather than the harness, and make unaudited input a failure
