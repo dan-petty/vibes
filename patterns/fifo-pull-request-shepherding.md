@@ -1,8 +1,8 @@
 # Pattern: FIFO Pull Request Shepherding
 
-> **Pattern Type**: Swarm Orchestration & Delivery Lifecycle  
-> **Target Audience**: AI Agents, Multi-Agent Review Pipelines & Human Tech Leads  
-> **Source Project**: `devops-cli`  
+> **Pattern Class**: Swarm Orchestration & Delivery Lifecycle
+> **Problem**: Concurrent pull requests starve and cascade into merge conflicts when every agent opens work and none closes it
+> **Solution**: Strict FIFO shepherding: the oldest open pull request is driven to merge before any new work is started
 
 ---
 

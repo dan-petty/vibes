@@ -1,5 +1,9 @@
 # Pattern: Tool Cardinality Budget Management — Paying for the Namespace You Enter
 
+> **Pattern Class**: Context Engineering & Tool Surface Design
+> **Problem**: Past roughly 40 tools, selection precision collapses and schemas consume a quarter of the context before any reasoning
+> **Solution**: Lazy domain-gated hydration, namespace disambiguation, and schema compression, paying only for the namespace entered
+
 ## 1. Problem Statement
 
 As autonomous agent toolsets grow beyond ~40 tools, models exhibit **selection precision collapse** — vacillating between semantically adjacent tools, hallucinating parameter names from pretraining priors, and consuming 15-25% of the context window with schema definitions before any task reasoning begins. The tool surface is unbounded while the attention budget is fixed.

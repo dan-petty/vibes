@@ -1,8 +1,8 @@
 # Pattern: Multi-Agent Codebase Concurrency
 
-> **Pattern Type**: Swarm Orchestration & Concurrency Architecture
-> **Target Audience**: Multi-Agent Frameworks, Autonomous Swarms & Platform Engineers
-> **Source Project**: `devops-cli` & `vibes`
+> **Pattern Class**: Swarm Orchestration & Concurrency Architecture
+> **Problem**: Concurrent agents on one working tree clobber each other's edits, corrupt shared state files, and live-lock on rebase
+> **Solution**: Partitioned worktrees, per-agent state directories, and distributed mutexes over the resources that cannot be partitioned
 
 ---
 

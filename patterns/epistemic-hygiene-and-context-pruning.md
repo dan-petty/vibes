@@ -1,8 +1,8 @@
 # Pattern: Epistemic Hygiene & Context Pruning
 
-> **Pattern Type**: Context Engineering & Cognitive Economics  
-> **Target Audience**: AI Coding Assistants & Agent Framework Architects  
-> **Source Project**: `devops-cli`  
+> **Pattern Class**: Context Engineering & Cognitive Economics
+> **Problem**: Context windows are large but attention is finite: ingesting whole files and verbose output dilutes the instructions that matter
+> **Solution**: Deliberate pruning and summarisation at ingestion, treating context as a budget spent rather than a container filled
 
 ---
 

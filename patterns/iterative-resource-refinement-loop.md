@@ -1,5 +1,10 @@
 # Pattern: Iterative Resource Refinement Loop (Scan-Run-Review-Iterate)
 
+> **Pattern Class**: Continuous Verification & Self-Improvement
+> **Problem**: Open-loop single-shot execution produces changes nobody measured against the repository they landed in
+> **Solution**: A closed Scan-Run-Review-Feedback-Iterate cycle emitting prescriptive, ranked next actions
+> **Reference Implementation**: [`tools/resource_iteration_workbench.py`](../tools/resource_iteration_workbench.py)
+
 A continuous, metric-driven engineering loop enabling AI agents to iteratively inspect, execute, evaluate, and refine repository resources before committing changes.
 
 ---

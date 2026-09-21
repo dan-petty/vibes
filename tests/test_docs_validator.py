@@ -496,3 +496,35 @@ def test_observation_structure_non_observation_file(tmp_path: Path) -> None:
     assert (len(findings), findings) == (0, [])
 
 
+
+
+def test_pattern_header_requires_the_canonical_fields(tmp_path: Path) -> None:
+    """Three competing header vocabularies had accumulated before this was mechanical."""
+    patterns = tmp_path / "patterns"
+    patterns.mkdir()
+    doc = patterns / "some-pattern.md"
+    doc.write_text("# Pattern: Some Pattern\n\n> **Category**: Legacy vocabulary\n\n## Problem Statement\n", encoding="utf-8")
+
+    findings = DocsValidator().validate_file(doc)
+    assert [f.category for f in findings] == ["pattern_header"]
+    assert "Pattern Class" in findings[0].message
+
+
+def test_pattern_header_accepts_the_canonical_block(tmp_path: Path) -> None:
+    """Reference Implementation stays optional: not every pattern has executable code."""
+    patterns = tmp_path / "patterns"
+    patterns.mkdir()
+    doc = patterns / "some-pattern.md"
+    doc.write_text(
+        "# Pattern: Some Pattern\n\n> **Pattern Class**: Governance\n"
+        "> **Problem**: A thing goes wrong\n> **Solution**: Stop it going wrong\n\n## Problem Statement\n",
+        encoding="utf-8",
+    )
+    assert DocsValidator().validate_file(doc) == []
+
+
+def test_pattern_header_rule_ignores_non_pattern_documents(tmp_path: Path) -> None:
+    """Observations and docs carry no such header and must not be faulted for it."""
+    doc = tmp_path / "notes.md"
+    doc.write_text("# Notes\n\nNo metadata block here.\n", encoding="utf-8")
+    assert DocsValidator().validate_file(doc) == []

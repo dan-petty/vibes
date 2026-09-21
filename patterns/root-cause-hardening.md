@@ -1,8 +1,8 @@
 # Pattern: Root-Cause Remediation & Instruction Hardening
 
-> **Pattern Type**: Meta-Cognitive Self-Improvement & Harness Resilience  
-> **Target Audience**: AI Agents, System Prompt Designers & Engineering Leads  
-> **Source Project**: `devops-cli`  
+> **Pattern Class**: Meta-Cognitive Self-Improvement & Harness Resilience
+> **Problem**: An agent that fixes a defect learns nothing: the next session starts blank and reintroduces it
+> **Solution**: Codify the preventative rule into the instruction file on every defect fix, so the lesson survives the session that learned it
 
 ---
 

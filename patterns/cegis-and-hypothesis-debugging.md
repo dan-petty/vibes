@@ -1,8 +1,9 @@
 # Pattern: Counterexample-Guided Inductive Synthesis (CEGIS) & Hypothesis Debugging
 
-> **Pattern Type**: Operational Debugging & Defect Remediation  
-> **Target Audience**: AI Agents & Automated Patch Synthesis Pipelines  
-> **Source Project**: `devops-cli`  
+> **Pattern Class**: Operational Debugging & Defect Remediation
+> **Problem**: Faced with a defect, agents guess: they patch symptoms, mask errors, and cycle between fixes that each break the other
+> **Solution**: Counterexample-guided synthesis with an accumulating constraint set, so a later patch cannot silently reintroduce an earlier bug
+> **Reference Implementation**: [`examples/cegis-debugging-workbench/`](../examples/cegis-debugging-workbench/)
 
 ---
 

@@ -1,8 +1,9 @@
 # Pattern: Agentic IDE Lifecycle Hooks & LSP Oracles
 
-> **Category**: Editor Integration & Control Plane Governance
-> **Applicability**: Agentic IDEs (Antigravity, Cursor, VS Code Copilot), FastMCP Host Servers, Development Containers
-> **Status**: Production Standard
+> **Pattern Class**: Editor Integration & Control Plane Governance
+> **Problem**: Tool execution privileges inside an IDE expose credentials, host filesystem, and network egress to an autonomous agent
+> **Solution**: Pre- and post-tool lifecycle hooks enforcing zero-trust egress, process-group containment, and LSP diagnostics as a regression oracle
+> **Reference Implementation**: [`examples/agentic-ide-hook-sentinel/`](../examples/agentic-ide-hook-sentinel/)
 
 ---
 

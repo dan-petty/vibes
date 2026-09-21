@@ -50,6 +50,7 @@ from doc_rules_structure import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     check_directory_maps,
     check_observation_structure,
+    check_pattern_header,
 )
 
 # Supported documentation extensions
@@ -849,6 +850,7 @@ class DocsValidator:
             lambda: check_html_tags(lines, file_path),
             lambda: check_observation_structure(lines, file_path),
             lambda: check_directory_maps(lines, file_path),
+            lambda: check_pattern_header(lines, file_path),
         )
         findings = [finding for check in checks for finding in check()]
         return sorted(findings, key=lambda f: (f.line_number, f.category))

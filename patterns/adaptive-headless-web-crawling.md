@@ -1,5 +1,10 @@
 # Pattern: Adaptive Headless Web Crawling & Domain Strategy Memory
 
+> **Pattern Class**: Agent Data Acquisition & External Grounding
+> **Problem**: Static fetching silently returns empty SPA shells, and unconditional headless rendering costs seconds per page
+> **Solution**: Two-tier escalation with persistent per-domain strategy memory, so each domain is learned once and paid for once
+> **Reference Implementation**: [`examples/adaptive-web-crawler/`](../examples/adaptive-web-crawler/)
+
 A robust, two-tier web crawling and documentation extraction pattern for AI agents that mitigates headless browsing limitations through dynamic tier escalation, SPA shell detection, and persistent domain strategy memory.
 
 ---

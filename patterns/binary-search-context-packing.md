@@ -1,8 +1,9 @@
 # Pattern: Binary Search AST Context Packing
 
-> **Category**: Context Topology & Algorithmic Token Budgeting  
-> **Applicability**: Code Exploration, Multi-File Repomaps, Architectural Diagrams, Code Review Harvesters  
-> **Status**: Production Standard  
+> **Pattern Class**: Context Topology & Algorithmic Token Budgeting
+> **Problem**: Packing multi-file AST context into a fixed token budget by trial and error is slow and truncates mid-block
+> **Solution**: Monotonic binary search over the inclusion boundary, in O(log N) probes, cutting only at syntactic boundaries
+> **Reference Implementation**: [`examples/binary-search-context-packer/`](../examples/binary-search-context-packer/)
 
 ---
 

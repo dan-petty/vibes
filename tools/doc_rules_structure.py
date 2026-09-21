@@ -28,6 +28,12 @@ TREE_ELLIPSIS: Final[frozenset[str]] = frozenset({"...", "\u2026"})
 _OBSERVATION_FILENAME_RE: Final[re.Pattern[str]] = re.compile(r"^\d+-.+\.md$")
 _OBSERVATION_NUMBERED_SECTION_RE: Final[re.Pattern[str]] = re.compile(r"^##\s+(\d+)\.")
 
+# A pattern declares this metadata block so a reader can judge applicability before
+# reading the body. Three competing vocabularies (Pattern Type, Category, prose subtitle)
+# had accumulated across 19 files before this was made mechanical.
+PATTERN_REQUIRED_FIELDS: Final[tuple[str, ...]] = ("Pattern Class", "Problem", "Solution")
+_PATTERN_PATH_RE: Final[re.Pattern[str]] = re.compile(r"(^|/)patterns/[a-z0-9-]+\.md$")
+
 # Observations must have numbered sections 1-5 (## 1. ... through ## 5. ...)
 OBSERVATION_REQUIRED_SECTION_COUNT: Final[int] = 5
 
@@ -219,6 +225,34 @@ def _extract_numbered_sections(lines: Sequence[str]) -> set[int]:
 def _missing_numbered_sections(found: set[int]) -> list[int]:
     """Return required section numbers (1–N) absent from the found set."""
     return [n for n in range(1, OBSERVATION_REQUIRED_SECTION_COUNT + 1) if n not in found]
+
+
+def _is_pattern_file(file_path: Path) -> bool:
+    """Identify a pattern document by its location, not by guessing from content."""
+    return _PATTERN_PATH_RE.search(file_path.as_posix()) is not None and file_path.name != "README.md"
+
+
+def check_pattern_header(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
+    """Verify a pattern declares its metadata block with the canonical field names."""
+    if not _is_pattern_file(file_path):
+        return []
+    header = "\n".join(lines[:12])
+    missing = [field for field in PATTERN_REQUIRED_FIELDS if f"**{field}**:" not in header]
+    if not missing:
+        return []
+    return [
+        DocFinding(
+            file_path=str(file_path),
+            line_number=1,
+            category="pattern_header",
+            message=(
+                f"Pattern header omits {', '.join(missing)}. Declare the metadata block in the "
+                "first 12 lines so a reader can judge applicability before reading the body: "
+                "> **Pattern Class**, > **Problem**, > **Solution**, and optionally "
+                "> **Reference Implementation**."
+            ),
+        )
+    ]
 
 
 def check_observation_structure(

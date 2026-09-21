@@ -1,8 +1,9 @@
 # Pattern: Deterministic Mechanical Oracles & Closed-Loop Feedback Inversion
 
-> **Pattern Type**: Meta-Cognitive Architecture & Deterministic Quality Enforcement  
-> **Target Audience**: AI Agents, System Prompt Engineers & Autonomous Tooling Designers  
-> **Source Projects**: [`devops-cli`](https://github.com/dan-petty/devops-cli) & [`vibes`](https://github.com/dan-petty/vibes)  
+> **Pattern Class**: Meta-Cognitive Architecture & Deterministic Quality Enforcement
+> **Problem**: Probabilistic generation bounded only by natural-language instructions drifts into structural entropy
+> **Solution**: Deterministic mechanical oracles that bound generation, with the loop inverting from remediation to elevation once they are satisfied
+> **Reference Implementation**: [`tools/resource_iteration_workbench.py`](../tools/resource_iteration_workbench.py)
 
 ---
 

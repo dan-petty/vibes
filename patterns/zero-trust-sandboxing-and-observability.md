@@ -1,5 +1,10 @@
 # Pattern: Zero-Trust Sandboxing & Distributed Observability
 
+> **Pattern Class**: Runtime Isolation & Distributed Observability
+> **Problem**: Agents synthesize and execute untrusted code, and raw execution privileges expose the host and the network behind it
+> **Solution**: Rootless, capability-dropped sandboxes paired with high-fidelity telemetry, so isolation is verifiable rather than assumed
+> **Reference Implementation**: [`examples/ephemeral-container-sandbox/`](../examples/ephemeral-container-sandbox/)
+
 A defense-in-depth architectural pattern coupling isolated, unprivileged execution environments with continuous, high-fidelity distributed telemetry.
 
 ---

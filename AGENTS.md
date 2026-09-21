@@ -88,7 +88,18 @@ Concrete evidence of resolution (test suite results, token reduction percentages
 
 ## 5. Pattern Authoring Standard
 
-Every pattern under `patterns/` must provide an actionable operational playbook:
+Every pattern under `patterns/` opens with the canonical metadata block, so a reader can judge applicability before reading the body. Three competing vocabularies (`Pattern Type`, `Category`, a prose subtitle) had accumulated across nineteen files before this was made mechanical; `docs_validator.py` now enforces it (`pattern_header` rule):
+
+```markdown
+# Pattern: <Name> — <the sharp version of what it does>
+
+> **Pattern Class**: <domain>
+> **Problem**: <the failure mode, in one line>
+> **Solution**: <the countermeasure, in one line>
+> **Reference Implementation**: [`path`](../path)   <!-- optional: omit when none exists -->
+```
+
+Every pattern must then provide an actionable operational playbook:
 1. **Problem Statement**: What failure mode does this pattern solve?
 2. **Core Mechanics**: Step-by-step description of the pattern (including Mermaid flowcharts or sequence diagrams).
 3. **Implementation Example**: Concrete code snippet, prompt snippet, or CLI command sequence demonstrating the pattern.

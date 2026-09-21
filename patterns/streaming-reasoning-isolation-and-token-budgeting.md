@@ -1,8 +1,9 @@
 # Pattern: Streaming Reasoning Isolation & Token Budgeting
 
-> **Category**: Operational Execution & Cognitive Stream Governance  
-> **Applicability**: AI Coding Assistants, Reasoning Model Integration (R1, Thinking Blocks), FastMCP Tool Gateways  
-> **Status**: Production Standard  
+> **Pattern Class**: Operational Execution & Cognitive Stream Governance
+> **Problem**: Reasoning tokens streamed into dispatchers and terminals leak chain-of-thought into tool parameters and user output
+> **Solution**: A streaming finite-state sanitizer isolating reasoning channels, with an explicit budget for what reasoning may cost
+> **Reference Implementation**: [`examples/streaming-reasoning-sanitizer/`](../examples/streaming-reasoning-sanitizer/)
 
 ---
 

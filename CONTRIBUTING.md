@@ -115,6 +115,8 @@ See [`docs/CURATION_GUIDELINES.md`](docs/CURATION_GUIDELINES.md) for the full ac
 
 ## Pattern Authoring Standard
 
+Open with the canonical metadata block — `Pattern Class`, `Problem`, `Solution`, and an optional `Reference Implementation` — in the first 12 lines. The `pattern_header` rule in `docs_validator.py` enforces the field names.
+
 Every file under `patterns/` must include:
 1. **Problem Statement** — what failure mode does this pattern solve?
 2. **Core Mechanics** — step-by-step description with a Mermaid diagram.
