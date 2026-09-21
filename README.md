@@ -354,6 +354,9 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
+│   ├── doc_core.py                    # Shared finding types and fenced-block extraction
+│   ├── doc_rules_mermaid.py           # Mermaid label, diagram type, and WCAG contrast rules
+│   ├── doc_rules_structure.py         # Observation structure and directory map oracles
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom

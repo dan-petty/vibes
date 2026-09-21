@@ -29,30 +29,32 @@ import urllib.parse
 import yaml
 from markdown_it import MarkdownIt
 
+from doc_core import (
+    SUPPORTED_EXTENSIONS,
+    DocFinding,
+    DocValidationReport,
+    closing_fence_index,
+    extract_fenced_blocks,
+)
+from doc_rules_mermaid import (
+    MIN_MERMAID_CONTRAST_RATIO,
+    VALID_MERMAID_TYPES,
+    _MERMAID_EDGE_RE,
+    _MERMAID_NODE_RE,
+    _is_unquoted_parens_node_label,
+    _is_unquoted_special_edge_label,
+    check_mermaid_diagrams,
+    contrast_ratio,
+)
+from doc_rules_structure import (
+    OBSERVATION_REQUIRED_SECTION_COUNT,
+    check_directory_maps,
+    check_observation_structure,
+)
+
 # Supported documentation extensions
-SUPPORTED_EXTENSIONS: Final[frozenset[str]] = frozenset({".md", ".markdown"})
 
 # Valid Mermaid diagram declarations
-VALID_MERMAID_TYPES: Final[frozenset[str]] = frozenset(
-    {
-        "flowchart",
-        "graph",
-        "sequencediagram",
-        "classdiagram",
-        "statediagram",
-        "erdiagram",
-        "gantt",
-        "pie",
-        "gitgraph",
-        "mindmap",
-        "timeline",
-        "quadrantchart",
-        "xychart",
-        "block",
-        "packet",
-        "architecture",
-    }
-)
 
 PAIRED_HTML_TAGS: Final[frozenset[str]] = frozenset(
     {"details", "summary", "div", "span", "table", "thead", "tbody", "tr", "th", "td"}
@@ -60,68 +62,17 @@ PAIRED_HTML_TAGS: Final[frozenset[str]] = frozenset(
 VOID_HTML_TAGS: Final[frozenset[str]] = frozenset({"br", "hr", "img", "input"})
 
 # Observations must have numbered sections 1–5 (## 1. ... through ## 5. ...)
-OBSERVATION_REQUIRED_SECTION_COUNT: Final[int] = 5
 
 _FENCE_RE: Final[re.Pattern[str]] = re.compile(r"^(`{3,}|~{3,})(.*)$")
 _SPACE_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]+)\]\s+\(([^)]+)\)")
 _MARKDOWN_LINK_RE: Final[re.Pattern[str]] = re.compile(r"!?\[([^\]]*)\]\(([^)]+)\)")
-_MERMAID_NODE_RE: Final[re.Pattern[str]] = re.compile(r"([A-Za-z0-9_]+)\[([^\]]+)\]")
-_MERMAID_EDGE_RE: Final[re.Pattern[str]] = re.compile(r"(-->|-\.->|==>)\|([^|]+)\|")
 _HTML_TAG_RE: Final[re.Pattern[str]] = re.compile(r"<(/)?([a-zA-Z0-9]+)(?:\s+[^>]*)?>")
 _FILE_URI_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]*)\]\(file://(/[^)#\s]+)(#[^)\s]*)?\)")
-_MERMAID_FILL_RE: Final[re.Pattern[str]] = re.compile(r"fill:\s*(#[0-9a-fA-F]{3,6})")
-_MERMAID_TEXT_COLOR_RE: Final[re.Pattern[str]] = re.compile(r"(?<![\w-])color:\s*(#[0-9a-fA-F]{3,6})")
-_LEGACY_MERMAID_HEADER_RE: Final[re.Pattern[str]] = re.compile(r"^graph\s+(?:TB|TD|BT|RL|LR)\b")
-_SEQUENCE_STATEMENT_RE: Final[re.Pattern[str]] = re.compile(r"^(?:\s*[Nn]ote\s|[^:]*(?:->>|-->>|-\)|--\)|-x|--x|->|-->))[^:]*:(.+)$")
-_TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(r"^(?P<indent>(?:[\u2502]   |    )*)(?:\u251c\u2500\u2500|\u2514\u2500\u2500) (?P<name>\S+)")
 
 # Filesystem entries a directory map is never expected to enumerate.
-TREE_IGNORED_NAMES: Final[frozenset[str]] = frozenset({"__pycache__", "node_modules"})
 # A tree line consisting of an ellipsis marks the listing as deliberately partial.
-TREE_ELLIPSIS: Final[frozenset[str]] = frozenset({"...", "\u2026"})
 
 # WCAG 2.1 AA contrast floor for normal text; mermaid renders node labels at body size.
-MIN_MERMAID_CONTRAST_RATIO: Final[float] = 4.5
-
-
-@dataclass(frozen=True)
-class DocFinding:
-    """A single syntax, link, or structural issue detected in documentation."""
-
-    file_path: str
-    line_number: int
-    category: str
-    message: str
-    severity: str = "error"
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize finding to dictionary."""
-        return asdict(self)
-
-
-@dataclass
-class DocValidationReport:
-    """Consolidated summary report of all audited documentation files."""
-
-    total_files: int = 0
-    files_with_findings: int = 0
-    error_count: int = 0
-    warning_count: int = 0
-    is_valid: bool = True
-    findings: list[DocFinding] = field(default_factory=list)
-    duration_seconds: float = 0.0
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize report to dictionary."""
-        return {
-            "total_files": self.total_files,
-            "files_with_findings": self.files_with_findings,
-            "error_count": self.error_count,
-            "warning_count": self.warning_count,
-            "is_valid": self.is_valid,
-            "findings": [f.to_dict() for f in self.findings],
-            "duration_seconds": round(self.duration_seconds, 4),
-        }
 
 
 def slugify_heading(heading_text: str) -> str:
@@ -260,384 +211,6 @@ def check_code_fences(
     findings = _check_token_fences(tokens, file_str)
     findings.extend(_check_line_fences(lines, file_str))
     return sorted(findings, key=lambda f: (f.line_number, f.category))
-
-
-def _is_unquoted_parens_node_label(label: str) -> bool:
-    """Predicate checking if node label contains unquoted parentheses."""
-    if label.startswith('"') and label.endswith('"'):
-        return False
-    return ("(" in label) or (")" in label)
-
-
-def _check_mermaid_node_label(line: str, line_no: int, file_str: str) -> list[DocFinding]:
-    """Validate that node shape labels with parentheses are properly quoted."""
-    findings: list[DocFinding] = []
-    for match in _MERMAID_NODE_RE.finditer(line):
-        node_id, label = match.group(1), match.group(2)
-        if _is_unquoted_parens_node_label(label):
-            findings.append(
-                DocFinding(
-                    file_path=file_str,
-                    line_number=line_no,
-                    category="mermaid",
-                    message=(
-                        f"Unquoted parentheses in node '{node_id}': '{label}'. "
-                        f'Wrap in double quotes: {node_id}["{label}"]'
-                    ),
-                )
-            )
-    return findings
-
-
-def _is_unquoted_special_edge_label(label: str) -> bool:
-    """Predicate checking if edge label contains unquoted special characters."""
-    if label.startswith('"') and label.endswith('"'):
-        return False
-    return any(c in label for c in ("(", ")", ">", "<"))
-
-
-def _check_mermaid_edge_label(line: str, line_no: int, file_str: str) -> list[DocFinding]:
-    """Validate that edge labels with parentheses or special characters are properly quoted."""
-    findings: list[DocFinding] = []
-    for match in _MERMAID_EDGE_RE.finditer(line):
-        label = match.group(2).strip()
-        if _is_unquoted_special_edge_label(label):
-            findings.append(
-                DocFinding(
-                    file_path=file_str,
-                    line_number=line_no,
-                    category="mermaid",
-                    message=(
-                        f"Unquoted special characters in Mermaid edge label: '|{label}|'. "
-                        f'Wrap in double quotes: |"{label}"|'
-                    ),
-                )
-            )
-    return findings
-
-
-@dataclass(frozen=True)
-class TreeEntry:
-    """A single path declared by an embedded directory map."""
-
-    line_number: int
-    path: Path
-    is_directory: bool
-
-
-def _parse_tree_line(line: str) -> tuple[int, str, bool] | None:
-    """Return (depth, name, is_directory) for a tree line, or None if it is not one."""
-    match = _TREE_ENTRY_RE.match(line)
-    if not match:
-        return None
-    name = match.group("name")
-    return len(match.group("indent")) // 4, name.rstrip("/"), name.endswith("/")
-
-
-def _tree_entries(block: Sequence[tuple[int, str]], root: Path) -> list[TreeEntry]:
-    """Resolve an embedded tree into filesystem paths, or [] if the listing is partial."""
-    entries: list[TreeEntry] = []
-    ancestors: dict[int, Path] = {}
-    for line_no, text in block:
-        parsed = _parse_tree_line(text)
-        if not parsed:
-            continue
-        depth, name, is_directory = parsed
-        if name in TREE_ELLIPSIS:
-            return []
-        path = ancestors.get(depth - 1, root) / name
-        ancestors[depth] = path
-        entries.append(TreeEntry(line_no, path, is_directory))
-    return entries
-
-
-def _is_directory_map(entries: Sequence[TreeEntry]) -> bool:
-    """Distinguish a filesystem map from other art drawn with the same box characters.
-
-    Trace waterfalls and AST dumps use the identical `\u251c\u2500\u2500` glyphs. A map is
-    identified structurally: it marks at least one child as a directory with a trailing
-    slash, and most of what it names exists on disk. A map whose every single entry has
-    vanished is indistinguishable from unrelated art without guessing, and is not reported.
-    """
-    if not entries or not any(entry.is_directory for entry in entries):
-        return False
-    resolved = sum(1 for entry in entries if entry.path.exists())
-    return resolved * 2 >= len(entries)
-
-
-def _check_tree_entry_exists(entry: TreeEntry, root: Path, file_str: str) -> DocFinding | None:
-    """Verify a mapped path still exists on disk with the declared kind."""
-    if entry.path.is_dir() if entry.is_directory else entry.path.is_file():
-        return None
-    kind = "directory" if entry.is_directory else "file"
-    return DocFinding(
-        file_path=file_str,
-        line_number=entry.line_number,
-        category="directory_map",
-        message=(
-            f"Directory map lists {kind} '{entry.path.relative_to(root)}', which does not exist. "
-            "A text tree breaks no link and fails no test, so it drifts silently — regenerate it."
-        ),
-    )
-
-
-def _undeclared_children(parent: Path, declared: set[str], kinds: set[bool]) -> list[str]:
-    """Return on-disk children of the kinds the map enumerates that the map omits."""
-    candidates = (
-        child
-        for child in sorted(parent.iterdir())
-        if not child.name.startswith(".")
-        and child.name not in TREE_IGNORED_NAMES
-        and child.is_dir() in kinds
-    )
-    return [child.name for child in candidates if child.name not in declared]
-
-
-def _check_tree_completeness(
-    entries: Sequence[TreeEntry], root: Path, file_str: str
-) -> list[DocFinding]:
-    """Report children absent from a map that already enumerates that kind of sibling."""
-    children: dict[Path, list[TreeEntry]] = {}
-    for entry in entries:
-        children.setdefault(entry.path.parent, []).append(entry)
-    findings: list[DocFinding] = []
-    for parent, listed in children.items():
-        if not parent.is_dir():
-            continue
-        declared = {entry.path.name for entry in listed}
-        missing = _undeclared_children(parent, declared, {entry.is_directory for entry in listed})
-        findings.extend(
-            _missing_child_finding(parent, root, name, listed[0].line_number, file_str)
-            for name in missing
-        )
-    return findings
-
-
-def _missing_child_finding(
-    parent: Path, root: Path, name: str, line_number: int, file_str: str
-) -> DocFinding:
-    """Build a finding for a filesystem entry the map claims to enumerate but omits."""
-    location = parent.relative_to(root) if parent != root else Path(".")
-    return DocFinding(
-        file_path=file_str,
-        line_number=line_number,
-        category="directory_map",
-        message=(
-            f"Directory map enumerates '{location}' but omits '{name}'. Either list it or mark the "
-            "listing partial with an ellipsis entry."
-        ),
-    )
-
-
-def check_directory_maps(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
-    """Diff every embedded text directory tree against the filesystem it describes."""
-    root = file_path.parent.resolve()
-    if not root.is_dir():
-        return []
-    findings: list[DocFinding] = []
-    for block in _extract_text_blocks(lines):
-        entries = _tree_entries(block, root)
-        if not _is_directory_map(entries):
-            continue
-        findings.extend(
-            finding
-            for finding in (_check_tree_entry_exists(entry, root, str(file_path)) for entry in entries)
-            if finding
-        )
-        findings.extend(_check_tree_completeness(entries, root, str(file_path)))
-    return findings
-
-
-def _extract_text_blocks(lines: Sequence[str]) -> list[list[tuple[int, str]]]:
-    """Extract fenced `text` blocks as (line_no, content) pairs."""
-    return [body for _, body in _extract_fenced_blocks(lines, "text")]
-
-
-def _expand_hex_color(hex_color: str) -> tuple[int, int, int]:
-    """Expand a 3- or 6-digit hex color into its 8-bit RGB channels."""
-    digits = hex_color.lstrip("#")
-    if len(digits) == 3:
-        digits = "".join(channel * 2 for channel in digits)
-    return int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16)
-
-
-def _srgb_channel(value: int) -> float:
-    """Linearize a single 8-bit sRGB channel per WCAG 2.1."""
-    ratio = value / 255
-    return ratio / 12.92 if ratio <= 0.03928 else ((ratio + 0.055) / 1.055) ** 2.4
-
-
-def _relative_luminance(hex_color: str) -> float:
-    """Compute WCAG 2.1 relative luminance for a hex color."""
-    red, green, blue = _expand_hex_color(hex_color)
-    return 0.2126 * _srgb_channel(red) + 0.7152 * _srgb_channel(green) + 0.0722 * _srgb_channel(blue)
-
-
-def contrast_ratio(foreground: str, background: str) -> float:
-    """Return the WCAG 2.1 contrast ratio between two hex colors (1.0 to 21.0)."""
-    luminances = (_relative_luminance(foreground), _relative_luminance(background))
-    return (max(luminances) + 0.05) / (min(luminances) + 0.05)
-
-
-def _check_mermaid_style_line(line: str, line_no: int, file_str: str) -> list[DocFinding]:
-    """Verify every styled mermaid node declares legible, theme-independent colors."""
-    fill = _MERMAID_FILL_RE.search(line)
-    if not fill:
-        return []
-    text_color = _MERMAID_TEXT_COLOR_RE.search(line)
-    if not text_color:
-        return [
-            DocFinding(
-                file_path=file_str,
-                line_number=line_no,
-                category="mermaid_style",
-                message=(
-                    f"Mermaid fill '{fill.group(1)}' declares no explicit 'color:'. Inherited label "
-                    "color flips between GitHub light and dark themes, rendering the node illegible in one."
-                ),
-            )
-        ]
-    ratio = contrast_ratio(text_color.group(1), fill.group(1))
-    if ratio < MIN_MERMAID_CONTRAST_RATIO:
-        return [
-            DocFinding(
-                file_path=file_str,
-                line_number=line_no,
-                category="mermaid_style",
-                message=(
-                    f"Mermaid contrast {ratio:.2f}:1 between color '{text_color.group(1)}' and fill "
-                    f"'{fill.group(1)}' is below the WCAG AA floor of {MIN_MERMAID_CONTRAST_RATIO}:1."
-                ),
-            )
-        ]
-    return []
-
-
-def _check_sequence_semicolon(line: str, line_no: int, file_str: str) -> list[DocFinding]:
-    """Reject semicolons in sequence diagram text, where they terminate the statement."""
-    match = _SEQUENCE_STATEMENT_RE.match(line)
-    if not match or ";" not in match.group(1):
-        return []
-    return [
-        DocFinding(
-            file_path=file_str,
-            line_number=line_no,
-            category="mermaid",
-            message=(
-                "Semicolon in sequence diagram text. Mermaid treats ';' as a statement separator, "
-                "so the message or note is truncated at that point and the remainder fails to parse. "
-                "Use a comma or a full stop."
-            ),
-        )
-    ]
-
-
-def _check_legacy_mermaid_header(first: str, m_start: int, file_str: str) -> DocFinding | None:
-    """Reject the legacy `graph` declaration in favour of modern `flowchart`."""
-    if not _LEGACY_MERMAID_HEADER_RE.match(first):
-        return None
-    return DocFinding(
-        file_path=file_str,
-        line_number=m_start,
-        category="mermaid",
-        message=(
-            f"Legacy Mermaid declaration '{first}'. Use 'flowchart {first.split()[1]}' — "
-            "`graph` is the deprecated alias and does not support the full modern edge grammar."
-        ),
-    )
-
-
-def _first_directive_line(m_lines: Sequence[str]) -> str:
-    """Return the first non-blank, non-comment line of a mermaid block."""
-    return next(
-        (
-            line_text.strip()
-            for line_text in m_lines
-            if line_text.strip() and not line_text.strip().startswith("%%")
-        ),
-        "",
-    )
-
-
-def _validate_mermaid_header(
-    m_lines: list[str], m_start: int, file_str: str
-) -> DocFinding | None:
-    """Validate that the first non-comment line of a mermaid block specifies a known diagram type."""
-    first = _first_directive_line(m_lines)
-    if first and not any(first.lower().startswith(vt) for vt in VALID_MERMAID_TYPES):
-        return DocFinding(
-            file_path=file_str,
-            line_number=m_start,
-            category="mermaid",
-            message=f"Unrecognized Mermaid diagram type: '{first}'",
-        )
-    return None
-
-
-def _closing_fence_index(lines: Sequence[str], start: int) -> int:
-    """Return the index of the fence closing the block opened at start, or end of input."""
-    closers = (idx for idx in range(start + 1, len(lines)) if lines[idx].strip().startswith("```"))
-    return next(closers, len(lines))
-
-
-def _extract_fenced_blocks(
-    lines: Sequence[str], info: str
-) -> list[tuple[int, list[tuple[int, str]]]]:
-    """Extract every fenced block carrying the given info string.
-
-    Returns (1-based opening line, [(1-based line number, raw text)]). Shared by the
-    Mermaid and directory-map rules: two hand-rolled fence state machines previously
-    drifted apart, and each one nested an elif ladder deep enough to strain the caps.
-    """
-    blocks: list[tuple[int, list[tuple[int, str]]]] = []
-    consumed = -1
-    for start, line in enumerate(lines):
-        if start <= consumed or not line.strip().startswith(f"```{info}"):
-            continue
-        consumed = _closing_fence_index(lines, start)
-        blocks.append((start + 1, [(idx + 1, lines[idx]) for idx in range(start + 1, consumed)]))
-    return blocks
-
-
-def _extract_mermaid_blocks(lines: Sequence[str]) -> list[tuple[int, list[tuple[int, str]]]]:
-    """Extract mermaid code blocks as (start_line, [(line_no, line_content)])."""
-    return _extract_fenced_blocks(lines, "mermaid")
-
-
-def _validate_single_mermaid_block(
-    start_line: int,
-    block_lines: Sequence[tuple[int, str]],
-    file_str: str,
-) -> list[DocFinding]:
-    """Validate header, node labels, and edge labels within a single mermaid block."""
-    raw_lines = [text for _, text in block_lines]
-    findings: list[DocFinding] = []
-    first = _first_directive_line(raw_lines)
-    findings.extend(
-        finding
-        for finding in (
-            _validate_mermaid_header(raw_lines, start_line, file_str),
-            _check_legacy_mermaid_header(first, start_line, file_str),
-        )
-        if finding
-    )
-    is_sequence = first.lower().startswith("sequencediagram")
-    for line_no, text in block_lines:
-        findings.extend(_check_mermaid_node_label(text, line_no, file_str))
-        findings.extend(_check_mermaid_edge_label(text, line_no, file_str))
-        findings.extend(_check_mermaid_style_line(text, line_no, file_str))
-        if is_sequence:
-            findings.extend(_check_sequence_semicolon(text, line_no, file_str))
-    return findings
-
-
-def check_mermaid_diagrams(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
-    """Inspect all mermaid diagrams for syntax structure and unquoted characters."""
-    file_str = str(file_path)
-    findings: list[DocFinding] = []
-    for start_line, block_lines in _extract_mermaid_blocks(lines):
-        findings.extend(_validate_single_mermaid_block(start_line, block_lines, file_str))
-    return findings
 
 
 def _mask_table_code_pipes(line: str) -> str:
@@ -1065,63 +638,14 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     return findings
 
 
-_OBSERVATION_FILENAME_RE: Final[re.Pattern[str]] = re.compile(r"^\d+-.+\.md$")
 
 
-def _is_observation_file(file_path: Path) -> bool:
-    """Predicate: true if file is a numbered observation doc under observations/."""
-    return (
-        "observations" in file_path.parts
-        and _OBSERVATION_FILENAME_RE.match(file_path.name) is not None
-    )
 
 
-_OBSERVATION_NUMBERED_SECTION_RE: Final[re.Pattern[str]] = re.compile(r"^##\s+(\d+)\.")
 
 
-def _extract_numbered_sections(lines: Sequence[str]) -> set[int]:
-    """Extract numbered section indices (## N. ...) from markdown outside fences."""
-    found: set[int] = set()
-    in_fence = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        m = _OBSERVATION_NUMBERED_SECTION_RE.match(stripped)
-        if m:
-            found.add(int(m.group(1)))
-    return found
 
 
-def _missing_numbered_sections(found: set[int]) -> list[int]:
-    """Return required section numbers (1–N) absent from the found set."""
-    return [n for n in range(1, OBSERVATION_REQUIRED_SECTION_COUNT + 1) if n not in found]
-
-
-def check_observation_structure(
-    lines: Sequence[str], file_path: Path
-) -> list[DocFinding]:
-    """Verify that observation documents contain numbered sections ## 1. through ## 5."""
-    if not _is_observation_file(file_path):
-        return []
-    found = _extract_numbered_sections(lines)
-    missing = _missing_numbered_sections(found)
-    return [
-        DocFinding(
-            file_path=str(file_path),
-            line_number=1,
-            category="observation_structure",
-            message=(
-                f"Observation document missing required numbered section '## {n}.'. "
-                f"Sections ## 1. through ## {OBSERVATION_REQUIRED_SECTION_COUNT}. are mandatory."
-            ),
-            severity="error",
-        )
-        for n in missing
-    ]
 
 
 def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[Path]:
