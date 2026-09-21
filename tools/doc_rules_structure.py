@@ -82,11 +82,16 @@ def _path_kind(path: Path, cache: dict[Path, str | None]) -> str | None:
     cost of validating the document.
     """
     if path not in cache:
-        try:
-            cache[path] = "dir" if path.is_dir() else ("file" if path.is_file() else None)
-        except OSError:
-            cache[path] = None
+        cache[path] = _stat_kind(path)
     return cache[path]
+
+
+def _stat_kind(path: Path) -> str | None:
+    """Classify a path as "dir", "file", or absent, treating an unreadable path as absent."""
+    try:
+        return "dir" if path.is_dir() else ("file" if path.is_file() else None)
+    except OSError:
+        return None
 
 
 def _is_directory_map(entries: Sequence[TreeEntry], cache: dict[Path, str | None]) -> bool:

@@ -366,6 +366,66 @@ def _is_excluded_doc_path(path: Path) -> bool:
     return any(p.startswith(".") for p in parts)
 
 
+def _imported_stems(path: Path) -> set[str]:
+    """Return the final component of every module name a file imports."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return set()
+    return {stem for node in ast.walk(tree) for stem in _node_import_stems(node)}
+
+
+def _node_import_stems(node: ast.AST) -> set[str]:
+    """Return the module stems a single import node names."""
+    if isinstance(node, ast.ImportFrom):
+        return {node.module.split(".")[-1].lower()} if node.module else set()
+    if isinstance(node, ast.Import):
+        return {alias.name.split(".")[-1].lower() for alias in node.names}
+    return set()
+
+
+def _exercised_modules(
+    test_paths: Sequence[Path], module_paths: Sequence[Path], root_dir: Path
+) -> set[str]:
+    """Return module stems reachable from the test suite's import graph.
+
+    Filename convention is not verification. `doc_core.py` is 97% covered by
+    `tests/test_docs_validator.py`, and demanding `tests/test_doc_core.py` because no file
+    carries that name manufactures work while proving nothing. Reachability is a weaker
+    signal than coverage but far stronger than a naming pattern, and unlike coverage it
+    needs no instrumentation run. Transitivity matters: a test importing the validator
+    exercises every rule module the validator imports.
+    """
+    graph = {path.stem.lower(): _imported_stems(root_dir / path) for path in module_paths}
+    frontier = set().union(*(_imported_stems(root_dir / p) for p in test_paths)) if test_paths else set()
+    reached: set[str] = set()
+    while frontier:
+        stem = frontier.pop()
+        if stem in reached:
+            continue
+        reached.add(stem)
+        frontier |= graph.get(stem, set()) - reached
+    return reached
+
+
+def _is_verified(stem: str, test_stems: set[str], exercised: set[str]) -> bool:
+    """Return whether a module is verified, by companion filename or by import reachability."""
+    named = {f"test_{stem}", f"{stem}_test"} & test_stems
+    return bool(named) or stem in exercised or any(stem in ts for ts in test_stems)
+
+
+def _public_function_nodes(tree: ast.AST) -> list[ast.AST]:
+    """Return module-level and class-level functions, excluding nested closures.
+
+    A closure defined inside a decorator or factory is not public surface, and asking an
+    agent to write a docstring for `wrapper` is manufactured work. Only what a caller can
+    reach from outside the module is counted.
+    """
+    kinds = (ast.FunctionDef, ast.AsyncFunctionDef)
+    containers = [tree] + [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+    return [node for container in containers for node in container.body if isinstance(node, kinds)]
+
+
 class ResourceScanner:
     """Scans repository files and computes structured baseline metrics."""
 
@@ -383,7 +443,7 @@ class ResourceScanner:
             )
 
         loc = len([ln for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#")])
-        func_nodes = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        func_nodes = _public_function_nodes(tree)
         class_nodes = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
 
         agg = _FunctionAggregate()
@@ -752,7 +812,7 @@ class FeedbackAnalyzer:
             cls._analyze_documentation_and_typing(eval_item, feedback)
             cls._analyze_execution_telemetry(eval_item, feedback)
             cls._analyze_positive_reinforcement(eval_item, feedback)
-        cls._analyze_test_parity(evaluations, feedback)
+        cls._analyze_test_parity(evaluations, feedback, root_dir)
         return sorted(feedback, key=lambda f: (cls._priority_rank(f.priority), f.target))
 
     @staticmethod
@@ -899,24 +959,27 @@ class FeedbackAnalyzer:
         cls,
         evaluations: list[ReviewEvaluation],
         feedback: list[ImprovementFeedback],
+        root_dir: Path,
     ) -> None:
         test_stems = {
             Path(e.resource_path).stem.lower()
             for e in evaluations
             if e.scan_metrics.resource_type == ResourceType.TEST_SUITE
         }
+        exercised = _exercised_modules(
+            [Path(e.resource_path) for e in evaluations
+             if e.scan_metrics.resource_type == ResourceType.TEST_SUITE],
+            [Path(e.resource_path) for e in evaluations
+             if e.scan_metrics.resource_type != ResourceType.TEST_SUITE],
+            root_dir,
+        )
 
         for item in evaluations:
             scan = item.scan_metrics
             if scan.resource_type not in (ResourceType.PYTHON_MODULE, ResourceType.SAMPLE_APP):
                 continue
             stem = Path(scan.file_path).stem.lower()
-            has_test = (
-                f"test_{stem}" in test_stems
-                or f"{stem}_test" in test_stems
-                or any(stem in ts for ts in test_stems)
-            )
-            if not has_test:
+            if not _is_verified(stem, test_stems, exercised):
                 feedback.append(
                     ImprovementFeedback(
                         category=FeedbackCategory.TEST_PARITY,

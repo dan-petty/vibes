@@ -455,3 +455,66 @@ def test_workbench_main_watch_flag(tmp_path: Path) -> None:
     assert exit_code == 0
 
 
+
+
+def test_nested_closures_are_not_public_surface(tmp_path: Path) -> None:
+    """Asking an agent to document `wrapper` inside a decorator is manufactured work."""
+    module = tmp_path / "api.py"
+    module.write_text(
+        'def deprecated(reason):\n'
+        '    """Public factory, documented."""\n'
+        "    def decorate(func):\n"
+        "        def wrapper(*args):\n"
+        "            return func(*args)\n"
+        "        return wrapper\n"
+        "    return decorate\n",
+        encoding="utf-8",
+    )
+
+    metrics = ResourceScanner.scan_python_file(module)
+    assert (metrics.functions_count, metrics.functions_without_docstrings) == (1, [])
+
+
+def test_module_exercised_through_an_import_chain_needs_no_companion_file(tmp_path: Path) -> None:
+    """Filename convention is not verification: a transitively imported module is exercised."""
+    from resource_iteration_workbench import _exercised_modules
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_facade.py").write_text("from facade import run\n", encoding="utf-8")
+    (tmp_path / "facade.py").write_text("from rule_engine import apply\n", encoding="utf-8")
+    (tmp_path / "rule_engine.py").write_text("def apply(): ...\n", encoding="utf-8")
+
+    exercised = _exercised_modules(
+        [Path("tests/test_facade.py")],
+        [Path("facade.py"), Path("rule_engine.py")],
+        tmp_path,
+    )
+    assert {"facade", "rule_engine"} <= exercised
+
+
+def test_unreferenced_module_is_still_reported_as_unverified(tmp_path: Path) -> None:
+    """Reachability must not excuse a module nothing imports."""
+    from resource_iteration_workbench import _exercised_modules
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_facade.py").write_text("from facade import run\n", encoding="utf-8")
+    (tmp_path / "facade.py").write_text("def run(): ...\n", encoding="utf-8")
+    (tmp_path / "orphan.py").write_text("def lonely(): ...\n", encoding="utf-8")
+
+    exercised = _exercised_modules(
+        [Path("tests/test_facade.py")], [Path("facade.py"), Path("orphan.py")], tmp_path
+    )
+    assert "facade" in exercised and "orphan" not in exercised
+
+
+def test_import_cycle_does_not_hang_reachability(tmp_path: Path) -> None:
+    """A module graph with a cycle must terminate, not spin."""
+    from resource_iteration_workbench import _exercised_modules
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_a.py").write_text("import a\n", encoding="utf-8")
+    (tmp_path / "a.py").write_text("import b\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("import a\n", encoding="utf-8")
+
+    exercised = _exercised_modules([Path("tests/test_a.py")], [Path("a.py"), Path("b.py")], tmp_path)
+    assert {"a", "b"} <= exercised
