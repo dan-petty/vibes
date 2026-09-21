@@ -261,7 +261,17 @@ To foster an autonomous, creative, and continuously self-improving engineering i
    - Whenever identifying **features, constructive suggestions, workflow automations, refactoring ideas, or third-party integrations** that could improve the codebase, AI agents **MUST AUTOMATICALLY ADD ITEMS TO THE ROADMAP (`docs/ROADMAP.md`)** to design, track, and implement them.
    - Ground every innovative suggestion into measurable deliverables with clear Value vs. Effort positioning and acceptance criteria.
 3. **Closing the Positive Feedback Loop**:
-   - Regularly run the Resource Iteration Workbench (`python3 tools/resource_iteration_workbench.py --export-backlog .data/sdlc_backlog.json`) and query the SDLC Project Manager (`python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json`) to convert roadmap items and feedback opportunities into actionable next steps, driving an unbroken recursive cycle of excellence.
+   - Every work generator in this repository is defect-shaped. The workbench reports decay, the sentinel reports invariant breaches, the quantifier reports smells — all of them answer *what is wrong with what exists*, and none answers *what should exist next*. Measured directly: with the repository certified at 100.0/100 the backlog held **0 items** while the roadmap held **11 open ones**. An agentic project can exhaust its mechanically-derivable work while everything it set out to build remains untouched, and the loop will report that state as success.
+   - Run all three stages, in this order, so declared intent and measured defects reach one prioritizer:
+
+     ```bash
+     python3 tools/resource_iteration_workbench.py --export-backlog .data/sdlc_backlog.json
+     python3 tools/roadmap_ingest.py --backlog .data/sdlc_backlog.json
+     python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json
+     ```
+
+   - Defects outrank features by construction, so a healthy repository advances the roadmap and an unhealthy one repairs itself first. Items whose value and effort are absent from the prioritization matrix are ranked on defaults and say so: add a matrix row to rank one deliberately rather than by assumption.
+   - Rejected work is never ingested. The roadmap's anti-pattern rows record decisions *not* to build things, and a loop that schedules them has inverted the decision it was given.
 
 ---
 

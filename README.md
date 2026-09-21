@@ -364,6 +364,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── doc_rules_structure.py         # Observation structure and directory map oracles
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
+│   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
@@ -374,6 +375,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
     ├── test_ast_refactorer.py         # Unit tests for AST conditional refactoring engine
     ├── test_reliability_slo.py        # Unit tests for SLO error budgets and phase policy
+    ├── test_roadmap_ingest.py         # Unit tests for roadmap deliverable ingestion
     ├── test_docs_validator.py         # Unit tests for documentation syntax and link validation
     └── test_gate_manifest.py          # Asserts every documented quality gate is wired into CI
 ```
