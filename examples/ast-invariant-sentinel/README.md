@@ -19,8 +19,16 @@ The **AST Invariant Sentinel** converts soft architectural guidelines into deter
 
 ### Running the Sentinel
 ```bash
+# One or many targets; files and directories may be mixed freely.
 python3 sentinel.py /path/to/python/code
+python3 sentinel.py tools examples tests benchmarks
 ```
+
+> [!IMPORTANT]
+> Every supplied path is audited. Pre-commit hooks with `pass_filenames: true` hand the sentinel
+> N staged files per invocation, so an entrypoint that reads only `argv[1]` certifies code it never
+> opened. Targets that do not exist raise `TargetIntegrity` rather than passing as a clean audit of
+> zero files.
 
 ### Running the Tests
 ```bash
@@ -29,13 +37,32 @@ pytest test_sentinel.py -v
 
 ---
 
+## Auditable Waivers
+
+A detector's own negative fixtures must embed the strings it hunts. Such modules declare a justified
+waiver in the first 15 lines, parsed from real comment tokens so text inside a string literal can
+never disarm the gate:
+
+```python
+"""Unit tests for the egress guard."""
+
+# sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting the detector fires
+```
+
+Only `ZeroTrustSanitization` is waivable. `CyclomaticComplexity` and `NestingDepth` are not: a metric
+you can opt out of is not an invariant. A malformed waiver, one naming a non-waivable invariant, or one
+lacking a justification of at least 12 characters raises `WaiverIntegrity` **and** leaves the original
+violation reported.
+
+---
+
 ## Programmatic Integration
 
 ```python
 from pathlib import Path
-from sentinel import audit_directory
+from sentinel import audit_targets
 
-report = audit_directory(Path("src"))
+report = audit_targets([Path("tools"), Path("tests")])
 if not report.is_clean:
     for violation in report.violations:
         print(f"{violation.file_path}:{violation.line_number} — {violation.message}")

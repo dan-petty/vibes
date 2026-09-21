@@ -1,5 +1,7 @@
 """Unit tests for the Adaptive Web Crawler reference application."""
 
+# sentinel: allow[ZeroTrustSanitization] — fixture URLs exercising the crawler's private-network egress guard
+
 from pathlib import Path
 import pytest
 from crawler import (

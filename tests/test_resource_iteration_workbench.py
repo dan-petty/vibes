@@ -1,5 +1,7 @@
 """Unit tests for the Resource Iteration Workbench."""
 
+# sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting the sanitization detector fires on private IPs
+
 import json
 from pathlib import Path
 import sys

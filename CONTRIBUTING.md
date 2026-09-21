@@ -18,9 +18,8 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 # Run the full test suite locally
 pytest tests/ examples/ benchmarks/ -v
 
-# Run the AST invariant sentinel on all Python sources
-python examples/ast-invariant-sentinel/sentinel.py examples
-python examples/ast-invariant-sentinel/sentinel.py tools
+# Run the AST invariant sentinel on all Python sources (accepts N paths)
+python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmarks
 
 # Validate all documentation files
 python tools/docs_validator.py

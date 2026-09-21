@@ -1,5 +1,7 @@
 """Unit tests for the Interactive Prompt Mutation Suite & Invariant Fuzzer."""
 
+# sentinel: allow[ZeroTrustSanitization] — adversarial prompt fixtures embedding private IPs to measure invariant drift
+
 import json
 from pathlib import Path
 import sys

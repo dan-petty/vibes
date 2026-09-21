@@ -1,5 +1,7 @@
 """Comprehensive test suite for Agentic IDE Hook Sentinel."""
 
+# sentinel: allow[ZeroTrustSanitization] — fixture payloads asserting the IDE hook blocks private-network egress
+
 from __future__ import annotations
 
 from pathlib import Path

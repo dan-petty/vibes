@@ -35,15 +35,16 @@ jobs:
         id: sentinel
         if: steps.changed-files.outputs.files_count > 0
         run: |
-          VIOLATIONS=0
+          # Deleted paths are filtered out; the sentinel fails on targets that no longer exist.
           while IFS= read -r py_file; do
-            if [ -f "$py_file" ]; then
-              echo "Auditing $py_file..."
-              if ! python examples/ast-invariant-sentinel/sentinel.py "$py_file"; then
-                VIOLATIONS=$((VIOLATIONS + 1))
-              fi
-            fi
-          done < /tmp/changed_py_files.txt
+            [ -f "$py_file" ] && printf '%s\n' "$py_file"
+          done < /tmp/changed_py_files.txt > /tmp/existing_py_files.txt
+
+          VIOLATIONS=0
+          if [ -s /tmp/existing_py_files.txt ]; then
+            # One consolidated audit: the sentinel accepts N paths and reports every violation.
+            xargs -r -a /tmp/existing_py_files.txt python examples/ast-invariant-sentinel/sentinel.py || VIOLATIONS=1
+          fi
 
           echo "total_violations=${VIOLATIONS}" >> $GITHUB_OUTPUT
           if [ "${VIOLATIONS}" -gt 0 ]; then

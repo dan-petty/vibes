@@ -37,9 +37,7 @@ jobs:
 
       - name: Run AST Invariant Sentinel (All Python Sources)
         run: |
-          python examples/ast-invariant-sentinel/sentinel.py examples
-          python examples/ast-invariant-sentinel/sentinel.py tools
-          python examples/ast-invariant-sentinel/sentinel.py benchmarks/benchmark_runner.py
+          python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmarks
 
       - name: Validate Documentation Quality & Link Integrity
         run: |

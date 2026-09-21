@@ -1,5 +1,7 @@
 """Unit tests for AST Invariant Sentinel."""
 
+# sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting this sentinel detects private IPs and subdomains
+
 import tempfile
 from pathlib import Path
 
@@ -179,3 +181,76 @@ def test_main_defaults_to_current_directory_without_paths(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
 
     assert main(["sentinel.py"]) == 0
+
+
+def test_justified_waiver_suppresses_sanitization_violation(tmp_path):
+    """A detector's own negative fixtures may waive sanitization with a written reason."""
+    module = _write_module(
+        tmp_path,
+        "fixtures.py",
+        '"""Fixtures."""\n'
+        "# sentinel: allow[ZeroTrustSanitization] — negative fixture for the detector\n"
+        'HOST = "http://192.168.1.10"\n',
+    )
+    assert audit_file(module) == []
+
+
+def test_waiver_without_justification_is_itself_a_violation(tmp_path):
+    """An unexplained waiver must fail loudly instead of quietly disabling the gate."""
+    module = _write_module(
+        tmp_path,
+        "lazy.py",
+        '"""Lazy."""\n# sentinel: allow[ZeroTrustSanitization]\nHOST = "http://192.168.1.10"\n',
+    )
+    violations = audit_file(module)
+    assert [v.invariant for v in violations] == ["WaiverIntegrity", "ZeroTrustSanitization"]
+
+
+def test_structural_invariants_are_never_waivable(tmp_path):
+    """Complexity and nesting caps must not be opt-out; only content detectors are."""
+    body = "\n".join(f"    if x == {n}:\n        return {n}" for n in range(12))
+    module = _write_module(
+        tmp_path,
+        "sprawl.py",
+        f'"""Sprawl."""\n# sentinel: allow[CyclomaticComplexity] — please let this one through\ndef f(x: int) -> int:\n{body}\n    return 0\n',
+    )
+    invariants = {v.invariant for v in audit_file(module)}
+    assert {"WaiverIntegrity", "CyclomaticComplexity"} <= invariants
+
+
+def test_waiver_inside_string_literal_is_not_honored(tmp_path):
+    """Waivers are parsed as comment tokens, so text inside a literal cannot disarm the gate."""
+    module = _write_module(
+        tmp_path,
+        "sneaky.py",
+        '"""Doc."""\nSAMPLE = "# sentinel: allow[ZeroTrustSanitization] — smuggled in a literal"\n'
+        'HOST = "http://192.168.1.10"\n',
+    )
+    assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]
+
+
+def test_waiver_below_module_header_is_not_honored(tmp_path):
+    """Waivers must be declared in the module header where reviewers will see them."""
+    padding = "\n".join(f"CONST_{n} = {n}" for n in range(20))
+    module = _write_module(
+        tmp_path,
+        "buried.py",
+        f'"""Doc."""\n{padding}\n# sentinel: allow[ZeroTrustSanitization] — buried far below the header\n'
+        'HOST = "http://192.168.1.10"\n',
+    )
+    assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]
+
+
+def test_directory_sweep_audits_test_files(tmp_path):
+    """Test modules are audited like any other source; §10.2 caps their complexity too."""
+    _write_module(tmp_path, "test_thing.py", 'HOST = "http://192.168.1.10"\n')
+
+    report = audit_targets([tmp_path])
+    assert (report.files_checked, len(report.violations)) == (1, 1)
+
+
+def test_missing_target_fails_instead_of_certifying_nothing(tmp_path):
+    """A typo'd or deleted path must fail rather than report a clean audit of zero files."""
+    report = audit_targets([tmp_path / "does_not_exist.py"])
+    assert (report.files_checked, report.is_clean) == (0, False)
+    assert report.violations[0].invariant == "TargetIntegrity"

@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import ipaddress
 import re
 import sys
+import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
@@ -32,6 +34,15 @@ CANONICAL_MOCK_DOMAIN = "example.com"
 
 # IPv4 regex for detecting hardcoded addresses in string literals
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+# Closed domain of waivable invariants. Structural caps (complexity, nesting) are
+# never waivable: a metric you can opt out of is not an invariant.
+WAIVABLE_INVARIANTS = frozenset({"ZeroTrustSanitization"})
+WAIVER_PRAGMA_RE = re.compile(
+    r"^#\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
+)
+WAIVER_HEADER_LINE_LIMIT = 15
+MIN_WAIVER_JUSTIFICATION_CHARS = 12
 
 
 @dataclass(frozen=True)
@@ -214,6 +225,58 @@ class SanitizationVisitor(ast.NodeVisitor):
             )
 
 
+@dataclass(frozen=True)
+class WaiverScan:
+    """Result of parsing module-header waiver pragmas."""
+
+    waived: frozenset[str] = frozenset()
+    violations: tuple[Violation, ...] = ()
+
+
+def _iter_header_comments(source: str) -> list[tuple[int, str]]:
+    """Return real comment tokens within the module header, ignoring string literals."""
+    comments: list[tuple[int, str]] = []
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if token.start[0] > WAIVER_HEADER_LINE_LIMIT:
+                break
+            if token.type == tokenize.COMMENT:
+                comments.append((token.start[0], token.string))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        pass
+    return comments
+
+
+def _waiver_defect(match: re.Match[str] | None) -> str | None:
+    """Return why a waiver pragma is invalid, or None when it is well-formed."""
+    if match is None:
+        return "Malformed waiver. Expected: # sentinel: allow[<Invariant>] <justification>"
+    invariant = match.group(1)
+    if invariant not in WAIVABLE_INVARIANTS:
+        return f"Invariant '{invariant}' is not waivable. Waivable: {', '.join(sorted(WAIVABLE_INVARIANTS))}."
+    if len(match.group("reason").strip()) < MIN_WAIVER_JUSTIFICATION_CHARS:
+        return f"Waiver for '{invariant}' needs >= {MIN_WAIVER_JUSTIFICATION_CHARS} characters of justification."
+    return None
+
+
+def _scan_waivers(file_path: Path, source: str) -> WaiverScan:
+    """Parse `# sentinel: allow[<Invariant>] <justification>` pragmas from the module header."""
+    waived: set[str] = set()
+    violations: list[Violation] = []
+    for line_number, text in _iter_header_comments(source):
+        if "sentinel:" not in text:
+            continue
+        match = WAIVER_PRAGMA_RE.match(text.strip())
+        defect = _waiver_defect(match)
+        if defect or match is None:
+            violations.append(
+                Violation(str(file_path), line_number, "WaiverIntegrity", defect or "Invalid waiver.")
+            )
+            continue
+        waived.add(match.group(1))
+    return WaiverScan(frozenset(waived), tuple(violations))
+
+
 def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) -> list[Violation]:
     """Audit a single Python source file for invariant violations."""
     try:
@@ -235,24 +298,20 @@ def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) ->
     sanitization_visitor = SanitizationVisitor(str(file_path))
     sanitization_visitor.visit(tree)
 
-    return complexity_visitor.violations + sanitization_visitor.violations
+    waivers = _scan_waivers(file_path, source)
+    detected = complexity_visitor.violations + sanitization_visitor.violations
+    return list(waivers.violations) + [v for v in detected if v.invariant not in waivers.waived]
 
 
-def _is_test_file(path: Path) -> bool:
-    return path.name.startswith("test_") or path.name.endswith("_test.py")
-
-
-def _collect_py_targets(root_path: Path, skip_tests: bool) -> list[Path]:
+def _collect_py_targets(root_path: Path) -> list[Path]:
     if root_path.is_file():
         return [root_path] if root_path.suffix == ".py" else []
-    return [p for p in root_path.rglob("*.py") if not (skip_tests and _is_test_file(p))]
+    return sorted(root_path.rglob("*.py"))
 
 
-def audit_directory(
-    root_path: Path, max_complexity: int = 10, max_depth: int = 5, skip_tests: bool = True
-) -> AuditReport:
+def audit_directory(root_path: Path, max_complexity: int = 10, max_depth: int = 5) -> AuditReport:
     """Audit Python files under root_path, supporting single files or directories."""
-    return audit_targets([root_path], max_complexity, max_depth, skip_tests)
+    return audit_targets([root_path], max_complexity, max_depth)
 
 
 def _dedupe_key(path: Path) -> Path:
@@ -263,12 +322,12 @@ def _dedupe_key(path: Path) -> Path:
         return path
 
 
-def _expand_targets(paths: Sequence[Path], skip_tests: bool) -> list[Path]:
+def _expand_targets(paths: Sequence[Path]) -> list[Path]:
     """Expand every file or directory target into a deduplicated, order-preserving file list."""
     expanded: list[Path] = []
     seen: set[Path] = set()
     for path in paths:
-        for py_file in _collect_py_targets(path, skip_tests):
+        for py_file in _collect_py_targets(path):
             key = _dedupe_key(py_file)
             if key not in seen:
                 seen.add(key)
@@ -276,12 +335,20 @@ def _expand_targets(paths: Sequence[Path], skip_tests: bool) -> list[Path]:
     return expanded
 
 
-def audit_targets(
-    paths: Sequence[Path], max_complexity: int = 10, max_depth: int = 5, skip_tests: bool = True
-) -> AuditReport:
+def audit_targets(paths: Sequence[Path], max_complexity: int = 10, max_depth: int = 5) -> AuditReport:
     """Audit every supplied file or directory target into one consolidated report."""
     report = AuditReport()
-    targets = _expand_targets(paths, skip_tests)
+    report.violations.extend(
+        Violation(
+            file_path=str(path),
+            line_number=1,
+            invariant="TargetIntegrity",
+            message="Audit target does not exist; the gate would otherwise certify nothing as clean.",
+        )
+        for path in paths
+        if not path.exists()
+    )
+    targets = _expand_targets([path for path in paths if path.exists()])
     report.files_checked = len(targets)
     for py_file in targets:
         report.violations.extend(audit_file(py_file, max_complexity, max_depth))
