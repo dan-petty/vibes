@@ -98,6 +98,7 @@ Here you will find:
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
 │   ├── epistemic-hygiene-and-context-pruning.md
+│   ├── error-budget-driven-feedback-inversion.md
 │   ├── fifo-pull-request-shepherding.md
 │   ├── gate-integrity-and-total-input-coverage.md
 │   ├── iterative-resource-refinement-loop.md
@@ -153,6 +154,7 @@ Here you will find:
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
+│   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
@@ -161,6 +163,7 @@ Here you will find:
     ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
     ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
     ├── test_ast_refactorer.py         # Unit tests for AST conditional refactoring engine
+    ├── test_reliability_slo.py        # Unit tests for SLO error budgets and phase policy
     └── test_docs_validator.py         # Unit tests for documentation syntax and link validation
 ```
 

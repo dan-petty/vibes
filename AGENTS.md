@@ -234,13 +234,29 @@ Stochastic language generation must always be bounded by deterministic mechanica
 
 ## 11. The Closed-Loop Feedback Inversion Dynamic
 
-When guided by continuous feedback tooling (`ResourceIterationWorkbench`, `SDLCProjectManager`):
-1. **Phase 1 (Reactive Remediation)**: When invariant violations or test failures exist, agents must focus 100% of priority on minimal, surgical fixes.
-2. **Phase 2 (Proactive Quality Elevation)**: As soon as blockers are cleared and repository health reaches 100.0/100, the feedback loop dynamically inverts to focus on proactive headroom:
+When guided by continuous feedback tooling (`ResourceIterationWorkbench`, `SDLCProjectManager`, `reliability_slo.py`):
+
+**The phase is decided by error budget, not by a binary health check.** A single unlucky iteration must not freeze proactive work, and a loop that has never once failed cannot distinguish *reliable* from *unambitious* — both look identical from inside a green run. Run the policy rather than eyeballing the score:
+
+```bash
+python3 tools/resource_iteration_workbench.py --json > .data/iteration_report.json
+python3 tools/reliability_slo.py record .data/iteration_report.json
+python3 tools/reliability_slo.py status     # exits non-zero when remediation is owed
+```
+
+1. **Phase 1 (Reactive Remediation)** — entered when any objective's budget is `EXHAUSTED`, or is `BURNING` faster than its window elapses across at least three iterations. Focus 100% of priority on minimal, surgical fixes until the budget recovers. `invariant_compliance` carries a 1.0 target and therefore *no* budget: a single invariant breach enters this phase immediately, by design.
+2. **Phase 2 (Proactive Quality Elevation)** — the default while budgets are `HEALTHY`. Spending budget below target is normal operation, not an incident:
    - Decomposing functions operating near the complexity ceiling ($7 \le M \le 10$) down to safe headroom ($M \le 6$).
    - Elevating public docstring coverage and parameter type annotations to 100%.
    - Optimizing test execution latency (sub-second test runner execution).
-3. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codified into `AGENTS.md`.
+   - Automating whatever `toil_containment` reports as machine-fixable backlog: work `ast_refactorer.py` or `docs_validator --fix` could clear is toil, and an agent spending judgement on it is the thing SRE tells you to stop doing.
+3. **Objective Review** — entered when *every* budget closes a full window completely unspent. This is a finding, not a celebration: the objectives are too loose to steer anything. Tighten the targets, or deliberately spend the risk they were reserving.
+4. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codified into `AGENTS.md`.
+
+> [!IMPORTANT]
+> An objective with too few valid events reports `INSUFFICIENT_DATA` rather than a ratio, because `0/1` and `0/1000` are the same number and entirely different facts.
+>
+> Objectives are measured as **good events over valid events**, never as an average. One pathologically slow suite or one violating module is exactly what a mean is designed to hide, and the tail is what an agent actually experiences.
 4. **One Registry Per Gate (Parallel Check Lists Always Diverge)**:
    - A validator with two entry points must register its rules in exactly one place. `docs_validator.py` kept separate check lists in `validate_file` and `validate_content`, so a rule added to one ran in tests and not in the CLI — a gate that passes because it never executed the rule.
    - When adding a rule, add it to the shared registry and assert that every entry point reports identically for the same input.
