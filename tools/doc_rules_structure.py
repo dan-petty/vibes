@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Final, Sequence
 
 from doc_core import DocFinding, extract_fenced_blocks
+from sanitization_policy import is_documentable
 
 _TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(
     r"^(?P<indent>(?:[\u2502]   |    )*)(?:\u251c\u2500\u2500|\u2514\u2500\u2500) (?P<name>\S+)"
@@ -264,7 +265,7 @@ def _private_host_addresses(text: str) -> list[str]:
             address = ipaddress.ip_address(match.group(0))
         except ValueError:
             continue
-        documentable = any(address in net for net in _DOCUMENTABLE_NETWORKS)
+        documentable = is_documentable(address)
         if address.is_private and not address.is_loopback and not documentable:
             found.append(match.group(0))
     return found

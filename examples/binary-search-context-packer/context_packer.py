@@ -59,17 +59,14 @@ def _extract_docstring(node: ast.AST) -> str:
     return ""
 
 
-def _extract_function_signature(node: ast.FunctionDef | ast.AsyncFunctionDef, lines: Sequence[str]) -> str:
-    """Extract def signature lines up to the start of body."""
-    start_line = node.lineno - 1
-    body_start = node.body[0].lineno - 1 if node.body else start_line + 1
-    sig_lines = [lines[i] for i in range(start_line, min(len(lines), body_start))]
-    sig = "\n".join(sig_lines).rstrip()
-    return sig if sig.endswith(":") else f"{sig}:"
+def _extract_declaration_signature(
+    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, lines: Sequence[str]
+) -> str:
+    """Extract the declaration lines of a def or class, up to the start of its body.
 
-
-def _extract_class_signature(node: ast.ClassDef, lines: Sequence[str]) -> str:
-    """Extract class declaration lines up to the start of body."""
+    Functions and classes differ in what they declare and not at all in how the
+    declaration is sliced, which is why the two extractors were byte-identical.
+    """
     start_line = node.lineno - 1
     body_start = node.body[0].lineno - 1 if node.body else start_line + 1
     sig_lines = [lines[i] for i in range(start_line, min(len(lines), body_start))]
@@ -103,10 +100,10 @@ def _parse_top_level_node(node: ast.AST, lines: Sequence[str]) -> AstSymbol | No
     docstring = _extract_docstring(node)
 
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        sig = _extract_function_signature(node, lines)
+        sig = _extract_declaration_signature(node, lines)
         return AstSymbol(node.name, "function", sig, docstring, "...", full_source, node.lineno)
     if isinstance(node, ast.ClassDef):
-        sig = _extract_class_signature(node, lines)
+        sig = _extract_declaration_signature(node, lines)
         return AstSymbol(node.name, "class", sig, docstring, "...", full_source, node.lineno)
     if isinstance(node, (ast.Import, ast.ImportFrom)):
         return AstSymbol("import", "import", full_source, "", "", full_source, node.lineno)

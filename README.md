@@ -344,6 +344,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
 │   ├── streaming-reasoning-sanitizer/ # Streaming reasoning FSM parser & bounded stream sanitizer
 │   ├── binary-search-context-packer/  # Binary search AST prompt context packer
+│   ├── code-smell-quantifier/         # Deterministic smell measurement (MI, clones, LCOM4)
 │   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
 │   └── deprecation-lifecycle-sentinel/ # Post-1.0 deprecation contract & removal deadline gate
 │
@@ -362,6 +363,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── doc_rules_structure.py         # Observation structure and directory map oracles
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
+│   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses

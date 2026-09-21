@@ -321,11 +321,6 @@ def _collect_py_targets(root_path: Path) -> list[Path]:
     return sorted(root_path.rglob("*.py"))
 
 
-def audit_directory(root_path: Path, max_complexity: int = 10, max_depth: int = 5) -> AuditReport:
-    """Audit Python files under root_path, supporting single files or directories."""
-    return audit_targets([root_path], max_complexity, max_depth)
-
-
 def _dedupe_key(path: Path) -> Path:
     """Return a canonical identity for path, tolerating unresolvable symlinks."""
     try:

@@ -26,6 +26,8 @@ import tempfile
 import xml.etree.ElementTree as ElementTree
 import sys
 import time
+
+from sanitization_policy import is_documentable
 from typing import Any, Sequence
 
 # Canonical quality thresholds
@@ -35,12 +37,6 @@ TEST_LATENCY_CEILING_SECONDS = 2.0
 CANONICAL_MOCK_DOMAIN = "example.com"
 
 # Allowed documentation networks for zero-trust compliance
-ALLOWED_TEST_NETWORKS = [
-    ipaddress.ip_network("192.0.2.0/24"),
-    ipaddress.ip_network("198.51.100.0/24"),
-    ipaddress.ip_network("203.0.113.0/24"),
-    ipaddress.ip_network("127.0.0.0/8"),
-]
 
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 PYTEST_PASSED_RE = re.compile(r"(\d+)\s+passed")
@@ -159,6 +155,7 @@ class FeedbackCategory(str, Enum):
     DOCUMENTATION = "DOCUMENTATION"
     TYPE_SAFETY = "TYPE_SAFETY"
     PERFORMANCE = "PERFORMANCE"
+    STRUCTURAL_DECAY = "STRUCTURAL_DECAY"
     POSITIVE_REINFORCEMENT = "POSITIVE_REINFORCEMENT"
 
 
@@ -285,7 +282,7 @@ class ASTMetricCalculator:
         """Check if an IPv4 address string is an unapproved RFC 1918 leak."""
         try:
             ip_obj = ipaddress.ip_address(ip_str)
-            return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS)
+            return ip_obj.is_private and not is_documentable(ip_obj)
         except ValueError:
             return False
 
@@ -340,6 +337,26 @@ class _FunctionAggregate:
             self.functions_without_docstrings.append(miss_doc)
         if miss_type:
             self.functions_without_type_hints.append(miss_type)
+
+
+def _load_smell_quantifier() -> Any | None:
+    """Import the code smell quantifier from the examples tree, if it is present.
+
+    Loaded lazily and optionally: the workbench must keep working in a checkout where the
+    example has been removed, so an absent quantifier degrades the loop rather than
+    breaking it.
+    """
+    example = Path(__file__).resolve().parent.parent / "examples" / "code-smell-quantifier"
+    if not (example / "smell_quantifier.py").exists():
+        return None
+    if str(example) not in sys.path:
+        sys.path.insert(0, str(example))
+    try:
+        import smell_quantifier
+
+        return smell_quantifier
+    except ImportError:
+        return None
 
 
 def _load_docs_validator_cls() -> type[Any]:
@@ -813,6 +830,7 @@ class FeedbackAnalyzer:
             cls._analyze_execution_telemetry(eval_item, feedback)
             cls._analyze_positive_reinforcement(eval_item, feedback)
         cls._analyze_test_parity(evaluations, feedback, root_dir)
+        cls._analyze_structural_decay(evaluations, feedback, root_dir)
         return sorted(feedback, key=lambda f: (cls._priority_rank(f.priority), f.target))
 
     @staticmethod
@@ -953,6 +971,54 @@ class FeedbackAnalyzer:
                     suggested_action="Preserve this structure and use as a reference design pattern for new resources.",
                 )
             )
+
+    @classmethod
+    def _analyze_structural_decay(
+        cls,
+        evaluations: Sequence[ReviewEvaluation],
+        feedback: list[ImprovementFeedback],
+        root_dir: Path,
+    ) -> None:
+        """Surface gating code smells the complexity and depth caps cannot see.
+
+        Cyclomatic complexity and nesting are two axes. A 300-line linear function, a
+        seven-parameter signature and a class with a dozen responsibilities all pass both
+        and are all harder to change. Only gating smells enter the backlog: advisory ones
+        (LCOM4, clones, dead symbols, maintainability index) are sound measurements whose
+        action needs judgement, and a work-generating loop must not manufacture that.
+        """
+        quantifier = _load_smell_quantifier()
+        if quantifier is None:
+            return
+        targets = [
+            root_dir / e.resource_path
+            for e in evaluations
+            if e.scan_metrics.resource_type is not ResourceType.DOCUMENTATION
+        ]
+        try:
+            report = quantifier.analyze([t for t in targets if t.exists()])
+        except (OSError, SyntaxError, ValueError) as err:
+            logger.debug("Structural decay analysis unavailable: %s", err)
+            return
+        feedback.extend(cls._decay_feedback(finding) for finding in report.gating[:10])
+
+    @staticmethod
+    def _decay_feedback(finding: Any) -> ImprovementFeedback:
+        """Translate one quantified smell into a prescriptive backlog item."""
+        return ImprovementFeedback(
+            category=FeedbackCategory.STRUCTURAL_DECAY,
+            priority=FeedbackPriority.MEDIUM,
+            target=finding.file_path,
+            headline=f"{finding.smell.value} in {Path(finding.file_path).name}: {finding.subject}",
+            prescriptive_guidance=(
+                f"Measured {finding.measured:g} against a threshold of {finding.threshold:g} "
+                f"({finding.excess:+g}). {finding.detail}"
+            ),
+            suggested_action=(
+                "Decompose the subject until the measurement falls below the threshold, or "
+                "record why the threshold does not apply here."
+            ),
+        )
 
     @classmethod
     def _analyze_test_parity(

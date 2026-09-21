@@ -50,15 +50,6 @@ class HookDecision(str, Enum):
     DENY = "DENY"
 
 
-class LifecycleEventType(str, Enum):
-    """Supported agentic IDE lifecycle event types."""
-
-    PRE_TOOL_EXECUTION = "PRE_TOOL_EXECUTION"
-    POST_TOOL_EXECUTION = "POST_TOOL_EXECUTION"
-    PRE_FILE_WRITE = "PRE_FILE_WRITE"
-    ON_LSP_DIAGNOSTICS = "ON_LSP_DIAGNOSTICS"
-
-
 @dataclass(frozen=True)
 class HookEvaluation:
     """Evaluation verdict with human-readable rationale."""
