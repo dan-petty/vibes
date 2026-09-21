@@ -102,6 +102,7 @@ Here you will find:
 │   ├── gate-integrity-and-total-input-coverage.md
 │   ├── iterative-resource-refinement-loop.md
 │   ├── multi-agent-codebase-concurrency.md
+│   ├── post-v1-deprecation-lifecycle.md
 │   ├── root-cause-hardening.md
 │   ├── streaming-reasoning-isolation-and-token-budgeting.md
 │   ├── structural-position-oracles.md
@@ -138,7 +139,8 @@ Here you will find:
 │   ├── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
 │   ├── streaming-reasoning-sanitizer/ # Streaming reasoning FSM parser & bounded stream sanitizer
 │   ├── binary-search-context-packer/  # Binary search AST prompt context packer
-│   └── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
+│   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
+│   └── deprecation-lifecycle-sentinel/ # Post-1.0 deprecation contract & removal deadline gate
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── README.md                      # Benchmark suite overview and scoring methodology
