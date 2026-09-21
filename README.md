@@ -302,6 +302,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── epistemic-hygiene-and-context-pruning.md
 │   ├── error-budget-driven-feedback-inversion.md
 │   ├── fifo-pull-request-shepherding.md
+│   ├── findings-must-carry-their-own-falsification.md
 │   ├── gate-integrity-and-total-input-coverage.md
 │   ├── iterative-resource-refinement-loop.md
 │   ├── multi-agent-codebase-concurrency.md
