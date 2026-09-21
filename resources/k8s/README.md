@@ -4,21 +4,6 @@ Production-grade Kubernetes manifests designed for isolated multi-agent executio
 
 ---
 
-## Directory Structure
-
-```text
-├── agent-sandbox/
-│   ├── sandbox-pod.yaml        # Non-root, read-only rootfs, dropped capabilities, seccomp RuntimeDefault
-│   ├── network-policy.yaml     # Zero-trust egress policy: blocks private RFC 1918 IPs & cloud metadata
-│   └── resource-quota.yaml     # Namespace ResourceQuota and LimitRange caps
-└── observability/
-    ├── otel-collector-deployment.yaml  # OTel Collector Deployment, ConfigMap, and Service
-    ├── jaeger-deployment.yaml          # Distributed tracing UI & OTLP endpoint
-    └── valkey-statefulset.yaml         # In-cluster Valkey L2 AST & embedding cache
-```
-
----
-
 ## Security Invariants Enforced
 
 1. **Pod Security Standard (`Restricted`)**:
@@ -57,4 +42,19 @@ kubectl apply -f resources/k8s/agent-sandbox/
 ```bash
 kubectl get pods -n agent-workloads
 kubectl logs agent-worker-sandbox -n agent-workloads
+```
+
+---
+
+## Directory Structure
+
+```text
+├── agent-sandbox/
+│   ├── sandbox-pod.yaml        # Non-root, read-only rootfs, dropped capabilities, seccomp RuntimeDefault
+│   ├── network-policy.yaml     # Zero-trust egress policy: blocks private RFC 1918 IPs & cloud metadata
+│   └── resource-quota.yaml     # Namespace ResourceQuota and LimitRange caps
+└── observability/
+    ├── otel-collector-deployment.yaml  # OTel Collector Deployment, ConfigMap, and Service
+    ├── jaeger-deployment.yaml          # Distributed tracing UI & OTLP endpoint
+    └── valkey-statefulset.yaml         # In-cluster Valkey L2 AST & embedding cache
 ```

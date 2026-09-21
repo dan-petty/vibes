@@ -95,19 +95,6 @@ func CleanContextLoop(ctx context.Context, wg *sync.WaitGroup) {
 
 ---
 
-## Directory Layout & Architecture
-
-```text
-├── go.mod                  # Go module specification (example.com/go-leak-sentinel)
-├── sentinel.go             # Native Go sentinel library & leak demonstration patterns
-├── sentinel_test.go        # Go unit tests verifying leak detection
-├── go_leak_sentinel.py     # Python runtime stack dump parser & concurrency scoring engine
-├── test_go_leak_sentinel.py # Automated test suite (6 passing unit tests in < 0.2s)
-└── README.md               # Architecture, failure mode guide & usage (this file)
-```
-
----
-
 ## Quickstart & CLI Usage
 
 ### Run the Interactive Demonstration
@@ -141,4 +128,17 @@ python3 examples/go-leak-sentinel/go_leak_sentinel.py --scan /path/to/stack.dump
 ### Run Automated Unit Tests
 ```bash
 python3 -m pytest -v examples/go-leak-sentinel/test_go_leak_sentinel.py
+```
+
+---
+
+## Directory Layout & Architecture
+
+```text
+├── go.mod                  # Go module specification (example.com/go-leak-sentinel)
+├── sentinel.go             # Native Go sentinel library & leak demonstration patterns
+├── sentinel_test.go        # Go unit tests verifying leak detection
+├── go_leak_sentinel.py     # Python runtime stack dump parser & concurrency scoring engine
+├── test_go_leak_sentinel.py # Automated test suite (6 passing unit tests in < 0.2s)
+└── README.md               # Architecture, failure mode guide & usage (this file)
 ```
