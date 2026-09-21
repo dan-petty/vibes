@@ -92,6 +92,11 @@ class ServiceLevelObjective:
     # A ratio over a handful of events is noise, and acting on noise is the twitchiness
     # this engine exists to remove. Zero-budget objectives override this to 1.
     min_valid_events: int = 10
+    # Gating objectives describe whether the artifact is fit to ship, and failing one
+    # fails the build. A steering objective describes how the loop should spend effort;
+    # it moves the phase but must never block a release. "Too much of your backlog is
+    # automatable" is a prioritisation signal, not a release criterion.
+    gating: bool = True
 
 
 @dataclass(frozen=True)
@@ -229,6 +234,7 @@ DEFAULT_OBJECTIVES: Final[tuple[ServiceLevelObjective, ...]] = (
         target=0.50,
         window_iterations=20,
         rationale="SRE's toil ceiling: over half the backlog being machine-fixable means the machine should fix it.",
+        gating=False,
     ),
 )
 
@@ -466,12 +472,18 @@ def decide_phase(states: Sequence[BudgetState]) -> PolicyDecision:
     )
 
 
+def gating_states(states: Sequence[BudgetState]) -> list[BudgetState]:
+    """Return only the objectives that describe whether the artifact is fit to ship."""
+    return [state for state in states if state.objective.gating]
+
+
 def render_status(states: Sequence[BudgetState], decision: PolicyDecision) -> list[str]:
     """Render the error budget table and the resulting phase decision."""
     header = f"{'OBJECTIVE':<22} {'OBSERVED':>9} {'TARGET':>7} {'BUDGET USED':>12} {'BURN':>7}  STATUS"
     rows = [
         f"{s.objective.sli:<22} {s.observed:>9.3f} {s.objective.target:>7.3f} "
         f"{s.consumed:>11.0%} {s.burn_rate:>6.2f}x  {s.status.value}"
+        + ("" if s.objective.gating else "  (steering)")
         for s in states
     ]
     return [
@@ -504,9 +516,15 @@ def _handle_record(args: argparse.Namespace) -> int:
 
 
 def _handle_status(args: argparse.Namespace) -> int:
-    """Report error budget state and the phase the loop should occupy."""
+    """Report error budget state, the phase the loop should occupy, and the release verdict.
+
+    The exit code reflects the gating objectives only. A steering objective can put the
+    loop into remediation without blocking a release, which is the whole point of
+    separating "what should we work on" from "is this fit to ship".
+    """
     states = evaluate_all(load_history(args.history))
     decision = decide_phase(states)
+    release = decide_phase(gating_states(states))
     if args.json:
         print(json.dumps({
             "objectives": [{**asdict(s), "objective": asdict(s.objective), "status": s.status.value} for s in states],
@@ -514,14 +532,15 @@ def _handle_status(args: argparse.Namespace) -> int:
         }, indent=2, default=str))
     else:
         print("\n".join(render_status(states, decision)))
-    return 0 if decision.phase is not LoopPhase.REACTIVE_REMEDIATION else 1
+        print(f"Release gate: {'BLOCKED by ' + release.driver if release.phase is LoopPhase.REACTIVE_REMEDIATION else 'clear'}")
+    return 0 if release.phase is not LoopPhase.REACTIVE_REMEDIATION else 1
 
 
 def _handle_policy(args: argparse.Namespace) -> int:
     """Emit only the phase decision, for agents and CI to branch on."""
-    decision = decide_phase(evaluate_all(load_history(args.history)))
-    print(decision.phase.value)
-    return 0 if decision.phase is not LoopPhase.REACTIVE_REMEDIATION else 1
+    states = evaluate_all(load_history(args.history))
+    print(decide_phase(states).phase.value)
+    return 0 if decide_phase(gating_states(states)).phase is not LoopPhase.REACTIVE_REMEDIATION else 1
 
 
 _COMMANDS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {

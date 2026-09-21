@@ -116,6 +116,9 @@ Toil earns a fifth indicator with no golden-signal counterpart. `toil_containmen
 ## Guardrails & Anti-Patterns
 
 > [!WARNING]
+> **Not every objective should block a release.** An indicator about how effort is spent — toil, backlog composition, review latency — steers what the loop works on next. Wiring it to the build means a team with a healthy but automatable backlog cannot ship, which discredits the whole instrument the first time it fires. Mark such objectives as steering: they move the phase, and the release verdict is computed from the gating ones alone.
+
+> [!WARNING]
 > **An objective nobody can breach is decoration.** Setting every target to 1.0 reproduces the binary check with more machinery. Reserve zero-budget objectives for invariants that genuinely admit no failure, and give everything else room to be spent.
 
 - **Do not average the window across iterations.** An iteration that evaluated two resources must not weigh as much as one that evaluated two hundred. Aggregate events, not ratios.

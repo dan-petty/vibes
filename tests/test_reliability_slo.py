@@ -228,3 +228,42 @@ def test_corrupt_shard_is_skipped_rather_than_halting_the_loop(tmp_path: Path) -
     (shards / "99999999T000000Z-00099.json").write_text("{not json", encoding="utf-8")
 
     assert len(load_history(shards)) == 1
+
+
+def test_steering_objective_moves_the_phase_without_blocking_release() -> None:
+    """"Too much of your backlog is automatable" steers priority; it is not a ship blocker."""
+    from reliability_slo import gating_states
+
+    steering = ServiceLevelObjective(
+        "toil_containment", target=0.50, window_iterations=10, rationale="r", gating=False
+    )
+    gating = ServiceLevelObjective("gate_pass_rate", target=0.90, window_iterations=10, rationale="r")
+    states = [
+        evaluate_objective(steering, _history("toil_containment", [(2, 11)] * 10)),
+        evaluate_objective(gating, _history("gate_pass_rate", [(100, 100)] * 10)),
+    ]
+
+    assert states[0].status is BudgetStatus.EXHAUSTED
+    assert decide_phase(states).phase is LoopPhase.REACTIVE_REMEDIATION
+    assert decide_phase(gating_states(states)).phase is not LoopPhase.REACTIVE_REMEDIATION
+
+
+def test_gating_objective_blocks_release(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A breached gating objective must still fail the build."""
+    ledger = tmp_path / "slo_history.json"
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(_report([_resource(health="CRITICAL", complexity_violations=["f: M=12"])])),
+        encoding="utf-8",
+    )
+    main(["slo", "record", str(report), "--history", str(ledger)])
+    capsys.readouterr()
+
+    assert main(["slo", "status", "--history", str(ledger)]) == 1
+    assert "Release gate: BLOCKED" in capsys.readouterr().out
+
+
+def test_default_objectives_declare_exactly_one_steering_indicator() -> None:
+    """Toil is the only indicator about effort rather than artifact fitness."""
+    steering = [o.sli for o in DEFAULT_OBJECTIVES if not o.gating]
+    assert steering == ["toil_containment"]

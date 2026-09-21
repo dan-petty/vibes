@@ -274,6 +274,8 @@ Record into [`docs/reliability/iterations/`](./docs/reliability/iterations/) —
 4. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is automatically ingested into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codified into `AGENTS.md`.
 
 > [!IMPORTANT]
+> **Gating objectives are not steering objectives.** `invariant_compliance`, `gate_pass_rate`, `feedback_latency` and `headroom_saturation` describe whether the artifact is fit to ship, and breaching one fails the build. `toil_containment` describes how the loop should spend effort: it moves the phase, but never blocks a release. "Too much of your backlog is automatable" is a prioritisation signal, and a repository whose backlog is healthy but automatable must still be able to ship.
+>
 > An objective with too few valid events reports `INSUFFICIENT_DATA` rather than a ratio, because `0/1` and `0/1000` are the same number and entirely different facts.
 >
 > Objectives are measured as **good events over valid events**, never as an average. One pathologically slow suite or one violating module is exactly what a mean is designed to hide, and the tail is what an agent actually experiences.
