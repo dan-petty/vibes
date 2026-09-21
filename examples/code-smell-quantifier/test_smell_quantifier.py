@@ -182,3 +182,34 @@ def test_main_fail_on_switch_controls_the_exit_code(tmp_path: Path) -> None:
 def test_maintainability_threshold_matches_the_radon_scale() -> None:
     """20 is radon's A/B boundary; 65 belongs to the unnormalized SEI scale."""
     assert LOW_MAINTAINABILITY_INDEX == pytest.approx(20.0)
+
+
+def test_method_calls_and_constants_are_not_instance_attributes() -> None:
+    """`self.run()` is a call and `self.LIMIT` is a constant; neither is state.
+
+    Counting every `self.X` reference as an attribute put nine classes over the ceiling
+    when their real counts were at or below it, and each would have been a refactor of
+    correct code.
+    """
+    source = (
+        "class C:\n"
+        "    LIMIT = 10\n"
+        "    def __init__(self):\n"
+        "        self.a = 1\n        self.b = 2\n"
+        "    def run(self):\n"
+        "        return self.helper() + self.LIMIT + self.a\n"
+        "    def helper(self):\n        return self.b\n"
+    )
+    node = next(n for n in ast.walk(_tree(source)) if isinstance(n, ast.ClassDef))
+    from smell_quantifier import _class_attribute_names, _class_attribute_references
+
+    assert _class_attribute_names(node) == {"a", "b"}
+    assert {"helper", "LIMIT"} <= _class_attribute_references(node)
+
+
+def test_god_class_ceiling_counts_only_assigned_state() -> None:
+    """A class with many collaborators is not a class with many attributes."""
+    calls = "\n".join(f"        self.step{i}()" for i in range(12))
+    defs = "\n".join(f"    def step{i}(self):\n        return {i}" for i in range(12))
+    source = f"class C:\n    def __init__(self):\n        self.only = 1\n    def run(self):\n{calls}\n{defs}\n"
+    assert detect_god_classes(_tree(source), Path("m.py")) == []

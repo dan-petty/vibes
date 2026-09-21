@@ -331,6 +331,15 @@ def validate_url_security(url: str) -> tuple[str, str]:
     return parsed.scheme, hostname
 
 
+@dataclass(frozen=True)
+class ExtractionOutcome:
+    """What one extraction attempt recovered from a page."""
+
+    title: str = ""
+    content: str = ""
+    links: list[str] = field(default_factory=list)
+
+
 class AdaptiveWebCrawler:
     """Agentic web crawler with dynamic tier escalation and domain strategy memory."""
 
@@ -378,14 +387,14 @@ class AdaptiveWebCrawler:
         status_code, html = self.http_fetcher(url, DEFAULT_BROWSER_HEADERS)
         if status_code == 429:
             self.strategy_store.record_rate_limit(domain)
-            return self._build_page(url, "", "", [], ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED, start_time)
+            return self._build_page(url, ExtractionOutcome(), ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED, start_time)
 
         cleaner = HTMLContentCleaner()
         cleaner.feed(html)
         title, text, links = cleaner.get_clean_content()
         quality = SPADetector.analyze(html, text)
 
-        return self._build_page(url, title, text, links, ExtractionTier.STATIC_HTTP, quality, start_time)
+        return self._build_page(url, ExtractionOutcome(title, text, links), ExtractionTier.STATIC_HTTP, quality, start_time)
 
     def _attempt_headless_extract(
         self, url: str, domain: str, wait_selector: str, start_time: float
@@ -393,26 +402,25 @@ class AdaptiveWebCrawler:
         status_code, html = self.headless_fetcher(url, wait_selector)
         if status_code == 429:
             self.strategy_store.record_rate_limit(domain)
-            return self._build_page(url, "", "", [], ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED, start_time)
+            return self._build_page(url, ExtractionOutcome(), ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED, start_time)
 
         cleaner = HTMLContentCleaner()
         cleaner.feed(html)
         title, text, links = cleaner.get_clean_content()
         quality = PageQuality.HIGH if len(text) >= 100 else PageQuality.PARTIAL
 
-        return self._build_page(url, title, text, links, ExtractionTier.HEADLESS_BROWSER, quality, start_time)
+        return self._build_page(url, ExtractionOutcome(title, text, links), ExtractionTier.HEADLESS_BROWSER, quality, start_time)
 
     def _build_page(
         self,
         url: str,
-        title: str,
-        content: str,
-        links: list[str],
+        extraction: ExtractionOutcome,
         tier: ExtractionTier,
         quality: PageQuality,
         start_time: float,
     ) -> CrawledPage:
         # Standard token approximation: ~4 characters per token
+        title, content, links = extraction.title, extraction.content, extraction.links
         token_estimate = max(len(content) // 4, 1) if content else 0
         resolved_links = [urljoin(url, link) for link in links if link and not link.startswith("#")]
         duration = round(time.monotonic() - start_time, 3)

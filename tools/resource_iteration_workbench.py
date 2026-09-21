@@ -305,6 +305,24 @@ class ASTMetricCalculator:
 
 
 @dataclass
+@dataclass(frozen=True)
+class FunctionReading:
+    """One function's measurements, travelling as a record rather than seven positionals.
+
+    The tuple this replaces was built in one place and unpacked in another by position,
+    so a reordering would have type-checked and silently mislabelled every field.
+    """
+
+    complexity: int
+    depth: int
+    complexity_violation: str | None
+    depth_violation: str | None
+    near_threshold: str | None
+    missing_docstring: str | None
+    missing_type_hints: str | None
+
+
+@dataclass
 class _FunctionAggregate:
     """Helper accumulator for function-level AST metrics."""
     max_complexity: int = 1
@@ -314,29 +332,20 @@ class _FunctionAggregate:
     functions_without_docstrings: list[str] = field(default_factory=list)
     functions_without_type_hints: list[str] = field(default_factory=list)
 
-    def update(
-        self,
-        c: int,
-        d: int,
-        c_viol: str | None,
-        d_viol: str | None,
-        near_thr: str | None,
-        miss_doc: str | None,
-        miss_type: str | None,
-    ) -> None:
-        """Accumulate single function AST metrics and bounds into aggregate."""
-        self.max_complexity = max(self.max_complexity, c)
-        self.max_depth = max(self.max_depth, d)
-        if c_viol:
-            self.complexity_violations.append(c_viol)
-        if d_viol:
-            self.complexity_violations.append(d_viol)
-        if near_thr:
-            self.near_threshold_functions.append(near_thr)
-        if miss_doc:
-            self.functions_without_docstrings.append(miss_doc)
-        if miss_type:
-            self.functions_without_type_hints.append(miss_type)
+    def update(self, reading: FunctionReading) -> None:
+        """Accumulate one function's AST metrics and bounds into the aggregate."""
+        self.max_complexity = max(self.max_complexity, reading.complexity)
+        self.max_depth = max(self.max_depth, reading.depth)
+        if reading.complexity_violation:
+            self.complexity_violations.append(reading.complexity_violation)
+        if reading.depth_violation:
+            self.complexity_violations.append(reading.depth_violation)
+        if reading.near_threshold:
+            self.near_threshold_functions.append(reading.near_threshold)
+        if reading.missing_docstring:
+            self.functions_without_docstrings.append(reading.missing_docstring)
+        if reading.missing_type_hints:
+            self.functions_without_type_hints.append(reading.missing_type_hints)
 
 
 def _load_smell_quantifier() -> Any | None:
@@ -465,7 +474,7 @@ class ResourceScanner:
 
         agg = _FunctionAggregate()
         for fn in func_nodes:
-            agg.update(*cls._inspect_function(fn))
+            agg.update(cls._inspect_function(fn))
 
         # Test suites often contain intentional mock IP strings to test sanitizers
         is_test = cls._classify_resource_type(path) == ResourceType.TEST_SUITE
@@ -489,12 +498,16 @@ class ResourceScanner:
     @classmethod
     def _inspect_function(
         cls, fn: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> tuple[int, int, str | None, str | None, str | None, str | None, str | None]:
-        c = ASTMetricCalculator.calculate_complexity(fn)
-        d = ASTMetricCalculator.calculate_max_nesting(fn)
-        c_viol, d_viol, near_thr = cls._check_complexity_bounds(fn.name, fn.lineno, c, d)
+    ) -> FunctionReading:
+        complexity = ASTMetricCalculator.calculate_complexity(fn)
+        depth = ASTMetricCalculator.calculate_max_nesting(fn)
+        c_viol, d_viol, near_thr = cls._check_complexity_bounds(fn.name, fn.lineno, complexity, depth)
         miss_doc, miss_type = cls._check_function_contract(fn)
-        return c, d, c_viol, d_viol, near_thr, miss_doc, miss_type
+        return FunctionReading(
+            complexity=complexity, depth=depth, complexity_violation=c_viol,
+            depth_violation=d_viol, near_threshold=near_thr,
+            missing_docstring=miss_doc, missing_type_hints=miss_type,
+        )
 
     @staticmethod
     def _check_complexity_bounds(

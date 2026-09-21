@@ -16,6 +16,7 @@ license = { text = "Apache-2.0" }
 # markdown-it-py and aborted every push until it was noticed.
 dependencies = [
     "markdown-it-py>=3.0",   # CommonMark parser backing the documentation validator
+    "networkx>=3.0",         # Graph algorithms: elementary cycle detection
     "pyyaml>=6.0",           # Kubernetes, compose and workflow manifest validation
     "radon>=6.0",            # Maintainability index, Halstead metrics, cyclomatic complexity
     "vulture>=2.11",         # Unreferenced code detection

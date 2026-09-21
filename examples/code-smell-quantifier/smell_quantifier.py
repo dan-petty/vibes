@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import math
 import sys
 from collections import defaultdict
@@ -31,6 +32,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Final, Iterable, Sequence
 
+import networkx
 from radon.metrics import mi_compute, mi_parameters
 from vulture import Vulture
 
@@ -147,16 +149,40 @@ def detect_long_functions(tree: ast.AST, path: Path) -> list[SmellFinding]:
     return findings
 
 
-def _class_attribute_names(node: ast.ClassDef) -> set[str]:
-    """Return instance attribute names assigned anywhere in a class body."""
+def _class_attribute_names(node: ast.AST) -> set[str]:
+    """Return instance attribute names *assigned* within a class or function body.
+
+    Only Store contexts count. Collecting every `self.X` reference counts method calls
+    and class constants as attributes: `self.run_command(...)` and `self.IGNORE_TAGS`
+    are not state. That inflation put nine classes over the attribute ceiling here when
+    their real counts were at or below it, and each would have been a refactor of
+    correct code.
+    """
     targets = (
         child.attr
         for child in ast.walk(node)
         if isinstance(child, ast.Attribute)
         and isinstance(child.value, ast.Name)
         and child.value.id == "self"
+        and isinstance(child.ctx, ast.Store)
     )
     return set(targets)
+
+
+def _class_attribute_references(node: ast.AST) -> set[str]:
+    """Return every `self.X` name a body touches, read or written.
+
+    LCOM4 connects two methods when they access a shared instance variable, regardless
+    of which one writes it, so cohesion needs references while the attribute ceiling
+    needs assignments. They are different questions about the same syntax.
+    """
+    return {
+        child.attr
+        for child in ast.walk(node)
+        if isinstance(child, ast.Attribute)
+        and isinstance(child.value, ast.Name)
+        and child.value.id == "self"
+    }
 
 
 def _class_methods(node: ast.ClassDef) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
@@ -189,20 +215,24 @@ def _is_data_carrier(node: ast.ClassDef) -> bool:
 
 def detect_god_classes(tree: ast.AST, path: Path) -> list[SmellFinding]:
     """Flag classes exceeding the pylint method or attribute ceilings."""
-    findings = []
-    for node in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
-        methods, attributes = len(_class_methods(node)), len(_class_attribute_names(node))
-        checks = [(methods, MAX_CLASS_METHODS, "methods")]
-        if not _is_data_carrier(node):
-            checks.append((attributes, MAX_CLASS_ATTRIBUTES, "instance attributes"))
-        for measured, threshold, noun in checks:
-            if measured > threshold:
-                findings.append(SmellFinding(
-                    smell=Smell.GOD_CLASS, file_path=str(path), line_number=node.lineno,
-                    subject=node.name, measured=measured, threshold=threshold,
-                    detail=f"{measured} {noun}; responsibilities accumulate faster than they are split",
-                ))
-    return findings
+    classes = (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
+    return [f for node in classes for f in _class_ceiling_findings(node, path)]
+
+
+def _class_ceiling_findings(node: ast.ClassDef, path: Path) -> list[SmellFinding]:
+    """Return ceiling breaches for one class."""
+    checks = [(len(_class_methods(node)), MAX_CLASS_METHODS, "methods")]
+    if not _is_data_carrier(node):
+        checks.append((len(_class_attribute_names(node)), MAX_CLASS_ATTRIBUTES, "instance attributes"))
+    return [
+        SmellFinding(
+            smell=Smell.GOD_CLASS, file_path=str(path), line_number=node.lineno,
+            subject=node.name, measured=measured, threshold=threshold,
+            detail=f"{measured} {noun}; responsibilities accumulate faster than they are split",
+        )
+        for measured, threshold, noun in checks
+        if measured > threshold
+    ]
 
 
 def _cohesion_components(node: ast.ClassDef) -> int:
@@ -217,7 +247,7 @@ def _cohesion_components(node: ast.ClassDef) -> int:
         return 1
     method_names = {m.name for m in methods}
     touched = {
-        m.name: _class_attribute_names(m) | {
+        m.name: _class_attribute_references(m) | {
             c.func.attr for c in ast.walk(m)
             if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
             and c.func.attr in method_names
@@ -286,17 +316,27 @@ def _statement_windows(
     window. Computing them per window instead re-walks every statement once for each of
     the `size` windows containing it, which was 39% of the tool's total runtime.
     """
-    for node in ast.walk(tree):
-        body = getattr(node, "body", None)
-        if not isinstance(body, list) or len(body) < size:
-            continue
-        subject = getattr(node, "name", type(node).__name__)
-        prints = [_normalize_for_clone(stmt) for stmt in body]
-        masses = [sum(1 for _ in ast.walk(stmt)) for stmt in body]
-        for start in range(len(body) - size + 1):
-            if sum(masses[start : start + size]) < MIN_CLONE_NODE_MASS:
-                continue
-            yield "|".join(prints[start : start + size]), f"{path.name}:{subject}", body[start].lineno
+    bodies = (
+        (getattr(node, "name", type(node).__name__), getattr(node, "body", None))
+        for node in ast.walk(tree)
+    )
+    scopes = ((s, b) for s, b in bodies if isinstance(b, list) and len(b) >= size)
+    for subject, body in scopes:
+        yield from _windows_in_scope(body, f"{path.name}:{subject}", size)
+
+
+def _windows_in_scope(
+    body: list[ast.stmt], subject: str, size: int
+) -> Iterable[tuple[str, str, int]]:
+    """Yield qualifying windows within one statement list."""
+    prints = [_normalize_for_clone(stmt) for stmt in body]
+    masses = [sum(1 for _ in ast.walk(stmt)) for stmt in body]
+    starts = (
+        s for s in range(len(body) - size + 1)
+        if sum(masses[s : s + size]) >= MIN_CLONE_NODE_MASS
+    )
+    for start in starts:
+        yield "|".join(prints[start : start + size]), subject, body[start].lineno
 
 
 def detect_duplicated_blocks(
@@ -343,13 +383,30 @@ def _merge_overlapping_clones(findings: list[SmellFinding], size: int) -> list[S
 
 def _local_imports(tree: ast.AST, known: set[str]) -> set[str]:
     """Return imported module stems that belong to the scanned corpus."""
-    stems: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            stems.add(node.module.split(".")[-1])
-        elif isinstance(node, ast.Import):
-            stems.update(alias.name.split(".")[-1] for alias in node.names)
+    stems = {s for node in ast.walk(tree) for s in _import_stems(node)}
     return stems & known
+
+
+def _import_stems(node: ast.AST) -> set[str]:
+    """Return the module stems one import node names."""
+    if isinstance(node, ast.ImportFrom):
+        return {node.module.split(".")[-1]} if node.module else set()
+    if isinstance(node, ast.Import):
+        return {alias.name.split(".")[-1] for alias in node.names}
+    return set()
+
+
+def _cycles_in(graph: dict[str, set[str]]) -> list[list[str]]:
+    """Return the elementary cycles of a directed graph.
+
+    Delegated to networkx rather than hand-rolled. The version this replaces was a
+    depth-first walk that cleared its own stack mid-iteration to emit "one representative
+    cycle per group" — a heuristic, at the nesting ceiling, approximating an algorithm
+    that has a correct published implementation. networkx carries no hard dependencies,
+    so the proportionality test in `AGENTS.md` §1a is satisfied.
+    """
+    digraph = networkx.DiGraph((src, dst) for src, targets in graph.items() for dst in targets)
+    return [list(cycle) for cycle in networkx.simple_cycles(digraph)]
 
 
 def detect_import_cycles(trees: dict[Path, ast.AST]) -> list[SmellFinding]:
@@ -357,7 +414,7 @@ def detect_import_cycles(trees: dict[Path, ast.AST]) -> list[SmellFinding]:
     known = {p.stem for p in trees}
     graph = {p.stem: _local_imports(t, known) for p, t in trees.items()}
     by_stem = {p.stem: p for p in trees}
-    cycles = _find_cycles(graph)
+    cycles = _cycles_in(graph)
     return [
         SmellFinding(
             smell=Smell.IMPORT_CYCLE, file_path=str(by_stem[cycle[0]]), line_number=1,
@@ -366,27 +423,6 @@ def detect_import_cycles(trees: dict[Path, ast.AST]) -> list[SmellFinding]:
         )
         for cycle in cycles
     ]
-
-
-def _find_cycles(graph: dict[str, set[str]]) -> list[list[str]]:
-    """Return one representative cycle per strongly connected group."""
-    seen: set[str] = set()
-    cycles: list[list[str]] = []
-    for start in sorted(graph):
-        if start in seen:
-            continue
-        stack = [(start, [start])]
-        while stack:
-            node, path_so_far = stack.pop()
-            for nxt in sorted(graph.get(node, set())):
-                if nxt == start and len(path_so_far) > 1:
-                    cycles.append(path_so_far)
-                    seen.update(path_so_far)
-                    stack = []
-                    break
-                if nxt not in path_so_far and nxt not in seen:
-                    stack.append((nxt, path_so_far + [nxt]))
-    return cycles
 
 
 def detect_unreferenced_symbols(
@@ -493,6 +529,15 @@ def _score_module(path: Path, source: str) -> ModuleScore:
     )
 
 
+def _parse_module(file_path: Path) -> tuple[str, ast.AST] | None:
+    """Read and parse a module, or return None when it cannot be read or parsed."""
+    try:
+        source = file_path.read_text(encoding="utf-8")
+        return source, ast.parse(source, filename=str(file_path))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return None
+
+
 def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport:
     """Quantify every Python module under the supplied targets.
 
@@ -504,18 +549,18 @@ def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport
     """
     report = SmellReport()
     trees: dict[Path, ast.AST] = {}
+    detectors = [
+        d for d in PER_FILE_DETECTORS if include_advisory or d not in ADVISORY_DETECTORS
+    ]
     for file_path in _python_files(paths):
-        try:
-            source = file_path.read_text(encoding="utf-8")
-            tree = ast.parse(source, filename=str(file_path))
-        except (OSError, SyntaxError, UnicodeDecodeError):
+        parsed = _parse_module(file_path)
+        if parsed is None:
             continue
+        source, tree = parsed
         trees[file_path] = tree
         if include_advisory:
             report.modules.append(_score_module(file_path, source))
-        for detector in PER_FILE_DETECTORS:
-            if include_advisory or detector not in ADVISORY_DETECTORS:
-                report.findings.extend(detector(tree, file_path))
+        report.findings.extend(f for d in detectors for f in d(tree, file_path))
 
     report.findings.extend(detect_import_cycles(trees))
     if not include_advisory:
@@ -580,26 +625,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_targets(raw_paths: Sequence[str]) -> tuple[list[Path], list[Path]]:
+    """Split requested targets into those that exist and those that do not.
+
+    A path that does not exist is reported and then excluded, never silently skipped: a
+    gate that certifies a typo as clean is worse than one that refuses to run.
+    """
+    targets = [Path(raw) for raw in raw_paths] or [Path(".")]
+    missing = [target for target in targets if not target.exists()]
+    for target in missing:
+        print(f"MISSING {target} — refusing to certify a path that does not exist.", file=sys.stderr)
+    return [target for target in targets if target.exists()], missing
+
+
+def _render_json(report: SmellReport) -> str:
+    """Serialize the report for trending across runs."""
+    return json.dumps({
+        "mean_maintainability": report.mean_maintainability,
+        "counts": report.counts(),
+        "modules": [vars(m) for m in report.modules],
+        "findings": [vars(f) | {"smell": f.smell.value} for f in report.findings],
+    }, indent=2)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI runner for the code smell quantifier."""
     args = build_arg_parser().parse_args(list(argv[1:]) if argv is not None else None)
-    targets = [Path(raw) for raw in args.paths] or [Path(".")]
-    missing = [t for t in targets if not t.exists()]
-    for target in missing:
-        print(f"MISSING {target} — refusing to certify a path that does not exist.", file=sys.stderr)
-
-    report = analyze([t for t in targets if t.exists()])
-    if args.json:
-        import json
-
-        print(json.dumps({
-            "mean_maintainability": report.mean_maintainability,
-            "counts": report.counts(),
-            "modules": [vars(m) for m in report.modules],
-            "findings": [vars(f) | {"smell": f.smell.value} for f in report.findings],
-        }, indent=2))
-    else:
-        print("\n".join(render(report)))
+    present, missing = _resolve_targets(args.paths)
+    report = analyze(present)
+    print(_render_json(report) if args.json else "\n".join(render(report)))
 
     blocking = {"none": [], "gating": report.gating, "any": report.findings}[args.fail_on]
     return 1 if blocking or missing else 0

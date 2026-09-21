@@ -108,12 +108,17 @@ def _directory_listing(parent: Path, cache: dict[Path, dict[str, str]]) -> dict[
     with a large map: measured here at 0.764ms per stat against 0.001ms on tmpfs.
     """
     if parent not in cache:
-        try:
-            with os.scandir(parent) as entries:
-                cache[parent] = {e.name: ("dir" if e.is_dir() else "file") for e in entries}
-        except OSError:
-            cache[parent] = {}
+        cache[parent] = _scan_directory(parent)
     return cache[parent]
+
+
+def _scan_directory(parent: Path) -> dict[str, str]:
+    """Return {name: kind} for one directory, treating an unreadable path as empty."""
+    try:
+        with os.scandir(parent) as entries:
+            return {entry.name: ("dir" if entry.is_dir() else "file") for entry in entries}
+    except OSError:
+        return {}
 
 
 def _path_kind(path: Path, cache: dict[Path, dict[str, str]]) -> str | None:
@@ -271,16 +276,23 @@ def _private_host_addresses(text: str) -> list[str]:
     A CIDR range is how the sanitization rule itself is written down; a bare host address
     is someone's actual machine. Only the second leaks, so only the second is reported.
     """
-    found = []
-    for match in _HOST_IPV4_RE.finditer(text):
-        try:
-            address = ipaddress.ip_address(match.group(0))
-        except ValueError:
-            continue
-        documentable = is_documentable(address)
-        if address.is_private and not address.is_loopback and not documentable:
-            found.append(match.group(0))
-    return found
+    candidates = (_parse_address(m.group(0)) for m in _HOST_IPV4_RE.finditer(text))
+    return [
+        str(address)
+        for address in candidates
+        if address is not None
+        and address.is_private
+        and not address.is_loopback
+        and not is_documentable(address)
+    ]
+
+
+def _parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Parse a dotted-quad token, or return None when it is not an address."""
+    try:
+        return ipaddress.ip_address(token)
+    except ValueError:
+        return None
 
 
 def check_documentation_sanitization(lines: Sequence[str], file_path: Path) -> list[DocFinding]:

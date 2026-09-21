@@ -142,21 +142,38 @@ def _check_token_fences(tokens: Sequence[Any], file_str: str) -> list[DocFinding
     return findings
 
 
+@dataclass
+class _FenceScan:
+    """Scanner state while walking fenced blocks.
+
+    These fields travelled as an untyped `list[Any]` alongside parallel scalars, which is
+    why two of these functions carried six and seven parameters: the state was passed by
+    spreading it. Naming it collapses both signatures and makes the positional unpacking
+    that read `in_fence, fence_char, fence_len, _ = state` unnecessary.
+    """
+
+    in_fence: bool = False
+    fence_char: str = ""
+    fence_len: int = 0
+    start_line: int = 0
+    language: str = ""
+    block_lines: list[str] = field(default_factory=list)
+
+
 def _process_fence_line(
-    chars: str,
-    info: str,
+    m_fence: re.Match[str],
     idx: int,
     file_str: str,
-    state: list[Any],
+    scan: _FenceScan,
     findings: list[DocFinding],
 ) -> None:
     """Process a single code fence line against active state."""
-    in_fence, fence_char, fence_len, _ = state
+    chars, info = m_fence.group(1), m_fence.group(2).strip()
     char_type, curr_len = chars[0], len(chars)
-    if not in_fence:
-        state[:] = [True, char_type, curr_len, idx]
+    if not scan.in_fence:
+        scan.in_fence, scan.fence_char, scan.fence_len, scan.start_line = True, char_type, curr_len, idx
         return
-    if char_type != fence_char or curr_len < fence_len:
+    if char_type != scan.fence_char or curr_len < scan.fence_len:
         return
     if info:
         findings.append(
@@ -164,30 +181,28 @@ def _process_fence_line(
                 file_path=file_str,
                 line_number=idx,
                 category="code_fence",
-                message=f"Nested code fence at line {idx} inside a {fence_len}-backtick block requires 4+ backticks",
+                message=f"Nested code fence at line {idx} inside a {scan.fence_len}-backtick block requires 4+ backticks",
             )
         )
     else:
-        state[0] = False
+        scan.in_fence = False
 
 
 def _check_line_fences(lines: Sequence[str], file_str: str) -> list[DocFinding]:
     """Inspect lines for unclosed code fences and nested blocks."""
     findings: list[DocFinding] = []
-    state = [False, "", 0, 0]
+    scan = _FenceScan()
     for idx, line in enumerate(lines, 1):
         m_fence = _FENCE_RE.match(line.strip())
         if m_fence:
-            _process_fence_line(
-                m_fence.group(1), m_fence.group(2).strip(), idx, file_str, state, findings
-            )
-    if state[0]:
+            _process_fence_line(m_fence, idx, file_str, scan, findings)
+    if scan.in_fence:
         findings.append(
             DocFinding(
                 file_path=file_str,
-                line_number=state[3],
+                line_number=scan.start_line,
                 category="code_fence",
-                message=f"Unclosed code fence opened at line {state[3]}",
+                message=f"Unclosed code fence opened at line {scan.start_line}",
             )
         )
     return findings
@@ -513,52 +528,40 @@ def _validate_single_snippet(
 
 
 def _handle_fence_transition(
-    m_fence: re.Match[str],
-    in_fence: bool,
-    fence_lang: str,
-    start_line: int,
-    block_lines: list[str],
-    line_no: int,
-    file_str: str,
-) -> tuple[bool, str, int, list[str], DocFinding | None]:
-    """Handle state transition when entering or exiting a fenced code block."""
-    if not in_fence:
+    m_fence: re.Match[str], scan: _FenceScan, line_no: int, file_str: str
+) -> DocFinding | None:
+    """Enter or leave a fenced block, updating the scan and returning any finding."""
+    if not scan.in_fence:
         info = m_fence.group(2).strip().split()
-        return True, info[0].lower() if info else "", line_no, [], None
-    finding = _validate_single_snippet(fence_lang, block_lines, start_line, file_str)
-    return False, "", 0, [], finding
+        scan.in_fence, scan.language = True, info[0].lower() if info else ""
+        scan.start_line, scan.block_lines = line_no, []
+        return None
+    finding = _validate_single_snippet(scan.language, scan.block_lines, scan.start_line, file_str)
+    scan.in_fence, scan.language, scan.start_line, scan.block_lines = False, "", 0, []
+    return finding
 
 
 def _process_snippet_line(
-    line: str,
-    idx: int,
-    file_str: str,
-    state: list[Any],
-    findings: list[DocFinding],
+    line: str, idx: int, file_str: str, scan: _FenceScan, findings: list[DocFinding]
 ) -> None:
     """Process a single line for embedded code snippets."""
-    stripped = line.strip()
-    m_fence = _FENCE_RE.match(stripped)
-    in_fence, fence_lang, start_line, block_lines = state
+    m_fence = _FENCE_RE.match(line.strip())
     if m_fence:
-        in_f, f_lang, s_line, b_lines, finding = _handle_fence_transition(
-            m_fence, in_fence, fence_lang, start_line, block_lines, idx, file_str
-        )
-        state[:] = [in_f, f_lang, s_line, b_lines]
+        finding = _handle_fence_transition(m_fence, scan, idx, file_str)
         if finding:
             findings.append(finding)
-    elif in_fence:
-        block_lines.append(line)
+    elif scan.in_fence:
+        scan.block_lines.append(line)
 
 
 def check_embedded_snippets(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Syntactically parse embedded code blocks in supported languages."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    state: list[Any] = [False, "", 0, []]
+    scan = _FenceScan()
 
     for idx, line in enumerate(lines, 1):
-        _process_snippet_line(line, idx, file_str, state, findings)
+        _process_snippet_line(line, idx, file_str, scan, findings)
     return findings
 
 
