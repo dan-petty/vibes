@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from sentinel import audit_file
+from sentinel import audit_file, audit_targets, main
 
 
 def test_clean_code_passes_all_invariants():
@@ -137,3 +137,45 @@ def test_subdomain_mock_domain_is_flagged():
         assert "api.example.com" in violations[0].message
     finally:
         tmp_path.unlink()
+
+
+def _write_module(directory: Path, name: str, code: str) -> Path:
+    path = directory / name
+    path.write_text(code)
+    return path
+
+
+def test_audit_targets_scans_every_supplied_path(tmp_path):
+    """Pre-commit passes N filenames; every one must be audited, not just the first."""
+    clean = _write_module(tmp_path, "clean.py", "def ok() -> int:\n    return 1\n")
+    dirty = _write_module(tmp_path, "dirty.py", 'HOST = "http://192.168.1.10:8080"\n')
+
+    report = audit_targets([clean, dirty])
+    assert (report.files_checked, len(report.violations)) == (2, 1)
+    assert report.violations[0].invariant == "ZeroTrustSanitization"
+
+
+def test_main_audits_all_cli_paths_and_fails(tmp_path, capsys):
+    """A violation in any trailing argument must fail the run, never be silently dropped."""
+    clean = _write_module(tmp_path, "clean.py", "def ok() -> int:\n    return 1\n")
+    dirty = _write_module(tmp_path, "dirty.py", 'HOST = "http://10.1.2.3"\n')
+
+    exit_code = main(["sentinel.py", str(clean), str(dirty)])
+    assert exit_code == 1
+    assert "Checked 2 Python files." in capsys.readouterr().out
+
+
+def test_audit_targets_deduplicates_overlapping_paths(tmp_path):
+    """A directory plus one of its own files must not double-count that file."""
+    module = _write_module(tmp_path, "solo.py", "def ok() -> int:\n    return 1\n")
+
+    report = audit_targets([tmp_path, module])
+    assert (report.files_checked, report.is_clean) == (1, True)
+
+
+def test_main_defaults_to_current_directory_without_paths(tmp_path, monkeypatch):
+    """Bare invocation must retain its recursive whole-repository default."""
+    _write_module(tmp_path, "clean.py", "def ok() -> int:\n    return 1\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["sentinel.py"]) == 0

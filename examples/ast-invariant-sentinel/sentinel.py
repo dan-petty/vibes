@@ -10,6 +10,7 @@ Enforces four non-negotiable architectural invariants:
 
 from __future__ import annotations
 
+import argparse
 import ast
 import ipaddress
 import re
@@ -251,20 +252,61 @@ def audit_directory(
     root_path: Path, max_complexity: int = 10, max_depth: int = 5, skip_tests: bool = True
 ) -> AuditReport:
     """Audit Python files under root_path, supporting single files or directories."""
+    return audit_targets([root_path], max_complexity, max_depth, skip_tests)
+
+
+def _dedupe_key(path: Path) -> Path:
+    """Return a canonical identity for path, tolerating unresolvable symlinks."""
+    try:
+        return path.resolve()
+    except (OSError, RuntimeError):
+        return path
+
+
+def _expand_targets(paths: Sequence[Path], skip_tests: bool) -> list[Path]:
+    """Expand every file or directory target into a deduplicated, order-preserving file list."""
+    expanded: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        for py_file in _collect_py_targets(path, skip_tests):
+            key = _dedupe_key(py_file)
+            if key not in seen:
+                seen.add(key)
+                expanded.append(py_file)
+    return expanded
+
+
+def audit_targets(
+    paths: Sequence[Path], max_complexity: int = 10, max_depth: int = 5, skip_tests: bool = True
+) -> AuditReport:
+    """Audit every supplied file or directory target into one consolidated report."""
     report = AuditReport()
-    targets = _collect_py_targets(root_path, skip_tests)
+    targets = _expand_targets(paths, skip_tests)
     report.files_checked = len(targets)
     for py_file in targets:
         report.violations.extend(audit_file(py_file, max_complexity, max_depth))
     return report
 
 
+def _parse_cli_targets(argv: Sequence[str] | None) -> list[Path]:
+    """Resolve every CLI path argument; pre-commit passes N filenames, never one.
+
+    Unknown flags exit non-zero via argparse rather than being silently discarded:
+    a sentinel that quietly ignores part of its input certifies code it never read.
+    """
+    parser = argparse.ArgumentParser(description="AST Invariant Sentinel")
+    parser.add_argument("paths", nargs="*", default=[], help="File or directory paths to audit")
+    args = parser.parse_args(list(argv[1:]) if argv is not None else None)
+    return [Path(raw) for raw in args.paths] or [Path(".")]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI runner for the AST Invariant Sentinel."""
-    target_path = Path(argv[1]) if argv and len(argv) > 1 else Path(".")
-    print(f"🛡️  AST Invariant Sentinel: Scanning '{target_path}'...")
+    target_paths = _parse_cli_targets(argv)
+    scanned = ", ".join(f"'{path}'" for path in target_paths)
+    print(f"🛡️  AST Invariant Sentinel: Scanning {scanned}...")
 
-    report = audit_directory(target_path)
+    report = audit_targets(target_paths)
     print(f"Checked {report.files_checked} Python files.")
 
     if report.is_clean:

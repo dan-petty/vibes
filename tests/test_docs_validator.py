@@ -178,6 +178,33 @@ def test_docs_validator_cli_entrypoint(tmp_path: Path, capsys: pytest.CaptureFix
     assert (data["total_files"], data["is_valid"]) == (1, True)
 
 
+def test_docs_validator_cli_accepts_multiple_paths(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Pre-commit passes N filenames; every supplied document must be validated."""
+    clean = tmp_path / "clean.md"
+    clean.write_text("# Clean\nNothing wrong here.", encoding="utf-8")
+    broken = tmp_path / "broken.md"
+    broken.write_text("# Broken\n\n```python\ndef unclosed(", encoding="utf-8")
+
+    exit_code = docs_validator_main([str(clean), str(broken)])
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "broken.md" in captured and "clean.md" not in captured
+
+
+def test_docs_validator_cli_aggregates_totals_across_paths(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ensure counts from every target are merged rather than reported per-file."""
+    for name in ("a.md", "b.md", "c.md"):
+        (tmp_path / name).write_text(f"# {name}\nClean content.", encoding="utf-8")
+
+    exit_code = docs_validator_main([str(tmp_path / "a.md"), str(tmp_path / "b.md"), "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert (exit_code, data["total_files"], data["is_valid"]) == (0, 2, True)
+
+
 def test_resource_scanner_scans_documentation(tmp_path: Path) -> None:
     """Ensure ResourceScanner integrates documentation files into repository scans."""
     doc = tmp_path / "guide.md"

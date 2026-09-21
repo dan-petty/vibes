@@ -1143,6 +1143,11 @@ class DocsValidator:
         )
 
 
+def _fix_target(target: Path, validator: DocsValidator) -> int:
+    """Apply automatic remediation to a single file or directory target."""
+    return validator.fix_file(target) if target.is_file() else validator.fix_directory(target)
+
+
 def _resolve_report(target: Path, validator: DocsValidator) -> DocValidationReport:
     """Generate validation report for single file or directory."""
     if not target.is_file():
@@ -1157,6 +1162,20 @@ def _resolve_report(target: Path, validator: DocsValidator) -> DocValidationRepo
         findings=findings,
         duration_seconds=0.0,
     )
+
+
+def _merge_reports(reports: Sequence[DocValidationReport]) -> DocValidationReport:
+    """Consolidate per-target reports into one aggregate report."""
+    merged = DocValidationReport()
+    for report in reports:
+        merged.total_files += report.total_files
+        merged.files_with_findings += report.files_with_findings
+        merged.error_count += report.error_count
+        merged.warning_count += report.warning_count
+        merged.findings.extend(report.findings)
+        merged.duration_seconds += report.duration_seconds
+    merged.is_valid = len(merged.findings) == 0
+    return merged
 
 
 def _filter_report_by_rule(report: DocValidationReport, rule: str | None) -> None:
@@ -1192,22 +1211,22 @@ def _determine_exit_code(report: DocValidationReport, strict: bool) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint for standalone vibes doc validator."""
     parser = argparse.ArgumentParser(description="Vibes Documentation Syntax & Link Validator")
-    parser.add_argument("path", nargs="?", default=".", help="File or directory path to validate")
+    parser.add_argument("paths", nargs="*", default=[], help="File or directory paths to validate")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as errors")
     parser.add_argument("--fix", action="store_true", help="Automatically remediate fixable documentation issues")
     parser.add_argument("--json", action="store_true", help="Emit report as JSON")
     parser.add_argument("--rule", help="Filter findings by category rule")
     args = parser.parse_args(argv)
 
-    target = Path(args.path).resolve()
+    targets = [Path(raw).resolve() for raw in (args.paths or ["."])]
     validator = DocsValidator()
 
     if args.fix:
-        fixes = validator.fix_file(target) if target.is_file() else validator.fix_directory(target)
+        fixes = sum(_fix_target(target, validator) for target in targets)
         if fixes > 0:
             print(f"🔧 Applied {fixes} automatic remediation fix(es) to documentation.")
 
-    report = _resolve_report(target, validator)
+    report = _merge_reports([_resolve_report(target, validator) for target in targets])
     _filter_report_by_rule(report, args.rule)
 
     if args.json:

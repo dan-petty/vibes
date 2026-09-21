@@ -10,6 +10,7 @@ repos:
         language: python
         entry: python examples/ast-invariant-sentinel/sentinel.py
         files: \.py$
+        # N staged filenames per invocation; sentinel.py audits every one (argparse nargs="*").
         pass_filenames: true
         additional_dependencies: []
 
@@ -18,6 +19,8 @@ repos:
         language: python
         entry: python tools/docs_validator.py
         files: \.(md|markdown)$
+        # Deliberately whole-repository: cross-document link integrity cannot be judged
+        # from the changed files alone (a rename breaks inbound links in untouched docs).
         pass_filenames: false
         additional_dependencies: [markdown-it-py, pyyaml]
 
