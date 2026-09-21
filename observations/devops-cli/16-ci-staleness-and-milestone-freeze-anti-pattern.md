@@ -62,8 +62,8 @@ flowchart TD
 
     M2 --> M3 --> M4 --> Break --> Local
 
-    style Break fill:#f66,color:#fff
-    style Local fill:#fa0,color:#000
+    style Break fill:#b3261e,color:#fff
+    style Local fill:#f2b705,color:#000
 ```
 
 The sentinel gates in `pr-sentinel.yml` did cover changed Python files — but only for complexity and sanitization, not for test execution. A module could pass the sentinel with $M \le 10$ while harboring a broken import or runtime assertion error.

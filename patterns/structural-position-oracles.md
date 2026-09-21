@@ -36,10 +36,10 @@ flowchart TD
     B -->|"Yes"| PassSemantic["✅ — if keyword present"]
     B -->|"No (but ## 3. exists)"| FailSemantic["❌ — false violation"]
 
-    style Pass fill:#6a6,color:#fff
-    style Fail fill:#f66,color:#fff
-    style PassSemantic fill:#6a6,color:#fff
-    style FailSemantic fill:#f66,color:#fff
+    style Pass fill:#1b5e20,color:#fff
+    style Fail fill:#b3261e,color:#fff
+    style PassSemantic fill:#1b5e20,color:#fff
+    style FailSemantic fill:#b3261e,color:#fff
 ```
 
 ### Step-by-Step

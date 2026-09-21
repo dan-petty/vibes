@@ -15,6 +15,7 @@ from docs_validator import (
     DocValidationReport,
     DocsValidator,
     OBSERVATION_REQUIRED_SECTION_COUNT,
+    contrast_ratio,
     main as docs_validator_main,
 )
 from resource_iteration_workbench import ResourceScanner, ResourceType
@@ -176,6 +177,50 @@ def test_docs_validator_cli_entrypoint(tmp_path: Path, capsys: pytest.CaptureFix
     json_out = capsys.readouterr().out
     data = json.loads(json_out)
     assert (data["total_files"], data["is_valid"]) == (1, True)
+
+
+def test_contrast_ratio_matches_wcag_reference_values() -> None:
+    """Ensure the WCAG 2.1 relative luminance formula is implemented correctly."""
+    assert (
+        round(contrast_ratio("#fff", "#000"), 2),
+        round(contrast_ratio("#fff", "#fff"), 2),
+        round(contrast_ratio("#fff", "#b3261e"), 2),
+    ) == (21.0, 1.0, 6.54)
+
+
+def test_mermaid_fill_without_explicit_color_is_flagged() -> None:
+    """An inherited label color flips with the GitHub theme and must be rejected."""
+    validator = DocsValidator()
+    content = "```mermaid\nflowchart TD\n    A[\"Node\"]\n    style A fill:#b3261e\n```\n"
+    findings = validator.validate_content(content, Path("doc.md"))
+    assert [f.category for f in findings] == ["mermaid_style"]
+    assert "no explicit 'color:'" in findings[0].message
+
+
+def test_mermaid_below_wcag_contrast_is_flagged() -> None:
+    """Fill and label colors closer than 4.5:1 are illegible and must be rejected."""
+    validator = DocsValidator()
+    content = "```mermaid\nflowchart TD\n    A[\"Node\"]\n    style A fill:#6a6,color:#fff\n```\n"
+    findings = validator.validate_content(content, Path("doc.md"))
+    assert [f.category for f in findings] == ["mermaid_style"]
+    assert "2.80:1" in findings[0].message
+
+
+def test_mermaid_palette_pairs_pass_contrast_check() -> None:
+    """Every documented palette pair must satisfy the rule that enforces it."""
+    palette = [("#b3261e", "#fff"), ("#1b5e20", "#fff"), ("#f2b705", "#000"), ("#4527a0", "#fff")]
+    validator = DocsValidator()
+    for fill, color in palette:
+        content = f"```mermaid\nflowchart TD\n    A[\"Node\"]\n    style A fill:{fill},color:{color}\n```\n"
+        assert validator.validate_content(content, Path("doc.md")) == []
+
+
+def test_legacy_graph_declaration_is_flagged() -> None:
+    """The deprecated `graph` alias must be rejected in favour of `flowchart`."""
+    validator = DocsValidator()
+    findings = validator.validate_content("```mermaid\ngraph TD\n    A --> B\n```\n", Path("doc.md"))
+    assert [f.category for f in findings] == ["mermaid"]
+    assert "flowchart TD" in findings[0].message
 
 
 def test_docs_validator_cli_accepts_multiple_paths(

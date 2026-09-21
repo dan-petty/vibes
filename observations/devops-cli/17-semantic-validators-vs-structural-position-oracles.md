@@ -101,8 +101,8 @@ flowchart TD
     SemanticProblem --> FalsePositive["26 false violations on valid corpus"]
     StructuralProperty --> Correct["0 violations on valid corpus\n1 real defect discovered"]
 
-    style FalsePositive fill:#f66,color:#fff
-    style Correct fill:#6a6,color:#fff
+    style FalsePositive fill:#b3261e,color:#fff
+    style Correct fill:#1b5e20,color:#fff
 ```
 
 ---

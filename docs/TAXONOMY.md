@@ -7,7 +7,7 @@ A comprehensive taxonomy of architectures, execution topologies, verification ga
 ## 1. Execution Models & Topologies
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph Single-Shot
         SS[User Prompt] --> LLM1[LLM Completion]
     end

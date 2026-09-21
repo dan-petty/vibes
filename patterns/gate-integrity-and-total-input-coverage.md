@@ -48,9 +48,9 @@ flowchart TD
     Verdict -->|"Yes"| Pass["✅ Certified"]
     Verdict -->|"No"| Fail
 
-    style Pass fill:#6a6,color:#fff
-    style Fail fill:#f66,color:#fff
-    style BothFail fill:#f66,color:#fff
+    style Pass fill:#1b5e20,color:#fff
+    style Fail fill:#b3261e,color:#fff
+    style BothFail fill:#b3261e,color:#fff
 ```
 
 Four rules:

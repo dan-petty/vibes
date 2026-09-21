@@ -47,7 +47,7 @@ This naive logic broke immediately when confronted with `.dev`, `.ai`, `.co.uk`,
 In `devops-cli`, we introduced two strict architectural mandates in `AGENTS.md`:
 
 ```mermaid
-graph TD
+flowchart TD
     Op[Agent GitHub Operation] --> Limiter[Client-Side Token-Bucket Rate Limiter]
     Limiter --> Check{Tokens Available?}
     Check -- No --> Backoff[Bounded Exponential Backoff with Jitter]

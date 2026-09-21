@@ -1,6 +1,7 @@
-# Minimum Python version
+# Resolve whatever modern interpreter the contributor has; pinning an exact minor
+# version makes every hook unrunnable for anyone who does not happen to have it.
 default_language_version:
-  python: python3.12
+  python: python3
 
 repos:
   - repo: local

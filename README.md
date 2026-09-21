@@ -207,7 +207,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 Proven patterns distilled from hundreds of hours of autonomous agent sessions:
 
 ```mermaid
-graph TD
+flowchart TD
     A[User Request / Defect] --> B[CEGIS: Formulate Falsifiable Hypothesis]
     B --> C[Author Failing Counterexample Test]
     C --> D[Autonomous Patch Synthesis]

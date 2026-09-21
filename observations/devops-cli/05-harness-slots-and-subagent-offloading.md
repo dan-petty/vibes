@@ -42,7 +42,7 @@ Traditional agent frameworks use a single model for the entire session lifecycle
 In `devops-cli`, we designed the **Agent Harness Slot & Constellation Architecture**:
 
 ```mermaid
-graph TD
+flowchart TD
     UserGoal[User Goal / Architecture Task] --> Frontier["Frontier Model ('Big Decides')<br>Decomposes Goal & Designs Interface"]
     
     Frontier --> Slot1["Sub-Agent Slot A: Code Explorer<br>Local Model: Qwen 2.5 Coder"]

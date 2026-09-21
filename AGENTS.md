@@ -99,6 +99,42 @@ Every pattern under `patterns/` must provide an actionable operational playbook:
 - **Mermaid Diagrams & Mandatory Label Quoting**: Include Mermaid graphs to visualize workflows, state machines, and decision trees.
   - **Mandatory Quoting of Edge & Node Labels**: Always wrap edge labels containing parentheses `()`, comparison operators (`>`, `<`), brackets (`[]`), braces (`{}`), or colons in double quotes: `A -->|"Yes (Error)"| B` or `RelCheck -->|"False (Escape)"| Fail`. Never leave special characters unquoted inside edge pipes `|Yes (Error)|`, which causes Mermaid lexer failures (`Parse error on line ...: Expecting 'SQE', ... got 'PS'`).
   - **Quoted Node Text**: Always enclose node labels containing parentheses or punctuation in quotes: `Node["Label (Details)"]` or `Check{"Condition?"}`.
+  - **Modern Declarations Only**: Always declare `flowchart TD|LR`, never the deprecated `graph` alias. Mechanically enforced by `docs_validator.py` (`mermaid` rule).
+  - **Choose the Diagram Type That Matches the Mechanism**: A flowchart is the default, not the answer. Reach for the form that carries the most information per token:
+
+    | Mechanism being shown | Diagram type |
+    |---|---|
+    | Ordered exchange between parties (protocol, delegation, tool call) | `sequenceDiagram` |
+    | Lifecycle with irreversible transitions (ratchets, degradation, sessions) | `stateDiagram-v2` |
+    | Value vs. effort, risk vs. reward, any two-axis placement | `quadrantChart` |
+    | A metric moving across a measured series | `xychart-beta` |
+    | Chronology of milestones or phases | `timeline` |
+    | Branch, PR, and merge choreography | `gitGraph` |
+    | Decision logic, pipelines, control flow | `flowchart` |
+
+  - **Accessible, Theme-Independent Palette (WCAG AA)**: GitHub renders Mermaid on both light and dark backgrounds. A `fill:` without an explicit `color:` inherits a label color that flips with the theme and disappears against the fill. **Always declare both**, and always from this palette — every pair clears the WCAG AA 4.5:1 floor, and `docs_validator.py` computes the ratio mechanically (`mermaid_style` rule):
+
+    | Class | `fill` | `color` | Contrast | Use for |
+    |---|---|---|---|---|
+    | `failure` | `#b3261e` | `#fff` | 6.5:1 | Failure modes, violations, anti-patterns |
+    | `success` | `#1b5e20` | `#fff` | 7.9:1 | Verified outcomes, passing gates |
+    | `caution` | `#f2b705` | `#000` | 11.6:1 | Bounded risk, degraded-but-safe states |
+    | `accent` | `#4527a0` | `#fff` | 10.2:1 | The mechanical oracle or remediation itself |
+    | `neutral` | `#37474f` | `#fff` | 9.7:1 | Inert infrastructure and context |
+    | `zoneFail` | `#f7d9d7` | `#000` | 15.9:1 | Subgraph container: the broken state |
+    | `zonePass` | `#d8ead9` | `#000` | 16.7:1 | Subgraph container: the healed state |
+    | `zoneWarn` | `#fdf0cc` | `#000` | 18.5:1 | Subgraph container: the contested middle |
+
+  - **Prefer `classDef` Over Repeated `style`**: Declare the classes a diagram uses once and apply them with `:::`, reserving `style` for genuine one-offs:
+
+    ```mermaid
+    flowchart LR
+        classDef failure fill:#b3261e,color:#fff
+        classDef success fill:#1b5e20,color:#fff
+        Broken["Gate audits argv[1]"]:::failure --> Fixed["Gate audits every path"]:::success
+    ```
+
+  - **A Diagram Must Show a Mechanism, Not a Table of Contents**: Three boxes repeating adjacent prose earn nothing. A diagram belongs where structure is hard to say in a sentence: a cycle, a race, a fan-out, an irreversible transition, a place where two paths diverge. If the caption above it already conveys the whole thing, delete the diagram.
 - **Syntax Highlighting & Nested Code Fences**: Always specify the language identifier for code fences (`python`, `bash`, `json`, `yaml`, `markdown`, `mermaid`). For markdown documents embedding markdown examples, use 4-backtick or 5-backtick outer fences (````markdown ... ````) to prevent premature fence closure.
 - **Clickable Links**: Ensure all cross-references are valid markdown links.
 - **Poetic Conciseness**: Avoid fluff, boilerplate, or repetitive summaries. Deliver maximum information density per token.

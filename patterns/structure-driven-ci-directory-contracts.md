@@ -41,8 +41,8 @@ flowchart TD
         R1 --> R2 --> R3 --> R4
     end
 
-    style L4 fill:#f66,color:#fff
-    style R4 fill:#6a6,color:#fff
+    style L4 fill:#b3261e,color:#fff
+    style R4 fill:#1b5e20,color:#fff
 ```
 
 ### Step-by-Step

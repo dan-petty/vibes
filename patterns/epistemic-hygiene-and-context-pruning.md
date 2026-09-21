@@ -20,7 +20,7 @@ Context windows in modern LLMs are large, but **attention is finite**. When an a
 Epistemic Hygiene enforces human-like cognitive foraging through **three disciplined layers**:
 
 ```mermaid
-graph TD
+flowchart TD
     Raw[Massive External Data / Large Files] --> L1[Layer 1: Inspectional Multi-Scale Outline<br>AST Symbols, Signatures & TOCs]
     L1 --> Assess{Is Full Body Needed?}
     Assess -- No --> Synthesize[Synthesize Mental Model without reading full text]

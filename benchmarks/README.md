@@ -3,7 +3,7 @@
 Standardized, reproducible benchmarks designed to measure and compare autonomous AI coding assistants across three critical operational axes:
 
 ```mermaid
-graph TD
+flowchart TD
     A[Agent Evaluation Benchmark] --> B[Complexity Refactoring Track]
     A --> C[CEGIS Defect Convergence Track]
     A --> D[Token Economy & Offloading Track]

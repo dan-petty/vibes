@@ -44,7 +44,7 @@ LLMs are contextual mimicry engines:
 In `devops-cli`, we codified the **Zero Information Leakage & Comprehensive Environment Sanitization Mandate**:
 
 ```mermaid
-graph TD
+flowchart TD
     Raw[Raw Workstation Context] --> Filter[Sanitization Filter & Agent Invariant]
     
     Filter --> SafeIP[IPs: RFC 5737 / Loopback<br>192.0.2.0/24, 198.51.100.0/24, 127.0.0.1]

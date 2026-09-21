@@ -50,8 +50,8 @@ flowchart LR
     D3 -.->|"Only on PR open"| E1
     D4 -.->|"Partial, stale"| E2
 
-    style Gap fill:#fdd,color:#000
-    style Enforced fill:#dfd,color:#000
+    style Gap fill:#f7d9d7,color:#000
+    style Enforced fill:#d8ead9,color:#000
 ```
 
 The invariant sentinel only ran in CI at **pull request open time** — after code was already pushed to a remote branch. A developer or agent could:

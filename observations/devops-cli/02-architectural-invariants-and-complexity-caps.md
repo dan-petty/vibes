@@ -56,7 +56,7 @@ LLMs optimize for the immediate prompt context:
 In `devops-cli`, we solved this by transforming complexity into a **hard mechanical gate**:
 
 ```mermaid
-graph LR
+flowchart LR
     Code[Python Source Code] --> AST[Python AST Visitor]
     AST --> CC[Cyclomatic Complexity Meter]
     AST --> Depth[Max Nesting Depth Meter]

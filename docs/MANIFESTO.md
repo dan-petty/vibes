@@ -23,7 +23,7 @@ The agent transitions from an erratic code generator into a relentless, tire-les
 ## The 5 Pillars of Disciplined Agentic Development
 
 ```mermaid
-graph TD
+flowchart TD
     P1["1. Tests as Living Contracts (TDD)"]
     P2["2. AST-Enforced Invariants (Complexity <= 10)"]
     P3["3. Zero Zombie Code & Clean Breaking Changes"]

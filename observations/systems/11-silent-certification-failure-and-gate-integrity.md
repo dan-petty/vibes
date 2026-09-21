@@ -72,8 +72,8 @@ flowchart TD
     R2 -->|"concealed"| A3
     R4 -->|"concealed"| A4
 
-    style Reported fill:#6a6,color:#fff
-    style Actual fill:#f66,color:#fff
+    style Reported fill:#1b5e20,color:#fff
+    style Actual fill:#b3261e,color:#fff
 ```
 
 ---
