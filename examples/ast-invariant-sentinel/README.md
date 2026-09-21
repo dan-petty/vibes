@@ -35,6 +35,36 @@ python3 sentinel.py tools examples tests benchmarks
 pytest test_sentinel.py -v
 ```
 
+```mermaid
+flowchart TD
+    classDef failure fill:#b3261e,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+    classDef accent fill:#4527a0,color:#fff
+
+    In["N paths: files and directories"] --> Exists{"All targets exist?"}:::accent
+    Exists -->|"No"| TI["TargetIntegrity"]:::failure
+    Exists -->|"Yes"| Expand["Expand and dedupe<br/>by resolved identity"]
+    Expand --> Parse["ast.parse each module"]
+    Parse --> Visit["ComplexityVisitor + SanitizationVisitor"]
+
+    Visit --> CV["CyclomaticComplexity, NestingDepth"]
+    Visit --> ZT["ZeroTrustSanitization"]
+
+    Parse --> Tok["tokenize: header COMMENT tokens"]:::accent
+    Tok --> W{"Waiver well-formed,<br/>waivable, justified?"}
+    W -->|"No"| WI["WaiverIntegrity<br/>(original finding still reported)"]:::failure
+    W -->|"Yes"| Sup["Suppress that invariant only"]
+
+    CV -->|"never waivable"| Report["Consolidated report:<br/>files_checked + violations"]
+    ZT --> Sup
+    Sup --> Report
+    WI --> Report
+    TI --> Report
+    Report --> Verdict{"Zero violations?"}
+    Verdict -->|"Yes"| Pass["Exit 0"]:::success
+    Verdict -->|"No"| Fail["Exit 1, prescriptive findings"]:::failure
+```
+
 ---
 
 ## Auditable Waivers

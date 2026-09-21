@@ -79,6 +79,22 @@ Every file under `patterns/` must include:
 
 ## Quality Gates (Automated)
 
+Each gate fires at the earliest moment it can, so feedback arrives in milliseconds rather than minutes:
+
+```mermaid
+flowchart LR
+    classDef accent fill:#4527a0,color:#fff
+    classDef success fill:#1b5e20,color:#fff
+
+    Edit["Edit"] --> PC["pre-commit<br/>sentinel + docs validator<br/>~200ms"]:::accent
+    PC --> PP["pre-push<br/>pytest collection<br/>~2s"]:::accent
+    PP --> CI["ci.yml<br/>full suite, sentinel sweep,<br/>docs --strict, render gate<br/>~90s"]:::accent
+    CI --> PRS["pr-sentinel.yml<br/>audits changed files,<br/>posts prescriptive feedback"]:::accent
+    PRS --> Cert["certified-by-sentinel"]:::success
+
+    PC -.->|"same checks, 450x faster<br/>than learning it from CI"| CI
+```
+
 Every pull request runs the following gates automatically via GitHub Actions:
 
 | Gate | Tool | Threshold |

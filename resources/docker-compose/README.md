@@ -15,6 +15,28 @@ A turnkey, multi-container local evaluation environment providing distributed tr
 | **`grafana`** | `grafana/grafana:latest` | `:3000` (UI) | Visual dashboards for token spend, latency, and invariant gates. |
 | **`agent-sandbox`** | `python:3.14-slim` | *Internal only* | Non-root (`10001`), read-only container with cgroups caps. |
 
+```mermaid
+flowchart LR
+    classDef accent fill:#4527a0,color:#fff
+    classDef neutral fill:#37474f,color:#fff
+
+    subgraph Workload["Instrumented workload"]
+        Agent["agent-sandbox<br/>non-root 10001, read-only,<br/>cgroup capped"]:::neutral
+    end
+
+    Agent -->|"OTLP spans<br/>:4317 gRPC / :4318 HTTP"| Coll["otel-collector<br/>batching, memory limiter,<br/>attribute scrubbing"]:::accent
+    Agent -->|"AST repomap and<br/>tool memoization"| Valkey["valkey :6379<br/>L2 cache"]:::neutral
+
+    Coll -->|"traces"| Jaeger["jaeger :16686<br/>waterfall UI"]
+    Coll -->|"metrics :8889"| Prom["prometheus :9090<br/>agent alerting rules"]
+
+    Jaeger --> Graf["grafana :3000<br/>token spend, latency,<br/>invariant gates"]
+    Prom --> Graf
+```
+
+> [!NOTE]
+> Scrubbing happens in the collector, before storage — so a span attribute that leaks a path or hostname is redacted once, centrally, rather than at every emitting call site.
+
 ---
 
 ## Quickstart

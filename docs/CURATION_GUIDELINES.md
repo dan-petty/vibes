@@ -31,6 +31,27 @@ Before committing any document, prompt, test log, or schema to `vibes`, verify a
 
 ## 3. Contribution Categories & Submissions
 
+Every contribution belongs in exactly one of four places. Which one follows from what the content *is*, not from which directory feels closest:
+
+```mermaid
+flowchart TD
+    classDef accent fill:#4527a0,color:#fff
+
+    Start{"What are you contributing?"}:::accent
+    Start -->|"Something that happened<br/>in a real session"| Obs["observations/&lt;project&gt;/<br/>5-section structure, numbered"]
+    Start -->|"A reusable playbook<br/>for a recurring failure"| Pat["patterns/&lt;slug&gt;.md<br/>problem, mechanics, example,<br/>guardrails, cross-refs"]
+    Start -->|"A concrete asset others<br/>can run or copy"| Art["artifacts/&lt;type&gt;/"]
+    Start -->|"Vocabulary, theory<br/>or curation policy"| Doc["docs/"]
+
+    Obs --> San{"Sanitized?<br/>No RFC 1918, no internal<br/>hostnames, no gitignored paths"}:::accent
+    Pat --> San
+    Art --> San
+    Doc --> San
+    San -->|"No"| Fix["Replace with RFC 5737<br/>and example.com"]
+    Fix --> San
+    San -->|"Yes"| Gates["Run the local gates, then open the PR"]
+```
+
 ### 3.1 Submitting an Observation Report
 - **Directory**: `observations/<project-name>/<number>-<topic-slug>.md`
 - **Template**: Use the template provided in [`.github/ISSUE_TEMPLATE/observation_report.md`](../.github/ISSUE_TEMPLATE/observation_report.md).
