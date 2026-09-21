@@ -19,6 +19,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`ci.yml` completely overhauled**: Replaced Milestone 2 subset (5 specific test files) with the full `pytest tests/ examples/ benchmarks/` test run, expanded sentinel audit to cover all `tools/`, and added `docs_validator.py --strict` and observation structure compliance as CI gates. Matrix remains Python 3.12 & 3.13.
 
 ### Fixed
+- **Latency oracle measured the harness, not the tests** (`tools/resource_iteration_workbench.py`): the 2.0s fast-feedback ceiling compared against subprocess wall-clock, which includes ~1.7s of fixed interpreter boot, plugin loading, and collection. `test_crawler.py` was reported at 2.04s while its actual suite body runs in 0.38s — an unfixable, permanent false-positive defect that the SDLC manager ranked as the repository's top action item. `RunExecutionResult` now parses pytest's self-reported summary duration (`execution_seconds`), exposes `feedback_latency_seconds` and `harness_overhead_seconds`, and the ceiling is evaluated against test execution only. 4 new unit tests; `AGENTS.md` §11.4 codifies the guardrail.
 - **Observation 12 missing `## 5.` section**: `12-polyglot-cst-boundary-guards-and-symlink-containment.md` was missing its `Verifiable Impact & Key Takeaways` section (discovered mechanically by the new structure validator); section added with concrete OOM/ELOOP/boundary-escape containment metrics.
 
 ---

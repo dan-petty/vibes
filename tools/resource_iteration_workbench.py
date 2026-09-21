@@ -29,6 +29,7 @@ from typing import Any, Sequence
 # Canonical quality thresholds
 MAX_ALLOWED_COMPLEXITY = 10
 MAX_ALLOWED_NESTING = 5
+TEST_LATENCY_CEILING_SECONDS = 2.0
 CANONICAL_MOCK_DOMAIN = "example.com"
 
 # Allowed documentation networks for zero-trust compliance
@@ -43,6 +44,9 @@ IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 PYTEST_PASSED_RE = re.compile(r"(\d+)\s+passed")
 PYTEST_FAILED_RE = re.compile(r"(\d+)\s+failed")
 PYTEST_WARNINGS_RE = re.compile(r"(\d+)\s+warnings?")
+PYTEST_SUMMARY_DURATION_RE = re.compile(
+    r"(?:passed|failed|error|errors|skipped|xfailed|xpassed|deselected|no tests ran)[^\n]*?\sin\s(\d+(?:\.\d+)?)s"
+)
 
 
 class ResourceType(str, Enum):
@@ -97,7 +101,18 @@ class RunExecutionResult:
     passed_count: int = 0
     failed_count: int = 0
     warnings_count: int = 0
+    execution_seconds: float | None = None
     score: float | None = None
+
+    @property
+    def feedback_latency_seconds(self) -> float:
+        """Return test execution latency, excluding interpreter boot when self-reported."""
+        return self.duration_seconds if self.execution_seconds is None else self.execution_seconds
+
+    @property
+    def harness_overhead_seconds(self) -> float:
+        """Return wall-clock spent outside test execution (interpreter boot, collection)."""
+        return round(max(self.duration_seconds - self.feedback_latency_seconds, 0.0), 3)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize run execution result to JSON-compatible dictionary."""
@@ -504,6 +519,7 @@ class ResourceRunner:
             passed_count=passed,
             failed_count=failed,
             warnings_count=warnings,
+            execution_seconds=cls._parse_pytest_duration(stdout),
         )
 
     @classmethod
@@ -559,6 +575,12 @@ class ResourceRunner:
             str(resource_path),
         ]
         return cls.run_command(cmd, str(resource_path), cwd=cwd)
+
+    @staticmethod
+    def _parse_pytest_duration(output: str) -> float | None:
+        """Extract pytest's self-reported suite duration from its summary line."""
+        matches = PYTEST_SUMMARY_DURATION_RE.findall(output)
+        return float(matches[-1]) if matches else None
 
     @staticmethod
     def _parse_pytest_counts(output: str) -> tuple[int, int, int]:
@@ -769,20 +791,25 @@ class FeedbackAnalyzer:
         feedback: list[ImprovementFeedback],
     ) -> None:
         run = item.run_result
-        if not run:
+        if not run or run.feedback_latency_seconds <= TEST_LATENCY_CEILING_SECONDS:
             return
-        if run.duration_seconds > 2.0:
-            stem = Path(item.resource_path).name
-            feedback.append(
-                ImprovementFeedback(
-                    category=FeedbackCategory.PERFORMANCE,
-                    priority=FeedbackPriority.MEDIUM,
-                    target=item.resource_path,
-                    headline=f"Test latency in {stem} ({run.duration_seconds:.2f}s) exceeds 2.0s fast-feedback ceiling",
-                    prescriptive_guidance="Fast feedback loops (< 1.5s) are vital for autonomous agent agility.",
-                    suggested_action="Profile slow fixtures, parallelize independent cases, or isolate mock timeouts.",
-                )
+        stem = Path(item.resource_path).name
+        feedback.append(
+            ImprovementFeedback(
+                category=FeedbackCategory.PERFORMANCE,
+                priority=FeedbackPriority.MEDIUM,
+                target=item.resource_path,
+                headline=(
+                    f"Test execution in {stem} ({run.feedback_latency_seconds:.2f}s) "
+                    f"exceeds {TEST_LATENCY_CEILING_SECONDS:.1f}s fast-feedback ceiling"
+                ),
+                prescriptive_guidance=(
+                    "Fast feedback loops (< 1.5s) are vital for autonomous agent agility. Measured from pytest's "
+                    f"own summary line, excluding {run.harness_overhead_seconds:.2f}s of interpreter boot and collection."
+                ),
+                suggested_action="Profile slow fixtures, parallelize independent cases, or isolate mock timeouts.",
             )
+        )
 
     @classmethod
     def _analyze_positive_reinforcement(

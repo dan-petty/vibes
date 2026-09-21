@@ -122,6 +122,80 @@ def test_output_reviewer_deducts_for_violations_and_failures() -> None:
     assert len(evaluation.actionable_recommendations) >= 2
 
 
+def test_resource_runner_parses_self_reported_pytest_duration() -> None:
+    """Ensure the summary line duration is preferred over subprocess wall-clock."""
+    stdout_sample = "9 passed in 0.38s"
+    run = RunExecutionResult(
+        target="test_crawler.py",
+        command=["pytest"],
+        exit_code=0,
+        duration_seconds=2.04,
+        stdout=stdout_sample,
+        stderr="",
+        passed_count=9,
+        execution_seconds=ResourceRunner._parse_pytest_duration(stdout_sample),
+    )
+    assert (run.execution_seconds, run.feedback_latency_seconds, run.harness_overhead_seconds) == (0.38, 0.38, 1.66)
+
+
+def test_resource_runner_duration_falls_back_to_wall_clock() -> None:
+    """Ensure non-pytest output leaves latency measured by subprocess wall-clock."""
+    run = RunExecutionResult(
+        target="README.md",
+        command=["docs_validator"],
+        exit_code=0,
+        duration_seconds=0.001,
+        stdout="\u2713 All checks passed.",
+        stderr="",
+        passed_count=1,
+        execution_seconds=ResourceRunner._parse_pytest_duration("\u2713 All checks passed."),
+    )
+    assert (run.execution_seconds, run.feedback_latency_seconds, run.harness_overhead_seconds) == (None, 0.001, 0.0)
+
+
+def test_execution_telemetry_ignores_interpreter_boot_overhead() -> None:
+    """Ensure a fast suite behind slow interpreter boot raises no latency feedback."""
+    scan = ResourceScanMetrics(file_path="test_crawler.py", resource_type=ResourceType.TEST_SUITE)
+    run = RunExecutionResult(
+        target="test_crawler.py",
+        command=["pytest"],
+        exit_code=0,
+        duration_seconds=2.04,
+        stdout="9 passed in 0.38s",
+        stderr="",
+        passed_count=9,
+        execution_seconds=0.38,
+    )
+    evaluation = OutputReviewer.evaluate(scan, run)
+    feedback: list[ImprovementFeedback] = []
+    FeedbackAnalyzer._analyze_execution_telemetry(evaluation, feedback)
+    assert feedback == []
+
+
+def test_execution_telemetry_flags_genuinely_slow_suite() -> None:
+    """Ensure a suite whose own runtime breaches the ceiling still raises feedback."""
+    scan = ResourceScanMetrics(file_path="test_slow.py", resource_type=ResourceType.TEST_SUITE)
+    run = RunExecutionResult(
+        target="test_slow.py",
+        command=["pytest"],
+        exit_code=0,
+        duration_seconds=6.5,
+        stdout="9 passed in 4.80s",
+        stderr="",
+        passed_count=9,
+        execution_seconds=4.8,
+    )
+    evaluation = OutputReviewer.evaluate(scan, run)
+    feedback: list[ImprovementFeedback] = []
+    FeedbackAnalyzer._analyze_execution_telemetry(evaluation, feedback)
+    assert (len(feedback), feedback[0].category, feedback[0].priority) == (
+        1,
+        FeedbackCategory.PERFORMANCE,
+        FeedbackPriority.MEDIUM,
+    )
+    assert "4.80s" in feedback[0].headline and "1.70s of interpreter boot" in feedback[0].prescriptive_guidance
+
+
 def test_resource_runner_parses_pytest_counts() -> None:
     """Ensure ResourceRunner regex extracts test counts from raw stdout."""
     stdout_sample = "===== 14 passed, 2 failed, 3 warnings in 2.15s ====="
