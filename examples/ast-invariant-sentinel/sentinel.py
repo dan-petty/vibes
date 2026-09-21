@@ -14,12 +14,13 @@ import argparse
 import ast
 import io
 import ipaddress
+import itertools
 import re
 import sys
 import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Iterator, Sequence
 
 # Closed-domain RFC 5737 and loopback networks permitted in code/documentation
 ALLOWED_DOCUMENTATION_NETWORKS = (
@@ -233,18 +234,24 @@ class WaiverScan:
     violations: tuple[Violation, ...] = ()
 
 
+def _header_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
+    """Yield tokens from the module header, tolerating sources that fail to tokenize."""
+    try:
+        yield from itertools.takewhile(
+            lambda token: token.start[0] <= WAIVER_HEADER_LINE_LIMIT,
+            tokenize.generate_tokens(io.StringIO(source).readline),
+        )
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return
+
+
 def _iter_header_comments(source: str) -> list[tuple[int, str]]:
     """Return real comment tokens within the module header, ignoring string literals."""
-    comments: list[tuple[int, str]] = []
-    try:
-        for token in tokenize.generate_tokens(io.StringIO(source).readline):
-            if token.start[0] > WAIVER_HEADER_LINE_LIMIT:
-                break
-            if token.type == tokenize.COMMENT:
-                comments.append((token.start[0], token.string))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        pass
-    return comments
+    return [
+        (token.start[0], token.string)
+        for token in _header_tokens(source)
+        if token.type == tokenize.COMMENT
+    ]
 
 
 def _waiver_defect(match: re.Match[str] | None) -> str | None:
@@ -324,15 +331,11 @@ def _dedupe_key(path: Path) -> Path:
 
 def _expand_targets(paths: Sequence[Path]) -> list[Path]:
     """Expand every file or directory target into a deduplicated, order-preserving file list."""
-    expanded: list[Path] = []
-    seen: set[Path] = set()
-    for path in paths:
-        for py_file in _collect_py_targets(path):
-            key = _dedupe_key(py_file)
-            if key not in seen:
-                seen.add(key)
-                expanded.append(py_file)
-    return expanded
+    candidates = itertools.chain.from_iterable(_collect_py_targets(path) for path in paths)
+    unique: dict[Path, Path] = {}
+    for py_file in candidates:
+        unique.setdefault(_dedupe_key(py_file), py_file)
+    return list(unique.values())
 
 
 def audit_targets(paths: Sequence[Path], max_complexity: int = 10, max_depth: int = 5) -> AuditReport:
