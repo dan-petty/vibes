@@ -18,6 +18,11 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 # Run the full test suite locally
 pytest tests/ examples/ benchmarks/ -v
 
+# Check the coverage floor (CI enforces >= 90%; addopts is overridden because
+# pytest.ini disables the coverage plugin to keep the inner loop fast)
+pytest tests examples benchmarks -o addopts= --cov=tools --cov=examples \
+  --cov=benchmarks --cov-report=term-missing --cov-fail-under=90
+
 # Run the AST invariant sentinel on all Python sources (accepts N paths)
 python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmarks
 
@@ -142,6 +147,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | Gate | Tool | Threshold |
 |---|---|---|
 | **Full test suite** | `pytest tests/ examples/ benchmarks/` | 100% pass |
+| **Coverage floor** | `pytest --cov=tools --cov=examples --cov=benchmarks` | $\ge 90\%$ (currently 92%) |
 | **AST invariant sentinel** | `sentinel.py` | Cyclomatic complexity ≤10, nesting ≤5 |
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors, including the 5-section observation structure |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
