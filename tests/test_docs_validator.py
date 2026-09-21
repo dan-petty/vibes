@@ -363,7 +363,12 @@ def test_resource_scanner_scans_documentation(tmp_path: Path) -> None:
 
 
 def test_all_vibes_documentation_clean() -> None:
-    """Verify that all markdown documents in the Vibes repository pass validation."""
+    """Verify that all markdown documents in the Vibes repository pass validation.
+
+    This is the repository's single whole-corpus sweep. Observation structure findings
+    are errors, so this assertion subsumes a per-observation structure pass; a separate
+    real-repo structure test duplicated it at 0.26s per run and was removed.
+    """
     vibes_root = Path(__file__).resolve().parent.parent
     validator = DocsValidator()
     report = validator.validate_directory(vibes_root)
@@ -489,19 +494,5 @@ def test_observation_structure_non_observation_file(tmp_path: Path) -> None:
     validator = DocsValidator()
     findings = [f for f in validator.validate_file(doc) if f.category == "observation_structure"]
     assert (len(findings), findings) == (0, [])
-
-
-def test_observation_structure_real_repo_compliance() -> None:
-    """All existing observation documents in observations/ pass the 5-section structure check."""
-    repo_root = Path(__file__).resolve().parent.parent
-    obs_root = repo_root / "observations"
-    validator = DocsValidator()
-    violations: list[str] = []
-    for obs_file in sorted(obs_root.rglob("*.md")):
-        if obs_file.name == "README.md":
-            continue
-        findings = [f for f in validator.validate_file(obs_file) if f.category == "observation_structure"]
-        violations.extend(f"{obs_file.name}: {f.message}" for f in findings)
-    assert (len(violations), violations) == (0, [])
 
 

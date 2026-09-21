@@ -64,7 +64,7 @@ flowchart TD
 
 When an automated feedback engine monitors an autonomous agent:
 - **Phase 1 (Reactive Remediation)**: If any tests fail or invariant gates trigger, the agent is restricted to minimal, surgical defect correction.
-- **Phase 2 (Proactive Quality Elevation)**: As soon as the health score reaches 100.0/100, the feedback loop dynamically inverts:
+- **Phase 2 (Proactive Quality Elevation)**: Once remediation is no longer owed, the feedback loop dynamically inverts:
   - Identifies functions operating near the ceiling ($7 \le M \le 10$) and refactors them to safe headroom ($M \le 6$).
   - Scans for missing public docstrings or unannotated function parameters and elevates coverage to 100%.
   - Optimizes test execution latency (sub-second target).
@@ -134,6 +134,9 @@ def run_isolated_command(cmd: list[str], timeout_s: float = 10.0) -> str:
 | **Unbounded File Ingestion** | Ingesting minified bundles crashes agent tools with OOM (CWE-400). | Enforce pre-flight `st_size <= 5MB` check before reading into memory. |
 
 ---
+
+> [!IMPORTANT]
+> **Superseded trigger.** This pattern originally inverted on a binary condition — health exactly 100.0/100. That trigger is twitchy in one direction and blind in the other: one flaky iteration freezes proactive work, and permanent green cannot distinguish a reliable system from objectives too loose to breach. The inversion is now driven by error budget state, which subsumes the binary rule as the special case of a zero-budget objective. See [Error-Budget-Driven Feedback Inversion](./error-budget-driven-feedback-inversion.md) and `AGENTS.md` §11. The mechanical-oracle half of this pattern is unchanged.
 
 ## 5. Cross-References
 

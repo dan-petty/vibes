@@ -68,6 +68,3 @@ jobs:
         run: |
           python tools/reliability_slo.py status --history docs/reliability/iterations
 
-      - name: Verify Observation Structure Compliance
-        run: |
-          python tools/docs_validator.py observations/ --rule observation_structure

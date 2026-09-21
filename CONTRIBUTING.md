@@ -143,8 +143,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 |---|---|---|
 | **Full test suite** | `pytest tests/ examples/ benchmarks/` | 100% pass |
 | **AST invariant sentinel** | `sentinel.py` | Cyclomatic complexity ≤10, nesting ≤5 |
-| **Documentation validator** | `docs_validator.py --strict` | Zero errors |
-| **Observation structure** | `docs_validator.py --rule observation_structure` | All 5 sections present |
+| **Documentation validator** | `docs_validator.py --strict` | Zero errors, including the 5-section observation structure |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
 | **Workflow lint** | `actionlint` (pinned, checksum-verified) | Zero expression, shell, or injection findings |
 | **Reliability objectives** | `reliability_slo.py status --history docs/reliability/iterations` | No exhausted or burning error budget |

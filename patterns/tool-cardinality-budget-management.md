@@ -1,4 +1,4 @@
-# Tool Cardinality Budget Management
+# Pattern: Tool Cardinality Budget Management — Paying for the Namespace You Enter
 
 ## 1. Problem Statement
 
