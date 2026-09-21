@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-21T18:08:54Z",
+  "measurements": {
+    "gate_pass_rate": [
+      136,
+      136
+    ],
+    "invariant_compliance": [
+      136,
+      136
+    ],
+    "feedback_latency": [
+      114,
+      114
+    ],
+    "headroom_saturation": [
+      136,
+      136
+    ],
+    "toil_containment": [
+      0,
+      1
+    ]
+  }
+}
