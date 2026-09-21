@@ -64,7 +64,12 @@ Here you will find:
 │   │   ├── 12-polyglot-cst-boundary-guards-and-symlink-containment.md
 │   │   ├── 13-streaming-reasoning-token-parsers-and-think-block-sanitization.md
 │   │   ├── 14-binary-search-ast-context-packing-and-token-budgeting.md
-│   │   └── 15-llm-structured-output-repair-and-schema-reconciliation.md
+│   │   ├── 15-llm-structured-output-repair-and-schema-reconciliation.md
+│   │   ├── 16-ci-staleness-and-milestone-freeze-anti-pattern.md
+│   │   ├── 17-semantic-validators-vs-structural-position-oracles.md
+│   │   ├── 18-tool-cardinality-saturation-and-schema-context-taxation.md
+│   │   ├── 19-context-accumulation-drift-and-lossy-reflection-truncation.md
+│   │   └── 20-model-failover-capability-cliffs-and-one-way-degradation-ratchets.md
 │   ├── polyglot/                      # Cross-language agentic engineering observations
 │   │   ├── 01-rust-type-state-invariants.md
 │   │   ├── 02-typescript-cst-and-type-gymnastics.md
@@ -76,22 +81,30 @@ Here you will find:
 │       ├── 04-content-addressed-two-tier-caching-and-embedding-drift-audits.md
 │       ├── 05-rootless-container-sandboxing-and-process-group-containment.md
 │       ├── 06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md
-│       └── 07-agentic-ide-protocols-and-lsp-mcp-convergence.md
+│       ├── 07-agentic-ide-protocols-and-lsp-mcp-convergence.md
+│       ├── 08-convention-to-mechanical-enforcement-inversion.md
+│       ├── 09-multi-agent-epistemic-loss-and-delegation-boundary-distortion.md
+│       ├── 10-mcp-protocol-boundaries-and-stateless-transport-constraints.md
+│       └── 11-silent-certification-failure-and-gate-integrity.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
-│   ├── cegis-and-hypothesis-debugging.md
-│   ├── fifo-pull-request-shepherding.md
-│   ├── root-cause-hardening.md
-│   ├── epistemic-hygiene-and-context-pruning.md
-│   ├── zero-trust-sandboxing-and-observability.md
 │   ├── adaptive-headless-web-crawling.md
+│   ├── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
 │   ├── autonomous-sdlc-project-management.md
-│   ├── iterative-resource-refinement-loop.md
-│   ├── deterministic-oracles-and-feedback-inversion.md
-│   ├── multi-agent-codebase-concurrency.md
-│   ├── streaming-reasoning-isolation-and-token-budgeting.md
 │   ├── binary-search-context-packing.md
-│   └── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
+│   ├── cegis-and-hypothesis-debugging.md
+│   ├── deterministic-oracles-and-feedback-inversion.md
+│   ├── epistemic-hygiene-and-context-pruning.md
+│   ├── fifo-pull-request-shepherding.md
+│   ├── gate-integrity-and-total-input-coverage.md
+│   ├── iterative-resource-refinement-loop.md
+│   ├── multi-agent-codebase-concurrency.md
+│   ├── root-cause-hardening.md
+│   ├── streaming-reasoning-isolation-and-token-budgeting.md
+│   ├── structural-position-oracles.md
+│   ├── structure-driven-ci-directory-contracts.md
+│   ├── tool-cardinality-budget-management.md
+│   └── zero-trust-sandboxing-and-observability.md
 │
 ├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
 │   ├── prompts/
@@ -150,7 +163,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 21 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 34 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|

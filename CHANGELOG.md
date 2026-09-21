@@ -8,6 +8,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased — Milestone 5 Prep]
 
 ### Added
+- **Observation 11 — Silent Certification Failure & Gate Integrity** (`observations/systems/`): field study of four gates simultaneously reporting success over work they never performed, and the remediation that closed them.
+- **Pattern — Gate Integrity & Total Input Coverage** (`patterns/`): making "nothing was checked" impossible to confuse with "everything passed"; total input coverage, `TargetIntegrity` on missing paths, self-reported metrics over harness wall-clock, and waivers that cannot become mute buttons.
 - **Auditable waiver pragmas in the AST invariant sentinel** (`# sentinel: allow[<Invariant>] <justification>`): module-header waivers parsed from real comment tokens via `tokenize`, honored only in the first 15 lines and only for `ZeroTrustSanitization`. Structural caps are never waivable; malformed, unjustified, or non-waivable waivers raise `WaiverIntegrity` and do not suppress the underlying finding. Applied to the 5 fixture modules whose negative tests must embed private IPs. 7 new unit tests.
 - **Change Management & Validation hardening** (this release):
   - `.pre-commit-config.yaml`: Git pre-commit / pre-push hooks enforcing the AST invariant sentinel, docs validator, pytest collection check, and JSON schema lint — converting `AGENTS.md` §8 mandates from convention to mechanical enforcement.
@@ -17,6 +19,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - 4 new unit tests for observation structure: valid doc, missing sections, exempt non-observation files, real-repo compliance sweep.
 
 ### Changed
+- **Stale directory map regenerated**: `README.md` listed observations frozen at `devops-cli/15` and `systems/07` (20 and 11 exist) and 13 of 16 patterns. Text trees break no links and fail no test, so the drift was invisible to every gate; a `docs_validator` rule to diff embedded trees against the filesystem is queued as Milestone 3 Phase 5.
+- **Stale index counts corrected**: `observations/README.md` simultaneously claimed 32 case studies (scope line) and 25 (three body references) against 33 actual files, and reported two divergent test totals (192/192 and 217/217); the root `README.md` claimed 21. All now read 34 observations and 209/209 tests.
 - **`ci.yml` completely overhauled**: Replaced Milestone 2 subset (5 specific test files) with the full `pytest tests/ examples/ benchmarks/` test run, expanded sentinel audit to cover all `tools/`, and added `docs_validator.py --strict` and observation structure compliance as CI gates. Matrix remains Python 3.12 & 3.13.
 
 ### Fixed
