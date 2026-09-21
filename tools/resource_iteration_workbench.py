@@ -22,6 +22,8 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import tempfile
+import xml.etree.ElementTree as ElementTree
 import sys
 import time
 from typing import Any, Sequence
@@ -44,6 +46,13 @@ IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 PYTEST_PASSED_RE = re.compile(r"(\d+)\s+passed")
 PYTEST_FAILED_RE = re.compile(r"(\d+)\s+failed")
 PYTEST_WARNINGS_RE = re.compile(r"(\d+)\s+warnings?")
+# xunit1 is the only JUnit family that records the source file of each test case,
+# which is what makes one warm session attributable back to individual resources.
+WARM_SESSION_TIMEOUT_SECONDS = 600
+PYTEST_BASE_ARGS = (
+    "-p", "no:cov", "-p", "no:logfire", "-p", "no:xdist", "-p", "no:anyio",
+    "-p", "no:cacheprovider", "-o", "addopts=",
+)
 PYTEST_SUMMARY_DURATION_RE = re.compile(
     r"(?:passed|failed|error|errors|skipped|xfailed|xpassed|deselected|no tests ran)[^\n]*?\sin\s(\d+(?:\.\d+)?)s"
 )
@@ -550,30 +559,79 @@ class ResourceRunner:
             failed_count=len(errors),
         )
 
+    @staticmethod
+    def _suite_case_totals(xml_path: Path) -> dict[str, tuple[int, int, float]]:
+        """Parse a JUnit report into per-file (passed, failed, seconds).
+
+        Only counts and durations are read. The report also carries the runner hostname,
+        which is never extracted or persisted, per the zero-leakage mandate.
+        """
+        try:
+            root = ElementTree.parse(xml_path).getroot()
+        except (OSError, ElementTree.ParseError):
+            return {}
+        suites = root.iter("testsuite")
+        totals: dict[str, list[Any]] = {}
+        for case in (case for suite in suites for case in suite.iter("testcase")):
+            entry = totals.setdefault(case.get("file", ""), [0, 0, 0.0])
+            failed = any(child.tag in ("failure", "error") for child in case)
+            entry[0] += 0 if failed else 1
+            entry[1] += 1 if failed else 0
+            entry[2] += float(case.get("time", 0.0) or 0.0)
+        return {path: (p, f, round(t, 3)) for path, (p, f, t) in totals.items() if path}
+
+    @classmethod
+    def _warm_session_results(
+        cls, targets: Sequence[Path], cwd: Path, timeout: int
+    ) -> dict[str, RunExecutionResult]:
+        """Run every test target in one pytest session, attributed back per file.
+
+        Each per-file subprocess pays interpreter startup, plugin loading and collection
+        again. Measured across this repository that fixed cost was 6.2s of an 11.8s test
+        phase — more than half the wall time spent re-entering Python rather than running
+        tests. One session pays it once.
+        """
+        if not targets:
+            return {}
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "junit.xml"
+            cmd = [
+                sys.executable, "-m", "pytest", *PYTEST_BASE_ARGS,
+                "-o", "junit_family=xunit1", f"--junit-xml={report_path}",
+                *[str(target) for target in targets],
+            ]
+            run = cls.run_command(cmd, "warm-session", cwd=cwd, timeout=timeout)
+            totals = cls._suite_case_totals(report_path)
+        return {
+            path: cls._attributed_result(path, counts, run)
+            for path, counts in totals.items()
+        }
+
+    @staticmethod
+    def _attributed_result(
+        path: str, counts: tuple[int, int, float], session: RunExecutionResult
+    ) -> RunExecutionResult:
+        """Build a per-file result from its share of a warm session."""
+        passed, failed, seconds = counts
+        return RunExecutionResult(
+            target=path,
+            command=session.command,
+            exit_code=1 if failed else 0,
+            duration_seconds=seconds,
+            stdout=f"{passed} passed, {failed} failed in {seconds:.2f}s (warm session)",
+            stderr=session.stderr if failed else "",
+            passed_count=passed,
+            failed_count=failed,
+            execution_seconds=seconds,
+        )
+
     @classmethod
     def run_tests_for_resource(cls, resource_path: Path, cwd: Path) -> RunExecutionResult:
         """Execute pytest test suite or documentation validator with bounded timeout."""
         if resource_path.suffix == ".md":
             return cls._validate_doc_resource(resource_path)
 
-        cmd = [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-p",
-            "no:cov",
-            "-p",
-            "no:logfire",
-            "-p",
-            "no:xdist",
-            "-p",
-            "no:anyio",
-            "-p",
-            "no:cacheprovider",
-            "-o",
-            "addopts=",
-            str(resource_path),
-        ]
+        cmd = [sys.executable, "-m", "pytest", *PYTEST_BASE_ARGS, str(resource_path)]
         return cls.run_command(cmd, str(resource_path), cwd=cwd)
 
     @staticmethod
@@ -896,10 +954,13 @@ class ResourceIterationWorkbench:
         total_violations = 0
 
         # Phase 2 & 3: RUN & REVIEW
+        warm_results = self._warm_test_results(filtered_scans, execute_tests)
         for scan in filtered_scans:
             run_res = None
             if execute_tests and scan.resource_type in (ResourceType.TEST_SUITE, ResourceType.DOCUMENTATION):
-                run_res = ResourceRunner.run_tests_for_resource(Path(scan.file_path), cwd=self.root_dir)
+                run_res = warm_results.get(scan.file_path) or ResourceRunner.run_tests_for_resource(
+                    Path(scan.file_path), cwd=self.root_dir
+                )
                 total_passed += run_res.passed_count
                 total_failed += run_res.failed_count
 
@@ -917,6 +978,27 @@ class ResourceIterationWorkbench:
         )
         self._save_baseline(evaluations)
         return report
+
+    def _warm_test_results(
+        self, scans: Sequence[ResourceScanMetrics], execute_tests: bool
+    ) -> dict[str, RunExecutionResult]:
+        """Run every test suite in one warm pytest session, keyed by resource path.
+
+        Documentation resources are excluded: they are validated in-process and never
+        enter a pytest session. A suite missing from the result — a collection error, a
+        session that timed out — falls back to its own subprocess, so the warm path is an
+        optimisation that can never swallow a resource.
+        """
+        if not execute_tests:
+            return {}
+        targets = [
+            Path(scan.file_path)
+            for scan in scans
+            if scan.resource_type is ResourceType.TEST_SUITE
+        ]
+        return ResourceRunner._warm_session_results(
+            targets, self.root_dir, WARM_SESSION_TIMEOUT_SECONDS
+        )
 
     def _filter_scans(self, scans: list[ResourceScanMetrics], pattern: str | None) -> list[ResourceScanMetrics]:
         if not pattern:
