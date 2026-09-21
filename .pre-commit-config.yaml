@@ -31,7 +31,9 @@ repos:
         entry: pytest --collect-only -q
         pass_filenames: false
         stages: [pre-push]
-        additional_dependencies: [pytest, pytest-asyncio]
+        # Collection imports every test module, so this env needs the same runtime
+        # dependencies as ci.yml: pyyaml and markdown-it-py, not just the runner.
+        additional_dependencies: [pytest, pytest-asyncio, markdown-it-py, pyyaml]
 
       - id: json-schema-lint
         name: JSON Schema Lint (FastMCP Manifests)
