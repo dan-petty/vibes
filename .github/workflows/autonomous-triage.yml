@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -27,9 +27,11 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          cat << 'EOF' > /tmp/issue_body.md
-          ${{ github.event.issue.body }}
-          EOF
+          # Written from the environment, never interpolated. Actions substitutes
+          # workflow expressions before the shell parses anything, so an issue body
+          # containing a heredoc terminator or command substitution would escape
+          # into the runner. Reading it from env removes that path entirely.
+          printf '%s' "${ISSUE_BODY}" > /tmp/issue_body.md
 
           python tools/project_tooling.py triage-issue \
             --number "${ISSUE_NUMBER}" \
@@ -39,7 +41,7 @@ jobs:
           cat /tmp/triage_plan.txt
 
       - name: Apply Taxonomical Labels
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -67,7 +69,7 @@ jobs:
 
       - name: Post Autonomous Onboarding Comment
         if: github.event.action == 'opened'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

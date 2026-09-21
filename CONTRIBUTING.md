@@ -104,6 +104,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors |
 | **Observation structure** | `docs_validator.py --rule observation_structure` | All 5 sections present |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
+| **Workflow lint** | `actionlint` (pinned, checksum-verified) | Zero expression, shell, or injection findings |
 | **JSON schema lint** | `python -m json.tool` | Valid JSON |
 
 The PR sentinel ([`.github/workflows/pr-sentinel.yml`](.github/workflows/pr-sentinel.yml)) audits only your **changed Python files** and posts prescriptive feedback on invariant violations. Passing earns the `certified-by-sentinel` label.
