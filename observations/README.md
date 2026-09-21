@@ -2,8 +2,8 @@
 
 > **Exhibition**: `vibes` Empirical Knowledge Base
 > **Classification**: Master Observation Index & Cross-Domain Synthesis
-> **Scope**: 35 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
-> **Key Metric**: 100.0/100 Resource Health Score; 256/256 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance
+> **Scope**: 36 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
+> **Key Metric**: 100.0/100 Resource Health Score; 274/274 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance
 
 ---
 
@@ -11,7 +11,7 @@
 
 The `observations/` directory records the empirical reality of autonomous software engineering performed by AI coding assistants. Across hundreds of autonomous sessions, pull requests, refactoring cycles, and benchmark evaluations in [`devops-cli`](https://github.com/dan-petty/devops-cli) and [`vibes`](https://github.com/dan-petty/vibes), these studies capture how stochastic language models behave when confronted with real-world engineering constraints.
 
-The fundamental insight across all 35 observations is simple yet profound:
+The fundamental insight across all 36 observations is simple yet profound:
 
 > **Stochastic token generation without mechanical boundary oracles collapses into structural entropy. Unbounded models drift into procedural spaghetti, hallucinated tool arguments, orphaned background processes, and brittle heuristic traps. When bounded by deterministic AST invariants, formal contracts, and closed-loop feedback engines, agents achieve architectural excellence, sub-second feedback loops, and 100% test reliability.**
 
@@ -40,7 +40,7 @@ flowchart TD
     end
 
     subgraph ArchitecturalExcellence["Autonomous Engineering State"]
-        E1["256/256 Passing Tests (< 0.5s Latency)"]
+        E1["274/274 Passing Tests (< 0.5s Latency)"]
         E2["Project-Wide M <= 6 & Depth <= 3 Headroom"]
         E3["Zero-Shot Error Self-Correction (100%)"]
         E4["Zero Process/Memory Leaks & Zombie Immunity"]
@@ -71,7 +71,7 @@ flowchart TD
 
 ## 🧭 Master Observation Taxonomy Matrix
 
-The 35 empirical case studies are organized into three complementary domains:
+The 36 empirical case studies are organized into three complementary domains:
 1. **`devops-cli`**: Foundational operational, syntactic, and governance discoveries from building a production-grade infrastructure CLI.
 2. **`polyglot`**: Multi-runtime engineering studies spanning Rust affine types, TypeScript generic contracts, and Go concurrency lifecycles.
 3. **`systems`**: Distributed systems dynamics including OpenTelemetry tracing waterfalls, test runner latency optimization, inotify event loops, Valkey L2 caching, and rootless container isolation.
@@ -112,13 +112,14 @@ The 35 empirical case studies are organized into three complementary domains:
 | [**09**](./systems/09-multi-agent-epistemic-loss-and-delegation-boundary-distortion.md) | `systems` | [Multi-Agent Epistemic Loss & Delegation Boundary Distortion](./systems/09-multi-agent-epistemic-loss-and-delegation-boundary-distortion.md) | Prompt decomposition stripping constraints; subagent result distortion; 64KB pipe deadlock in background shell; mocked tiered execution hiding real delegation gaps. | Structured constraint propagation with typed invariant blocks; structured result schemas with failure signals; background pipe drain threads; end-to-end delegation fidelity testing. | 3-layer delegation at 85% fidelity/boundary = 61% end-to-end; structured constraints achieve 94%. |
 | [**10**](./systems/10-mcp-protocol-boundaries-and-stateless-transport-constraints.md) | `systems` | [MCP Protocol Boundaries & Stateless Transport Constraints](./systems/10-mcp-protocol-boundaries-and-stateless-transport-constraints.md) | MCP statelessness preventing multi-step transactions; 30K+ token tool discovery payload; Resource underutilization; indirect prompt injection via tool return strings. | Agent-side transaction journals; Resource-first data access; tool output sandboxing; lazy tool discovery with domain routing. | Resources are 3× cheaper than Tools for read-heavy patterns; transaction journals cost ~200 tokens vs ~2K for failure reconstruction. |
 | [**11**](./systems/11-silent-certification-failure-and-gate-integrity.md) | `systems` | [Silent Certification Failure & Gate Integrity](./systems/11-silent-certification-failure-and-gate-integrity.md) | Sentinel reading `argv[1]` while pre-commit passes N filenames; latency oracle timing interpreter boot; verdicts varying by invocation shape; `tests/` absent from CI enumeration. | Total input coverage (`nargs="*"`, deduplicated aggregation), `TargetIntegrity` on missing paths, self-reported metrics over harness wall-clock, uniform auditing with justified `# sentinel: allow[...]` waivers. | 1 of N files audited → all N; 35 of 41 modules gated → 41; phantom top-ranked defect (370.0) retired; 17 suppressed findings surfaced and classified. |
+| [**13**](./systems/13-verify-the-finding-before-you-fix-it.md) | `systems` | [Verify the Finding Before You Fix It](./systems/13-verify-the-finding-before-you-fix-it.md) | 4 of 5 backlog items were measurement error: modules at 97-100% coverage reported as untested because no file matched a naming pattern, and decorator closures counted as undocumented public API. Six first readings across one session measured the instrument rather than the system. | Test the finding as a hypothesis — actionability, denominator, proxy distance, reproduce before acting — and classify objectives by whether a breach means "must not ship" or "work on this next". | Backlog 5 → 0; 3 redundant test files avoided; 2 readings did not survive a second run; 3 release gates on non-defects removed. |
 | [**12**](./systems/12-gates-catch-their-author-first.md) | `systems` | [Gates Catch Their Author First](./systems/12-gates-catch-their-author-first.md) | Six gates added in one session; five fired on their own author's work within two commits. The one reporting a clean first run had been registered in one entry point and not the other. | Read a self-catch as end-to-end validation; invert the reading of a clean first run and suspect the wiring; write gates during the work; floor every window, rate and ratio before it steers a decision. | 9 defects caught in same-session work; 4 instrument calibration defects found by first use; 1 of 6 clean first runs was a wiring defect. |
 
 ---
 
 ## 🔬 The Five Unifying Architectural Theses
 
-When analyzed collectively, the 35 empirical case studies coalesce into five core engineering theses that define disciplined agentic software development:
+When analyzed collectively, the 36 empirical case studies coalesce into five core engineering theses that define disciplined agentic software development:
 
 ### 1. Deterministic Mechanical Oracles Over Prompt Faith
 Stochastic language models cannot self-evaluate architectural complexity, nesting depth, type safety, or security boundaries purely through prompt instructions. Relying on "be careful not to write complex code" invariably fails.
