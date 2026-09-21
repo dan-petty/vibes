@@ -206,6 +206,8 @@ flowchart LR
 
 ## 🤝 Contributing & Submitting Artifacts
 
+**Contributing an experience from your own agent sessions?** Start with the [Agentic Experience Contribution Harness](./artifacts/prompts/experience-contribution-harness.md) — five staged prompts that extract a publishable observation from a real session, or establish that the session does not contain one. Most do not, and the harness is built to say so.
+
 We invite AI researchers, agent engineers, and developers to contribute notable observations, prompt harnesses, benchmark findings, and case studies:
 
 - Read the [**Curation Guidelines**](./docs/CURATION_GUIDELINES.md) to understand artifact formatting, secret redaction, and verification criteria.
@@ -312,7 +314,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 ├── artifacts/                         # Battle-tested prompts, harnesses, and schemas
 │   ├── prompts/
 │   │   ├── multi-persona-code-reviewer.md
-│   │   └── architectural-invariant-sentinel.md
+│   │   ├── architectural-invariant-sentinel.md
+│   │   └── experience-contribution-harness.md
 │   ├── task-harnesses/
 │   │   ├── structured-task-spec-template.md
 │   │   └── sample-completed-task-spec.md

@@ -44,7 +44,49 @@ python tools/docs_validator.py --fix
 | Executable reference app | `examples/<slug>/` | `<slug>.py`, `test_<slug>.py`, `README.md` |
 | Foundational docs | `docs/` | Descriptive SCREAMING-KEBAB names |
 
-Never scatter loose files in the repo root. Only `README.md`, `LICENSE`, and `AGENTS.md` live there.
+Never scatter loose files in the repo root. It holds only the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pytest.ini`, `.pre-commit-config.yaml`).
+
+---
+
+## Contributing an Agentic Experience (Agent Prompts)
+
+Most of the work in contributing an observation is deciding whether there is one. A session that built a feature, fixed a bug, and passed its tests has produced a good session and nothing to publish, and an agent asked to "write up this session" will write one up regardless — because that is what it was asked to do.
+
+[`artifacts/prompts/experience-contribution-harness.md`](./artifacts/prompts/experience-contribution-harness.md) is a five-stage harness for extracting a contribution from a real session, or establishing that there isn't one. Every stage can return nothing, and the first one usually should.
+
+| Stage | Prompt | Returns nothing when |
+|---|---|---|
+| 1 | **Triage** — is there a phenomenon at all? | No surprise, no measured cost, no transferable mechanism → `NO_OBSERVATION` |
+| 2 | **Draft** — mechanism over narrative | The phenomenon thins out under writing → `RETRACTED` |
+| 3 | **Sanitize** — mandatory egress scrub | — (always run; returns `CLEAN` or a replacement list) |
+| 4 | **Adversarial review** — argue against publishing | The draft survives → `PUBLISH` |
+| 5 | **Distil a pattern** — only on recurrence | The mechanism appeared once → `INSUFFICIENT_RECURRENCE` |
+
+Start with triage, pasting your session transcript or its diff:
+
+```text
+Identify candidate phenomena. A candidate MUST satisfy at least one:
+  (a) SURPRISE — something behaved differently than a competent engineer would
+      have predicted before the session started.
+  (b) COST — a specific measurable price was paid: wall-clock, tokens, a defect
+      that reached a gate, a wrong decision that had to be reversed.
+  (c) TRANSFERABILITY — the mechanism would recur in a different codebase,
+      language, or model.
+
+Reject on sight: features built as designed, restatements of what the commit
+message already says, and anything whose lesson reduces to "be careful".
+
+If no candidate survives, output exactly: NO_OBSERVATION
+```
+
+Three failure modes these prompts exist to prevent, each of which has produced a rejected contribution before:
+
+- **The narrated changelog.** An observation that recounts what was built. If the commit message already says it, the observation adds nothing.
+- **The unmeasured claim.** "Significantly faster" with no number, or a number with no measurement method. Section 5 of the [standard](#observation-authoring-standard) exists to make claims checkable.
+- **The leaked transcript.** Session excerpts are the highest-risk content in the repository — they carry hostnames, paths, employer names and ticket IDs that no one intended to publish. Quote the minimum that carries the mechanism; the [sanitization checklist](#sanitization-checklist-mandatory) is not advisory.
+
+> [!TIP]
+> Writing the observation *during* the session rather than after it costs far less. The evidence is still in context, the measurements can still be re-run, and the surprise has not yet been rationalized into something that seems obvious in hindsight.
 
 ---
 
