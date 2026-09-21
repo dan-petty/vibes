@@ -158,10 +158,20 @@ def _load_sandbox_module() -> Any:
         return None
 
 
+# The timeout exists to contain a runaway candidate — `while True: pass` — not to
+# benchmark a legitimate one. At 0.15s it did both, and a convergence test failed on a
+# loaded host because evaluating a correct patch ran out of budget. A runaway loop is
+# caught just as decisively at two seconds, and legitimate evaluation here takes single-
+# digit milliseconds, so the containment property is unchanged and the flake is gone.
+DEFAULT_EVALUATION_TIMEOUT_SECONDS: float = 2.0
+
+
 class SandboxedPatchEvaluator:
     """Evaluates candidate patch source code in an isolated container or simulator sandbox."""
 
-    def __init__(self, timeout_seconds: float = 0.15, force_simulator: bool = True) -> None:
+    def __init__(
+        self, timeout_seconds: float = DEFAULT_EVALUATION_TIMEOUT_SECONDS, force_simulator: bool = True
+    ) -> None:
         """Initialize evaluator with bounded timeout and sandbox engine."""
         self.timeout_seconds = timeout_seconds
         self.force_simulator = force_simulator
@@ -262,7 +272,7 @@ class CEGISRunner:
         evaluator: SandboxedPatchEvaluator | None = None,
     ) -> tuple[bool, ConstraintSpec | None]:
         """Verify candidate patch source code against all constraints inside isolated sandbox."""
-        ev = evaluator or SandboxedPatchEvaluator(timeout_seconds=0.15, force_simulator=True)
+        ev = evaluator or SandboxedPatchEvaluator(force_simulator=True)
         all_tests = self.baseline_suite + self.state.accumulated_counterexamples
         for test in all_tests:
             result = ev.evaluate_code(patch_source, entrypoint, test)
@@ -335,7 +345,7 @@ def main() -> None:
 
     # 6. Sandboxed container / simulator evaluation
     print("\n--- Sandboxed Container / Process Group Evaluation ---")
-    evaluator = SandboxedPatchEvaluator(timeout_seconds=0.15, force_simulator=True)
+    evaluator = SandboxedPatchEvaluator(force_simulator=True)
     res_runaway = evaluator.evaluate_code(
         CANDIDATE_PATCH_RUNAWAY_LOOP,
         "parse_manifest_runaway",

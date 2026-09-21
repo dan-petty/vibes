@@ -89,7 +89,7 @@ def test_correct_patch_converges_and_passes_all_constraints() -> None:
 
 def test_sandboxed_patch_evaluator_success() -> None:
     """Verify sandboxed evaluator successfully tests converged candidate source."""
-    evaluator = SandboxedPatchEvaluator(timeout_seconds=0.15, force_simulator=True)
+    evaluator = SandboxedPatchEvaluator(force_simulator=True)
     test_case = ConstraintSpec(
         input_data="app: web\nreplicas: '8'",
         expected_output={"app": "web", "replicas": 8},
@@ -104,6 +104,8 @@ def test_sandboxed_patch_evaluator_success() -> None:
 
 def test_sandboxed_patch_evaluator_timeout_containment() -> None:
     """Verify runaway infinite loop candidate patch is contained safely by bounded timeout."""
+    # A deliberately short budget: this test asserts containment, so it wants the timeout
+    # to fire. Evaluation tests use the default, which has room for a loaded host.
     evaluator = SandboxedPatchEvaluator(timeout_seconds=0.1, force_simulator=True)
     test_case = ConstraintSpec(
         input_data="app: web\nreplicas: '8'",

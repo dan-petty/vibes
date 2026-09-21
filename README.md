@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 36 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 37 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -291,7 +291,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 10-mcp-protocol-boundaries-and-stateless-transport-constraints.md
 │       ├── 11-silent-certification-failure-and-gate-integrity.md
 │       ├── 12-gates-catch-their-author-first.md
-│       └── 13-verify-the-finding-before-you-fix-it.md
+│       ├── 13-verify-the-finding-before-you-fix-it.md
+│       └── 14-defect-shaped-loops-and-the-feature-blind-spot.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
