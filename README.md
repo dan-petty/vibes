@@ -246,6 +246,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── TAXONOMY.md                    # Structured taxonomy of agentic architectures & failure modes
 │   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
 │   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
+│   ├── archive/                       # Delivered roadmap scope, retained for provenance
 │   ├── reliability/                   # Committed error budget ledger (one shard per iteration)
 │   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
 │
