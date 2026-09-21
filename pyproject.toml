@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "vibes"
 version = "0.4.0"
@@ -31,3 +35,10 @@ Documentation = "https://github.com/dan-petty/vibes#readme"
 # pytest configuration deliberately remains in pytest.ini, which takes precedence over
 # this file. That isolation prevents a parent workspace's plugins from being discovered
 # and is documented there; splitting it here would reintroduce the discovery it prevents.
+
+# This repository is a showcase and a toolbox, not an importable library. Without an
+# explicit empty package list, setuptools' flat-layout auto-discovery finds `patterns`,
+# `artifacts`, `resources` and `observations` and refuses to guess between them. Declaring
+# no packages makes `pip install .` an installation of the dependency list and nothing else.
+[tool.setuptools]
+packages = []
