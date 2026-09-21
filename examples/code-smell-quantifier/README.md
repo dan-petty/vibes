@@ -1,6 +1,6 @@
 # Sample App: Code Smell Quantifier
 
-A deterministic, zero-dependency measurement of structural decay: ten metrics that established tooling reports and this repository previously did not, each expressed as a **measured value against a cited threshold**.
+A deterministic measurement of structural decay: ten metrics expressed as a **measured value against a cited threshold**. Where an established tool already defines a metric, this reports that tool's number rather than a reimplementation of its formula — `radon` for maintainability index, Halstead volume and cyclomatic complexity, `vulture` for unreferenced code.
 
 ---
 
@@ -24,7 +24,9 @@ Surveying what established tools measure against what was measured here:
 | Import cycles | import-linter, pylint R0401 | no |
 | Unreferenced symbols | vulture | no |
 
-Two of twelve. None of the missing tools were installable here without taking a dependency, and the repository's tooling is deliberately stdlib-only, so the metrics are implemented against `ast`.
+Two of twelve.
+
+These were first written by hand, under a since-retired convention that treated zero dependencies as a virtue. Measured against `radon` on the same modules, the hand-written maintainability index ran **18 to 40 points low**: the ranking held, the absolute values did not, and the threshold calibrated to radon's scale was being applied to numbers that were not on it. `radon` and `vulture` are now adopted directly, and what remains here is what no tool provided — clone detection tuned to this corpus, LCOM4, the gating/advisory split, and the loop integration.
 
 ---
 

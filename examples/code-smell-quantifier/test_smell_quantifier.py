@@ -9,7 +9,6 @@ from smell_quantifier import (
     ADVISORY_SMELLS,
     Smell,
     analyze,
-    compute_halstead,
     detect_duplicated_blocks,
     detect_god_classes,
     detect_import_cycles,
@@ -18,7 +17,7 @@ from smell_quantifier import (
     detect_low_cohesion,
     detect_unreferenced_symbols,
     main,
-    maintainability_index,
+    module_metrics,
 )
 
 
@@ -32,18 +31,21 @@ def _write(tmp_path: Path, name: str, source: str) -> Path:
     return path
 
 
-def test_halstead_volume_grows_with_vocabulary() -> None:
-    """Volume is N log2(n); a richer vocabulary must cost more bits."""
-    simple = compute_halstead(_tree("x = 1\n"))
-    complex_ = compute_halstead(_tree("a = b + c * d - e / f\ng = h(a, b, c)\n"))
-    assert complex_.volume > simple.volume >= 0.0
+def test_module_metrics_come_from_radon_not_a_paraphrase() -> None:
+    """Report the reference implementation's number, never a restatement of its formula."""
+    from radon.metrics import mi_visit
+
+    source = "def f(x):\n    return x + 1\n"
+    maintainability, volume, complexity = module_metrics(source)
+    assert maintainability == pytest.approx(round(mi_visit(source, multi=True), 1))
+    assert volume > 0 and complexity >= 1
 
 
-def test_maintainability_index_is_normalized_and_size_dominated() -> None:
-    """Radon's normalized scale is 0-100, and module length dominates the formula."""
-    halstead = compute_halstead(_tree("def f(x):\n    return x + 1\n"))
-    small = maintainability_index(halstead, complexity=1, loc=10)
-    large = maintainability_index(halstead, complexity=1, loc=2000)
+def test_maintainability_is_on_radons_normalized_scale() -> None:
+    """A large tangled module must score below a small clean one, both within 0-100."""
+    small, _, _ = module_metrics("def f(x):\n    return x + 1\n")
+    sprawl = "\n".join(f"def f{i}(a, b):\n    return a if a > b else b" for i in range(200))
+    large, _, _ = module_metrics(sprawl)
     assert 0.0 <= large < small <= 100.0
 
 
@@ -129,23 +131,20 @@ def test_import_cycle_is_detected(tmp_path: Path) -> None:
     assert detect_import_cycles(acyclic) == []
 
 
-def test_unreferenced_symbol_detection_spares_test_modules(tmp_path: Path) -> None:
-    """Nothing references a pytest function by name; the collector finds it by prefix."""
-    trees = {
-        tmp_path / "lib.py": _tree("def used():\n    return 1\n\ndef unused():\n    return 2\n"),
-        tmp_path / "test_lib.py": _tree("from lib import used\n\ndef test_used():\n    assert used()\n"),
-    }
-    findings = detect_unreferenced_symbols(trees)
-    assert [f.subject for f in findings] == ["unused"]
+def test_unreferenced_symbols_carry_vultures_confidence(tmp_path: Path) -> None:
+    """Confidence is the number a reader needs to decide whether deletion is safe."""
+    _write(tmp_path, "lib.py", "import os\n\n\ndef used():\n    return 1\n")
+    _write(tmp_path, "main.py", "from lib import used\n\nprint(used())\n")
+
+    findings = detect_unreferenced_symbols([tmp_path], min_confidence=90)
+    assert [f.subject for f in findings] == ["import os"]
+    assert findings[0].measured == 90
 
 
-def test_string_reference_counts_as_use(tmp_path: Path) -> None:
-    """A name reachable only through getattr or a registry is still reachable."""
-    trees = {
-        tmp_path / "lib.py": _tree("def handler():\n    return 1\n"),
-        tmp_path / "registry.py": _tree("ROUTES = {'handler': 'handler'}\n"),
-    }
-    assert detect_unreferenced_symbols(trees) == []
+def test_unreferenced_symbol_confidence_floor_filters(tmp_path: Path) -> None:
+    """A floor above every reported confidence must yield nothing."""
+    _write(tmp_path, "lib.py", "import os\n\n\ndef used():\n    return 1\n")
+    assert detect_unreferenced_symbols([tmp_path], min_confidence=100) == []
 
 
 def test_advisory_smells_never_gate(tmp_path: Path) -> None:

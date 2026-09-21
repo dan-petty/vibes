@@ -12,6 +12,9 @@ git clone https://github.com/dan-petty/vibes.git
 cd vibes
 
 # Install pre-commit hooks (enforces sentinel + docs validator before push)
+# Install the repository and its tooling from the manifest, never by naming packages
+pip install --editable ".[test]"
+
 pip install pre-commit
 pre-commit install --hook-type pre-commit --hook-type pre-push
 

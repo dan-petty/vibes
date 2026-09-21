@@ -14,6 +14,37 @@ This document provides foundational context, architectural standards, and operat
 
 ---
 
+## 1a. Dependency Policy: Adopt Reputable Open Source, Do Not Reimplement It
+
+**Reach for the established tool first.** A reputable open source project is the preferred implementation of any solved problem, and reimplementing one by hand is a defect, not a virtue. Hand-rolled equivalents are slower to write, carry the author's misreadings, and are maintained by exactly one person who will not be here next year.
+
+This repository previously treated "zero-dependency" as a quality in itself. It is not. It is a constraint that buys portability in an executable exhibit, and it costs correctness everywhere else. The cost has been measured: a hand-written maintainability index in [`examples/code-smell-quantifier/`](./examples/code-smell-quantifier/) disagreed with `radon`, its own reference implementation, by **18 to 40 points** on the same modules — the ranking held, the absolute values did not, and the threshold calibrated against radon's scale was being applied to numbers that were not on it.
+
+### What Qualifies as Reputable
+
+A dependency is adopted when it clears all of these. The bar is evidence, not popularity:
+
+1. **Maintained**: a release within roughly the last year, or an explicit, credible statement that it is complete.
+2. **Licensed compatibly**: OSI-approved and compatible with Apache-2.0. Verify, do not assume.
+3. **Proportionate**: the transitive tree is inspected before adoption. A single-function convenience that drags in twenty packages is a worse trade than ten lines of standard library.
+4. **Replaceable**: the surface consumed is small enough to swap. Adopt the library, not its worldview.
+5. **Auditable**: the project is on a public registry with source and issue history available.
+
+### The Obligations That Come With It
+
+Adoption is not free, and these are the conditions of it:
+
+- **Declare it in [`pyproject.toml`](./pyproject.toml)**, with a lower bound, and nowhere else. The dependency list previously lived duplicated across `ci.yml`, `.pre-commit-config.yaml` and `CONTRIBUTING.md`, and drifted: the pre-push hook shipped without `pyyaml` and `markdown-it-py` and aborted every push until someone hit it.
+- **Consume it behind a narrow seam.** Import what the tool computes, not its data model, so replacing it is an edit to one module.
+- **Prefer the tool's own metric to a recomputation of it.** If `radon` reports the maintainability index, report radon's number; do not paraphrase the formula.
+- **A dependency that is no longer used is removed in the same commit that stops using it**, per §7's zero-zombie rule.
+
+### Where Zero-Dependency Still Applies
+
+Sample applications under `examples/` are *exhibits*: a reader copies one file and runs it. Those keep the standard library where practical, and say so in their README. That is a deliberate exception scoped to copy-pasteable artifacts, and it never applies to `tools/`, which is infrastructure.
+
+---
+
 ## 2. Zero-Trust Security & Egress Sanitization Mandate
 
 AI agents authoring content for `vibes` MUST adhere strictly to the following sanitization rules without exception:

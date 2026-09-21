@@ -110,7 +110,7 @@ Read the full [**Manifesto**](./docs/MANIFESTO.md) and [**Retrospective Analysis
 
 ## 💻 Executable Sample Applications (`examples/`)
 
-Runnable, zero-dependency reference implementations demonstrating core agentic engineering mechanics in action:
+Runnable reference implementations demonstrating core agentic engineering mechanics in action. Sample apps stay close to the standard library so a reader can copy one file and run it; the repository's own tooling under `tools/` adopts established open source instead, per the dependency policy in [`AGENTS.md`](./AGENTS.md):
 
 | Sample Application | Mechanics Demonstrated | Automated Test Suite |
 |---|---|---|
@@ -239,6 +239,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 ├── CONTRIBUTING.md                    # Contributor entry point, local gates, and conventions
 ├── LICENSE                            # Apache 2.0 open-source license
 ├── README.md                          # Repository homepage and exhibition tour (this file)
+├── pyproject.toml                     # Project metadata and the single dependency manifest
 ├── pytest.ini                         # Isolated test config preventing parent plugin discovery
 │
 ├── docs/                              # Foundational theory, taxonomy, and curation standards

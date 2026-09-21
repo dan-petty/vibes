@@ -30,7 +30,6 @@ import yaml
 from markdown_it import MarkdownIt
 
 from doc_core import (
-    SUPPORTED_EXTENSIONS,
     DocFinding,
     DocValidationReport,
     closing_fence_index,

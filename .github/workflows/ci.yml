@@ -26,10 +26,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Test Dependencies
+      - name: Install Dependencies
         run: |
+          # The manifest is the single source of the dependency list. Hardcoding it here
+          # is how the pre-push hook came to be missing pyyaml and markdown-it-py.
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-cov markdown-it-py pyyaml
+          pip install --editable ".[test]"
 
       - name: Execute Full Test Suite (All Milestones)
         run: |

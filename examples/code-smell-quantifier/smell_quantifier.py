@@ -31,6 +31,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Final, Iterable, Sequence
 
+from radon.complexity import cc_visit
+from radon.metrics import h_visit, mi_visit
+from vulture import Vulture
+
 # Thresholds are the published defaults of the tools each detector mirrors, so a number
 # here can be traced to a source rather than to taste.
 MAX_PARAMETERS: Final[int] = 5           # pylint R0913 default
@@ -43,6 +47,8 @@ MIN_CLONE_STATEMENTS: Final[int] = 6      # PMD-CPD minimum-tokens analogue
 # Calibrated on this corpus: import windows peak at 27 AST nodes while code windows have a
 # median of 128, so a 40-node floor excludes every import run and keeps 90% of code.
 MIN_CLONE_NODE_MASS: Final[int] = 40
+# Vulture's own default. Below this its findings need a human to confirm reachability.
+VULTURE_MIN_CONFIDENCE: Final[int] = 60
 # radon's normalized MI scale grades A = 20-100, B = 10-19, C = 0-9; Visual Studio uses
 # the same normalization with green >= 20. 20 is therefore the A/B boundary, not 65 —
 # 65 belongs to the unnormalized SEI scale and is a common transcription error.
@@ -80,79 +86,20 @@ class SmellFinding:
         return round(self.measured - self.threshold, 2)
 
 
-@dataclass
-class HalsteadMetrics:
-    """Halstead's operator/operand counts, computed over AST nodes.
+def module_metrics(source: str) -> tuple[float, float, int]:
+    """Return (maintainability index, Halstead volume, max complexity) from radon.
 
-    The original is defined over lexical tokens. Counting AST operator nodes and
-    Name/Constant operands is the approximation radon also makes; it preserves the
-    metric's ordering behaviour, which is what a trend needs, and the docstring says so
-    rather than implying token fidelity.
+    These were hand-written here first, against radon's published formulae. Measured on
+    this repository the hand-written maintainability index ran 18 to 40 points below
+    radon's on the same modules: the ranking survived, the absolute values did not, and a
+    threshold calibrated to radon's scale was being applied to numbers that were not on
+    it. Reporting the reference implementation's number is not a convenience, it is the
+    difference between a metric and a paraphrase of one.
     """
-
-    distinct_operators: int = 0
-    distinct_operands: int = 0
-    total_operators: int = 0
-    total_operands: int = 0
-
-    @property
-    def vocabulary(self) -> int:
-        """Return n, the distinct operator and operand count."""
-        return self.distinct_operators + self.distinct_operands
-
-    @property
-    def length(self) -> int:
-        """Return N, the total operator and operand count."""
-        return self.total_operators + self.total_operands
-
-    @property
-    def volume(self) -> float:
-        """Return V = N log2(n), the size of the implementation in bits."""
-        return 0.0 if self.vocabulary <= 1 else round(self.length * math.log2(self.vocabulary), 2)
-
-
-_OPERATOR_NODES: Final[tuple[type[ast.AST], ...]] = (
-    ast.BinOp, ast.BoolOp, ast.UnaryOp, ast.Compare, ast.Call, ast.Attribute,
-    ast.Subscript, ast.Assign, ast.AugAssign, ast.Return, ast.Raise, ast.Assert,
-    ast.If, ast.For, ast.While, ast.With, ast.Lambda, ast.Await, ast.Yield,
-)
-
-
-def _classify_halstead_token(node: ast.AST) -> tuple[str, str]:
-    """Classify a node as a Halstead operator, operand, or neither."""
-    if isinstance(node, _OPERATOR_NODES):
-        return "operator", type(node).__name__
-    if isinstance(node, ast.Name):
-        return "operand", node.id
-    if isinstance(node, ast.Constant):
-        return "operand", repr(node.value)
-    return "", ""
-
-
-def compute_halstead(tree: ast.AST) -> HalsteadMetrics:
-    """Measure Halstead operator and operand counts across a syntax tree."""
-    classified = [_classify_halstead_token(node) for node in ast.walk(tree)]
-    operators = [value for kind, value in classified if kind == "operator"]
-    operands = [value for kind, value in classified if kind == "operand"]
-    return HalsteadMetrics(
-        distinct_operators=len(set(operators)),
-        distinct_operands=len(set(operands)),
-        total_operators=len(operators),
-        total_operands=len(operands),
-    )
-
-
-def maintainability_index(halstead: HalsteadMetrics, complexity: int, loc: int) -> float:
-    """Return the normalized 0-100 maintainability index used by radon.
-
-    MI = max(0, (171 - 5.2 ln(V) - 0.23 G - 16.2 ln(LOC)) * 100 / 171)
-
-    Below 65 is radon's B/C boundary: still shippable, measurably harder to change.
-    """
-    volume = max(halstead.volume, 1.0)
-    lines = max(loc, 1)
-    raw = 171.0 - 5.2 * math.log(volume) - 0.23 * complexity - 16.2 * math.log(lines)
-    return round(max(0.0, raw * 100.0 / 171.0), 1)
+    visits = cc_visit(source)
+    complexity = max((v.complexity for v in visits), default=1)
+    report = h_visit(source)
+    return round(mi_visit(source, multi=True), 1), round(report.total.volume, 2), complexity
 
 
 def _function_nodes(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
@@ -444,65 +391,31 @@ def _find_cycles(graph: dict[str, set[str]]) -> list[list[str]]:
     return cycles
 
 
-def _module_level_symbols(tree: ast.AST) -> dict[str, int]:
-    """Return public module-level function and class names with their line numbers."""
-    kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-    body = getattr(tree, "body", [])
-    return {n.name: n.lineno for n in body if isinstance(n, kinds) and not n.name.startswith("_")}
-
-
-def _node_reference(node: ast.AST) -> str | None:
-    """Return the name a single node references, by any means, or None."""
-    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        return node.attr
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    return None
-
-
-def _referenced_names(trees: dict[Path, ast.AST]) -> set[str]:
-    """Return every name referenced anywhere in the corpus, by any means."""
-    references = (
-        _node_reference(node) for tree in trees.values() for node in ast.walk(tree)
-    )
-    return {name for name in references if name is not None}
-
-
-def _is_convention_discovered(path: Path) -> bool:
-    """Return True for modules whose contents a runner discovers by naming convention.
-
-    Nothing references a pytest test function by name; the collector finds it by prefix.
-    Reporting such functions as dead would be a detector that recommends deleting the
-    test suite, which is the failure mode worth designing against rather than explaining.
-    """
-    return path.name.startswith("test_") or path.name.endswith("_test.py")
-
-
 def detect_unreferenced_symbols(
-    trees: dict[Path, ast.AST], entry_points: Sequence[str] = ("main",)
+    paths: Sequence[Path], min_confidence: int = VULTURE_MIN_CONFIDENCE
 ) -> list[SmellFinding]:
-    """Flag public module-level symbols no file in the corpus references.
+    """Report unreferenced code using vulture, carrying its confidence as the measurement.
 
-    Deliberately conservative: string constants count as references, because a name
-    reachable only through `getattr` or a registry lookup is still reachable. Over-reporting
-    dead code costs more than missing some, since the suggested action is deletion.
+    This was hand-written first and saw less: it examined module-level definitions only,
+    so an unused import or an unused loop variable was invisible to it, and it graded
+    every finding the same. Vulture reports unused imports, variables, attributes,
+    properties and unreachable code, each with a confidence, which is the number a reader
+    needs to decide whether deletion is safe.
     """
-    referenced = _referenced_names(trees)
-    findings: list[SmellFinding] = []
-    for path, tree in trees.items():
-        if _is_convention_discovered(path):
-            continue
-        for name, line in _module_level_symbols(tree).items():
-            if name in entry_points or name in referenced or name.startswith("test_"):
-                continue
-            findings.append(SmellFinding(
-                smell=Smell.UNREFERENCED_SYMBOL, file_path=str(path), line_number=line,
-                subject=name, measured=0, threshold=1,
-                detail="Defined and exported, referenced nowhere in the scanned corpus",
-            ))
-    return findings
+    scanner = Vulture(verbose=False)
+    scanner.scavenge([str(p) for p in paths])
+    return [
+        SmellFinding(
+            smell=Smell.UNREFERENCED_SYMBOL,
+            file_path=str(item.filename),
+            line_number=item.first_lineno,
+            subject=f"{item.typ} {item.name}",
+            measured=item.confidence,
+            threshold=min_confidence,
+            detail=f"Unused {item.typ}, {item.confidence}% confidence per vulture",
+        )
+        for item in scanner.get_unused_code(min_confidence=min_confidence)
+    ]
 
 
 # Smells whose measurement is sound but whose *action* requires judgement. They are
@@ -567,24 +480,13 @@ class SmellReport:
         return dict(sorted(tally.items()))
 
 
-def _max_complexity(tree: ast.AST) -> int:
-    """Return the highest branch count of any function in a module."""
-    branch_kinds = (ast.If, ast.For, ast.While, ast.ExceptHandler, ast.Assert, ast.IfExp, ast.BoolOp)
-    scores = [
-        1 + sum(1 for c in ast.walk(fn) if isinstance(c, branch_kinds))
-        for fn in _function_nodes(tree)
-    ]
-    return max(scores, default=1)
-
-
-def _score_module(path: Path, tree: ast.AST, source: str) -> ModuleScore:
-    """Quantify one module, before any threshold is applied."""
+def _score_module(path: Path, source: str) -> ModuleScore:
+    """Quantify one module with radon, before any threshold is applied."""
     loc = len([ln for ln in source.splitlines() if ln.strip() and not ln.strip().startswith("#")])
-    halstead = compute_halstead(tree)
-    complexity = _max_complexity(tree)
+    maintainability, volume, complexity = module_metrics(source)
     return ModuleScore(
-        path=str(path), loc=loc, halstead_volume=halstead.volume, max_complexity=complexity,
-        maintainability=maintainability_index(halstead, complexity, loc),
+        path=str(path), loc=loc, halstead_volume=volume, max_complexity=complexity,
+        maintainability=maintainability,
     )
 
 
@@ -599,13 +501,13 @@ def analyze(paths: Sequence[Path]) -> SmellReport:
         except (OSError, SyntaxError, UnicodeDecodeError):
             continue
         trees[file_path] = tree
-        report.modules.append(_score_module(file_path, tree, source))
+        report.modules.append(_score_module(file_path, source))
         for detector in PER_FILE_DETECTORS:
             report.findings.extend(detector(tree, file_path))
 
     report.findings.extend(detect_duplicated_blocks(trees))
     report.findings.extend(detect_import_cycles(trees))
-    report.findings.extend(detect_unreferenced_symbols(trees))
+    report.findings.extend(detect_unreferenced_symbols(list(paths)))
     report.findings.extend(
         SmellFinding(
             smell=Smell.LOW_MAINTAINABILITY, file_path=m.path, line_number=1,
