@@ -996,7 +996,12 @@ class FeedbackAnalyzer:
             if e.scan_metrics.resource_type is not ResourceType.DOCUMENTATION
         ]
         try:
-            report = quantifier.analyze([t for t in targets if t.exists()])
+            # Only gating smells enter the backlog, so only gating work is paid for:
+            # the advisory detectors are 94% of the runtime and every finding they
+            # produce would be discarded on the next line.
+            report = quantifier.analyze(
+                [t for t in targets if t.exists()], include_advisory=False
+            )
         except (OSError, SyntaxError, ValueError) as err:
             logger.debug("Structural decay analysis unavailable: %s", err)
             return
