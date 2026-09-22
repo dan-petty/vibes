@@ -39,14 +39,26 @@ jobs:
         id: audit
         if: steps.classify.outputs.is_defect == 'true'
         env:
-          # A ref name is attacker-controlled on a fork's pull request and may contain
-          # shell metacharacters; a merge SHA is not, but both travel the same way so the
-          # rule needs no per-value judgement. See `pr-sentinel.yml` for the full reason.
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          # Never interpolated into the shell; see `pr-sentinel.yml` for the full reason.
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          git diff "origin/${BASE_REF}...${MERGE_SHA}" > /tmp/pr_diff.patch
-          
+          # Diff the merged commit against its own first parent, never a three-dot range
+          # against the base branch. Once a pull request is merged, its commit is an
+          # ancestor of the base, so the merge base of `origin/main...<merge sha>` is the
+          # merge sha itself and the diff is empty -- for squash, merge and rebase alike.
+          # This workflow had never executed; on its first run it reported "AGENTS.md was
+          # not updated" for a pull request that had added a whole section to AGENTS.md,
+          # and opened an issue against the author saying so.
+          git diff "${MERGE_SHA}^1" "${MERGE_SHA}" > /tmp/pr_diff.patch
+
+          # An empty diff means the revision range is wrong, not that a merged pull
+          # request changed nothing. Failing loudly here is what turns the next range
+          # mistake into a red job instead of a false accusation in a new issue.
+          if [ ! -s /tmp/pr_diff.patch ]; then
+            echo "::error::Empty diff for ${MERGE_SHA}; the revision range is wrong."
+            exit 1
+          fi
+
           python tools/project_tooling.py verify-hardening \
             --diff-file /tmp/pr_diff.patch \
             --is-defect || echo "hardening_failed=true" >> "$GITHUB_ENV"
