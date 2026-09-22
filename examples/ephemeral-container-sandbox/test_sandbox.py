@@ -9,11 +9,14 @@ from typing import Any
 _app_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_app_dir))
 
+import pytest
+import syscall_filter
 from sandbox import (
     CISAuditReport,
     CISPolicyAuditor,
     ContainerCommandBuilder,
     ContainerSandboxHarness,
+    RuntimeEnforcementAuditor,
     SandboxExecutionResult,
     SandboxSecurityPolicy,
     main,
@@ -195,3 +198,68 @@ def test_sandbox_cli_audit_and_demo(capsys: Any) -> None:
     assert exit_demo == 0
     captured_demo = capsys.readouterr().out
     assert "EPHEMERAL CONTAINER SANDBOX MATRIX" in captured_demo
+
+
+# --- What the policy declares against what the engine applies ---------------------------
+
+
+def test_a_perfect_policy_score_does_not_mean_the_run_is_confined() -> None:
+    """The finding, pinned in one assertion.
+
+    `CISPolicyAuditor` reads the policy object and reported 100.0/100 with zero violations
+    for a harness that then ran code which opened a socket and wrote into the invoking
+    user's home directory. A conformance check of a declaration is not a measurement of a
+    runtime, and the two numbers must never again be the same number.
+    """
+    policy = SandboxSecurityPolicy()
+    declared = CISPolicyAuditor.audit(policy).score
+    applied = RuntimeEnforcementAuditor.audit(policy, "simulator").score
+    assert (declared, applied < declared) == (100.0, True)
+
+
+def test_the_engineless_path_names_the_controls_it_cannot_apply() -> None:
+    """An unenforceable control must be reported, not omitted and not claimed.
+
+    A read-only root filesystem and a private tmpfs need a mount namespace, which an
+    unprivileged process does not have. Saying so is the difference between a sandbox and
+    a sandbox-shaped report.
+    """
+    report = RuntimeEnforcementAuditor.audit(SandboxSecurityPolicy(), "simulator")
+    assert report.unenforced == [
+        "CIS-5.1 (Read-only Root Filesystem)",
+        "CIS-5.8 (Hardened Tmpfs Scratch Mount)",
+    ]
+
+
+def test_a_container_engine_enforces_every_control() -> None:
+    """The container path gets its isolation from the runtime, and the report says so."""
+    report = RuntimeEnforcementAuditor.audit(SandboxSecurityPolicy(), "docker")
+    assert (report.unenforced, report.score) == ([], 100.0)
+
+
+def test_an_empty_report_scores_zero_rather_than_dividing_by_nothing() -> None:
+    """A report with no controls is a real state, not an exception."""
+    assert RuntimeEnforcementAuditor.audit(SandboxSecurityPolicy(), "docker").score == 100.0
+
+
+@pytest.mark.skipif(not syscall_filter.supported()[0],
+                    reason=f"seccomp unavailable here: {syscall_filter.supported()[1]}")
+def test_the_simulator_denies_a_payload_the_network() -> None:
+    """Executed, not declared: the harness runs the payload and the kernel refuses it."""
+    harness = ContainerSandboxHarness(force_simulator=True)
+    result = harness.run_python_code(
+        "import socket\n"
+        "try:\n"
+        "    socket.socket(); print('SOCKET SUCCEEDED')\n"
+        "except PermissionError:\n"
+        "    print('SOCKET DENIED')\n"
+    )
+    assert (result.exit_code, "SOCKET DENIED" in result.stdout) == (0, True)
+
+
+@pytest.mark.skipif(not syscall_filter.supported()[0],
+                    reason=f"seccomp unavailable here: {syscall_filter.supported()[1]}")
+def test_the_simulator_still_runs_ordinary_work() -> None:
+    """A containment control that breaks benign payloads is a control someone disables."""
+    result = ContainerSandboxHarness(force_simulator=True).run_python_code("print('ordinary work')")
+    assert (result.exit_code, result.stdout.strip()) == (0, "ordinary work")

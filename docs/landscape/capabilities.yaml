@@ -267,6 +267,7 @@ capabilities:
       - resource_caps
       - egress_control
       - benchmark_audit
+      - syscall_isolation
     alternatives:
       - repo: google/gvisor
         has:

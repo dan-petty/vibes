@@ -18,19 +18,42 @@ Key Hardening Features:
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import shutil
 import signal
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
+
+# Kept importable whether this file is run from its own directory, imported by a test
+# runner rooted elsewhere, or copied out of the repository, which is what an exhibit is for.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Imported after the path is arranged above; E402 is not in this project's ruff selection, and a
+# `noqa` for an unselected rule is itself a finding (RUF100).
+import syscall_filter
 
 # Bounded output constraints
 MAX_OUTPUT_BYTES = 65536
 TRUNCATION_MARKER = "\n... [TRUNCATED DUE TO BUFFER LIMIT] ...\n"
 DEFAULT_SAFE_VARS = frozenset({"PATH", "LANG", "LC_ALL", "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"})
+
+# The eight controls, in the order both auditors report them.
+CIS_CONTROL_NAMES: tuple[str, ...] = (
+    "CIS-5.1 (Read-only Root Filesystem)",
+    "CIS-5.2 (Network Isolation Egress Deny-All)",
+    "CIS-5.3 (Capabilities Dropped)",
+    "CIS-5.4 (No New Privileges)",
+    "CIS-5.5 (Unprivileged User)",
+    "CIS-5.6 (Cgroups Memory Cap)",
+    "CIS-5.7 (PID Limit Fork-Bomb Protection)",
+    "CIS-5.8 (Hardened Tmpfs Scratch Mount)",
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +71,9 @@ class SandboxSecurityPolicy:
     timeout_seconds: float = 5.0
     tmpfs_mounts: tuple[tuple[str, str], ...] = (("/tmp", "rw,noexec,nosuid,nodev,size=64m"),)
     allowed_env_vars: tuple[str, ...] = ("PATH", "LANG", "LC_ALL", "PYTHONUNBUFFERED")
+    # Which syscall groups the engine-less path denies in the kernel. The container
+    # path gets its isolation from the runtime; this is what the other path has.
+    seccomp_groups: tuple[str, ...] = syscall_filter.DEFAULT_GROUPS
 
 
 @dataclass
@@ -164,6 +190,79 @@ class CISPolicyAuditor:
             r.append("Mount /tmp with rw,noexec,nosuid,nodev,size=64m.")
 
 
+@dataclass(frozen=True)
+class ControlEnforcement:
+    """One control, and whether the engine about to run actually applies it."""
+
+    control: str
+    enforced: bool
+    mechanism: str
+
+
+@dataclass
+class EnforcementReport:
+    """What the runtime enforces, as distinct from what the policy declares."""
+
+    engine: str
+    controls: list[ControlEnforcement] = field(default_factory=list)
+
+    @property
+    def score(self) -> float:
+        """Return the share of controls this engine actually applies."""
+        if not self.controls:
+            return 0.0
+        return round(100.0 * sum(c.enforced for c in self.controls) / len(self.controls), 1)
+
+    @property
+    def unenforced(self) -> list[str]:
+        """Return the controls the policy declares and this engine does not apply."""
+        return [c.control for c in self.controls if not c.enforced]
+
+
+class RuntimeEnforcementAuditor:
+    """Audit what the engine enforces, not what the policy asks for.
+
+    `CISPolicyAuditor` reads the policy object. That is a useful check of the declaration
+    and it was the only check there was, so a default policy scored 100.0/100 with zero
+    violations while the engine-less path enforced none of the eight controls — it ran code
+    that opened a socket and wrote into the invoking user's home directory, and reported a
+    perfect score for the run. A conformance check of a declaration is not a measurement of
+    a runtime, and presenting one as the other is the failure mode of
+    [Observation 11](../../observations/systems/11-silent-certification-failure-and-gate-integrity.md).
+    """
+
+    @classmethod
+    def audit(cls, policy: SandboxSecurityPolicy, engine: str) -> EnforcementReport:
+        """Report per-control enforcement for the engine that will actually run."""
+        if engine != "simulator":
+            return EnforcementReport(engine, [
+                ControlEnforcement(name, True, f"{engine} run flag")
+                for name in CIS_CONTROL_NAMES
+            ])
+        return EnforcementReport(engine, cls._simulator_controls(policy))
+
+    @classmethod
+    def _simulator_controls(cls, policy: SandboxSecurityPolicy) -> list[ControlEnforcement]:
+        """Describe what an unprivileged process can and cannot enforce on itself."""
+        ok, reason = syscall_filter.supported()
+        seccomp = f"seccomp-BPF ({', '.join(policy.seccomp_groups)})" if ok else f"unavailable: {reason}"
+        denied = set(policy.seccomp_groups) if ok else set()
+        return [
+            ControlEnforcement(CIS_CONTROL_NAMES[0], False,
+                               "no mount namespace; an unprivileged process cannot remount its root"),
+            ControlEnforcement(CIS_CONTROL_NAMES[1], "network" in denied, seccomp),
+            ControlEnforcement(CIS_CONTROL_NAMES[2], "privilege" in denied, seccomp),
+            ControlEnforcement(CIS_CONTROL_NAMES[3], ok, "prctl(PR_SET_NO_NEW_PRIVS)"),
+            ControlEnforcement(CIS_CONTROL_NAMES[4], os.getuid() != 0,
+                               f"the harness runs as uid {os.getuid()} and cannot drop to another"),
+            ControlEnforcement(CIS_CONTROL_NAMES[5], True, f"RLIMIT_AS at {policy.memory_limit_mb}MB"),
+            ControlEnforcement(CIS_CONTROL_NAMES[6], True,
+                               f"RLIMIT_NPROC at {policy.pids_limit}, per-uid rather than per-tree"),
+            ControlEnforcement(CIS_CONTROL_NAMES[7], False,
+                               "no mount namespace; /tmp is the host's"),
+        ]
+
+
 class ContainerCommandBuilder:
     """Compiles hardened container CLI execution argument lists."""
 
@@ -259,13 +358,42 @@ class ContainerSandboxHarness:
 
     def _run_simulator(self, command: list[str]) -> SandboxExecutionResult:
         sanitized_env = self.sanitize_env(dict(os.environ))
-        return self._execute_subprocess(command, runtime_name="simulator", env=sanitized_env)
+        return self._execute_subprocess(
+            command, runtime_name="simulator", env=sanitized_env, confine=self._confinement()
+        )
+
+    def _confinement(self) -> Callable[[], None] | None:
+        """Build the child-side confinement, or None when this host cannot apply it.
+
+        Built in the parent so the child does nothing between `fork` and `exec` but call
+        two already-resolved `prctl`s and four `setrlimit`s. Returning None rather than
+        raising is deliberate: an unenforceable control is reported as unenforced by
+        `RuntimeEnforcementAuditor`, and a sandbox that quietly runs unconfined is the
+        defect this was added to fix.
+        """
+        supported, _ = syscall_filter.supported()
+        if not supported:
+            return None
+        install = syscall_filter.installer(self.policy.seccomp_groups)
+        limit = syscall_filter.limiter(
+            memory_mb=self.policy.memory_limit_mb,
+            cpu_seconds=max(1, math.ceil(self.policy.timeout_seconds)),
+            max_processes=self.policy.pids_limit,
+        )
+
+        def confine() -> None:
+            """Cap resources first, then filter; the filter cannot be undone."""
+            limit()
+            install()
+
+        return confine
 
     def _execute_subprocess(
         self,
         cmd: list[str],
         runtime_name: str,
         env: dict[str, str] | None = None,
+        confine: Callable[[], None] | None = None,
     ) -> SandboxExecutionResult:
         start = time.monotonic()
         timed_out = False
@@ -281,6 +409,7 @@ class ContainerSandboxHarness:
                 text=True,
                 env=env,
                 start_new_session=True,
+                preexec_fn=confine,
             )
             stdout_raw, stderr_raw = proc.communicate(timeout=self.policy.timeout_seconds)
             exit_code = proc.returncode
@@ -360,8 +489,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     policy = SandboxSecurityPolicy(timeout_seconds=0.15 if args.demo else 5.0)
 
     if args.audit or not args.demo:
-        report = CISPolicyAuditor.audit(policy)
-        _print_audit_report(report)
+        _print_audit_report(CISPolicyAuditor.audit(policy))
+        # Always printed beside the policy audit, never instead of it. The policy score is
+        # a property of the declaration; this one is a property of the run about to happen,
+        # and reporting only the first is how this harness came to certify a containment it
+        # was not applying.
+        engine = ContainerSandboxHarness._resolve_engine(None, args.simulator)
+        _print_enforcement_report(RuntimeEnforcementAuditor.audit(policy, engine))
 
     if args.demo:
         harness = ContainerSandboxHarness(policy=policy, force_simulator=args.simulator)
@@ -381,6 +515,21 @@ def _print_audit_report(report: CISAuditReport) -> None:
         print(f"  [PASS] {ctrl}")
     for viol in report.violations:
         print(f"  [FAIL] {viol}")
+    print("==========================================================================")
+
+
+def _print_enforcement_report(report: EnforcementReport) -> None:
+    print("==========================================================================")
+    print(f"🧱 RUNTIME ENFORCEMENT ({report.engine})")
+    enforced = len(report.controls) - len(report.unenforced)
+    print(f"Enforced: {report.score}% | {enforced}/{len(report.controls)} controls applied by this engine")
+    print("--------------------------------------------------------------------------")
+    for control in report.controls:
+        print(f"  [{'ENFORCED' if control.enforced else 'DECLARED'}] {control.control}")
+        print(f"             {control.mechanism}")
+    if report.unenforced:
+        print("--------------------------------------------------------------------------")
+        print("  The controls above marked DECLARED are in the policy and not in the run.")
     print("==========================================================================")
 
 
