@@ -1,0 +1,147 @@
+# What this repository builds, and the third-party projects that build something comparable.
+#
+# The shape of this file is the safeguard. A feature is claimed for an alternative only by
+# writing an entry under `has:` whose value is the evidence for it — a flag, a command, a
+# documented behaviour. There is no way to assert a capability without citing something,
+# which is what stops a survey inventing a feature matrix out of README keywords.
+#
+# A feature absent from both `has:` and `lacks:` is *unknown*, never *no*. "We searched and
+# did not find it" and "it is not there" are different claims, and only the second belongs
+# in `lacks:`. Gap detection reads `has:` alone, so an unknown can never manufacture work.
+
+feature_catalog:
+  cyclomatic_complexity: Flags functions exceeding a cyclomatic complexity ceiling
+  nesting_depth: Flags block nesting deeper than a configured ceiling
+  maintainability_index: Reports a normalized maintainability score per module
+  halstead_metrics: Reports Halstead volume, difficulty or effort
+  trend_over_time: Tracks metric movement across git history rather than one snapshot
+  per_file_baseline: Accepts existing violations so a gate can be adopted incrementally
+  sarif_output: Emits SARIF for code scanning and security dashboards
+  multi_language: Analyses languages beyond Python
+  auto_fix: Rewrites source to remove the finding, not only report it
+  pre_commit_hook: Ships a documented pre-commit integration
+  editor_lsp: Provides a language server or first-party editor integration
+  clone_detection: Detects duplicated or near-duplicated blocks
+  dead_code: Detects unreferenced symbols
+  import_cycles: Detects circular imports between modules
+  cohesion_metric: Reports a class cohesion measure such as LCOM
+  secret_scanning: Detects credentials or private network addresses in source
+  link_checking: Verifies that document links resolve
+  diagram_rendering: Verifies embedded diagrams actually render
+  prose_style: Enforces prose style or terminology rules
+  markdown_structure: Enforces document structure or heading conventions
+  config_presets: Ships selectable rule presets rather than one fixed rule set
+  baseline_diff: Reports only findings introduced relative to a base revision
+  adversarial_prompts: Generates adversarial or mutated prompts against a target
+  attack_taxonomy: Classifies probes against a published attack taxonomy
+  model_providers: Drives more than one model provider out of the box
+
+capabilities:
+  - key: complexity-gating
+    title: Mechanical complexity and nesting invariant gate
+    short: Complexity gate
+    path: examples/ast-invariant-sentinel/sentinel.py
+    ours:
+      - cyclomatic_complexity
+      - nesting_depth
+      - secret_scanning
+      - pre_commit_hook
+    alternatives:
+      - repo: rubik/xenon
+        has:
+          cyclomatic_complexity: "Fails the build on --max-absolute / --max-average / --max-modules thresholds"
+        lacks: [multi_language]
+      - repo: terryyin/lizard
+        has:
+          cyclomatic_complexity: "-C sets a CCN warning threshold and exits non-zero"
+          multi_language: "Documents C/C++, Java, JavaScript, Go, Rust, Swift and more"
+          per_file_baseline: "-W whitelist file suppresses known warnings"
+      - repo: astral-sh/ruff
+        has:
+          cyclomatic_complexity: "C901 via mccabe, max-complexity setting"
+          auto_fix: "ruff check --fix rewrites source"
+          editor_lsp: "ruff server implements the Language Server Protocol"
+          pre_commit_hook: "Publishes ruff-pre-commit"
+          sarif_output: "--output-format sarif"
+          config_presets: "select / extend-select rule families in pyproject.toml"
+        lacks: [multi_language]
+      - repo: pylint-dev/pylint
+        has:
+          cyclomatic_complexity: "R0912 too-many-branches and related design checks"
+          config_presets: "Enable/disable by message family in pylintrc"
+
+  - key: smell-quantification
+    title: Quantified structural decay across a repository
+    short: Smell quantifier
+    path: examples/code-smell-quantifier/smell_quantifier.py
+    ours:
+      - maintainability_index
+      - halstead_metrics
+      - clone_detection
+      - dead_code
+      - import_cycles
+      - cohesion_metric
+    alternatives:
+      - repo: rubik/radon
+        has:
+          maintainability_index: "radon mi computes the maintainability index per module"
+          halstead_metrics: "radon hal reports volume, difficulty and effort"
+          cyclomatic_complexity: "radon cc ranks blocks A-F"
+      - repo: jendrikseipp/vulture
+        has:
+          dead_code: "Reports unused code with a confidence percentage"
+          per_file_baseline: "Whitelist files suppress known-live symbols"
+      - repo: tonybaloney/wily
+        has:
+          trend_over_time: "wily build indexes metrics across git revisions; wily graph and wily diff report movement"
+          maintainability_index: "Tracks radon maintainability index as an indexed metric"
+          baseline_diff: "wily diff reports metric change against a revision"
+      - repo: kucherenko/jscpd
+        has:
+          clone_detection: "Token-based copy-paste detection with a --threshold failure gate"
+          multi_language: "Documents over 150 formats"
+          sarif_output: "Reporters include sarif"
+
+  - key: documentation-integrity
+    title: Executable documentation quality and link integrity gate
+    short: Docs validator
+    path: tools/docs_validator.py
+    ours:
+      - link_checking
+      - diagram_rendering
+      - markdown_structure
+      - secret_scanning
+      - auto_fix
+    alternatives:
+      - repo: DavidAnson/markdownlint
+        has:
+          markdown_structure: "Rule set MD001-MD059 covers heading, list and fence structure"
+          auto_fix: "--fix applies safe rule fixes"
+          config_presets: ".markdownlint.json enables or disables rules individually"
+      - repo: lycheeverse/lychee
+        has:
+          link_checking: "Async link checker for markdown, HTML and text"
+          multi_language: "Checks links in any text format, not one markup language"
+      - repo: vale-cli/vale
+        has:
+          prose_style: "Applies configurable prose style guides such as Microsoft or Google"
+          multi_language: "Supports markdown, reStructuredText, AsciiDoc and code comments"
+          config_presets: "Styles are installable packages selected in .vale.ini"
+
+  - key: prompt-adversarial-testing
+    title: Adversarial prompt mutation against agent instructions
+    short: Prompt fuzzer
+    path: examples/prompt-mutation-fuzzer/fuzzer.py
+    ours:
+      - adversarial_prompts
+    alternatives:
+      - repo: NVIDIA/garak
+        has:
+          adversarial_prompts: "Probe modules generate attack prompts against a target generator"
+          attack_taxonomy: "Probes are organised against a published vulnerability taxonomy"
+          model_providers: "Generators for OpenAI, Hugging Face, Replicate, local models and more"
+      - repo: promptfoo/promptfoo
+        has:
+          adversarial_prompts: "Red-team plugins generate adversarial test cases"
+          model_providers: "Declarative provider list covering many hosted and local models"
+          baseline_diff: "Evaluations compare prompt or model variants side by side"

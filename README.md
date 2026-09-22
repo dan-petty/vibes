@@ -248,6 +248,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
 │   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
 │   ├── archive/                       # Delivered roadmap scope, retained for provenance
+│   ├── landscape/                     # Comparable-project survey: manifest, facts snapshot, report
 │   ├── reliability/                   # Committed error budget ledger (one shard per iteration)
 │   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
 │
@@ -368,6 +369,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
 │   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog
+│   ├── landscape_survey.py            # Maturity, feature comparison and gap-to-roadmap survey
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   ├── source_tree_policy.py          # Single definition of which paths are repository source
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
@@ -381,6 +383,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_reliability_slo.py        # Unit tests for SLO error budgets and phase policy
     ├── test_roadmap_ingest.py         # Unit tests for roadmap deliverable ingestion
     ├── test_sdlc_sync.py              # Unit tests for backlog reconciliation and promotion
+    ├── test_landscape_survey.py       # Unit tests for maturity scoring and gap-to-roadmap emission
     ├── test_source_tree_policy.py     # Unit tests pinning one corpus definition across instruments
     ├── test_docs_validator.py         # Unit tests for documentation syntax and link validation
     └── test_gate_manifest.py          # Asserts every documented quality gate is wired into CI

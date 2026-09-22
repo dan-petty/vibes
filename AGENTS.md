@@ -299,7 +299,21 @@ To foster an autonomous, creative, and continuously self-improving engineering i
    - A roadmap card cannot be judged by a scan's silence, so it is judged against ingestion: when the scan carries roadmap cards at all, that set is the complete list of *open* deliverables, and a card missing from it has been checked off. A defect-only export says nothing either way and leaves the roadmap untouched. Without that distinction the board kept recommending work that had already shipped.
    - A roadmap card's **declared** fields — priority, sizing, blocker, guidance — are re-read from the roadmap on every pass; its `lifecycle_state` belongs to the board and is never reset by a re-read.
 
-4. **Record a Deferral, Do Not Re-Decide It**:
+4. **Look Outward as Well as Inward**:
+   - Every generator listed above is inward-facing. None of them can observe that a capability treated here as finished is behind the field, or that a problem was solved better elsewhere. [`tools/landscape_survey.py`](./tools/landscape_survey.py) is the outward-facing generator and feeds the same prioritizer:
+
+     ```bash
+     python3 tools/landscape_survey.py refresh                 # facts from GitHub (network)
+     python3 tools/landscape_survey.py report --out docs/landscape/SURVEY.md
+     python3 tools/landscape_survey.py roadmap --top 4         # dry run; --write applies
+     ```
+
+   - **Never assert a third-party capability without citing it.** In [`docs/landscape/capabilities.yaml`](./docs/landscape/capabilities.yaml) a feature is claimed by adding it under an alternative's `has:` key, and the value of that key *is* the evidence. A feature in neither `has:` nor `lacks:` is unknown and can never become a gap.
+   - The structure forces a citation but cannot check that the citation supports the claim — the first draft of that manifest cited "Wraps radon; Python only" as evidence a tool was multi-language. Read the evidence you write, and expect a reader to overturn it: every citation travels onto the roadmap item for exactly that reason.
+   - A survey establishes that a capability exists elsewhere, never what it is worth here. Emitted items carry no matrix row on purpose and are ranked on defaults until a human records a judgement.
+   - `discover` proposes candidates; it never adds them. Search ranking is not evidence of comparability, and a survey that ingested its own search results would be citing itself.
+
+5. **Record a Deferral, Do Not Re-Decide It**:
    - Passing over the same item twice on the same grounds is a defect in the loop, not a preference. The prioritizer has no memory, so an unrecorded judgement is re-derived — and re-litigated — on every pass.
    - Annotate the roadmap item itself. The reason is mandatory and travels with the card:
 
