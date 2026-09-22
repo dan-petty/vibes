@@ -135,6 +135,42 @@ def test_fingerprints_ignore_memory_addresses_and_the_scratch_directory(tmp_path
     assert (first.fingerprint, first.error) == (second.fingerprint, None)
 
 
+def test_a_scratch_name_containing_an_address_pattern_is_still_normalized() -> None:
+    """`mkdtemp` draws from a pool that includes `0`, `x` and the hex digits.
+
+    Roughly one scratch directory in three hundred is named something the address pattern
+    rewrites, and normalizing addresses before paths then left the directory name inside
+    the hash. It presented as a 0.3% flake that no serial re-run could reproduce, because
+    contention raises the number of directories drawn and not the odds for any one.
+    """
+    hostile = Path("/tmp/vibes-fuzz-8t0x1im")
+    benign = Path("/tmp/vibes-fuzz-qwrtyzzz")
+    assert fuzz_harness._fingerprint([f"{hostile}/case.py"], hostile) == fuzz_harness._fingerprint(
+        [f"{benign}/case.py"], benign
+    )
+
+
+def test_a_divergence_is_confirmed_before_it_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One anomalous sample in 726 subprocess calls is a nightly red build, not a defect."""
+    answers = iter(["a", "b", "c", "same", "same", "same"])
+    monkeypatch.setattr(fuzz_harness, "_seed_fingerprint", lambda t, p, s: next(answers))
+    plan = Plan(cases=1, seed=1, corpus_dir=tmp_path / "corpus")
+    campaign = crosscheck([_probe(_clean)], tmp_path / "ws", plan)
+    assert (campaign.executed, campaign.failures) == (1, [])
+
+
+def test_a_divergence_that_reproduces_is_still_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real hash-order dependence is deterministic per seed and survives the second pass."""
+    monkeypatch.setattr(fuzz_harness, "_seed_fingerprint", lambda t, p, s: s)
+    plan = Plan(cases=1, seed=1, corpus_dir=tmp_path / "corpus")
+    campaign = crosscheck([_probe(_clean)], tmp_path / "ws", plan)
+    assert (campaign.executed, len(gating_failures(campaign))) == (1, 1)
+
+
 def test_failures_are_grouped_by_defect_not_by_input(tmp_path: Path) -> None:
     """Two hundred mutations of one module find one defect two hundred times."""
     campaign = explore([_probe(_boom)], tmp_path, Plan(cases=12, seed=5, save=False))

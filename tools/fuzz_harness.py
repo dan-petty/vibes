@@ -336,8 +336,17 @@ def _fingerprint(value: object, workspace: Path) -> str:
     finding's `file_path`, and it is a fresh random name per process — so the first
     cross-seed run reported all three hash seeds disagreeing for every target, which was
     not a property of any instrument but of where this harness had put the file.
+
+    **The order of the two substitutions is load-bearing.** Addresses were normalized
+    first, and `mkdtemp` draws its suffix from a pool that includes `0`, `x` and the hex
+    digits: roughly one scratch directory in three hundred is named something like
+    `vibes-fuzz-8t0x1im`, which the address pattern rewrites to `vibes-fuzz-8t0xX`. The
+    path replacement then no longer matched, the scratch name reached the hash, and that
+    run disagreed with every other. It presented as a 0.3% flake that vanished whenever it
+    was investigated serially, because contention only raised the number of directories
+    drawn, never the odds for any one of them. Replace the path first.
     """
-    normalized = _ADDRESS_RE.sub("0xX", repr(value)).replace(str(workspace), "<workspace>")
+    normalized = _ADDRESS_RE.sub("0xX", repr(value).replace(str(workspace), "<workspace>"))
     return hashlib.sha256(normalized.encode("utf-8", "surrogateescape")).hexdigest()[:16]
 
 
@@ -576,10 +585,26 @@ def crosscheck(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campai
         for index, case in enumerate(_crosscheck_cases(target, plan)):
             path = _write(workspace, f"cross-{target.name}-{index}", case.text, SUFFIXES[case.corpus])
             campaign.executed += 1
-            answers = {s: _seed_fingerprint(target.name, path, s) for s in HASH_SEEDS}
-            if len(set(answers.values())) > 1:
+            answers = _confirmed_answers(target.name, path)
+            if answers is not None:
                 campaign.failures.append(_divergence(target, case, answers))
     return campaign
+
+
+def _confirmed_answers(target: str, path: Path) -> dict[str, str] | None:
+    """Return the seed answers when they disagree twice running, else None.
+
+    A determinism verdict taken from one sample per seed is itself a one-sample
+    measurement. Real hash-order dependence is deterministic for a fixed seed and so
+    survives the second pass unchanged; a sampling artefact does not, and without this
+    the check reported two findings per run that no serial re-run could reproduce. The
+    second pass costs three subprocesses and runs only on disagreement.
+    """
+    answers = {seed: _seed_fingerprint(target, path, seed) for seed in HASH_SEEDS}
+    if len(set(answers.values())) == 1:
+        return None
+    again = {seed: _seed_fingerprint(target, path, seed) for seed in HASH_SEEDS}
+    return again if len(set(again.values())) > 1 else None
 
 
 def _divergence(target: Target, case: Case, answers: dict[str, str]) -> Failure:
