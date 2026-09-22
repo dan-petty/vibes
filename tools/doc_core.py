@@ -8,12 +8,89 @@ validator would be a cycle; this module is the only thing they share.
 
 from __future__ import annotations
 
+import os
+import threading
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Final, Sequence
 
 # Supported documentation extensions
 SUPPORTED_EXTENSIONS: Final[frozenset[str]] = frozenset({".md", ".markdown"})
+
+
+def _scan_directory(parent: Path) -> dict[str, str]:
+    """Return {name: kind} for one directory, treating an unreadable path as empty."""
+    try:
+        with os.scandir(parent) as entries:
+            return {entry.name: ("dir" if entry.is_dir() else "file") for entry in entries}
+    except OSError:
+        return {}
+
+
+class PathOracle:
+    """Answer existence questions from one `scandir` per directory, shared across a sweep.
+
+    Every rule that consults the filesystem asks overlapping questions: link rules stat
+    each target, map rules stat each entry, and one directory backs many documents. A
+    stat costs ~1.8ms on the virtualised mount this repository is developed on against
+    ~0.001ms on tmpfs, so the *number* of filesystem round trips, not the work between
+    them, sets the wall clock. Scoping one oracle to a whole corpus sweep rather than to
+    a single document is what collapses that count.
+    """
+
+    def __init__(self) -> None:
+        self._listings: dict[Path, dict[str, str]] = {}
+        self._locks: dict[Path, threading.Lock] = {}
+        self._lock = threading.Lock()
+
+    def _cached(self, parent: Path) -> dict[str, str] | None:
+        """Return an already-scanned listing, or None if this directory is still unscanned."""
+        with self._lock:
+            return self._listings.get(parent)
+
+    def _scan_lock(self, parent: Path) -> threading.Lock:
+        """Return the lock that admits exactly one thread to the first scan of a directory."""
+        with self._lock:
+            return self._locks.setdefault(parent, threading.Lock())
+
+    def _store(self, parent: Path, listing: dict[str, str]) -> None:
+        """Publish a completed scan to every thread that asks for this directory next."""
+        with self._lock:
+            self._listings[parent] = listing
+
+    def listing(self, parent: Path) -> dict[str, str]:
+        """Return {name: kind} for a directory, scanning it at most once per oracle.
+
+        The sweep runs a thread per document, so without a per-directory lock every
+        thread that starts before the first scan finishes repeats it — the saving
+        would depend on scheduling. Each directory gets its own lock so that
+        concurrent scans of *different* directories still overlap.
+        """
+        cached = self._cached(parent)
+        if cached is not None:
+            return cached
+        with self._scan_lock(parent):
+            settled = self._cached(parent)
+            if settled is not None:
+                return settled
+            scanned = _scan_directory(parent)
+            self._store(parent, scanned)
+            return scanned
+
+    def kind(self, path: Path) -> str | None:
+        """Return "dir", "file", or None for a path, using its parent's cached listing."""
+        name = path.name
+        if name in ("", ".."):
+            # A directory listing cannot answer for a path that names no entry within it:
+            # `a/..` and a filesystem root have no row in their own parent. Ask directly.
+            if path.is_dir():
+                return "dir"
+            return "file" if path.exists() else None
+        return self.listing(path.parent).get(name)
+
+    def exists(self, path: Path) -> bool:
+        """Report whether a path is present on disk, of any kind."""
+        return self.kind(path) is not None
 
 
 @dataclass(frozen=True)

@@ -10,13 +10,12 @@ diffs it.
 from __future__ import annotations
 
 import ipaddress
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Sequence
 
-from doc_core import DocFinding, extract_fenced_blocks
+from doc_core import DocFinding, PathOracle, extract_fenced_blocks
 from sanitization_policy import is_documentable
 
 _TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(
@@ -98,35 +97,7 @@ def _tree_entries(block: Sequence[tuple[int, str]], root: Path) -> list[TreeEntr
     return entries
 
 
-def _directory_listing(parent: Path, cache: dict[Path, dict[str, str]]) -> dict[str, str]:
-    """Return {name: kind} for a directory, scanning it at most once per document.
-
-    One `scandir` per parent answers both questions the map rules ask — does this entry
-    exist with its declared kind, and what does the directory contain that the map omits.
-    Stat-ing each entry individually asked the filesystem the same thing once per entry,
-    which on a virtualised or network mount is the dominant cost of validating a document
-    with a large map: measured here at 0.764ms per stat against 0.001ms on tmpfs.
-    """
-    if parent not in cache:
-        cache[parent] = _scan_directory(parent)
-    return cache[parent]
-
-
-def _scan_directory(parent: Path) -> dict[str, str]:
-    """Return {name: kind} for one directory, treating an unreadable path as empty."""
-    try:
-        with os.scandir(parent) as entries:
-            return {entry.name: ("dir" if entry.is_dir() else "file") for entry in entries}
-    except OSError:
-        return {}
-
-
-def _path_kind(path: Path, cache: dict[Path, dict[str, str]]) -> str | None:
-    """Return "dir", "file", or None for a path, using its parent's cached listing."""
-    return _directory_listing(path.parent, cache).get(path.name)
-
-
-def _is_directory_map(entries: Sequence[TreeEntry], cache: dict[Path, str | None]) -> bool:
+def _is_directory_map(entries: Sequence[TreeEntry], oracle: PathOracle) -> bool:
     """Distinguish a filesystem map from other art drawn with the same box characters.
 
     Trace waterfalls and AST dumps use the identical `\u251c\u2500\u2500` glyphs. A map is
@@ -136,16 +107,16 @@ def _is_directory_map(entries: Sequence[TreeEntry], cache: dict[Path, str | None
     """
     if not entries or not any(entry.is_directory for entry in entries):
         return False
-    resolved = sum(1 for entry in entries if _path_kind(entry.path, cache) is not None)
+    resolved = sum(1 for entry in entries if oracle.kind(entry.path) is not None)
     return resolved * 2 >= len(entries)
 
 
 def _check_tree_entry_exists(
-    entry: TreeEntry, root: Path, file_str: str, cache: dict[Path, dict[str, str]]
+    entry: TreeEntry, root: Path, file_str: str, oracle: PathOracle
 ) -> DocFinding | None:
     """Verify a mapped path still exists on disk with the declared kind."""
     expected = "dir" if entry.is_directory else "file"
-    if _path_kind(entry.path, cache) == expected:
+    if oracle.kind(entry.path) == expected:
         return None
     kind = "directory" if entry.is_directory else "file"
     return DocFinding(
@@ -160,10 +131,10 @@ def _check_tree_entry_exists(
 
 
 def _undeclared_children(
-    parent: Path, declared: set[str], kinds: set[bool], cache: dict[Path, dict[str, str]]
+    parent: Path, declared: set[str], kinds: set[bool], oracle: PathOracle
 ) -> list[str]:
     """Return on-disk children of the kinds the map enumerates that the map omits."""
-    listing = _directory_listing(parent, cache)
+    listing = oracle.listing(parent)
     candidates = (
         name
         for name, kind in sorted(listing.items())
@@ -176,7 +147,7 @@ def _undeclared_children(
 
 
 def _check_tree_completeness(
-    entries: Sequence[TreeEntry], root: Path, file_str: str, cache: dict[Path, dict[str, str]]
+    entries: Sequence[TreeEntry], root: Path, file_str: str, oracle: PathOracle
 ) -> list[DocFinding]:
     """Report children absent from a map that already enumerates that kind of sibling."""
     children: dict[Path, list[TreeEntry]] = {}
@@ -184,11 +155,11 @@ def _check_tree_completeness(
         children.setdefault(entry.path.parent, []).append(entry)
     findings: list[DocFinding] = []
     for parent, listed in children.items():
-        if not _directory_listing(parent, cache):
+        if not oracle.listing(parent):
             continue
         declared = {entry.path.name for entry in listed}
         missing = _undeclared_children(
-            parent, declared, {entry.is_directory for entry in listed}, cache
+            parent, declared, {entry.is_directory for entry in listed}, oracle
         )
         findings.extend(
             _missing_child_finding(parent, root, name, listed[0].line_number, file_str)
@@ -213,25 +184,32 @@ def _missing_child_finding(
     )
 
 
-def check_directory_maps(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
+def check_directory_maps(
+    lines: Sequence[str], file_path: Path, oracle: PathOracle | None = None
+) -> list[DocFinding]:
     """Diff every embedded text directory tree against the filesystem it describes."""
+    blocks = _extract_text_blocks(lines)
+    if not blocks:
+        # Most documents draw no tree at all. Resolving the root first asked the
+        # filesystem about every document to serve the few that embed a map.
+        return []
+    oracle = oracle if oracle is not None else PathOracle()
     root = file_path.parent.resolve()
-    if not root.is_dir():
+    if oracle.kind(root) != "dir":
         return []
     findings: list[DocFinding] = []
-    cache: dict[Path, dict[str, str]] = {}
-    for block in _extract_text_blocks(lines):
+    for block in blocks:
         entries = _tree_entries(block, root)
-        if not _is_directory_map(entries, cache):
+        if not _is_directory_map(entries, oracle):
             continue
         findings.extend(
             finding
             for finding in (
-                _check_tree_entry_exists(entry, root, str(file_path), cache) for entry in entries
+                _check_tree_entry_exists(entry, root, str(file_path), oracle) for entry in entries
             )
             if finding
         )
-        findings.extend(_check_tree_completeness(entries, root, str(file_path), cache))
+        findings.extend(_check_tree_completeness(entries, root, str(file_path), oracle))
     return findings
 
 

@@ -32,6 +32,7 @@ from markdown_it import MarkdownIt
 from doc_core import (
     DocFinding,
     DocValidationReport,
+    PathOracle,
     closing_fence_index,
     extract_fenced_blocks,
 )
@@ -348,14 +349,16 @@ def _check_local_anchor(
     return None
 
 
-def _check_path_target(path_part: str, file_path: Path, line_no: int) -> DocFinding | None:
+def _check_path_target(
+    path_part: str, file_path: Path, line_no: int, oracle: PathOracle
+) -> DocFinding | None:
     """Validate relative target path on filesystem."""
     target_path = file_path.parent / path_part
-    if target_path.exists():
+    if oracle.exists(target_path):
         return None
     # Fallback relative to repository root if testing from subdirectories
     repo_root_fallback = file_path.cwd() / path_part.lstrip("./")
-    if repo_root_fallback.exists():
+    if oracle.exists(repo_root_fallback):
         return None
     return DocFinding(
         file_path=str(file_path),
@@ -365,11 +368,24 @@ def _check_path_target(path_part: str, file_path: Path, line_no: int) -> DocFind
     )
 
 
+@dataclass(frozen=True)
+class LinkContext:
+    """What a link rule needs beyond the line itself: heading anchors and a path oracle.
+
+    Bundled rather than passed separately because the oracle has to reach the bottom of
+    the call chain, and threading a sixth positional argument through each level is the
+    long-parameter-list smell this repository's own detector reports.
+    """
+
+    anchors: dict[Path, set[str]]
+    paths: PathOracle
+
+
 def _validate_link_target(
     target: str,
     file_path: Path,
     line_no: int,
-    known_anchors: dict[Path, set[str]],
+    context: LinkContext,
 ) -> DocFinding | None:
     """Validate a single markdown link destination against filesystem and heading anchors."""
     file_str = str(file_path)
@@ -378,9 +394,9 @@ def _validate_link_target(
         return finding
     parsed = urllib.parse.urlparse(target)
     if not parsed.path and parsed.fragment:
-        return _check_local_anchor(parsed.fragment, file_path, line_no, known_anchors)
+        return _check_local_anchor(parsed.fragment, file_path, line_no, context.anchors)
     if parsed.path:
-        return _check_path_target(parsed.path, file_path, line_no)
+        return _check_path_target(parsed.path, file_path, line_no, context.paths)
     return None
 
 
@@ -389,7 +405,7 @@ def _check_line_links(
     line_no: int,
     file_path: Path,
     file_str: str,
-    effective_anchors: dict[Path, set[str]],
+    context: LinkContext,
 ) -> list[DocFinding]:
     """Inspect a single markdown line for whitespace malformations and target link targets."""
     line_findings: list[DocFinding] = []
@@ -403,7 +419,7 @@ def _check_line_links(
             )
         )
     for match in _MARKDOWN_LINK_RE.finditer(line):
-        finding = _validate_link_target(match.group(2).strip(), file_path, line_no, effective_anchors)
+        finding = _validate_link_target(match.group(2).strip(), file_path, line_no, context)
         if finding:
             line_findings.append(finding)
     return line_findings
@@ -425,12 +441,16 @@ def check_markdown_links(
     lines: Sequence[str],
     file_path: Path,
     known_anchors: dict[Path, set[str]] | None = None,
+    oracle: PathOracle | None = None,
 ) -> list[DocFinding]:
     """Inspect all markdown links for broken paths, missing anchors, and host-specific URIs."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
     in_fence = False
-    effective_anchors = _resolve_effective_anchors(file_path, lines, known_anchors)
+    context = LinkContext(
+        anchors=_resolve_effective_anchors(file_path, lines, known_anchors),
+        paths=oracle if oracle is not None else PathOracle(),
+    )
 
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -438,7 +458,7 @@ def check_markdown_links(
             in_fence = not in_fence
             continue
         if not in_fence:
-            findings.extend(_check_line_links(line, idx, file_path, file_str, effective_anchors))
+            findings.extend(_check_line_links(line, idx, file_path, file_str, context))
     return findings
 
 
@@ -809,6 +829,7 @@ class DocsValidator:
         self,
         file_path: Path,
         known_anchors: dict[Path, set[str]] | None = None,
+        oracle: PathOracle | None = None,
     ) -> list[DocFinding]:
         """Run all validation rules on a single markdown documentation file."""
         if not file_path.is_file():
@@ -822,7 +843,7 @@ class DocsValidator:
             ]
 
         content = file_path.read_text(encoding="utf-8")
-        return self._run_all_checks(content.splitlines(), file_path, known_anchors)
+        return self._run_all_checks(content.splitlines(), file_path, known_anchors, oracle)
 
     def validate_content(
         self,
@@ -838,21 +859,23 @@ class DocsValidator:
         lines: Sequence[str],
         file_path: Path,
         known_anchors: dict[Path, set[str]] | None,
+        oracle: PathOracle | None = None,
     ) -> list[DocFinding]:
         """Run every validation rule. The single place a new rule is registered.
 
         `validate_file` and `validate_content` previously kept parallel lists, so a rule
         added to one silently did not run on the other — including the CLI path.
         """
+        paths = oracle if oracle is not None else PathOracle()
         checks: tuple[Callable[[], list[DocFinding]], ...] = (
             lambda: check_code_fences(lines, file_path, self.parser),
             lambda: check_mermaid_diagrams(lines, file_path),
             lambda: check_markdown_tables(lines, file_path),
-            lambda: check_markdown_links(lines, file_path, known_anchors),
+            lambda: check_markdown_links(lines, file_path, known_anchors, paths),
             lambda: check_embedded_snippets(lines, file_path),
             lambda: check_html_tags(lines, file_path),
             lambda: check_observation_structure(lines, file_path),
-            lambda: check_directory_maps(lines, file_path),
+            lambda: check_directory_maps(lines, file_path, paths),
             lambda: check_pattern_header(lines, file_path),
             lambda: check_documentation_sanitization(lines, file_path),
         )
@@ -915,10 +938,16 @@ class DocsValidator:
 
         known_anchors = {f: extract_heading_anchors(f.read_text(encoding="utf-8")) for f in md_files}
         all_findings: list[DocFinding] = []
+        # One oracle for the whole sweep: the corpus asks about the same directories over
+        # and over, and a per-document cache threw that answer away 95 times.
+        oracle = PathOracle()
 
         with ThreadPoolExecutor() as executor:
             findings_lists = list(
-                executor.map(lambda f: self.validate_file(f, known_anchors=known_anchors), md_files)
+                executor.map(
+                    lambda f: self.validate_file(f, known_anchors=known_anchors, oracle=oracle),
+                    md_files,
+                )
             )
         for f_list in findings_lists:
             all_findings.extend(f_list)

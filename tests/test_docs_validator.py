@@ -5,13 +5,20 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
+from typing import Any
+from unittest import mock
+
 import pytest
 
 # Add tools/ to sys.path for direct imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
+import doc_core
+from doc_core import PathOracle
+from doc_rules_structure import check_directory_maps
 from docs_validator import (
     DocFinding,
     DocValidationReport,
@@ -591,3 +598,67 @@ def test_directory_map_ignores_build_artifacts(tmp_path: Path) -> None:
     doc.write_text("# Map\n\n```text\n├── src/\n│   └── app.py\n```\n", encoding="utf-8")
 
     assert DocsValidator().validate_file(doc) == []
+
+
+def test_path_oracle_answers_from_one_scan_per_directory(tmp_path: Path) -> None:
+    """The oracle must collapse repeated questions about one directory into a single scan."""
+    (tmp_path / "a.md").write_text("a", encoding="utf-8")
+    (tmp_path / "sub").mkdir()
+    scans: list[Path] = []
+    real_scandir = os.scandir
+
+    def counting_scandir(path: Any) -> Any:
+        scans.append(Path(path))
+        return real_scandir(path)
+
+    oracle = PathOracle()
+    with mock.patch.object(doc_core.os, "scandir", counting_scandir):
+        kinds = [
+            oracle.kind(tmp_path / "a.md"),
+            oracle.kind(tmp_path / "sub"),
+            oracle.kind(tmp_path / "missing.md"),
+            oracle.kind(tmp_path / "a.md"),
+        ]
+    assert (kinds, scans.count(tmp_path)) == (["file", "dir", None, "file"], 1)
+
+
+def test_path_oracle_resolves_paths_absent_from_their_parent_listing(tmp_path: Path) -> None:
+    """`a/..` and a filesystem root name no entry in any listing, so they need a direct stat."""
+    (tmp_path / "sub").mkdir()
+    oracle = PathOracle()
+    assert (
+        oracle.kind(tmp_path / "sub" / ".."),
+        oracle.kind(Path(tmp_path.root)),
+        oracle.exists(tmp_path / "sub" / ".." / "sub"),
+        oracle.exists(tmp_path / "gone" / ".."),
+    ) == ("dir", "dir", True, False)
+
+
+def test_validate_directory_shares_one_oracle_across_every_document(tmp_path: Path) -> None:
+    """A sweep must not rescan a directory once per document that asks about it."""
+    for index in range(4):
+        (tmp_path / f"doc{index}.md").write_text(
+            f"# Doc {index}\n\nSee [sibling](doc0.md) and [target](target.txt).\n", encoding="utf-8"
+        )
+    (tmp_path / "target.txt").write_text("x", encoding="utf-8")
+    scans: list[Path] = []
+    real_scandir = os.scandir
+
+    def counting_scandir(path: Any) -> Any:
+        scans.append(Path(path))
+        return real_scandir(path)
+
+    with mock.patch.object(doc_core.os, "scandir", counting_scandir):
+        report = DocsValidator().validate_directory(tmp_path)
+    # Two scans of the directory: one walk to discover the documents, and one oracle
+    # scan shared by all four. A per-document cache scanned it once per document.
+    assert (report.is_valid, report.total_files, scans.count(tmp_path)) == (True, 4, 2)
+
+
+def test_directory_map_rule_skips_documents_that_draw_no_tree(tmp_path: Path) -> None:
+    """A document with no text block must not touch the filesystem to prove it has no map."""
+    doc = tmp_path / "plain.md"
+    doc.write_text("# Plain\n\nProse only, no tree.\n", encoding="utf-8")
+    lines = doc.read_text(encoding="utf-8").splitlines()
+    with mock.patch.object(doc_core.os, "scandir", side_effect=AssertionError("scanned")):
+        assert check_directory_maps(lines, doc) == []
