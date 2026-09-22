@@ -34,6 +34,8 @@ _SHA_PINNED = re.compile(r"^[^@]+@[0-9a-f]{40}$")
 _EXPRESSION = re.compile(r"\$\{\{(.+?)\}\}", re.DOTALL)
 _STEP_REF = re.compile(r"steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)")
 _PY_INVOCATION = re.compile(r"\bpython3?\s+((?:tools|examples|benchmarks)/[^\s]+\.py)((?:\s+[^\s|>&;]+)*)")
+_DIFF_TO_FILE = re.compile(r"git\s+diff\b[^\n]*?>\s*(\S+)")
+_REDIRECT_TARGET = re.compile(r">\s*(/\S+)")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -192,3 +194,49 @@ def _help(script: str, subcommand: list[str]) -> str:
     )
     assert proc.returncode == 0, f"{script} {' '.join(subcommand)} --help failed: {proc.stderr[:300]}"
     return proc.stdout
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_a_generated_diff_is_checked_for_emptiness_before_it_is_judged(path: Path) -> None:
+    """An empty input to a verifier is a broken range, not a clean result.
+
+    `recursive-hardening.yml` ran `git diff origin/BASE...MERGE_SHA`. Once a pull request
+    is merged its commit is an ancestor of the base, so that three-dot range has the merge
+    commit as its own merge base and produces an empty diff — under squash, merge and
+    rebase alike. The verifier read the empty patch as "AGENTS.md was not updated" and
+    opened an issue accusing the author of skipping the hardening they had in fact done.
+    On the real merge that exposed this, the broken range yielded 0 files and the correct
+    one 12.
+
+    The durable rule is not about that range. It is that a step which generates input for
+    a judgement must distinguish "nothing matched" from "the query was wrong", because
+    only one of those is a finding.
+    """
+    unchecked = [name for name, body in _jobs_with_diffs(path).items() if not _tests_emptiness(body)]
+    assert unchecked == []
+
+
+def _jobs_with_diffs(path: Path) -> dict[str, str]:
+    """Return each job's concatenated shell, for the jobs that generate a diff file."""
+    document = _load(path)
+    bodies = {
+        name: "\n".join(
+            step["run"] for step in (job.get("steps") or []) if isinstance(step.get("run"), str)
+        )
+        for name, job in (document.get("jobs") or {}).items()
+    }
+    return {name: body for name, body in bodies.items() if _DIFF_TO_FILE.search(body)}
+
+
+def _tests_emptiness(body: str) -> bool:
+    """Report whether a job checks the size of any file it wrote.
+
+    Scoped to the job, not the step, and satisfied by any produced file rather than the
+    diff itself. `pr-sentinel.yml` writes the changed-file list in one step, filters
+    deleted paths into a second file in the next, and tests that one — which is a correct
+    handling of an empty result, just not in the same step or on the same path. What must
+    not happen is that no file the job produced is ever tested, which is the state
+    `recursive-hardening.yml` was in when it accused an author of skipping hardening they
+    had done.
+    """
+    return any(f"-s {target}" in body for target in _REDIRECT_TARGET.findall(body))
