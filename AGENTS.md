@@ -184,7 +184,7 @@ Every pattern must then provide an actionable operational playbook:
   - **Every Diagram Must Actually Render**: Textual rules cannot tell whether a diagram parses. Before pushing, run the real engine:
 
     ```bash
-    npm install --no-save mermaid@11 jsdom
+    npm install --no-save mermaid@11 jsdom@30
     node tools/verify_mermaid.mjs .
     ```
 
@@ -313,7 +313,23 @@ To foster an autonomous, creative, and continuously self-improving engineering i
    - A survey establishes that a capability exists elsewhere, never what it is worth here. Emitted items carry no matrix row on purpose and are ranked on defaults until a human records a judgement.
    - `discover` proposes candidates; it never adds them. Search ranking is not evidence of comparability, and a survey that ingested its own search results would be citing itself.
 
-5. **Record a Deferral, Do Not Re-Decide It**:
+5. **Review the Supply Chain, Not Only the Manifest**:
+   - [`tools/supply_chain_audit.py`](./tools/supply_chain_audit.py) inventories four things, because a dependency review that reads `pyproject.toml` alone misses most of what executes:
+
+     ```bash
+     python3 tools/supply_chain_audit.py inventory            # requirements, actions, packages, egress
+     python3 tools/supply_chain_audit.py audit [--strict]     # risks, severe first
+     python3 tools/supply_chain_audit.py fix [--write]        # mechanical repairs only
+     python3 tools/supply_chain_audit.py roadmap [--write]    # the rest, as deliverables
+     ```
+
+   - **Actions are code that runs with repository credentials.** `uses: x@v7` is a tag the upstream can repoint at any commit. Pin to the 40-character SHA and keep the tag as a trailing comment — a bare hash tells a reader nothing about which version they are on, and a pin nobody can read is a pin nobody will update.
+   - **A `>=` floor is a compatibility claim, and CI never checks it.** CI installs the newest release, so the configuration the gates certify is the newest one. `pytest>=8.0` while 9.x is tested asserts something no run has verified. Below 1.0 the *minor* carries compatibility, so `ruff>=0.6` against 0.16 is the same drift.
+   - **A package installed mid-workflow is a dependency.** `npm install jsdom` with no version executes different third-party code on every run and appears in no manifest. Pin it.
+   - **Egress means genuinely external.** Loopback, RFC 1918, link-local and RFC 5737 addresses are local services or the sanitization mandate's own placeholders; reporting them as network risk buries the one endpoint that matters under a dozen that do not. That judgement is deliberately separate from `sanitization_policy.is_documentable`, which answers a different question.
+   - **Fix what is mechanical, schedule what needs judgement.** Raising a floor and pinning a SHA are reversible rewrites with a verifiable outcome. Choosing a replacement for an unmaintained dependency is not, so it becomes a roadmap proposal instead of an edit. After any `--write`, re-run the full gate set before committing.
+
+6. **Record a Deferral, Do Not Re-Decide It**:
    - Passing over the same item twice on the same grounds is a defect in the loop, not a preference. The prioritizer has no memory, so an unrecorded judgement is re-derived — and re-litigated — on every pass.
    - Annotate the roadmap item itself. The reason is mandatory and travels with the card:
 

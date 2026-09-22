@@ -370,7 +370,10 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
 │   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog
 │   ├── landscape_survey.py            # Maturity, feature comparison and gap-to-roadmap survey
+│   ├── roadmap_emit.py                # Shared: machine findings to idempotent roadmap proposals
+│   ├── supply_chain_audit.py          # Dependency, action, package and egress audit with fixes
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
+│   ├── upstream_facts.py              # Shared: GitHub repository facts and maturity scoring
 │   ├── source_tree_policy.py          # Single definition of which paths are repository source
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
@@ -385,6 +388,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_sdlc_sync.py              # Unit tests for backlog reconciliation and promotion
     ├── test_landscape_survey.py       # Unit tests for maturity scoring and gap-to-roadmap emission
     ├── test_source_tree_policy.py     # Unit tests pinning one corpus definition across instruments
+    ├── test_supply_chain_audit.py     # Unit tests for dependency inventory, risk and mechanical fixes
+    ├── test_upstream_facts.py         # Unit tests for repository facts and maturity scoring
     ├── test_docs_validator.py         # Unit tests for documentation syntax and link validation
     └── test_gate_manifest.py          # Asserts every documented quality gate is wired into CI
 ```

@@ -15,7 +15,7 @@ license = { text = "Apache-2.0" }
 # CONTRIBUTING.md, and drifted — the pre-push hook shipped without pyyaml and
 # markdown-it-py and aborted every push until it was noticed.
 dependencies = [
-    "markdown-it-py>=3.0",   # CommonMark parser backing the documentation validator
+    "markdown-it-py>=4.0",   # CommonMark parser backing the documentation validator
     "networkx>=3.0",         # Graph algorithms: elementary cycle detection
     "pyyaml>=6.0",           # Kubernetes, compose and workflow manifest validation
     "radon>=6.0",            # Maintainability index, Halstead metrics, cyclomatic complexity
@@ -24,15 +24,15 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.24",
-    "pytest-cov>=5.0",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+    "pytest-cov>=7.0",
 ]
 # Static gates. Declared here for the same reason as the runtime list above: the versions
 # CI installs and the versions a contributor installs must come from one place.
 lint = [
-    "mypy>=1.11",
-    "ruff>=0.6",
+    "mypy>=2.0",
+    "ruff>=0.16",
     "types-PyYAML",
 ]
 

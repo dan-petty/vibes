@@ -1,6 +1,7 @@
 """Unit tests for the Code Smell Quantifier."""
 
 import ast
+import itertools
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from smell_quantifier import (
     ADVISORY_SMELLS,
     LOW_MAINTAINABILITY_INDEX,
     Smell,
+    _count_disjoint_clusters,
     analyze,
     detect_duplicated_blocks,
     detect_god_classes,
@@ -241,29 +243,17 @@ def test_a_calling_method_joins_the_cluster_of_the_method_it_calls() -> None:
     assert detect_low_cohesion(tree, Path("service.py")) == []
 
 
-def test_cohesion_is_identical_across_randomised_string_hashing() -> None:
-    """The same class must score the same LCOM4 in every process that measures it.
+def test_cohesion_is_the_same_whatever_order_the_methods_arrive_in() -> None:
+    """The same class must score the same LCOM4 however the traversal reaches it.
 
-    `set.pop()` returns an arbitrary element and string hashing is randomised per
-    process, so an order-dependent traversal reported a different number on each run.
+    `set.pop()` returns an arbitrary element and string hashing is randomised per process,
+    so an order-dependent traversal reported a different number on each run. Permuting the
+    input directly proves the property over every ordering, which four sampled hash seeds
+    could only sample — and does it without spawning a subprocess per seed.
     """
-    import subprocess
-    import sys
-
-    program = (
-        f"import ast,sys;sys.path.insert(0,{str(Path(__file__).resolve().parent)!r});"
-        "from smell_quantifier import _count_disjoint_clusters as c;"
-        "print(c({'a':{'x'},'b':{'a'},'c':{'x'},'d':{'z'},'e':{'d'}}))"
-    )
-    seeds = ["0", "1", "42", "99991"]
+    graph = {"a": {"x"}, "b": {"a"}, "c": {"x"}, "d": {"z"}, "e": {"d"}}
     results = {
-        subprocess.run(
-            [sys.executable, "-c", program],
-            capture_output=True,
-            text=True,
-            check=True,
-            env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
-        ).stdout.strip()
-        for seed in seeds
+        _count_disjoint_clusters({key: graph[key] for key in order})
+        for order in itertools.permutations(graph)
     }
-    assert results == {"2"}
+    assert results == {2}
