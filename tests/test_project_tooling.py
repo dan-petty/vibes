@@ -14,6 +14,7 @@ from project_tooling import (
     GitHubAPIClient,
     audit_self_hardening,
     classify_content,
+    count_guardrail_lines,
     main,
     parse_acceptance_criteria,
     triage_issue_content,
@@ -210,3 +211,70 @@ def test_github_client_bounds_error_detail(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("urllib.request.urlopen", _raise)
     with pytest.raises(RuntimeError, match="HTTP 422"):
         GitHubAPIClient(token="t").request("/issues")
+
+
+# --- Hardening detection scope -------------------------------------------------------
+#
+# The audit ran against five literal keywords across the whole patch. It therefore counted
+# a line containing "rule" in an unrelated file as hardening AGENTS.md, and rejected a real
+# guardrail reading "Never rebuild text by splitting on a marker and re-joining it" because
+# the imperative uses none of the five words -- then reported "AGENTS.md was not updated"
+# about a pull request that had updated it. Found by running the workflow on PR #8.
+
+_UNRELATED_KEYWORD_DIFF = (
+    "diff --git a/tools/thing.py b/tools/thing.py\n"
+    "--- a/tools/thing.py\n"
+    "+++ b/tools/thing.py\n"
+    "+# this rule has nothing to do with AGENTS.md\n"
+)
+
+_IMPERATIVE_GUARDRAIL_DIFF = (
+    "diff --git a/AGENTS.md b/AGENTS.md\n"
+    "--- a/AGENTS.md\n"
+    "+++ b/AGENTS.md\n"
+    "+   - **Never rebuild text by splitting on a marker and re-joining it.**\n"
+)
+
+
+def test_a_keyword_in_another_file_is_not_hardening(tmp_path: Path) -> None:
+    """The count is scoped to AGENTS.md, so an unrelated file cannot satisfy the mandate."""
+    result = audit_self_hardening(_UNRELATED_KEYWORD_DIFF, is_defect_fix=True)
+    assert (result.agents_md_modified, result.new_guardrails_detected, result.is_compliant) == (
+        False,
+        0,
+        False,
+    )
+
+
+def test_a_guardrail_written_in_the_imperative_counts(tmp_path: Path) -> None:
+    """"Never do X" is an instruction; a keyword list that misses it rejects real hardening."""
+    result = audit_self_hardening(_IMPERATIVE_GUARDRAIL_DIFF, is_defect_fix=True)
+    assert (result.agents_md_modified, result.new_guardrails_detected, result.is_compliant) == (
+        True,
+        1,
+        True,
+    )
+
+
+def test_both_diff_header_forms_are_recognised() -> None:
+    """A patch fragment carries only `+++`; recognising one form would silently count zero."""
+    abbreviated = "+++ b/AGENTS.md\n+   - **Never do the thing.**\n"
+    full = _IMPERATIVE_GUARDRAIL_DIFF
+    assert (count_guardrail_lines(abbreviated), count_guardrail_lines(full)) == (1, 1)
+
+
+def test_touching_agents_md_without_adding_anything_says_so() -> None:
+    """A verdict that misnames its own cause sends the reader to the wrong file."""
+    deletion_only = "diff --git a/AGENTS.md b/AGENTS.md\n--- a/AGENTS.md\n+++ b/AGENTS.md\n-old line\n"
+    result = audit_self_hardening(deletion_only, is_defect_fix=True)
+    assert (result.agents_md_modified, result.is_compliant, "changed AGENTS.md" in result.summary) == (
+        True,
+        False,
+        True,
+    )
+
+
+def test_blank_added_lines_are_not_instruction() -> None:
+    """Whitespace added to AGENTS.md is not a guardrail, and must not satisfy the mandate."""
+    blank_only = "diff --git a/AGENTS.md b/AGENTS.md\n+++ b/AGENTS.md\n+\n+   \n"
+    assert audit_self_hardening(blank_only, is_defect_fix=True).is_compliant is False
