@@ -17,12 +17,16 @@ import argparse
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 import json
+import time
 from pathlib import Path
 import re
 import sys
 from typing import Any, Sequence
 
 # Canonical priority weights
+# Passes are cheap; the interval exists so a watch does not spin.
+WATCH_INTERVAL_SECONDS = 2.0
+
 PRIORITY_BASE_WEIGHTS = {
     "P0_CRITICAL": 1000.0,
     "P1_HIGH": 500.0,
@@ -316,33 +320,36 @@ def _render_column(state: LifecycleState, items: list[SDLCResource], dep_graph: 
     return lines
 
 
+def load_resources_from_dicts(payload: Sequence[dict[str, Any]]) -> list[SDLCResource]:
+    """Build resources from already-parsed task dictionaries."""
+    return [_resource_from_dict(item) for item in payload]
+
+
+def _resource_from_dict(item: dict[str, Any]) -> SDLCResource:
+    """Build one resource from a task dictionary."""
+    return SDLCResource(
+        resource_id=str(item.get("resource_id", item.get("number", ""))),
+        kind=SDLCResourceKind(item.get("kind", "issue")),
+        number=int(item["number"]),
+        title=str(item["title"]),
+        labels=list(item.get("labels", [])),
+        milestone=item.get("milestone"),
+        lifecycle_state=LifecycleState(item.get("lifecycle_state", "Backlog")),
+        priority=PriorityLevel(item.get("priority", "P2_MEDIUM")),
+        age_days=float(item.get("age_days", 0.0)),
+        is_draft=bool(item.get("is_draft", False)),
+        checks_passing=bool(item.get("checks_passing", True)),
+        unresolved_review_threads=int(item.get("unresolved_review_threads", 0)),
+        depends_on=[int(n) for n in item.get("depends_on", [])],
+        blocks=[int(n) for n in item.get("blocks", [])],
+        effort_points=int(item.get("effort_points", 2)),
+        business_value=int(item.get("business_value", 5)),
+    )
+
+
 def load_resources_from_json(path: Path) -> list[SDLCResource]:
     """Load SDLC resources from a JSON state file."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    resources: list[SDLCResource] = []
-
-    for item in raw:
-        resources.append(
-            SDLCResource(
-                resource_id=str(item.get("resource_id", item.get("number", ""))),
-                kind=SDLCResourceKind(item.get("kind", "issue")),
-                number=int(item["number"]),
-                title=str(item["title"]),
-                labels=list(item.get("labels", [])),
-                milestone=item.get("milestone"),
-                lifecycle_state=LifecycleState(item.get("lifecycle_state", "Backlog")),
-                priority=PriorityLevel(item.get("priority", "P2_MEDIUM")),
-                age_days=float(item.get("age_days", 0.0)),
-                is_draft=bool(item.get("is_draft", False)),
-                checks_passing=bool(item.get("checks_passing", True)),
-                unresolved_review_threads=int(item.get("unresolved_review_threads", 0)),
-                depends_on=[int(n) for n in item.get("depends_on", [])],
-                blocks=[int(n) for n in item.get("blocks", [])],
-                effort_points=int(item.get("effort_points", 2)),
-                business_value=int(item.get("business_value", 5)),
-            )
-        )
-    return resources
+    return load_resources_from_dicts(json.loads(path.read_text(encoding="utf-8")))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -360,6 +367,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     cmd_next.add_argument("--file", "-f", required=True, type=Path, help="Path to resources JSON file.")
 
     # Command: board
+    cmd_sync = subparsers.add_parser(
+        "sync", help="Reconcile the board against a fresh scan, closing resolved cards."
+    )
+    cmd_sync.add_argument("--file", "-f", required=True, type=Path, help="Path to resources JSON file.")
+    cmd_sync.add_argument(
+        "--scan", type=Path, help="Fresh backlog export to reconcile against (default: the same file)."
+    )
+    cmd_sync.add_argument(
+        "--watch", action="store_true", help="Reconcile continuously until interrupted."
+    )
+    cmd_sync.add_argument(
+        "--interval", type=float, default=WATCH_INTERVAL_SECONDS, help="Seconds between passes."
+    )
+    cmd_sync.add_argument("--max-passes", type=int, default=None, help="Stop after this many passes.")
+
     cmd_board = subparsers.add_parser("board", help="Display ASCII Kanban board.")
     cmd_board.add_argument("--file", "-f", required=True, type=Path, help="Path to resources JSON file.")
 
@@ -391,6 +413,42 @@ def _handle_next(manager: SDLCProjectManager) -> int:
     return 0
 
 
+def _sync_once(backlog: Path, scan: Path) -> ReconciliationResult:
+    """Run one reconciliation pass and persist the result."""
+    existing = json.loads(backlog.read_text(encoding="utf-8")) if backlog.is_file() else []
+    current = json.loads(scan.read_text(encoding="utf-8")) if scan.is_file() else []
+    merged, result = reconcile_backlog(existing, current)
+
+    manager = SDLCProjectManager(load_resources_from_dicts(merged))
+    merged, promoted = advance_ready_item(merged, manager)
+    if promoted:
+        result.advanced.append(promoted)
+
+    backlog.parent.mkdir(parents=True, exist_ok=True)
+    backlog.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+    return result
+
+
+def _handle_sync(args: argparse.Namespace) -> int:
+    """Reconcile the board once, or continuously until interrupted."""
+    scan = args.scan or args.file
+    passes = 0
+    try:
+        while True:
+            result = _sync_once(args.file, scan)
+            passes += 1
+            print(f"[sync {passes}] {result.summary()}")
+            for label, names in (("closed", result.closed), ("opened", result.opened), ("ready", result.advanced)):
+                for name in names:
+                    print(f"    {label}: {name[:88]}")
+            if not args.watch or (args.max_passes is not None and passes >= args.max_passes):
+                return 0
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print(f"\nStopped after {passes} pass(es).")
+        return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Execute SDLC project manager command line interface."""
     parser = build_arg_parser()
@@ -407,9 +465,109 @@ def main(argv: Sequence[str] | None = None) -> int:
         "prioritize": lambda: _handle_prioritize(manager, getattr(args, "json", False)),
         "next": lambda: _handle_next(manager),
         "board": lambda: (print(manager.render_kanban_board()), 0)[1],
+        "sync": lambda: _handle_sync(args),
     }
     handler = dispatch.get(args.command)
     return handler() if handler else 0
+
+@dataclass
+class ReconciliationResult:
+    """What one reconciliation pass changed about the board."""
+
+    opened: list[str] = field(default_factory=list)
+    closed: list[str] = field(default_factory=list)
+    advanced: list[str] = field(default_factory=list)
+    unchanged: int = 0
+
+    @property
+    def changed(self) -> bool:
+        """Return whether the pass moved anything."""
+        return bool(self.opened or self.closed or self.advanced)
+
+    def summary(self) -> str:
+        """Render a one-line description of the pass."""
+        return (
+            f"opened {len(self.opened)}, closed {len(self.closed)}, "
+            f"advanced {len(self.advanced)}, unchanged {self.unchanged}"
+        )
+
+
+def _card_identity(task: dict[str, Any]) -> str:
+    """Return the stable identity of a card, which is its title rather than its number.
+
+    Numbers are assigned by export order and shift whenever the finding set changes, so
+    keying on them would close and reopen every card on each pass. The title carries the
+    finding's subject and location, which is what makes two cards the same card.
+    """
+    return str(task.get("title", "")).strip()
+
+
+def _is_roadmap_card(task: dict[str, Any]) -> bool:
+    """Return True for cards sourced from the roadmap rather than from a scan."""
+    return str(task.get("resource_id", "")).startswith("roadmap-")
+
+
+def reconcile_backlog(
+    existing: Sequence[dict[str, Any]], current: Sequence[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], ReconciliationResult]:
+    """Fold a fresh scan into the existing board, closing what the scan no longer reports.
+
+    A defect card exists because a scan reported a finding. When the finding stops being
+    reported the defect is fixed, and leaving the card open makes the board a record of
+    what was once wrong rather than of what is wrong now.
+
+    Roadmap cards are exempt: their absence from a scan means nothing, since no scan can
+    observe an unbuilt feature. They close when the roadmap says so, which ingestion
+    handles by replacing them wholesale.
+    """
+    result = ReconciliationResult()
+    current_by_id = {_card_identity(task): task for task in current}
+    merged: list[dict[str, Any]] = []
+
+    for task in existing:
+        identity = _card_identity(task)
+        if _is_roadmap_card(task):
+            merged.append(task)
+            result.unchanged += 1
+        elif identity in current_by_id:
+            merged.append(task)
+            result.unchanged += 1
+        elif task.get("lifecycle_state") != LifecycleState.DONE.value:
+            closed = {**task, "lifecycle_state": LifecycleState.DONE.value}
+            merged.append(closed)
+            result.closed.append(identity)
+
+    known = {_card_identity(task) for task in merged}
+    for identity, task in current_by_id.items():
+        if identity not in known:
+            merged.append(task)
+            result.opened.append(identity)
+    return merged, result
+
+
+def advance_ready_item(
+    tasks: Sequence[dict[str, Any]], manager: SDLCProjectManager
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Promote the highest-ranked unblocked backlog card to Ready.
+
+    Exactly one card is promoted per pass. A board where everything is Ready states no
+    order, which is the same as stating no priority.
+    """
+    ranked = manager.get_ranked_resources()
+    candidates = (
+        res for res in ranked
+        if res.lifecycle_state is LifecycleState.BACKLOG and manager._is_unblocked_candidate(res)
+    )
+    target = next(candidates, None)
+    if target is None:
+        return list(tasks), None
+    promoted = [
+        {**task, "lifecycle_state": LifecycleState.READY.value}
+        if _card_identity(task) == target.title.strip()
+        else task
+        for task in tasks
+    ]
+    return promoted, target.title.strip()
 
 
 if __name__ == "__main__":

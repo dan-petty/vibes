@@ -267,8 +267,11 @@ To foster an autonomous, creative, and continuously self-improving engineering i
      ```bash
      python3 tools/resource_iteration_workbench.py --export-backlog .data/sdlc_backlog.json
      python3 tools/roadmap_ingest.py --backlog .data/sdlc_backlog.json
+     python3 tools/sdlc_project_manager.py sync --file .data/sdlc_backlog.json   # close what is fixed
      python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json
      ```
+
+   - `sync` closes defect cards whose finding a scan no longer reports and promotes exactly one card to Ready. Roadmap cards are exempt from closing, because no scan can observe an unbuilt feature and its absence therefore means nothing. Add `--watch` to reconcile continuously.
 
    - Defects outrank features by construction, so a healthy repository advances the roadmap and an unhealthy one repairs itself first. Items whose value and effort are absent from the prioritization matrix are ranked on defaults and say so: add a matrix row to rank one deliberately rather than by assumption.
    - Rejected work is never ingested. The roadmap's anti-pattern rows record decisions *not* to build things, and a loop that schedules them has inverted the decision it was given.

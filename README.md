@@ -377,6 +377,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_ast_refactorer.py         # Unit tests for AST conditional refactoring engine
     ├── test_reliability_slo.py        # Unit tests for SLO error budgets and phase policy
     ├── test_roadmap_ingest.py         # Unit tests for roadmap deliverable ingestion
+    ├── test_sdlc_sync.py              # Unit tests for backlog reconciliation and promotion
     ├── test_docs_validator.py         # Unit tests for documentation syntax and link validation
     └── test_gate_manifest.py          # Asserts every documented quality gate is wired into CI
 ```
