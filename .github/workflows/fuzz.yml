@@ -52,8 +52,10 @@ jobs:
         # This is the check that would have caught the cohesion detector reporting 15, 16
         # and 17 findings on three consecutive runs of unchanged files.
         if: always()
+        env:
+          FUZZ_SEED: ${{ github.run_number }}
         run: |
-          python tools/fuzz_harness.py crosscheck --cases 40 --seed "${{ github.run_number }}"
+          python tools/fuzz_harness.py crosscheck --cases 40 --seed "$FUZZ_SEED"
 
       - name: Publish What Was Found
         # Deliberately not a commit. A new corpus entry is a claim that an instrument is

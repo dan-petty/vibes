@@ -156,6 +156,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | **AST invariant sentinel** | `sentinel.py` | Cyclomatic complexity ≤10, nesting ≤5 |
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors, including the 5-section observation structure |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
+| **Workflow contracts** | `pytest tests/test_workflow_contracts.py` | Commands resolve against the real CLIs; no `${{ }}` in `run:`; actions SHA-pinned |
 | **Workflow lint** | `actionlint` (pinned, checksum-verified) | Zero expression, shell, or injection findings |
 | **Fuzzing regression corpus** | `fuzz_harness.py replay` | Zero crashes, hash-seed divergences, or non-convergent repairs |
 | **Reliability objectives** | `reliability_slo.py status --history docs/reliability/iterations` | No exhausted or burning error budget |

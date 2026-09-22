@@ -15,6 +15,7 @@ import ast
 import io
 import ipaddress
 import itertools
+import os
 import re
 import sys
 import tokenize
@@ -315,10 +316,38 @@ def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) ->
     return list(waivers.violations) + [v for v in detected if v.invariant not in waivers.waived]
 
 
+# Directory names holding code this repository did not write. Kept in step with
+# `tools/source_tree_policy.py`, which is the repository's single definition of its own
+# corpus; this sample application is standalone by design and cannot import it, so
+# `tests/test_source_tree_policy.py` asserts the two agree on the real tree rather than
+# trusting them to. Without this, `sentinel.py` with no arguments audited `node_modules`
+# and failed on a vendored package — the corpus defect of Observation 16, in the one
+# instrument that had never been invoked that way by CI or by a hook.
+VENDORED_DIR_NAMES: frozenset[str] = frozenset({"node_modules", "__pycache__", "venv"})
+VENDORED_DIR_SUFFIXES: tuple[str, ...] = (".egg-info",)
+
+
+def _is_repository_dir(name: str) -> bool:
+    """Report whether a directory belongs to this repository rather than to a dependency."""
+    return not (
+        name.startswith(".") or name in VENDORED_DIR_NAMES or name.endswith(VENDORED_DIR_SUFFIXES)
+    )
+
+
 def _collect_py_targets(root_path: Path) -> list[Path]:
+    """Expand one target into the repository's own Python files beneath it.
+
+    Prunes during the walk. `rglob` cannot prune, so it descends into every vendored
+    package before discarding the result: measured on a tree carrying a Node toolchain
+    that is most of the walk.
+    """
     if root_path.is_file():
         return [root_path] if root_path.suffix == ".py" else []
-    return sorted(root_path.rglob("*.py"))
+    found: list[Path] = []
+    for parent, dirs, files in os.walk(root_path):
+        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
+        found.extend(Path(parent) / name for name in files if name.endswith(".py"))
+    return sorted(found)
 
 
 def _dedupe_key(path: Path) -> Path:

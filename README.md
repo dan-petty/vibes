@@ -403,5 +403,6 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_supply_chain_audit.py     # Unit tests for dependency inventory, risk and mechanical fixes
     ├── test_upstream_facts.py         # Unit tests for repository facts and maturity scoring
     ├── test_docs_validator.py         # Unit tests for documentation syntax and link validation
+    ├── test_workflow_contracts.py     # Resolves every workflow's commands against the real CLIs
     └── test_gate_manifest.py          # Asserts every documented quality gate is wired into CI
 ```

