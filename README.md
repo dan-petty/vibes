@@ -390,6 +390,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── fuzz_core.py                   # Shared: corpus generation, mutation and delta shrinking
 │   ├── fuzz_harness.py                # Fuzzes the instruments themselves; replays what broke them
 │   ├── sarif_report.py                # Every oracle's findings as one schema-valid SARIF log
+│   ├── semconv_snapshot.py            # Derives the GenAI semantic conventions from upstream
 │   ├── supply_chain_audit.py          # Dependency, action, package and egress audit with fixes
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   ├── upstream_facts.py              # Shared: GitHub repository facts and maturity scoring
@@ -399,6 +400,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 └── tests/                             # Automated test suites for tools and harnesses
     ├── test_app_factory.py            # Runs the real gates over the factory's own output
     ├── test_contract_variables.py     # Contract questions, answer coercion and safe rendering
+    ├── test_semconv_snapshot.py       # Deriving the GenAI convention table from upstream
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources

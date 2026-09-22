@@ -28,7 +28,7 @@ sequenceDiagram
     T-->>S: 412 symbols
     S-->>F: compact catalog
     deactivate S
-    S->>O: span: agent.tokens.prompt / completion,<br/>agent.persona, agent.cache_hit
+    S->>O: span: gen_ai.usage.input_tokens / output_tokens,<br/>gen_ai.provider.name, gen_ai.request.model
 
     F->>T: apply patch
     T-->>F: diff applied
@@ -63,6 +63,11 @@ python3 generator.py --otlp
 python3 generator.py --export-otlp http://localhost:4318/v1/traces
 ```
 
+### Check Conformance With the GenAI Semantic Conventions
+```bash
+python3 examples/agent-telemetry-trace-generator/generator.py --validate
+```
+
 ### Run the Unit Tests
 ```bash
 pytest test_generator.py -v
@@ -89,3 +94,60 @@ AgentSession                       | 1045.0ms  | ██████████�
 Tokens: Prompt=51600, Completion=2530, Cached=18000 (Total: 54130)
 ==============================================================================
 ```
+
+---
+
+## Semantic Conventions, and Why the Envelope Is Not the Convention
+
+This generator used to emit valid OTLP carrying a private vocabulary — `ai.tokens.prompt`,
+`ai.model.name`, `agent.persona` — with every span kind hard-coded to `INTERNAL`. Every
+collector accepted it. No GenAI-aware backend could chart it, and nothing anywhere said so:
+a span with the wrong key is never rejected, it just never appears in the dashboard built
+to read it, and an empty dashboard reads as *no traffic*.
+
+| Then | Now |
+|---|---|
+| `ai.tokens.prompt` | `gen_ai.usage.input_tokens` |
+| `ai.tokens.completion` | `gen_ai.usage.output_tokens` |
+| `ai.model.name` | `gen_ai.request.model`, `gen_ai.response.model` |
+| — | `gen_ai.operation.name`, `gen_ai.provider.name` (both **required**) |
+| `name: "FrontierPlanning"` | `name: "chat claude-3-5-sonnet"` |
+| `kind: 1` on every span | `kind: 3` (CLIENT) on model calls |
+| `agent.persona` | `vibes.agent.persona` — still ours, and no longer pretending otherwise |
+
+The convention is not restated in this repository. [`tools/semconv_snapshot.py`](../../tools/semconv_snapshot.py)
+fetches the upstream model at a **pinned commit**, resolves its attribute groups, and writes
+`semconv_genai.json`; [`semconv.py`](./semconv.py) reads that with nothing but the standard
+library. `--validate` prints the provenance before the findings, so a reader can tell what
+the table is a snapshot *of*.
+
+### Four things this turned up
+
+**The conventions moved repository.** `open-telemetry/semantic-conventions` now redirects:
+the GenAI definitions live in `open-telemetry/semantic-conventions-genai`, which has no
+tagged release, so the pin is a commit and the snapshot says so.
+
+**"Moved" is not "deprecated".** Every GenAI attribute is marked deprecated in the
+repository they left, with the reason `moved`. Reading that table before the live registry
+reported all thirty conformant attributes on a correct span as obsolete. A record that an
+attribute's *definition* moved is not a statement that the *attribute* is obsolete.
+
+**A silent re-reference is not a requirement level.** `gen_ai.inference.client`
+re-references `gen_ai.operation.name` with no `requirement_level`, purely to mark it
+sampling-relevant, while its attribute group declares it **required**. Reading the silence
+as the default downgraded it to `recommended`, and a validator built on that snapshot would
+have accepted a span missing the one attribute the convention mandates.
+
+**A rename is a silent outage, and the eight of them are the point.**
+`gen_ai.usage.prompt_tokens` became `gen_ai.usage.input_tokens`. A dashboard still querying
+the old key returns zero rows, and zero rows renders as no traffic. The outage is in the
+reading, not in the pipeline, so nothing is red and nothing alerts — which is why emitting
+a renamed key is an error here and not a note.
+
+### What is a warning rather than an error
+
+`gen_ai.provider.name: "ollama"` is not a well-known value. OpenTelemetry enums are open
+unless declared closed, so a local runtime is permitted — and a typo looks exactly the
+same. The exhibit keeps one deliberately, so the distinction is visible in the output
+rather than described in prose. The span name rule is a SHOULD and warns for the same
+reason: reporting a SHOULD as an error teaches its reader to ignore the report.

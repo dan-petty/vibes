@@ -26,15 +26,17 @@ def test_build_synthetic_agent_session() -> None:
     child_spans = [s for s in session.spans if s.parent_span_id is not None]
 
     assert (session.session_goal, len(session.trace_id), len(session.spans)) == (goal, 32, 5)
-    assert (len(root_spans), root_spans[0].name, len(child_spans)) == (1, "AgentSession", 4)
+    assert (len(root_spans), root_spans[0].name, len(child_spans)) == (
+        1, f"invoke_workflow {goal}", 4
+    )
 
 
 def test_session_token_aggregation() -> None:
     session = build_synthetic_agent_session("Token test")
     tokens = session.total_tokens()
 
-    assert all(tokens[k] > 0 for k in ("prompt", "completion", "cached"))
-    assert tokens["total"] == tokens["prompt"] + tokens["completion"]
+    assert all(tokens[k] > 0 for k in ("input", "output", "cached"))
+    assert tokens["total"] == tokens["input"] + tokens["output"]
 
 
 def test_session_duration_calculation() -> None:
@@ -49,7 +51,9 @@ def test_render_ascii_waterfall() -> None:
     session = build_synthetic_agent_session("Render test")
     output = render_ascii_waterfall(session)
 
-    expected_snippets = ["AGENT WATERFALL TRACE", "AgentSession", "FrontierPlanning", "Tokens: Prompt="]
+    expected_snippets = [
+        "AGENT WATERFALL TRACE", "invoke_workflow", "chat claude-3-5-sonnet", "Tokens: Input=",
+    ]
     assert all(snippet in output for snippet in expected_snippets)
 
 
@@ -66,9 +70,12 @@ def test_to_otlp_json_schema_conformance() -> None:
     first_span = spans[0]
     assert (first_span["traceId"], first_span["kind"], first_span["status"]["code"]) == (session.trace_id, 1, 1)
 
-    # Verify semantic attributes presence
+    # The conventional keys, not a private vocabulary that only this repository can read.
     attr_keys = {attr["key"] for s in spans for attr in s.get("attributes", [])}
-    assert {"ai.model.tier", "agent.persona", "ai.tokens.prompt"}.issubset(attr_keys)
+    assert {
+        "gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.usage.input_tokens",
+    }.issubset(attr_keys)
+    assert not {key for key in attr_keys if key.startswith("ai.")}
 
 
 def test_export_otlp_http_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
