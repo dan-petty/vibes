@@ -75,11 +75,15 @@ jobs:
           script: |
             const fs = require('fs');
             const plan = fs.readFileSync('/tmp/triage_plan.txt', 'utf8');
-            
-            // Extract comment portion after header
-            const parts = plan.split('### 🤖 Autonomous Project Grounding');
-            if (parts.length > 1) {
-              const commentBody = '### 🤖 Autonomous Project Grounding' + parts[1].trim();
+
+            // Slice from the header rather than splitting on it and re-joining. The old
+            // form trimmed the remainder, which ate the space in `Grounding — Issue #5`
+            // and rendered `Grounding— Issue #5`. The step had never run: it is gated on
+            // `action == 'opened'`, and the workflow's first execution came from an edit.
+            const marker = '### 🤖 Autonomous Project Grounding';
+            const start = plan.indexOf(marker);
+            if (start !== -1) {
+              const commentBody = plan.slice(start).trim();
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
