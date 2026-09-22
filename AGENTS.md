@@ -298,6 +298,13 @@ flowchart LR
      ```
 
    - **Finished is not passed.** `status: completed` says the run stopped, not that it succeeded; read `conclusion`, and read it for **every** job. A matrix entry that failed while its siblings passed is a failure, and `--exit-status` is what makes the shell agree.
+   - **An empty check list is not a passing check list.** `gh pr checks <n> --watch` exits **0** printing `no checks reported` when no check has registered yet, which on a freshly opened pull request is the normal state for the first several seconds. Observed here on PR #4: the watch returned success immediately, and the five checks that were about to run all appeared afterwards. Wait until at least one check exists before believing the verdict, or watch the run identifiers directly:
+
+     ```bash
+     gh pr view <n> --json statusCheckRollup -q '.statusCheckRollup | length'   # must be > 0 first
+     gh pr checks <n> --watch --interval 15
+     ```
+
    - **Local green does not predict CI green, and the difference is not noise.** CI builds a clean checkout, installs from the manifest rather than from whatever is already importable, and runs a three-version matrix (3.12, 3.13, 3.14) plus gates that cannot run locally at all — `actionlint`, the Mermaid render gate behind `npm install`, and the coverage floor. Interpreter differences are real and reachable: `ast.parse` on a source containing a null byte raised `ValueError` before 3.12 and `SyntaxError` after, which changes whether an `except` clause written against one of them catches anything. Verify a version-sensitive claim against the versions in the matrix rather than against the one that happens to be installed.
    - **A red check is your defect until you have evidence otherwise**, and the evidence is a reproduction, not a re-run. Re-running a failed job to see whether it passes the second time is how a real flake gets promoted to "known flaky" without anyone finding its cause — see [§10a.6](#10a-measuring-and-believing-what-you-measured) for the 0.3% flake that survived every serial re-run and was a defect all along.
    - **Never make a check green by weakening the check.** No `--no-verify`, no force-push over a shared branch, no `continue-on-error` added to a job that just failed, no deleting the assertion. If a gate is genuinely wrong, fix the gate in its own commit and say so.
