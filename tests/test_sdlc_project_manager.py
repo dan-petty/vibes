@@ -1,8 +1,9 @@
 """Unit tests for the Autonomous SDLC Project Management & Prioritization Engine."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import pytest
 
 # Add tools/ to sys.path for direct imports
@@ -16,7 +17,6 @@ from sdlc_project_manager import (
     SDLCProjectManager,
     SDLCResource,
     SDLCResourceKind,
-    load_resources_from_json,
     main,
 )
 

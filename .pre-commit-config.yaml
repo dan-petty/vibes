@@ -15,6 +15,16 @@ repos:
         pass_filenames: true
         additional_dependencies: []
 
+      - id: ruff
+        name: Ruff (correctness, modernization, import order)
+        language: python
+        entry: ruff check --force-exclude
+        files: \.py$
+        # N staged filenames per invocation. Configuration lives in pyproject.toml so the
+        # hook, CI and a developer's own `ruff check` cannot disagree about the rule set.
+        pass_filenames: true
+        additional_dependencies: [ruff>=0.6]
+
       - id: docs-validator
         name: Docs Validator (fences, Mermaid, tables, links)
         language: python
@@ -35,6 +45,18 @@ repos:
         # Collection imports every test module, so this env needs the same runtime
         # dependencies as ci.yml: pyyaml and markdown-it-py, not just the runner.
         additional_dependencies: [pytest, pytest-asyncio, markdown-it-py, networkx, pyyaml, radon, vulture]
+
+      - id: mypy
+        name: mypy (tools/)
+        language: python
+        # `tools/` is the source root: its scripts import each other by bare module name,
+        # so mypy runs from inside it. Pointing it at `tools/` from the repository root
+        # resolves every file twice and aborts before checking anything.
+        entry: bash -c 'cd tools && python -m mypy .'
+        files: ^tools/.*\.py$
+        pass_filenames: false
+        stages: [pre-push]
+        additional_dependencies: [mypy>=1.11, types-PyYAML, markdown-it-py, networkx, pyyaml, radon, vulture]
 
       - id: json-schema-lint
         name: JSON Schema Lint (FastMCP Manifests)

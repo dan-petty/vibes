@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 from smell_quantifier import (
-    LOW_MAINTAINABILITY_INDEX,
     ADVISORY_SMELLS,
+    LOW_MAINTAINABILITY_INDEX,
     Smell,
     analyze,
     detect_duplicated_blocks,
@@ -181,7 +181,7 @@ def test_main_fail_on_switch_controls_the_exit_code(tmp_path: Path) -> None:
 
 def test_maintainability_threshold_matches_the_radon_scale() -> None:
     """20 is radon's A/B boundary; 65 belongs to the unnormalized SEI scale."""
-    assert LOW_MAINTAINABILITY_INDEX == pytest.approx(20.0)
+    assert pytest.approx(20.0) == LOW_MAINTAINABILITY_INDEX
 
 
 def test_method_calls_and_constants_are_not_instance_attributes() -> None:
@@ -213,3 +213,57 @@ def test_god_class_ceiling_counts_only_assigned_state() -> None:
     defs = "\n".join(f"    def step{i}(self):\n        return {i}" for i in range(12))
     source = f"class C:\n    def __init__(self):\n        self.only = 1\n    def run(self):\n{calls}\n{defs}\n"
     assert detect_god_classes(_tree(source), Path("m.py")) == []
+
+
+MUTUAL_CALL_CLASS = '''
+class Service:
+    def __init__(self) -> None:
+        self.store = {}
+
+    def alpha(self) -> None:
+        self.beta()
+
+    def beta(self) -> None:
+        self.store["k"] = 1
+
+    def gamma(self) -> None:
+        self.store["j"] = 2
+'''
+
+
+def test_a_calling_method_joins_the_cluster_of_the_method_it_calls() -> None:
+    """`alpha` touches no attribute of its own; it is cohesive only through `beta`.
+
+    The link was tested in one direction only, so whether these three methods formed one
+    cluster or two depended on which one the traversal reached first.
+    """
+    tree = ast.parse(MUTUAL_CALL_CLASS)
+    assert detect_low_cohesion(tree, Path("service.py")) == []
+
+
+def test_cohesion_is_identical_across_randomised_string_hashing() -> None:
+    """The same class must score the same LCOM4 in every process that measures it.
+
+    `set.pop()` returns an arbitrary element and string hashing is randomised per
+    process, so an order-dependent traversal reported a different number on each run.
+    """
+    import subprocess
+    import sys
+
+    program = (
+        f"import ast,sys;sys.path.insert(0,{str(Path(__file__).resolve().parent)!r});"
+        "from smell_quantifier import _count_disjoint_clusters as c;"
+        "print(c({'a':{'x'},'b':{'a'},'c':{'x'},'d':{'z'},'e':{'d'}}))"
+    )
+    seeds = ["0", "1", "42", "99991"]
+    results = {
+        subprocess.run(
+            [sys.executable, "-c", program],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
+        ).stdout.strip()
+        for seed in seeds
+    }
+    assert results == {"2"}

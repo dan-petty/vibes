@@ -1,8 +1,8 @@
 """Unit tests for the Reliability SLO engine."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 

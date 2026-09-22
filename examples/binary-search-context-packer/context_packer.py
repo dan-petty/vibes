@@ -9,14 +9,15 @@ Uses binary search boundary convergence over structured symbol units.
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
-from typing import Final, Sequence
+from enum import StrEnum
+from typing import Final
 
 DEFAULT_TOKEN_CHAR_RATIO: Final[int] = 4
 
 
-class ContextDetailLevel(str, Enum):
+class ContextDetailLevel(StrEnum):
     """Fidelity level for packed symbol representation."""
 
     FULL = "FULL"

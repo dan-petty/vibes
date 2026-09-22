@@ -27,9 +27,10 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final, Sequence
+from typing import Final
 
 DEFAULT_ROADMAP = Path("docs/ROADMAP.md")
 DEFAULT_BACKLOG = Path(".data/sdlc_backlog.json")
@@ -246,17 +247,22 @@ def merge_into_backlog(items: Sequence[RoadmapItem], backlog: Path) -> list[dict
     Previous roadmap entries are replaced rather than appended, because an item checked
     off in the roadmap must disappear from the backlog on the next ingest.
     """
-    existing: list[dict[str, object]] = []
-    if backlog.exists():
-        try:
-            loaded = json.loads(backlog.read_text(encoding="utf-8"))
-            existing = [t for t in loaded if not str(t.get("resource_id", "")).startswith("roadmap-")]
-        except (OSError, json.JSONDecodeError):
-            existing = []
+    existing = _non_roadmap_tasks(backlog)
     tasks = existing + [item.to_backlog_task(2000 + i) for i, item in enumerate(items, 1)]
     backlog.parent.mkdir(parents=True, exist_ok=True)
     backlog.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
     return tasks
+
+
+def _non_roadmap_tasks(backlog: Path) -> list[dict[str, object]]:
+    """Read the backlog's non-roadmap tasks, treating an absent or corrupt file as empty."""
+    if not backlog.exists():
+        return []
+    try:
+        loaded = json.loads(backlog.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [t for t in loaded if not str(t.get("resource_id", "")).startswith("roadmap-")]
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -276,13 +282,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     items = parse_roadmap(args.roadmap)
-    for item in items:
-        ratio = item.business_value / max(item.effort_points, 1)
-        sized = " " if item.sized_from_matrix else "~"
-        print(f" {sized}{item.priority:<12} {item.milestone:<8} value/effort={ratio:.2f}  {item.title[:54]}")
-    unsized = sum(1 for item in items if not item.sized_from_matrix)
-    if unsized:
-        print(f"\n  ~ {unsized} item(s) have no prioritization matrix row; ranked on defaults.")
+    _report_items(items)
     if args.dry_run:
         print(f"{len(items)} open deliverable(s); nothing written.")
         return 0
@@ -290,6 +290,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     tasks = merge_into_backlog(items, args.backlog)
     print(f"\nMerged {len(items)} roadmap item(s) into {args.backlog} ({len(tasks)} total tasks).")
     return 0
+
+
+def _report_items(items: Sequence[RoadmapItem]) -> None:
+    """Print one line per deliverable, marking those ranked on assumed sizing."""
+    for item in items:
+        ratio = item.business_value / max(item.effort_points, 1)
+        sized = " " if item.sized_from_matrix else "~"
+        print(f" {sized}{item.priority:<12} {item.milestone:<8} value/effort={ratio:.2f}  {item.title[:54]}")
+    unsized = sum(1 for item in items if not item.sized_from_matrix)
+    if unsized:
+        print(f"\n  ~ {unsized} item(s) have no prioritization matrix row; ranked on defaults.")
 
 
 if __name__ == "__main__":

@@ -10,17 +10,17 @@ Emits structured, prescriptive error prompts for autonomous zero-shot self-corre
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
 import json
-import sys
-from typing import Any, Callable, Sequence
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Any
 
 # Canonical string length ceiling to mitigate log bloat / CWE-400
 DEFAULT_STRING_LENGTH_CAP = 256
 
 
-class ViolationKind(str, Enum):
+class ViolationKind(StrEnum):
     """Taxonomy of tool contract violations."""
     HALLUCINATED_PARAM = "HALLUCINATED_PARAM"
     MISSING_REQUIRED_PARAM = "MISSING_REQUIRED_PARAM"
@@ -30,7 +30,7 @@ class ViolationKind(str, Enum):
     OUTPUT_CONTRACT_VIOLATION = "OUTPUT_CONTRACT_VIOLATION"
 
 
-class ParameterType(str, Enum):
+class ParameterType(StrEnum):
     """Supported parameter data types."""
     STRING = "string"
     INTEGER = "integer"

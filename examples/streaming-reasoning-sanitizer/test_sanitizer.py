@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from sanitizer import (
-    ParserState,
     StreamingReasoningSanitizer,
     sanitize_reasoning_stream,
 )

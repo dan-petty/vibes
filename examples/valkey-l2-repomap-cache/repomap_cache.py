@@ -16,17 +16,17 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 import hashlib
 import json
 import math
-from pathlib import Path
 import socket
 import sys
 import time
-from typing import Any, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 # Canonical dummy host for mock network tests
 CANONICAL_MOCK_HOST = "localhost"
@@ -37,7 +37,7 @@ FN_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 RETURN_TYPES = (ast.Return, ast.Yield)
 
 
-class CacheTier(str, Enum):
+class CacheTier(StrEnum):
     """Source tier providing repomap resolution."""
 
     L1_MEMORY = "L1_MEMORY"
@@ -45,7 +45,7 @@ class CacheTier(str, Enum):
     MISS_COMPUTED = "MISS_COMPUTED"
 
 
-class DriftVerdict(str, Enum):
+class DriftVerdict(StrEnum):
     """Classification of semantic and structural drift severity."""
 
     PRESERVED = "PRESERVED"
@@ -109,10 +109,10 @@ class DriftReport:
 
 def encode_resp_command(*args: str) -> bytes:
     """Encode command arguments into Redis Serialization Protocol (RESP) wire bytes."""
-    lines = [f"*{len(args)}\r\n".encode("utf-8")]
+    lines = [f"*{len(args)}\r\n".encode()]
     for arg in args:
         arg_bytes = arg.encode("utf-8")
-        lines.append(f"${len(arg_bytes)}\r\n".encode("utf-8"))
+        lines.append(f"${len(arg_bytes)}\r\n".encode())
         lines.append(arg_bytes + b"\r\n")
     return b"".join(lines)
 
@@ -179,7 +179,7 @@ class ValkeyL2Client:
                 resp = s.recv(1024)
                 val, _ = decode_resp_response(resp)
                 self.is_connected = bool(val == "PONG")
-        except (OSError, socket.error):
+        except OSError:
             self.is_connected = False
 
     def get(self, key: str) -> str | None:
@@ -192,7 +192,7 @@ class ValkeyL2Client:
                 resp = s.recv(65536)
                 val, _ = decode_resp_response(resp)
                 return str(val) if val is not None else None
-        except (OSError, socket.error):
+        except OSError:
             return self._fallback_store.get(key)
 
     def set(self, key: str, value: str, ttl_seconds: int | None = None) -> bool:
@@ -209,7 +209,7 @@ class ValkeyL2Client:
                 resp = s.recv(1024)
                 val, _ = decode_resp_response(resp)
                 return bool(val == "OK")
-        except (OSError, socket.error):
+        except OSError:
             self._fallback_store[key] = value
             return True
 
@@ -222,7 +222,7 @@ class ValkeyL2Client:
             with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
                 s.sendall(encode_resp_command("DEL", key))
                 return True
-        except (OSError, socket.error):
+        except OSError:
             return True
 
 
@@ -343,7 +343,7 @@ class EmbeddingDriftAuditor:
     def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
         if len(vec_a) != len(vec_b) or not vec_a:
             return 0.0
-        dot = sum(a * b for a, b in zip(vec_a, vec_b))
+        dot = sum(a * b for a, b in zip(vec_a, vec_b, strict=True))
         norm_a = math.sqrt(sum(a * a for a in vec_a))
         norm_b = math.sqrt(sum(b * b for b in vec_b))
         denom = norm_a * norm_b
@@ -472,7 +472,7 @@ def run_demo() -> int:
     print(f"Pass 2: Resolved via [{tier2.value}] (SHA: {rec2.content_sha256[:8]}...)")
 
     cache._l1_cache.clear()
-    rec3, tier3 = cache.get_repomap(p, source_code=src_v1)
+    _rec3, tier3 = cache.get_repomap(p, source_code=src_v1)
     print(f"Pass 3: Resolved via [{tier3.value}] (L1 evicted -> L2 lookup)")
 
     rec_v2, _ = cache.get_repomap(p, source_code=src_v2)

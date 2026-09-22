@@ -24,13 +24,13 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import math
 import sys
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Callable, Final, Iterable, Sequence
+from typing import Final
 
 import networkx
 from radon.metrics import mi_compute, mi_parameters
@@ -258,21 +258,46 @@ def _cohesion_components(node: ast.ClassDef) -> int:
 
 
 def _count_disjoint_clusters(touched: dict[str, set[str]]) -> int:
-    """Count connected components among methods linked by shared symbols."""
-    unvisited, clusters = set(touched), 0
+    """Count connected components among methods linked by shared symbols.
+
+    The linking relation has to be symmetric. "A shares an attribute with B" already is,
+    but "A calls B" is not, and testing only that direction made membership depend on
+    which method the traversal happened to reach first: the same unchanged class scored
+    LCOM4 5 on one run and 7 on the next, because `set.pop()` returns an arbitrary
+    element and string hashing is randomised per process. A metric that answers
+    differently for identical input cannot support a judgement about a class.
+
+    Traversal order is fixed as well, so that anything derived from these clusters later
+    is reproducible rather than merely counted reproducibly.
+    """
+    unvisited, clusters = dict.fromkeys(sorted(touched)), 0
     while unvisited:
-        frontier, cluster = {unvisited.pop()}, set()
-        while frontier:
-            current = frontier.pop()
-            cluster.add(current)
-            shared = {
-                other for other in unvisited
-                if touched[other] & touched[current] or other in touched[current]
-            }
-            frontier |= shared
-            unvisited -= shared
+        _drain_cluster(next(iter(unvisited)), unvisited, touched)
         clusters += 1
     return clusters
+
+
+def _drain_cluster(start: str, unvisited: dict[str, None], touched: dict[str, set[str]]) -> None:
+    """Remove every method reachable from `start` from the unvisited set."""
+    del unvisited[start]
+    frontier = [start]
+    while frontier:
+        for other in _linked_methods(frontier.pop(), unvisited, touched):
+            del unvisited[other]
+            frontier.append(other)
+
+
+def _linked_methods(
+    current: str, unvisited: dict[str, None], touched: dict[str, set[str]]
+) -> list[str]:
+    """Return the still-unvisited methods linked to `current`, in stable order."""
+    return [
+        other
+        for other in unvisited
+        if touched[other] & touched[current]
+        or other in touched[current]
+        or current in touched[other]
+    ]
 
 
 def detect_low_cohesion(tree: ast.AST, path: Path) -> list[SmellFinding]:
@@ -418,7 +443,7 @@ def detect_import_cycles(trees: dict[Path, ast.AST]) -> list[SmellFinding]:
     return [
         SmellFinding(
             smell=Smell.IMPORT_CYCLE, file_path=str(by_stem[cycle[0]]), line_number=1,
-            subject=" -> ".join(cycle + [cycle[0]]), measured=len(cycle), threshold=0,
+            subject=" -> ".join([*cycle, cycle[0]]), measured=len(cycle), threshold=0,
             detail="Cyclic imports force the whole group to load together and resist extraction",
         )
         for cycle in cycles

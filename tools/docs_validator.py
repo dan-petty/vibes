@@ -14,31 +14,27 @@ from __future__ import annotations
 
 import argparse
 import ast
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
 import json
 import os
-from pathlib import Path
 import re
 import sys
 import textwrap
 import threading
 import time
-from typing import Any, Callable, Final, Sequence
 import urllib.parse
-import yaml
-from markdown_it import MarkdownIt
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Final
 
+import yaml
 from doc_core import (
     DocFinding,
     DocValidationReport,
     PathOracle,
-    closing_fence_index,
-    extract_fenced_blocks,
 )
 from doc_rules_mermaid import (
-    MIN_MERMAID_CONTRAST_RATIO,
-    VALID_MERMAID_TYPES,
     _MERMAID_EDGE_RE,
     _MERMAID_NODE_RE,
     _is_unquoted_parens_node_label,
@@ -46,7 +42,6 @@ from doc_rules_mermaid import (
     check_mermaid_diagrams,
     contrast_ratio,
 )
-from source_tree_policy import iter_source_files
 from doc_rules_structure import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     check_directory_maps,
@@ -54,6 +49,22 @@ from doc_rules_structure import (
     check_observation_structure,
     check_pattern_header,
 )
+from markdown_it import MarkdownIt
+from source_tree_policy import iter_source_files
+
+# This module is the documentation validator's public face: the rule modules behind it
+# are an implementation detail, so callers import the validator, its entry point and the
+# two rule constants they assert against from here. Naming that surface explicitly is
+# what makes the re-exports deliberate rather than incidental — an automated unused-import
+# pass had already deleted them once, because nothing in this file used them.
+__all__ = [
+    "OBSERVATION_REQUIRED_SECTION_COUNT",
+    "DocFinding",
+    "DocValidationReport",
+    "DocsValidator",
+    "contrast_ratio",
+    "main",
+]
 
 # Supported documentation extensions
 
@@ -217,7 +228,7 @@ def check_code_fences(
     file_str = str(file_path)
     try:
         tokens = parser.parse("\n".join(lines))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return [
             DocFinding(
                 file_path=file_str,
@@ -641,7 +652,8 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Check pairing and nesting of structural HTML tags outside code blocks."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    in_fence, stack = False, []
+    in_fence = False
+    stack: list[tuple[str, int]] = []
 
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()

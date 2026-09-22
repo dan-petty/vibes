@@ -26,17 +26,18 @@ import functools
 import re
 import sys
 import warnings
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Iterator, Sequence
+from typing import Any
 
 SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
 DEPRECATION_DECORATOR_NAMES = frozenset({"deprecated"})
 REQUIRED_DEPRECATION_FIELDS = ("since", "remove_in", "replacement")
 
 
-class DeprecationDefect(str, Enum):
+class DeprecationDefect(StrEnum):
     """The closed set of deprecation contract violations."""
 
     MISSING_METADATA = "MissingMetadata"
@@ -113,7 +114,9 @@ def deprecated(
     The warning is the half callers actually experience; the metadata is the half the
     sentinel enforces. Both are required, which is why they are declared in one place.
     """
-    for name, value in zip(REQUIRED_DEPRECATION_FIELDS, (since, remove_in, replacement)):
+    for name, value in zip(
+        REQUIRED_DEPRECATION_FIELDS, (since, remove_in, replacement), strict=True
+    ):
         if not value:
             raise ValueError(f"@deprecated requires '{name}'")
     parse_semver(since), parse_semver(remove_in)

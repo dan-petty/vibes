@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import ast
+
 from context_packer import (
-    AstSymbol,
     ContextDetailLevel,
     binary_search_pack_symbols,
     estimate_tokens,
@@ -73,7 +73,7 @@ def test_pack_source_large_budget_returns_full() -> None:
 
 def test_pack_source_constrained_budget_degrades_to_signatures() -> None:
     """Ensure tight token budget degrades to signatures without breaking AST syntax."""
-    rendered, level, count = pack_source_to_budget(SAMPLE_MODULE, budget_tokens=50)
+    rendered, level, _count = pack_source_to_budget(SAMPLE_MODULE, budget_tokens=50)
     # Output must be syntactically valid Python
     parsed = ast.parse(rendered)
     tokens = estimate_tokens(rendered)
@@ -97,8 +97,8 @@ def test_binary_search_monotonicity() -> None:
 
 def test_pack_source_empty_and_zero_budget() -> None:
     """Ensure edge cases for empty string and zero budget return empty results cleanly."""
-    r1, l1, c1 = pack_source_to_budget("", 100)
-    r2, l2, c2 = pack_source_to_budget(SAMPLE_MODULE, 0)
+    r1, _l1, c1 = pack_source_to_budget("", 100)
+    r2, _l2, c2 = pack_source_to_budget(SAMPLE_MODULE, 0)
     assert (r1, c1, r2, c2) == ("", 0, "", 0)
 
 

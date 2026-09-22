@@ -1,10 +1,10 @@
 """Validation test suite for Kubernetes, Docker Compose, and Observability resources."""
 
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
-import pytest
+
 import yaml
 
 RESOURCES_DIR = Path(__file__).resolve().parent.parent / "resources"

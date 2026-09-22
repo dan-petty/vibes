@@ -15,21 +15,22 @@ from __future__ import annotations
 
 import argparse
 import ast
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 import ipaddress
 import json
-from pathlib import Path
 import re
 import subprocess
-import tempfile
-import xml.etree.ElementTree as ElementTree
 import sys
+import tempfile
 import time
+import xml.etree.ElementTree as ElementTree
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 from sanitization_policy import is_documentable
 from source_tree_policy import iter_source_files
-from typing import Any, Sequence
 
 # Canonical quality thresholds
 MAX_ALLOWED_COMPLEXITY = 10
@@ -55,7 +56,7 @@ PYTEST_SUMMARY_DURATION_RE = re.compile(
 )
 
 
-class ResourceType(str, Enum):
+class ResourceType(StrEnum):
     """Classification of repository resources."""
     PYTHON_MODULE = "python_module"
     TEST_SUITE = "test_suite"
@@ -65,7 +66,7 @@ class ResourceType(str, Enum):
     DOCUMENTATION = "documentation"
 
 
-class HealthStatus(str, Enum):
+class HealthStatus(StrEnum):
     """Overall health status of an evaluated resource."""
     HEALTHY = "HEALTHY"
     NEEDS_REMEDIATION = "NEEDS_REMEDIATION"
@@ -149,7 +150,7 @@ class ReviewEvaluation:
         }
 
 
-class FeedbackCategory(str, Enum):
+class FeedbackCategory(StrEnum):
     """Categorization of actionable feedback for recursive improvement."""
     PROACTIVE_REFACTOR = "PROACTIVE_REFACTOR"
     TEST_PARITY = "TEST_PARITY"
@@ -160,7 +161,7 @@ class FeedbackCategory(str, Enum):
     POSITIVE_REINFORCEMENT = "POSITIVE_REINFORCEMENT"
 
 
-class FeedbackPriority(str, Enum):
+class FeedbackPriority(StrEnum):
     """Priority ranking of improvement feedback."""
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
@@ -362,7 +363,7 @@ def _load_smell_quantifier() -> Any | None:
     if str(example) not in sys.path:
         sys.path.insert(0, str(example))
     try:
-        import smell_quantifier
+        import smell_quantifier  # type: ignore[import-not-found]
 
         return smell_quantifier
     except ImportError:
@@ -375,7 +376,8 @@ def _load_docs_validator_cls() -> type[Any]:
         from docs_validator import DocsValidator
         return DocsValidator
     except ModuleNotFoundError:
-        from tools.docs_validator import DocsValidator  # type: ignore[no-redef]
+        from tools.docs_validator import DocsValidator  # type: ignore[no-redef,import-not-found]
+
         return DocsValidator
 
 
@@ -427,16 +429,21 @@ def _is_verified(stem: str, test_stems: set[str], exercised: set[str]) -> bool:
     return bool(named) or stem in exercised or any(stem in ts for ts in test_stems)
 
 
-def _public_function_nodes(tree: ast.AST) -> list[ast.AST]:
+def _public_function_nodes(tree: ast.Module) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
     """Return module-level and class-level functions, excluding nested closures.
 
     A closure defined inside a decorator or factory is not public surface, and asking an
     agent to write a docstring for `wrapper` is manufactured work. Only what a caller can
     reach from outside the module is counted.
     """
-    kinds = (ast.FunctionDef, ast.AsyncFunctionDef)
-    containers = [tree] + [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
-    return [node for container in containers for node in container.body if isinstance(node, kinds)]
+    containers: list[ast.Module | ast.ClassDef] = [tree]
+    containers += [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+    return [
+        node
+        for container in containers
+        for node in container.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
 
 
 class ResourceScanner:
@@ -1010,7 +1017,11 @@ class FeedbackAnalyzer:
                 [t for t in targets if t.exists()], include_advisory=False
             )
         except (OSError, SyntaxError, ValueError) as err:
-            logger.debug("Structural decay analysis unavailable: %s", err)
+            # `logger` was never defined or imported in this module, so this handler
+            # raised NameError instead of degrading: a quantifier that failed took the
+            # whole loop down. The path had never been exercised, which is how it
+            # survived. Degradation is now visible rather than silent.
+            print(f"⚠️  Structural decay analysis unavailable: {err}", file=sys.stderr)
             return
         feedback.extend(cls._decay_feedback(finding) for finding in report.gating[:10])
 

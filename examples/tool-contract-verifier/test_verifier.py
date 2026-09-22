@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
-import pytest
 
+import pytest
 from verifier import (
-    ContractValidationReport,
     ParameterContract,
     ParameterType,
     ToolContract,
@@ -76,7 +75,7 @@ def test_verifier_hallucinated_parameter_rejected(test_verifier: ToolContractVer
     assert report.is_valid is False
     assert res is None
     assert any(v.kind == ViolationKind.HALLUCINATED_PARAM for v in report.violations)
-    hallucinated = [v for v in report.violations if v.kind == ViolationKind.HALLUCINATED_PARAM][0]
+    hallucinated = next(v for v in report.violations if v.kind == ViolationKind.HALLUCINATED_PARAM)
     assert hallucinated.param_name == "cluster_override"
     assert "cluster_override" in report.feedback_message
 
@@ -89,7 +88,7 @@ def test_verifier_missing_required_parameter(test_verifier: ToolContractVerifier
     assert report.is_valid is False
     assert res is None
     assert any(v.kind == ViolationKind.MISSING_REQUIRED_PARAM for v in report.violations)
-    missing = [v for v in report.violations if v.kind == ViolationKind.MISSING_REQUIRED_PARAM][0]
+    missing = next(v for v in report.violations if v.kind == ViolationKind.MISSING_REQUIRED_PARAM)
     assert missing.param_name == "service_name"
     assert "service_name" in report.feedback_message
 
@@ -97,11 +96,11 @@ def test_verifier_missing_required_parameter(test_verifier: ToolContractVerifier
 def test_verifier_type_mismatch_detected(test_verifier: ToolContractVerifier) -> None:
     """Verify passing string for integer parameter is rejected without silent coercion."""
     args = {"service_name": "cache-service", "replicas": "five"}
-    res, report = test_verifier.execute_call("deploy_service", args)
+    _res, report = test_verifier.execute_call("deploy_service", args)
 
     assert report.is_valid is False
     assert any(v.kind == ViolationKind.TYPE_MISMATCH for v in report.violations)
-    violation = [v for v in report.violations if v.kind == ViolationKind.TYPE_MISMATCH][0]
+    violation = next(v for v in report.violations if v.kind == ViolationKind.TYPE_MISMATCH)
     assert violation.param_name == "replicas"
     assert "expected integer" in violation.message.lower()
 
@@ -110,11 +109,11 @@ def test_verifier_string_length_bound_exceeded(test_verifier: ToolContractVerifi
     """Verify strings exceeding bounded length cap are flagged to prevent log bloat / CWE-400."""
     oversized_name = "a" * 128  # Max length is 64
     args = {"service_name": oversized_name}
-    res, report = test_verifier.execute_call("deploy_service", args)
+    _res, report = test_verifier.execute_call("deploy_service", args)
 
     assert report.is_valid is False
     assert any(v.kind == ViolationKind.LENGTH_BOUND_EXCEEDED for v in report.violations)
-    violation = [v for v in report.violations if v.kind == ViolationKind.LENGTH_BOUND_EXCEEDED][0]
+    violation = next(v for v in report.violations if v.kind == ViolationKind.LENGTH_BOUND_EXCEEDED)
     assert violation.param_name == "service_name"
     assert "length 128 exceeds maximum 64" in violation.message
 

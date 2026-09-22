@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import ast
 import json
-from pathlib import Path
 import sys
 import tempfile
+from pathlib import Path
 
 # Add repo root and tools/ to sys.path for direct imports
 _repo_root = Path(__file__).resolve().parent.parent
@@ -25,17 +25,13 @@ sys.path.insert(0, str(_repo_root / "tools"))
 sys.path.insert(0, str(_repo_root))
 
 import pytest
-
 from ast_refactorer import (
     ASTRefactorer,
     CandidateDetector,
-    LadderBranch,
     RefactorCandidate,
     RefactorStrategy,
     calculate_cyclomatic_complexity,
     calculate_nesting_depth,
-    compute_unified_diff,
-    extract_equality_ladder,
     invert_condition,
     run_cli,
 )

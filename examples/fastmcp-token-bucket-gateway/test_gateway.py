@@ -1,10 +1,14 @@
 """Unit and concurrency tests for FastMCP Token-Bucket Gateway."""
 
-import asyncio
 import time
-import pytest
 
-from gateway import FastMCPGateway, RateLimitConfig, RateLimitExceededException, TokenBucket
+import pytest
+from gateway import (
+    FastMCPGateway,
+    RateLimitConfig,
+    RateLimitExceededException,
+    TokenBucket,
+)
 
 
 @pytest.mark.asyncio

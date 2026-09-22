@@ -3,8 +3,9 @@
 # sentinel: allow[ZeroTrustSanitization] — adversarial prompt fixtures embedding private IPs to measure invariant drift
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import pytest
 
 # Add current dir to sys.path for direct imports

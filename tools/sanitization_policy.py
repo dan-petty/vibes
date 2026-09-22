@@ -24,11 +24,11 @@ IPv4Network = ipaddress.IPv4Network
 # forbids writing the guard that blocks it. Scoped to the single address, never the
 # surrounding link-local /16.
 DOCUMENTABLE_NETWORKS: Final[tuple[IPv4Network, ...]] = (
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("192.0.2.0/24"),
-    ipaddress.ip_network("198.51.100.0/24"),
-    ipaddress.ip_network("203.0.113.0/24"),
-    ipaddress.ip_network("169.254.169.254/32"),
+    ipaddress.IPv4Network("127.0.0.0/8"),
+    ipaddress.IPv4Network("192.0.2.0/24"),
+    ipaddress.IPv4Network("198.51.100.0/24"),
+    ipaddress.IPv4Network("203.0.113.0/24"),
+    ipaddress.IPv4Network("169.254.169.254/32"),
 )
 
 

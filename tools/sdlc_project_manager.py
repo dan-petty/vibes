@@ -14,14 +14,14 @@ paths, and maintain continuous alignment with human project managers.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 import json
-import time
-from pathlib import Path
-import re
 import sys
-from typing import Any, Final, Sequence
+import time
+from collections.abc import Iterator, Sequence
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from typing import Any, Final
 
 # Canonical priority weights
 # Passes are cheap; the interval exists so a watch does not spin.
@@ -45,14 +45,14 @@ LABEL_WEIGHT_MODIFIERS = {
 }
 
 
-class SDLCResourceKind(str, Enum):
+class SDLCResourceKind(StrEnum):
     """Classification of SDLC resource on GitHub."""
     ISSUE = "issue"
     PULL_REQUEST = "pull_request"
     MILESTONE = "milestone"
 
 
-class PriorityLevel(str, Enum):
+class PriorityLevel(StrEnum):
     """Urgency and business impact priority level."""
     P0_CRITICAL = "P0_CRITICAL"
     P1_HIGH = "P1_HIGH"
@@ -60,7 +60,7 @@ class PriorityLevel(str, Enum):
     P3_LOW = "P3_LOW"
 
 
-class LifecycleState(str, Enum):
+class LifecycleState(StrEnum):
     """Canonical GitHub Projects v2 Kanban lifecycle state."""
     BACKLOG = "Backlog"
     READY = "Ready"
@@ -478,22 +478,47 @@ def _sync_once(backlog: Path, scan: Path) -> ReconciliationResult:
 
 def _handle_sync(args: argparse.Namespace) -> int:
     """Reconcile the board once, or continuously until interrupted."""
+    completed = 0
+    try:
+        # The generator performs each pass and reports its number, so an interrupt at any
+        # point still leaves `completed` holding the count actually finished.
+        for passes in _sync_passes(args):
+            completed = passes
+    except KeyboardInterrupt:
+        print(f"\nStopped after {completed} pass(es).")
+    return 0
+
+
+def _sync_passes(args: argparse.Namespace) -> Iterator[int]:
+    """Reconcile repeatedly, yielding each completed pass number until the run is done."""
     scan = args.scan or args.file
     passes = 0
-    try:
-        while True:
-            result = _sync_once(args.file, scan)
-            passes += 1
-            print(f"[sync {passes}] {result.summary()}")
-            for label, names in (("closed", result.closed), ("opened", result.opened), ("ready", result.advanced)):
-                for name in names:
-                    print(f"    {label}: {name[:88]}")
-            if not args.watch or (args.max_passes is not None and passes >= args.max_passes):
-                return 0
-            time.sleep(args.interval)
-    except KeyboardInterrupt:
-        print(f"\nStopped after {passes} pass(es).")
-        return 0
+    while True:
+        passes += 1
+        _print_sync_pass(passes, _sync_once(args.file, scan))
+        yield passes
+        if not args.watch or (args.max_passes is not None and passes >= args.max_passes):
+            return
+        time.sleep(args.interval)
+
+
+def _print_sync_pass(passes: int, result: ReconciliationResult) -> None:
+    """Print one reconciliation pass: its summary line, then every card it moved.
+
+    `refreshed` is listed with the rest. It was counted in the summary and omitted here,
+    so a card that silently took a new blocker or priority from the roadmap showed up as
+    a number with nothing to attribute it to.
+    """
+    print(f"[sync {passes}] {result.summary()}")
+    moved = (
+        ("closed", result.closed),
+        ("opened", result.opened),
+        ("ready", result.advanced),
+        ("refreshed", result.refreshed),
+    )
+    for label, names in moved:
+        for name in names:
+            print(f"    {label}: {name[:88]}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -599,13 +624,8 @@ def reconcile_backlog(
             merged.extend(
                 _reconcile_roadmap_card(task, identity, current_by_id, roadmap_ingested, result)
             )
-        elif identity in current_by_id:
-            merged.append(task)
-            result.unchanged += 1
-        elif task.get("lifecycle_state") != LifecycleState.DONE.value:
-            closed = {**task, "lifecycle_state": LifecycleState.DONE.value}
-            merged.append(closed)
-            result.closed.append(identity)
+        else:
+            merged.extend(_reconcile_defect_card(task, identity, current_by_id, result))
 
     known = {_card_identity(task) for task in merged}
     for identity, task in current_by_id.items():
@@ -613,6 +633,22 @@ def reconcile_backlog(
             merged.append(task)
             result.opened.append(identity)
     return merged, result
+
+
+def _reconcile_defect_card(
+    task: dict[str, Any],
+    identity: str,
+    current_by_id: dict[str, dict[str, Any]],
+    result: ReconciliationResult,
+) -> list[dict[str, Any]]:
+    """Keep a defect card the scan still reports, close it when the scan has gone quiet."""
+    if identity in current_by_id:
+        result.unchanged += 1
+        return [task]
+    if task.get("lifecycle_state") == LifecycleState.DONE.value:
+        return []
+    result.closed.append(identity)
+    return [{**task, "lifecycle_state": LifecycleState.DONE.value}]
 
 
 def _reconcile_roadmap_card(

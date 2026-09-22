@@ -10,8 +10,9 @@ semicolon that silently truncates a sequence diagram message.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Final, Sequence
+from typing import Final
 
 from doc_core import DocFinding, extract_fenced_blocks, first_directive_line
 

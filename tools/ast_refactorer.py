@@ -16,14 +16,14 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections.abc import Callable
-from dataclasses import dataclass, field
 import difflib
-from enum import Enum
 import json
-from pathlib import Path
 import sys
-from typing import Any, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 # Branch node types contributing to McCabe cyclomatic complexity
 BRANCH_NODE_TYPES = (
@@ -63,7 +63,7 @@ INVERTED_COMPARE_OPS: dict[type[ast.cmpop], type[ast.cmpop]] = {
 }
 
 
-class RefactorStrategy(str, Enum):
+class RefactorStrategy(StrEnum):
     """Automated AST refactoring strategy classification."""
 
     TABLE_DISPATCH = "TABLE_DISPATCH"
@@ -204,12 +204,13 @@ def _extract_single_return_val(body: list[ast.stmt]) -> ast.expr | None:
 
 def _match_single_equality_branch(if_node: ast.If, target_id: str) -> tuple[ast.expr, ast.expr] | None:
     """Check if an if node matches target_id == key returning an expression."""
-    if not _is_single_eq_compare(if_node.test, target_id):
+    test = if_node.test
+    if not isinstance(test, ast.Compare) or not _is_single_eq_compare(test, target_id):
         return None
     val = _extract_single_return_val(if_node.body)
     if val is None:
         return None
-    return if_node.test.comparators[0], val
+    return test.comparators[0], val
 
 
 def _step_ladder_traversal(
@@ -386,10 +387,10 @@ class CandidateDetector:
 
     @staticmethod
     def _has_inverting_guard_opportunity(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-        for stmt in fn.body:
-            if isinstance(stmt, ast.If) and len(stmt.body) >= 2 and not stmt.orelse:
-                return True
-        return False
+        return any(
+            isinstance(stmt, ast.If) and len(stmt.body) >= 2 and not stmt.orelse
+            for stmt in fn.body
+        )
 
 
 class TableDispatchTransformer:
@@ -507,7 +508,11 @@ class PredicateExtractor:
         helper_name = f"_is_{fn_name}_valid"
         helper_fn = cls._create_helper(helper_name, target_if.test, fn_node)
 
-        call_args = [ast.Name(id=a.arg, ctx=ast.Load()) for a in fn_node.args.args if a.arg not in ("self", "cls")]
+        call_args: list[ast.expr] = [
+            ast.Name(id=a.arg, ctx=ast.Load())
+            for a in fn_node.args.args
+            if a.arg not in ("self", "cls")
+        ]
         target_if.test = ast.Call(func=ast.Name(id=helper_name, ctx=ast.Load()), args=call_args, keywords=[])
 
         cls._insert_helper(module_tree, fn_node, helper_fn)
@@ -542,6 +547,9 @@ class PredicateExtractor:
             body=body,
             decorator_list=[],
             returns=ast.Name(id="bool", ctx=ast.Load()),
+            # Required since 3.12: a FunctionDef built without it matches no overload,
+            # and `ast.unparse` on a node missing the field raises at generation time.
+            type_params=[],
         )
 
     @staticmethod
@@ -569,9 +577,10 @@ class AssertionConsolidator:
         acc_rights: list[ast.expr] = []
 
         for stmt in fn_node.body:
-            if cls._is_simple_equality_assert(stmt):
-                acc_lefts.append(stmt.test.left)  # type: ignore[union-attr]
-                acc_rights.append(stmt.test.comparators[0])  # type: ignore[union-attr]
+            test = stmt.test if isinstance(stmt, ast.Assert) else None
+            if isinstance(test, ast.Compare) and cls._is_simple_equality_assert(stmt):
+                acc_lefts.append(test.left)
+                acc_rights.append(test.comparators[0])
             else:
                 cls._flush_accumulated_asserts(acc_lefts, acc_rights, new_body)
                 new_body.append(stmt)
@@ -598,7 +607,7 @@ class AssertionConsolidator:
         if not lefts:
             return
         if len(lefts) < 3:
-            for l_expr, r_expr in zip(lefts, rights):
+            for l_expr, r_expr in zip(lefts, rights, strict=True):
                 out_stmts.append(
                     ast.Assert(test=ast.Compare(left=l_expr, ops=[ast.Eq()], comparators=[r_expr]), msg=None)
                 )

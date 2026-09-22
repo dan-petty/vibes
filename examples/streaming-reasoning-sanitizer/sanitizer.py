@@ -8,16 +8,17 @@ trace leakage into operational execution payloads, tool parameters, and user ter
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Final, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Final
 
 DEFAULT_OPEN_TAG: Final[str] = "<think>"
 DEFAULT_CLOSE_TAG: Final[str] = "</think>"
 DEFAULT_MAX_THOUGHT_CHARS: Final[int] = 65_536
 
 
-class ParserState(str, Enum):
+class ParserState(StrEnum):
     """Streaming finite state machine state for reasoning token extraction."""
 
     EMITTING = "EMITTING"

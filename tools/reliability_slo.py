@@ -28,10 +28,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Final, Sequence
+from typing import Any, Final
 
 # SRE convention: an objective is a target on good events over valid events, never an
 # average. Averages hide the tail that callers actually experience.
@@ -48,7 +49,7 @@ MIN_BURN_RATE_ITERATIONS: Final[int] = 3
 SLACK_BUDGET_THRESHOLD: Final[float] = 0.0
 
 
-class LoopPhase(str, Enum):
+class LoopPhase(StrEnum):
     """The phase the self-improvement loop should occupy, per AGENTS.md §11."""
 
     REACTIVE_REMEDIATION = "PHASE_1_REACTIVE_REMEDIATION"
@@ -57,7 +58,7 @@ class LoopPhase(str, Enum):
     OBJECTIVE_REVIEW = "OBJECTIVE_REVIEW"
 
 
-class BudgetStatus(str, Enum):
+class BudgetStatus(StrEnum):
     """Error budget health, in the vocabulary an on-call engineer would use."""
 
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"

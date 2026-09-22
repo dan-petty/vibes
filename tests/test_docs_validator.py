@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
 from unittest import mock
 
@@ -20,11 +20,11 @@ import doc_core
 from doc_core import PathOracle
 from doc_rules_structure import check_directory_maps
 from docs_validator import (
-    DocFinding,
-    DocValidationReport,
-    DocsValidator,
     OBSERVATION_REQUIRED_SECTION_COUNT,
+    DocsValidator,
     contrast_ratio,
+)
+from docs_validator import (
     main as docs_validator_main,
 )
 from resource_iteration_workbench import ResourceScanner, ResourceType
@@ -425,7 +425,7 @@ def _run_concurrent_validations(
             findings = validator.validate_content(doc_content)
             assert len(findings) == 0
         return None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return exc
 
 

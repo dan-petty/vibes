@@ -18,9 +18,9 @@ import itertools
 import re
 import sys
 import tokenize
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, Sequence
 
 # Closed-domain RFC 5737 and loopback networks permitted in code/documentation
 ALLOWED_DOCUMENTATION_NETWORKS = (

@@ -7,11 +7,12 @@ Transforms trial-and-error code patching into a formal constraint-accumulation l
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import importlib.util
-from pathlib import Path
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -211,8 +212,8 @@ class SandboxedPatchEvaluator:
         return (
             "import json, sys\n\n"
             f"{patch_source}\n\n"
-            f"input_str = {repr(test_case.input_data)}\n"
-            f"expected = {repr(test_case.expected_output)}\n"
+            f"input_str = {test_case.input_data!r}\n"
+            f"expected = {test_case.expected_output!r}\n"
             "try:\n"
             f"    actual = {entrypoint}(input_str)\n"
             "    if actual == expected:\n"
@@ -258,7 +259,7 @@ class CEGISRunner:
         self, candidate_fn: Callable[[str], dict[str, int | str]], hypothesis: Hypothesis
     ) -> bool:
         """Evaluate candidate patch against the full constraint suite."""
-        success, failed_case = self.run_oracle(candidate_fn)
+        success, _failed_case = self.run_oracle(candidate_fn)
         if success:
             self.state.converged = True
             self.state.verified_patches += 1

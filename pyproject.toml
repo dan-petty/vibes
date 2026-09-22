@@ -28,6 +28,13 @@ test = [
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
 ]
+# Static gates. Declared here for the same reason as the runtime list above: the versions
+# CI installs and the versions a contributor installs must come from one place.
+lint = [
+    "mypy>=1.11",
+    "ruff>=0.6",
+    "types-PyYAML",
+]
 
 [project.urls]
 Homepage = "https://github.com/dan-petty/vibes"
@@ -43,3 +50,53 @@ Documentation = "https://github.com/dan-petty/vibes#readme"
 # no packages makes `pip install .` an installation of the dependency list and nothing else.
 [tool.setuptools]
 packages = []
+
+# Linting. Only the linter is configured: `ruff format` would reflow 18 files and this
+# repository's line breaks are deliberate, so formatting stays a human decision while
+# correctness and modernization rules are mechanical. Ruff infers its target version
+# from `requires-python` above.
+[tool.ruff]
+# Not a reformatting target: this only stops the import rule wrapping long `from X import Y`
+# lines, which would carry a trailing `# type: ignore` onto a continuation line where mypy
+# no longer reads it. 99% of existing lines already fit within it.
+line-length = 110
+
+[tool.ruff.lint]
+select = [
+    "E4",   # import placement and shadowing
+    "E7",   # statement-level mistakes
+    "E9",   # syntax and IO errors
+    "F",    # pyflakes: undefined names, unused imports and variables
+    "I",    # import ordering
+    "UP",   # pyupgrade: this repository's modernization policy, enforced rather than asked for
+    "B",    # bugbear: silent zip truncation, mutable defaults, and similar latent defects
+    "SIM",  # simplifiable constructs
+    "RUF",  # ruff's own correctness rules
+]
+ignore = [
+    # This repository's prose uses en and em dashes deliberately, in documentation and in
+    # the comments that explain why a rule exists. Flagging them as "ambiguous unicode"
+    # would trade readable writing for a lint that guards against homoglyph attacks in
+    # identifiers, which these are not.
+    "RUF002",  # ambiguous unicode in docstrings
+    "RUF003",  # ambiguous unicode in comments
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests, examples and benchmarks prepend their target directory to `sys.path` and only
+# then import from it. The import genuinely cannot precede that statement, so E402 is
+# not a finding here — it is the mechanism by which these files locate what they test.
+"tests/*" = ["E402"]
+"examples/*" = ["E402"]
+"benchmarks/*" = ["E402"]
+
+# Type checking. `tools/` holds flat scripts that import each other by bare module name:
+# they are executed directly and are also placed on `sys.path` by the test suite. That
+# makes the directory itself the source root, so mypy is invoked from inside it
+# (`cd tools && mypy .`). Pointing mypy at `tools/` from the repository root instead
+# resolves every file under two names at once — `docs_validator` and
+# `tools.docs_validator` — and the run aborts before checking anything.
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true

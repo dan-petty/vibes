@@ -6,8 +6,8 @@ convention-versus-enforcement gap this repository exists to close, reappearing i
 document that describes the closing of it.
 """
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"

@@ -20,13 +20,12 @@ from __future__ import annotations
 
 import argparse
 import ast
-from dataclasses import dataclass, field
-from enum import Enum
-import os
-from pathlib import Path
 import re
 import sys
-from typing import Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB boundary guard
 
@@ -59,7 +58,7 @@ TS_FUNC_RE = re.compile(r"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_
 BASH_FUNC_RE = re.compile(r"^\s*(?:function\s+)?([A-Za-z0-9_-]+)\s*\(\)\s*\{", re.MULTILINE)
 
 
-class SymbolKind(str, Enum):
+class SymbolKind(StrEnum):
     """Classification of extracted source code symbols."""
 
     FUNCTION = "FUNCTION"
@@ -161,7 +160,7 @@ class BoundaryGuard:
             return True, resolved, ""
 
         ok, err = cls._check_root_containment(resolved, base_root)
-        return ok, (resolved if ok else resolved), err
+        return ok, resolved, err
 
     @staticmethod
     def _verify_size(resolved: Path, max_size_bytes: int) -> tuple[bool, str]:

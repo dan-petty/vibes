@@ -1,13 +1,13 @@
 import json
-from unittest.mock import MagicMock
 import urllib.error
 import urllib.request
-import pytest
+from unittest.mock import MagicMock
 
+import pytest
 from generator import (
-    AgentTraceSession,
     STATUS_ERROR,
     STATUS_UNSET,
+    AgentTraceSession,
     Span,
     _format_otlp_status,
     build_synthetic_agent_session,

@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Final, Sequence
+from typing import Any, Final
 
 # Supported documentation extensions
 SUPPORTED_EXTENSIONS: Final[frozenset[str]] = frozenset({".md", ".markdown"})

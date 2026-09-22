@@ -3,8 +3,9 @@
 # sentinel: allow[ZeroTrustSanitization] — fixture URLs exercising the crawler's private-network egress guard
 
 from pathlib import Path
-import pytest
+
 import crawler
+import pytest
 from crawler import (
     AdaptiveWebCrawler,
     DomainStrategyStore,
@@ -195,9 +196,9 @@ def test_security_ssrf_protection_blocks_rfc1918() -> None:
 
     # RFC 5737 and standard domain names pass validation
     scheme, host = validate_url_security("http://192.0.2.1/docs")
-    assert host == "192.0.2.1"
+    assert (scheme, host) == ("http", "192.0.2.1")
 
-    scheme, host = validate_url_security("http://example.com/guide")
+    _scheme, host = validate_url_security("http://example.com/guide")
     assert host == "example.com"
 
 

@@ -17,9 +17,10 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 # Canonical taxonomic labels used across vibes
 TAXONOMY_PATTERNS: dict[str, Sequence[str]] = {
@@ -217,11 +218,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "verify-hardening":
         diff_text = args.diff_file.read_text(encoding="utf-8")
-        result = audit_self_hardening(diff_text, is_defect_fix=args.is_defect)
-        print(f"🔄 Recursive Self-Hardening Audit:")
-        print(f"   Compliant: {result.is_compliant}")
-        print(f"   Summary: {result.summary}")
-        return 0 if result.is_compliant else 1
+        audit = audit_self_hardening(diff_text, is_defect_fix=args.is_defect)
+        print("🔄 Recursive Self-Hardening Audit:")
+        print(f"   Compliant: {audit.is_compliant}")
+        print(f"   Summary: {audit.summary}")
+        return 0 if audit.is_compliant else 1
 
     return 0
 

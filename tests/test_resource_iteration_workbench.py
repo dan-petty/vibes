@@ -3,15 +3,15 @@
 # sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting the sanitization detector fires on private IPs
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import pytest
 
 # Add tools/ to sys.path for direct imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 from resource_iteration_workbench import (
-    ASTMetricCalculator,
     FeedbackAnalyzer,
     FeedbackCategory,
     FeedbackPriority,
@@ -518,3 +518,27 @@ def test_import_cycle_does_not_hang_reachability(tmp_path: Path) -> None:
 
     exercised = _exercised_modules([Path("tests/test_a.py")], [Path("a.py"), Path("b.py")], tmp_path)
     assert {"a", "b"} <= exercised
+
+
+def test_a_failing_smell_quantifier_degrades_the_loop_instead_of_breaking_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The quantifier is optional, so its failure must not take the whole scan down.
+
+    The handler referenced an undefined `logger` and could therefore only raise
+    NameError. Nothing exercised it, which is precisely why the defect survived: an
+    error path that is never taken is indistinguishable from one that works.
+    """
+    import resource_iteration_workbench as workbench
+
+    class _FailingQuantifier:
+        @staticmethod
+        def analyze(paths: object, include_advisory: bool = True) -> object:
+            raise OSError("quantifier exploded")
+
+    monkeypatch.setattr(workbench, "_load_smell_quantifier", lambda: _FailingQuantifier())
+    feedback: list[ImprovementFeedback] = []
+
+    FeedbackAnalyzer._analyze_structural_decay([], feedback, tmp_path)
+
+    assert (feedback, "quantifier exploded" in capsys.readouterr().err) == ([], True)

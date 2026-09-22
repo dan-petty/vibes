@@ -8,15 +8,16 @@ file bounds (CWE-400), POSIX process group containment, and LSP diagnostic inges
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
 import ipaddress
 import os
-from pathlib import Path
 import re
 import signal
 import subprocess
-from typing import Any, Final, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from typing import Any, Final
 
 MAX_ALLOWED_FILE_SIZE_BYTES: Final[int] = 5 * 1024 * 1024  # 5MB boundary guard
 DEFAULT_SUBPROCESS_TIMEOUT_SECONDS: Final[float] = 10.0
@@ -43,7 +44,7 @@ ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network, ...]] = (
 )
 
 
-class HookDecision(str, Enum):
+class HookDecision(StrEnum):
     """Result of evaluating a lifecycle hook event."""
 
     ALLOW = "ALLOW"

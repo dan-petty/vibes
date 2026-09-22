@@ -185,7 +185,7 @@ def test_github_client_sends_authenticated_json_request(monkeypatch: pytest.Monk
         def __exit__(self, *_: object) -> None:
             return None
 
-    def _fake_urlopen(request, timeout=None):  # noqa: ANN001 - urllib signature
+    def _fake_urlopen(request, timeout=None):
         captured["url"] = request.full_url
         captured["method"] = request.method
         captured["auth"] = request.get_header("Authorization")
@@ -204,7 +204,7 @@ def test_github_client_sends_authenticated_json_request(monkeypatch: pytest.Monk
 def test_github_client_bounds_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
     """Error bodies are caller-controlled, so the detail must be length-capped (CWE-209)."""
 
-    def _raise(request, timeout=None):  # noqa: ANN001 - urllib signature
+    def _raise(request, timeout=None):
         raise urllib.error.HTTPError(request.full_url, 422, "Unprocessable", {}, None)
 
     monkeypatch.setattr("urllib.request.urlopen", _raise)

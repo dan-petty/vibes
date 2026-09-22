@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Sequence
+from typing import Final
 
 from doc_core import DocFinding, PathOracle, extract_fenced_blocks
 from sanitization_policy import is_documentable
@@ -42,10 +43,10 @@ _HOST_IPV4_RE: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b
 # exact ranges the sanitization policy mandates. The link-local metadata address is a
 # well-known public constant, not anybody's machine, and every SSRF discussion names it.
 _DOCUMENTABLE_NETWORKS: Final[tuple[ipaddress.IPv4Network, ...]] = (
-    ipaddress.ip_network("192.0.2.0/24"),
-    ipaddress.ip_network("198.51.100.0/24"),
-    ipaddress.ip_network("203.0.113.0/24"),
-    ipaddress.ip_network("169.254.169.254/32"),
+    ipaddress.IPv4Network("192.0.2.0/24"),
+    ipaddress.IPv4Network("198.51.100.0/24"),
+    ipaddress.IPv4Network("203.0.113.0/24"),
+    ipaddress.IPv4Network("169.254.169.254/32"),
 )
 _INTERNAL_HOSTNAME_RE: Final[re.Pattern[str]] = re.compile(r"\b[a-z0-9-]+\.(?:lan|local|internal|home)\b", re.I)
 # A waiver for documents that must quote the thing they warn about. The justification is

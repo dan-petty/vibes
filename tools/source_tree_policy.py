@@ -16,8 +16,9 @@ wrong with it, so the corpus definition lives here and nowhere else.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Final, Iterator, Sequence
+from typing import Final
 
 # Directory names that hold code this repository did not write and does not maintain.
 # Hidden names (`.venv`, `.git`, `.mypy_cache`) are covered by the leading-dot rule.

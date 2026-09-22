@@ -31,7 +31,7 @@ jobs:
           # The manifest is the single source of the dependency list. Hardcoding it here
           # is how the pre-push hook came to be missing pyyaml and markdown-it-py.
           python -m pip install --upgrade pip
-          pip install --editable ".[test]"
+          pip install --editable ".[test,lint]"
 
       - name: Execute Full Test Suite (All Milestones)
         run: |
@@ -44,6 +44,16 @@ jobs:
           python -m pytest tests examples benchmarks -q -o addopts= -p no:cacheprovider \
             --cov=tools --cov=examples --cov=benchmarks \
             --cov-report=term-missing:skip-covered --cov-fail-under=90
+
+      - name: Lint (correctness, modernization, import order)
+        run: |
+          ruff check tools tests examples benchmarks
+
+      - name: Type Check tools/
+        # `tools/` is the source root: its scripts import each other by bare module name.
+        working-directory: tools
+        run: |
+          mypy .
 
       - name: Run AST Invariant Sentinel (All Python Sources)
         run: |

@@ -12,20 +12,17 @@ Validates:
 from __future__ import annotations
 
 import json
-from pathlib import Path
-import subprocess
 import sys
+from pathlib import Path
 
 # Add directory to sys.path for direct imports
 _curr_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_curr_dir))
 
-import pytest
 
 from go_leak_sentinel import (
     SAMPLE_CLEAN_TRACE,
     SAMPLE_LEAKY_TRACE,
-    ConcurrencyAuditReport,
     GoroutineLeakSentinel,
     GoroutineStackParser,
     GoroutineState,

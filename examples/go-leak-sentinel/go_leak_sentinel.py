@@ -9,12 +9,12 @@ workers, and calculates a deterministic concurrency safety score.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 import json
-from pathlib import Path
 import re
 import sys
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 # System runtime functions that are not leaks
@@ -29,7 +29,7 @@ SYSTEM_GOROUTINE_PATTERNS = (
 )
 
 
-class GoroutineState(str, Enum):
+class GoroutineState(StrEnum):
     """Categorized Go runtime execution state."""
 
     RUNNING = "running"
@@ -57,7 +57,7 @@ REMEDIATION_TEMPLATES: dict[GoroutineState, str] = {
 }
 
 
-class LeakSeverity(str, Enum):
+class LeakSeverity(StrEnum):
     """Severity classification of identified concurrency defects."""
 
     CRITICAL = "CRITICAL"

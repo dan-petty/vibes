@@ -1,8 +1,8 @@
 """Unit tests for backlog reconciliation and lifecycle advancement."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 

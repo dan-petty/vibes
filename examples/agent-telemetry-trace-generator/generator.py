@@ -12,11 +12,11 @@ import json
 import secrets
 import sys
 import time
-from dataclasses import asdict, dataclass, field
-from typing import Any, Sequence
 import urllib.error
 import urllib.request
-
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 STATUS_UNSET = 0
 STATUS_OK = 1

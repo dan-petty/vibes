@@ -11,14 +11,15 @@ from __future__ import annotations
 
 import argparse
 import ast
-from dataclasses import asdict, dataclass, field
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
-from typing import Any, Sequence
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class BenchmarkScorecard:
     total_tracks: int
     passed_tracks: int
     overall_score: float
+    duration_seconds: float = 0.0
     results: list[TrackResult] = field(default_factory=list)
 
 
@@ -293,6 +295,7 @@ def run_all_benchmarks() -> BenchmarkScorecard:
         total_tracks=len(results),
         passed_tracks=passed,
         overall_score=round(overall_score, 1),
+        duration_seconds=round(elapsed, 3),
         results=results,
     )
 
@@ -302,7 +305,10 @@ def print_scorecard(scorecard: BenchmarkScorecard) -> None:
     print("=" * 72)
     print("🏆  VIBES MULTI-AGENT BENCHMARK SCORECARD")
     print("=" * 72)
-    print(f"Tracks Evaluated: {scorecard.total_tracks} | Passed: {scorecard.passed_tracks} | Overall Score: {scorecard.overall_score}/100\n")
+    print(
+        f"Tracks Evaluated: {scorecard.total_tracks} | Passed: {scorecard.passed_tracks} "
+        f"| Overall Score: {scorecard.overall_score}/100 | Elapsed: {scorecard.duration_seconds}s\n"
+    )
 
     for res in scorecard.results:
         status_symbol = "✅ PASS" if res.passed else "❌ FAIL"

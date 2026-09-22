@@ -8,17 +8,18 @@ and resource overhead).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from html.parser import HTMLParser
 import ipaddress
 import json
 import logging
-import socket
-from pathlib import Path
 import re
+import socket
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import StrEnum
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import ClassVar
 from urllib.parse import urldefrag, urljoin, urlparse
 
 logger = logging.getLogger(__name__)
@@ -49,13 +50,13 @@ DEFAULT_BROWSER_HEADERS = {
 }
 
 
-class ExtractionTier(str, Enum):
+class ExtractionTier(StrEnum):
     """Execution tier utilized to extract page content."""
     STATIC_HTTP = "static_http"
     HEADLESS_BROWSER = "headless_browser"
 
 
-class PageQuality(str, Enum):
+class PageQuality(StrEnum):
     """Quality classification of extracted page content."""
     HIGH = "high"
     PARTIAL = "partial"
@@ -92,7 +93,9 @@ class CrawledPage:
 class HTMLContentCleaner(HTMLParser):
     """Strips noisy boilerplate and extracts clean markdown from HTML."""
 
-    IGNORE_TAGS = {"script", "style", "nav", "footer", "header", "noscript", "svg"}
+    IGNORE_TAGS: ClassVar[set[str]] = {
+        "script", "style", "nav", "footer", "header", "noscript", "svg",
+    }
 
     def __init__(self) -> None:
         super().__init__()

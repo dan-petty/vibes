@@ -18,15 +18,14 @@ Key Hardening Features:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
 import os
-from pathlib import Path
 import shutil
 import signal
 import subprocess
 import sys
 import time
-from typing import Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 # Bounded output constraints
 MAX_OUTPUT_BYTES = 65536

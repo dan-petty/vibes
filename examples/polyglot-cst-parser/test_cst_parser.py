@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
-import tempfile
+from pathlib import Path
 from typing import Any
+
 import pytest
 
 _app_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_app_dir))
 
 from parser import (
-    BoundaryGuard,
-    FileMetrics,
     LanguageDetector,
     PolyglotCSTParser,
-    PolyglotFileNode,
-    PolyglotSymbol,
     SymbolKind,
     main,
 )
