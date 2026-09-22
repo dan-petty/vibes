@@ -4,7 +4,7 @@
 Every work generator here answers a question about existing work. [Observation 14](../observations/systems/14-defect-shaped-loops-and-the-feature-blind-spot.md)
 named that and roadmap ingestion was the fix; the landscape survey was then added to look
 outward. But the survey's manifest listed four capabilities and all four were analysis
-tools, so every gap it could emit was a linter feature and twelve of sixteen sample
+tools, so every gap it could emit was a linter feature and thirteen of sixteen sample
 applications were invisible to it. **The correction for the blind spot inherited the blind
 spot**, and being citation-backed made it read as rigour.
 
@@ -53,6 +53,15 @@ class Balance:
 
     label: str
     counts: dict[str, int] = field(default_factory=dict)
+    # How the counted units were classified. A ratio computed mostly from the location
+    # fallback is a ratio about the directory layout, which is what went wrong twice.
+    by_source: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def declared_share(self) -> float:
+        """Return the share of counted units that a declaration, not a location, decided."""
+        total = sum(self.by_source.values())
+        return round(self.by_source.get("declaration", 0) / total, 3) if total else 0.0
 
     @property
     def total(self) -> int:
@@ -70,6 +79,7 @@ class Balance:
             "counts": dict(sorted(self.counts.items())),
             "total": self.total,
             "capability_share": self.share("capability"),
+            "declared_share": self.declared_share,
         }
 
 
@@ -108,18 +118,31 @@ def _numstat_row(line: str) -> tuple[int, str] | None:
 
 
 def declared_kinds(manifest_path: Path) -> dict[str, str]:
-    """Map each declared capability's path to its kind, longest path first.
+    """Map every declared capability path to its kind, longest path first.
 
     Sorted by length so the most specific declaration wins: `examples/` alone would
     classify the sentinel and the crawler identically, and they are opposite kinds.
+
+    Reads `paths:` as well as `path:`, because a capability that outgrows one file was
+    otherwise silently handed back to the location fallback. `tools/contract_variables.py`
+    is exactly that: it exists to close a *capability* gap, it lives beside the
+    instruments, and one commit after this metric was repaired it was counted as quality
+    again — the same defect, on the next change, through the declaration instead of
+    through the code.
     """
     document = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-    declared = {
-        str(entry["path"]).rstrip("/"): str(entry.get("kind", "undeclared"))
-        for entry in document.get("capabilities", [])
-        if entry.get("path")
-    }
+    declared: dict[str, str] = {}
+    for entry in document.get("capabilities", []):
+        kind = str(entry.get("kind", "undeclared"))
+        for path in _entry_paths(entry):
+            declared[path] = kind
     return dict(sorted(declared.items(), key=lambda item: -len(item[0])))
+
+
+def _entry_paths(entry: dict[str, Any]) -> list[str]:
+    """Return every path one capability declares, from `path` and from `paths`."""
+    raw = [entry.get("path"), *(entry.get("paths") or [])]
+    return [str(path).rstrip("/") for path in raw if path]
 
 
 def _classify_path(path: str, declared: dict[str, str] | None = None) -> str:
@@ -134,14 +157,25 @@ def _classify_path(path: str, declared: dict[str, str] | None = None) -> str:
     Location remains the fallback, because most files are not a declared capability and
     dropping them would leave the ratio measuring a handful of paths.
     """
+    return classify(path, declared)[0]
+
+
+def classify(path: str, declared: dict[str, str] | None = None) -> tuple[str, str]:
+    """Return the kind and how it was decided: by `declaration` or by `location`.
+
+    The provenance is reported because the fallback is where this measurement goes wrong,
+    twice now, and silently both times. A ratio computed mostly from locations is a ratio
+    about the directory layout, and saying which of the two answered is the difference
+    between a measurement and a guess with a percent sign on it.
+    """
     for prefix, kind in (declared or {}).items():
         if path == prefix or path.startswith(prefix + "/"):
-            return kind
+            return kind, "declaration"
     if path.startswith(CAPABILITY_PREFIXES):
-        return "capability"
+        return "capability", "location"
     if path.startswith(QUALITY_PREFIXES):
-        return "quality"
-    return "other"
+        return "quality", "location"
+    return "other", "location"
 
 
 def investment(window: int, root: Path, manifest_path: Path | None = None) -> Balance:
@@ -160,10 +194,14 @@ def investment(window: int, root: Path, manifest_path: Path | None = None) -> Ba
     """
     declared = declared_kinds(manifest_path) if manifest_path else {}
     tally: dict[str, int] = collections.Counter()
+    sources: dict[str, int] = collections.Counter()
     for added, path in _added_lines(window, root):
-        tally[_classify_path(path, declared)] += added
+        kind, source = classify(path, declared)
+        tally[kind] += added
+        if kind != "other":
+            sources[source] += added
     counted = {kind: total for kind, total in tally.items() if kind != "other"}
-    return Balance(f"investment/{window} (lines added)", counted)
+    return Balance(f"investment/{window} (lines added)", counted, dict(sources))
 
 
 def render(measurements: list[Balance]) -> list[str]:
@@ -174,6 +212,11 @@ def render(measurements: list[Balance]) -> list[str]:
         for kind, count in sorted(measure.counts.items()):
             bar = "█" * round(20 * count / measure.total) if measure.total else ""
             lines.append(f"  {kind:<12} {count:>4}  {measure.share(kind):>5.0%} {bar}")
+        if measure.by_source:
+            lines.append(
+                f"  ↳ {measure.declared_share:.0%} of these lines were classified by declaration, "
+                f"the rest by location"
+            )
     return lines
 
 

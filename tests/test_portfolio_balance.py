@@ -24,6 +24,7 @@ from portfolio_balance import (
     Balance,
     _classify_path,
     _numstat_row,
+    classify,
     declared_kinds,
     investment,
     portfolio,
@@ -177,3 +178,95 @@ def test_investment_reads_the_manifest_when_it_is_given_one(tmp_path: Path) -> N
     without = investment(5, tmp_path)
     with_manifest = investment(5, tmp_path, manifest)
     assert (without.counts, with_manifest.counts) == ({"quality": 1}, {"capability": 1})
+
+
+# --- A capability that outgrows one file ------------------------------------------------
+
+
+def test_a_capability_may_declare_more_than_one_path(tmp_path: Path) -> None:
+    """One file per capability was the assumption, and it expired on the next change."""
+    manifest = tmp_path / "capabilities.yaml"
+    manifest.write_text(
+        yaml.safe_dump({"capabilities": [
+            {"key": "factory", "kind": "capability",
+             "path": "tools/app_factory.py",
+             "paths": ["tools/app_factory.py", "tools/contract_variables.py"]},
+        ]}),
+        encoding="utf-8",
+    )
+    declared = declared_kinds(manifest)
+    assert _classify_path("tools/contract_variables.py", declared) == "capability"
+
+
+def test_the_real_manifest_classifies_the_factorys_second_module_as_a_capability() -> None:
+    """The regression in one line, and the second time this metric has needed one.
+
+    `tools/contract_variables.py` exists to close a capability gap, it lives beside the
+    instruments, and one commit after the classifier was repaired it was counted as
+    quality again — the same defect arriving through the declaration rather than through
+    the code, because the declaration named a file and the capability had grown a module.
+    """
+    declared = declared_kinds(REPO_ROOT / DEFAULT_MANIFEST)
+    assert _classify_path("tools/contract_variables.py", declared) == "capability"
+
+
+def test_every_declared_path_exists() -> None:
+    """A declaration pointing at a moved file silently stops covering it.
+
+    Nothing else would notice: the classifier falls back to location, which is the answer
+    the declaration was added to override, and the ratio goes quietly wrong again.
+    """
+    declared = declared_kinds(REPO_ROOT / DEFAULT_MANIFEST)
+    missing = sorted(path for path in declared if not (REPO_ROOT / path).exists())
+    assert missing == []
+
+
+# --- How the answer was reached ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("tools/app_factory.py", ("capability", "declaration")),
+        ("tools/fuzz_harness.py", ("quality", "location")),
+        ("examples/fastmcp-token-bucket-gateway/gateway.py", ("capability", "location")),
+        ("docs/ROADMAP.md", ("other", "location")),
+    ],
+)
+def test_classification_says_whether_a_declaration_or_a_location_decided(
+    path: str, expected: tuple[str, str]
+) -> None:
+    """The fallback is where this measurement went wrong, twice, and silently both times."""
+    assert classify(path, declared_kinds(REPO_ROOT / DEFAULT_MANIFEST)) == expected
+
+
+def test_the_declared_share_is_reported_beside_the_ratio() -> None:
+    """A ratio computed mostly from locations is a ratio about the directory layout."""
+    measure = Balance("m", {"capability": 10, "quality": 30}, {"declaration": 10, "location": 30})
+    assert measure.declared_share == 0.25
+
+
+def test_a_share_of_no_classifications_is_zero_rather_than_a_crash() -> None:
+    """An empty window is the normal state of a new checkout, not an error."""
+    assert Balance("m").declared_share == 0.0
+
+
+def test_the_investment_measure_records_how_each_line_was_classified(tmp_path: Path) -> None:
+    """Reported from the same walk that produces the counts, so the two cannot disagree."""
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    _git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "app_factory.py").write_text("A = 1\n", encoding="utf-8")
+    (tmp_path / "tools" / "other.py").write_text("B = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "one")
+    manifest = tmp_path / "capabilities.yaml"
+    manifest.write_text(
+        yaml.safe_dump({"capabilities": [
+            {"key": "factory", "kind": "capability", "paths": ["tools/app_factory.py"]},
+        ]}),
+        encoding="utf-8",
+    )
+    measure = investment(5, tmp_path, manifest)
+    assert measure.by_source == {"declaration": 1, "location": 1}
