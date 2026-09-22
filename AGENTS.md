@@ -223,9 +223,12 @@ To ensure the repository thrives with **zero required human manual intervention*
 flowchart LR
     Triage["1. tools/project_tooling.py triage-issue"] --> Dev["2. TDD & Invariant Implementation"]
     Dev --> LocalSentinel["3. Local Sentinel Audit (Complexity <= 10)"]
-    LocalSentinel --> PR["4. Open PR -> pr-sentinel.yml Certifies"]
-    PR --> Merge["5. Merge & recursive-hardening.yml Audits"]
-    Merge --> Harden["6. Codify New Guardrail in AGENTS.md"]
+    LocalSentinel --> Push["4. Commit AND Push"]
+    Push --> Watch["5. Watch the run to a conclusion<br/>gh run watch --exit-status"]
+    Watch -->|"red"| Dev
+    Watch -->|"green"| PR["6. Open PR -> pr-sentinel.yml Certifies"]
+    PR --> Merge["7. Merge & recursive-hardening.yml Audits"]
+    Merge --> Harden["8. Codify New Guardrail in AGENTS.md"]
     Harden --> Triage
 ```
 
@@ -285,6 +288,20 @@ flowchart LR
    - Record which findings were false and why. A review pipeline that never learns its false-positive rate cannot improve, and the next batch carries the same class.
 9. **Autonomous Review Thread Resolution**:
    - If the `pr-sentinel.yml` bot leaves a review comment or request for remediation, the agent must treat the sentinel feedback as an unyielding boundary condition, refactor the code to satisfy the metric, and re-push.
+10. **A Commit Is Not Delivered Until It Is Pushed and Its Checks Are Green**:
+   - **Push after committing.** Work that exists only in a local object store is indistinguishable, from everywhere except that one checkout, from work that was never done. Commit, then `git push`, in the same pass — do not report a task complete with commits sitting unpushed and do not leave the decision for someone else to remember. The exception is an explicit instruction to hold, or a branch policy that requires a pull request, in which case push the branch and open the PR.
+   - **Then watch what you pushed.** Pushing starts the gates; leaving is how a red build becomes somebody else's morning.
+
+     ```bash
+     gh run list --branch "$(git branch --show-current)" --limit 5
+     gh run watch "$(gh run list --branch "$(git branch --show-current)" --limit 1 --json databaseId -q '.[0].databaseId')" --exit-status
+     ```
+
+   - **Finished is not passed.** `status: completed` says the run stopped, not that it succeeded; read `conclusion`, and read it for **every** job. A matrix entry that failed while its siblings passed is a failure, and `--exit-status` is what makes the shell agree.
+   - **Local green does not predict CI green, and the difference is not noise.** CI builds a clean checkout, installs from the manifest rather than from whatever is already importable, and runs a three-version matrix (3.12, 3.13, 3.14) plus gates that cannot run locally at all — `actionlint`, the Mermaid render gate behind `npm install`, and the coverage floor. Interpreter differences are real and reachable: `ast.parse` on a source containing a null byte raised `ValueError` before 3.12 and `SyntaxError` after, which changes whether an `except` clause written against one of them catches anything. Verify a version-sensitive claim against the versions in the matrix rather than against the one that happens to be installed.
+   - **A red check is your defect until you have evidence otherwise**, and the evidence is a reproduction, not a re-run. Re-running a failed job to see whether it passes the second time is how a real flake gets promoted to "known flaky" without anyone finding its cause — see [§10a.6](#10a-measuring-and-believing-what-you-measured) for the 0.3% flake that survived every serial re-run and was a defect all along.
+   - **Never make a check green by weakening the check.** No `--no-verify`, no force-push over a shared branch, no `continue-on-error` added to a job that just failed, no deleting the assertion. If a gate is genuinely wrong, fix the gate in its own commit and say so.
+   - **Code scanning is part of the run.** After the SARIF upload lands, read the alerts the change introduced (`gh api repos/:owner/:repo/code-scanning/alerts --jq '.[] | select(.state=="open") | .rule.id'`) and either fix them or record why they stand. An alert nobody reads is the CI log this repository built SARIF to escape.
 
 ---
 
