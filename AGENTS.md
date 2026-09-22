@@ -320,6 +320,27 @@ flowchart LR
    - **An empty result and a wrong query are not the same answer.** `recursive-hardening.yml` ran `git diff origin/BASE...MERGE_SHA`, and once a pull request is merged its commit is an ancestor of the base — so that three-dot range has the merge commit as its own merge base and yields an empty diff under squash, merge and rebase alike. The verifier read the empty patch as "AGENTS.md was not updated" and opened an issue accusing the author of skipping hardening they had done. On the merge that exposed it, the broken range produced 0 files and `MERGE_SHA^1..MERGE_SHA` produced 12. Any step that generates the input to a judgement must fail when that input is empty, because a merged pull request always changed something.
    - **A CLI path only CI invokes is a path only CI tests.** `sentinel.py` with no arguments scanned `node_modules` and exited non-zero on a vendored package. No workflow and no hook ever invoked it that way — CI passes explicit directories and pre-commit passes filenames — so the one entry point a contributor would reach for first was the one nothing covered. Assert the exit code of every documented invocation, not only the ones automation happens to use.
 
+12. **Use GitHub Issues For Work That Must Outlive the Session**:
+   - This repository already has two places work lives, and an issue is a third that is only worth opening when neither of the first two fits. Choosing wrongly is not neutral: a duplicate makes two records that drift, and a missing one makes work that gets re-derived from scratch every pass.
+
+     | Surface | Holds | Lifetime |
+     |---|---|---|
+     | [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Declared intent: deliverables and capabilities, sized and prioritized | Versioned; ingested by `roadmap_ingest.py` |
+     | `.data/sdlc_backlog.json` | Findings a scan derives mechanically, reconciled every pass | Regenerated; gitignored; nothing survives that a scan cannot re-derive |
+     | **GitHub issues** | Work that is **not derivable from the tree**, must survive this session, and needs a decision or a conversation | Until closed with a reason |
+
+   - **Open an issue when:**
+     - A finding is real but you are not acting on it now, and no scan will rediscover it — a defect you could not reproduce, a withdrawn review item worth revisiting, a judgement deferred pending information. The roadmap's `(blocked: reason)` contract covers *scheduled deliverables*; everything else has nowhere else to go, and [Observation 14](./observations/systems/14-defect-shaped-loops-and-the-feature-blind-spot.md) is what happens to work no instrument can see.
+     - Something turns up mid-task that is genuinely out of scope. File it and link it from the pull request rather than widening the change; scope that grows silently is how a reviewable diff becomes an unreviewable one.
+     - The next step needs a human decision — a policy question, a trade-off, an advisory finding whose response is judgement rather than a fix.
+     - Automation needs somewhere to put a finding. `recursive-hardening.yml` opens one when a merged defect fix skipped its guardrail; that only works because issues are the substrate it writes to.
+   - **Do not open an issue for:** work you are about to do in this session, a roadmap deliverable (`docs/ROADMAP.md` is the single source, and `landscape_survey.py` and `supply_chain_audit.py` emit there idempotently), or anything the workbench re-derives on every scan. A tracker that duplicates a generated backlog goes stale in exactly the way the backlog does not.
+   - **Search before opening.** `gh issue list --search "<terms>" --state all`. Two issues describing one defect are the tracker's version of the divergent corpus definitions in [§10a.3](#10a-measuring-and-believing-what-you-measured): neither can be reconciled against the other.
+   - **Label from the taxonomy the tooling already emits** — `observation`, `pattern`, `artifact`, `bug`, `roadmap`, falling back to `triage-needed`. `autonomous-triage.yml` applies these automatically on `opened` and `edited`, and `project_tooling.py triage-issue` is the same classifier, so a hand-applied label that disagrees with it will be silently corrected on the next edit.
+   - **Close with the evidence, not just the state.** State what changed, where, and how it was verified. An issue closed with no reason is the CI log problem in a slower medium — see [§8.5](#8-autonomous-recursive-development-protocol-project-tooling).
+   - **Link the pull request to the issue** (`Closes #N`) so merging closes it. An issue that outlives its fix is indistinguishable from one nobody worked on.
+   - **An issue opened by `GITHUB_TOKEN` does not trigger `issues` workflows.** GitHub suppresses that recursion deliberately, and it is not visible anywhere in the workflow files. Verified here: `recursive-hardening.yml` created an issue and `autonomous-triage.yml` did not fire; the same issue edited under a user token triggered it immediately and classified it correctly. A workflow that must trigger another needs a personal access token, or it must do the downstream work inline.
+
 ---
 
 ## 9. Autonomous Innovative Self-Improvement & Mandatory Roadmap Evolution
@@ -329,6 +350,7 @@ To foster an autonomous, creative, and continuously self-improving engineering i
 1. **Automatic Roadmap Ingestion for Issues, Struggles, Challenges & Insights**:
    - Whenever encountering **any issue, struggle, friction point, debugging challenge, technical hurdle, cognitive barrier, or insight** during any task or interaction, AI agents **MUST AUTOMATICALLY ADD AN ITEM TO THE ROADMAP (`docs/ROADMAP.md`)** under the appropriate upcoming milestone or future research track.
    - Document the underlying friction and the proposed engineering solution or architectural guardrail to transform real-world engineering hurdles into permanent systemic capabilities.
+   - The roadmap holds the *deliverable*. Where the item is instead a discrete piece of work needing a decision or a conversation, [§8.12](#8-autonomous-recursive-development-protocol-project-tooling) says to open an issue and which surface owns which kind of work.
 2. **Automatic Roadmap Ingestion for Features, Suggestions & Integrations**:
    - Whenever identifying **features, constructive suggestions, workflow automations, refactoring ideas, or third-party integrations** that could improve the codebase, AI agents **MUST AUTOMATICALLY ADD ITEMS TO THE ROADMAP (`docs/ROADMAP.md`)** to design, track, and implement them.
    - Ground every innovative suggestion into measurable deliverables with clear Value vs. Effort positioning and acceptance criteria.
