@@ -35,9 +35,34 @@ feature_catalog:
   adversarial_prompts: Generates adversarial or mutated prompts against a target
   attack_taxonomy: Classifies probes against a published attack taxonomy
   model_providers: Drives more than one model provider out of the box
+  goroutine_leak_detection: Detects goroutines that outlive the work that started them
+  test_harness_integration: Fails an ordinary test run when the defect is present
+  incremental_parsing: Reparses only the edited region rather than the whole file
+  structural_query: Matches code by syntax structure rather than by text
+  javascript_rendering: Renders client-side pages rather than reading raw HTML only
+  politeness_controls: Paces or throttles requests per host
+  strategy_memory: Remembers a per-domain acquisition strategy across runs
+  llm_ready_output: Emits text shaped for direct model consumption
+  syscall_isolation: Confines a workload below the process boundary
+  resource_caps: Bounds memory, CPU or process count
+  egress_control: Denies or restricts outbound network by default
+  benchmark_audit: Audits configuration against a published hardening benchmark
+  repo_packing: Serializes a repository into a single model-ready artifact
+  token_budgeting: Fits its output to a token budget
+  relevance_ranking: Orders or selects content by estimated relevance
+  otel_export: Emits OpenTelemetry spans
+  semantic_conventions: Follows published semantic conventions for AI spans
+  cost_attribution: Attributes token or currency cost to spans
+  waterfall_rendering: Renders a trace as a readable waterfall
 
+# `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
+# the self-hardening audit reject a real guardrail, and the same trap applies here: a
+# portfolio measurement that guesses would report whatever its word list happened to catch.
+#   capability - something a reader runs to build or operate an application
+#   quality    - something that judges work that already exists
 capabilities:
   - key: complexity-gating
+    kind: quality
     title: Mechanical complexity and nesting invariant gate
     short: Complexity gate
     path: examples/ast-invariant-sentinel/sentinel.py
@@ -74,6 +99,7 @@ capabilities:
           config_presets: "Enable/disable by message family in pylintrc"
 
   - key: smell-quantification
+    kind: quality
     title: Quantified structural decay across a repository
     short: Smell quantifier
     path: examples/code-smell-quantifier/smell_quantifier.py
@@ -109,6 +135,7 @@ capabilities:
           sarif_output: "Reporters include sarif"
 
   - key: documentation-integrity
+    kind: quality
     title: Executable documentation quality and link integrity gate
     short: Docs validator
     path: tools/docs_validator.py
@@ -137,6 +164,7 @@ capabilities:
           config_presets: "Styles are installable packages selected in .vale.ini"
 
   - key: prompt-adversarial-testing
+    kind: quality
     title: Adversarial prompt mutation against agent instructions
     short: Prompt fuzzer
     path: examples/prompt-mutation-fuzzer/fuzzer.py
@@ -153,3 +181,127 @@ capabilities:
           adversarial_prompts: "Red-team plugins generate adversarial test cases"
           model_providers: "Declarative provider list covering many hosted and local models"
           baseline_diff: "Evaluations compare prompt or model variants side by side"
+
+  # --- Application-shaped capabilities -------------------------------------------------
+  #
+  # Added because the survey's world was four analysis tools, so every gap it could emit
+  # was a linter feature and twelve of sixteen sample applications were invisible to it.
+  # An instrument that chooses the repository's work cannot see only the part of the
+  # repository it was first pointed at.
+
+  - key: go-concurrency-leak-detection
+    kind: quality
+    title: Go concurrency leak detection and runtime trace analysis
+    short: Go leak sentinel
+    path: examples/go-leak-sentinel/
+    ours:
+      - goroutine_leak_detection
+    alternatives:
+      - repo: uber-go/goleak
+        has:
+          goroutine_leak_detection: "VerifyNone and VerifyTestMain fail when goroutines outlive a test"
+          test_harness_integration: "Drops into an existing go test run with no separate tooling"
+      - repo: fortytw2/leaktest
+        has:
+          goroutine_leak_detection: "leaktest.Check compares goroutine snapshots taken around a test"
+          test_harness_integration: "Called from inside a standard Go test function"
+
+  - key: polyglot-structural-parsing
+    kind: capability
+    title: Multi-language structural parsing for code analysis
+    short: CST parser
+    path: examples/polyglot-cst-parser/
+    ours:
+      - multi_language
+      - cyclomatic_complexity
+    alternatives:
+      - repo: tree-sitter/tree-sitter
+        has:
+          multi_language: "Separate grammars per language, from one parsing engine"
+          incremental_parsing: "Reparses an edited buffer without reparsing the file"
+          structural_query: "S-expression query language matches syntax nodes by pattern"
+      - repo: ast-grep/ast-grep
+        has:
+          multi_language: "--lang selects among many supported languages"
+          structural_query: "Patterns are written as code and matched structurally, not textually"
+
+  - key: agent-web-acquisition
+    kind: capability
+    title: Adaptive web acquisition for agent context
+    short: Web crawler
+    path: examples/adaptive-web-crawler/
+    ours:
+      - javascript_rendering
+      - politeness_controls
+      - strategy_memory
+    alternatives:
+      - repo: unclecode/crawl4ai
+        has:
+          javascript_rendering: "Drives a headless browser so client-rendered pages resolve"
+          llm_ready_output: "Emits Markdown shaped for model consumption"
+      - repo: firecrawl/firecrawl
+        has:
+          javascript_rendering: "Renders pages before extraction"
+          llm_ready_output: "Scrape and crawl endpoints return Markdown for LLMs"
+      - repo: scrapy/scrapy
+        has:
+          politeness_controls: "DOWNLOAD_DELAY and AutoThrottle pace requests per domain"
+
+  - key: untrusted-code-sandboxing
+    kind: capability
+    title: Ephemeral sandboxing of agent-generated code
+    short: Sandbox
+    path: examples/ephemeral-container-sandbox/
+    ours:
+      - resource_caps
+      - egress_control
+      - benchmark_audit
+    alternatives:
+      - repo: google/gvisor
+        has:
+          syscall_isolation: "Intercepts application system calls in a user-space kernel"
+          resource_caps: "Runs under the container runtime's cgroup limits"
+      - repo: firecracker-microvm/firecracker
+        has:
+          syscall_isolation: "Each workload runs in its own microVM with a minimal device model"
+          resource_caps: "Per-microVM memory and vCPU sizing"
+      - repo: e2b-dev/E2B
+        has:
+          syscall_isolation: "Runs AI-generated code in an isolated sandbox rather than the host"
+
+  - key: repository-context-packing
+    kind: capability
+    title: Packing repository context into a model budget
+    short: Context packer
+    path: examples/binary-search-context-packer/
+    ours:
+      - token_budgeting
+    alternatives:
+      - repo: yamadashy/repomix
+        has:
+          repo_packing: "Packs an entire repository into a single model-ready file"
+          token_budgeting: "Reports a token count per file and for the whole pack"
+      - repo: Aider-AI/aider
+        has:
+          repo_packing: "Builds a repository map of definitions rather than whole files"
+          token_budgeting: "Sizes the map to a configurable token budget"
+          relevance_ranking: "Ranks the map with a graph algorithm over symbol references"
+
+  - key: agent-trace-observability
+    kind: capability
+    title: Distributed tracing and cost attribution for agent runs
+    short: Trace generator
+    path: examples/agent-telemetry-trace-generator/
+    ours:
+      - otel_export
+      - cost_attribution
+      - waterfall_rendering
+    alternatives:
+      - repo: traceloop/openllmetry
+        has:
+          otel_export: "Emits OpenTelemetry spans for model and vector-store calls"
+          semantic_conventions: "Follows published conventions for GenAI span attributes"
+      - repo: Arize-ai/openinference
+        has:
+          otel_export: "OpenTelemetry instrumentation for AI frameworks"
+          semantic_conventions: "Publishes the semantic conventions it instruments against"
