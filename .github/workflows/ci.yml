@@ -103,6 +103,13 @@ jobs:
         run: |
           python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmarks
 
+      - name: Verify the Semantic Convention Snapshot
+        run: |
+          # Offline by design. Refreshing needs upstream and a gate must not, so this
+          # checks the committed snapshot's internal agreement instead: every attribute a
+          # span requires is one the registry defines or one declared external.
+          python tools/semconv_snapshot.py verify
+
       - name: Replay the Fuzzing Regression Corpus
         run: |
           # Every input here once broke an instrument. Replay is deterministic and only

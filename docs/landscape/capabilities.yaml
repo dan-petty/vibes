@@ -304,10 +304,14 @@ capabilities:
     title: Distributed tracing and cost attribution for agent runs
     short: Trace generator
     path: examples/agent-telemetry-trace-generator/
+    paths:
+      - examples/agent-telemetry-trace-generator/
+      - tools/semconv_snapshot.py
     ours:
       - otel_export
       - cost_attribution
       - waterfall_rendering
+      - semantic_conventions
     alternatives:
       - repo: traceloop/openllmetry
         has:

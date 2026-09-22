@@ -1,0 +1,853 @@
+{
+  "attributes": {
+    "gen_ai.agent.description": {
+      "brief": "Free-form description of the GenAI agent provided by the application.",
+      "type": "string"
+    },
+    "gen_ai.agent.id": {
+      "brief": "The unique and stable identifier of the GenAI hosted agent resource.",
+      "type": "string"
+    },
+    "gen_ai.agent.name": {
+      "brief": "Human-readable name of the GenAI agent provided by the application.",
+      "type": "string"
+    },
+    "gen_ai.agent.version": {
+      "brief": "The version of the GenAI agent.",
+      "type": "string"
+    },
+    "gen_ai.conversation.compacted": {
+      "brief": "Indicates whether the effective conversation context used for this operation is a compacted view of a prior conversation.",
+      "type": "boolean"
+    },
+    "gen_ai.conversation.id": {
+      "brief": "The unique identifier for a conversation (session, thread), used to store and correlate messages within this conversation.",
+      "type": "string"
+    },
+    "gen_ai.data_source.id": {
+      "brief": "The data source identifier.",
+      "type": "string"
+    },
+    "gen_ai.embeddings.dimension.count": {
+      "brief": "The number of dimensions the resulting output embeddings should have.",
+      "type": "int"
+    },
+    "gen_ai.evaluation.explanation": {
+      "brief": "A free-form explanation for the assigned score provided by the evaluator.",
+      "type": "string"
+    },
+    "gen_ai.evaluation.name": {
+      "brief": "The name of the evaluation metric used for the GenAI response.",
+      "type": "string"
+    },
+    "gen_ai.evaluation.score.label": {
+      "brief": "Human readable label for evaluation.",
+      "type": "string"
+    },
+    "gen_ai.evaluation.score.value": {
+      "brief": "The evaluation score returned by the evaluator.",
+      "type": "double"
+    },
+    "gen_ai.input.messages": {
+      "brief": "The chat history provided to the model as an input.",
+      "type": "any"
+    },
+    "gen_ai.memory.query.text": {
+      "brief": "The search query used to retrieve memories.",
+      "type": "string"
+    },
+    "gen_ai.memory.record.count": {
+      "brief": "The number of memory records relevant to the operation.",
+      "type": "int"
+    },
+    "gen_ai.memory.record.id": {
+      "brief": "The unique identifier of the memory record.",
+      "type": "string"
+    },
+    "gen_ai.memory.records": {
+      "brief": "The memory records stored or retrieved in a memory operation.",
+      "type": "any"
+    },
+    "gen_ai.memory.store.id": {
+      "brief": "The unique identifier of the memory store.",
+      "type": "string"
+    },
+    "gen_ai.operation.name": {
+      "brief": "The name of the operation being performed.",
+      "type": "enum",
+      "values": [
+        "chat",
+        "create_agent",
+        "create_memory",
+        "create_memory_store",
+        "delete_memory",
+        "delete_memory_store",
+        "embeddings",
+        "execute_tool",
+        "fetch_response",
+        "generate_content",
+        "invoke_agent",
+        "invoke_workflow",
+        "plan",
+        "retrieval",
+        "search_memory",
+        "text_completion",
+        "update_memory",
+        "upsert_memory"
+      ]
+    },
+    "gen_ai.output.messages": {
+      "brief": "Messages returned by the model where each message represents a specific model response (choice, candidate).",
+      "type": "any"
+    },
+    "gen_ai.output.type": {
+      "brief": "Represents the content type requested by the client.",
+      "type": "enum",
+      "values": [
+        "image",
+        "json",
+        "speech",
+        "text"
+      ]
+    },
+    "gen_ai.prompt.name": {
+      "brief": "The name of the prompt that uniquely identifies it.",
+      "type": "string"
+    },
+    "gen_ai.prompt.variable": {
+      "brief": "The variables supplied to the prompt template, the `<key>` being the variable name, the value being the variable value.",
+      "type": "template[string]"
+    },
+    "gen_ai.prompt.version": {
+      "brief": "The version of the prompt template used.",
+      "type": "string"
+    },
+    "gen_ai.provider.name": {
+      "brief": "The Generative AI provider as identified by the client or server instrumentation.",
+      "type": "enum",
+      "values": [
+        "anthropic",
+        "aws.bedrock",
+        "azure.ai.inference",
+        "azure.ai.openai",
+        "cohere",
+        "deepseek",
+        "gcp.gemini",
+        "gcp.gen_ai",
+        "gcp.vertex_ai",
+        "groq",
+        "ibm.watsonx.ai",
+        "mistral_ai",
+        "moonshot_ai",
+        "openai",
+        "perplexity",
+        "x_ai"
+      ]
+    },
+    "gen_ai.request.choice.count": {
+      "brief": "The target number of candidate completions to return.",
+      "type": "int"
+    },
+    "gen_ai.request.encoding_formats": {
+      "brief": "The encoding formats requested in an embeddings operation, if specified.",
+      "type": "string[]"
+    },
+    "gen_ai.request.frequency_penalty": {
+      "brief": "The frequency penalty setting for the GenAI request.",
+      "type": "double"
+    },
+    "gen_ai.request.max_tokens": {
+      "brief": "The maximum number of tokens the model generates for a request.",
+      "type": "int"
+    },
+    "gen_ai.request.model": {
+      "brief": "The name of the GenAI model a request is being made to.",
+      "type": "string"
+    },
+    "gen_ai.request.presence_penalty": {
+      "brief": "The presence penalty setting for the GenAI request.",
+      "type": "double"
+    },
+    "gen_ai.request.previous_response.id": {
+      "brief": "The unique identifier of a previous response or interaction used to provide context for the current operation.",
+      "type": "string"
+    },
+    "gen_ai.request.reasoning.level": {
+      "brief": "The reasoning or thinking effort level requested for a GenAI model.",
+      "type": "string"
+    },
+    "gen_ai.request.seed": {
+      "brief": "Requests with same seed value more likely to return same result.",
+      "type": "int"
+    },
+    "gen_ai.request.stop_sequences": {
+      "brief": "List of sequences that the model will use to stop generating further tokens.",
+      "type": "string[]"
+    },
+    "gen_ai.request.stream": {
+      "brief": "Indicates whether the GenAI request was made in streaming mode.",
+      "type": "boolean"
+    },
+    "gen_ai.request.stream_cursor": {
+      "brief": "The cursor identifying the last streamed event already received, used to resume a streamed response from that position.",
+      "type": "string"
+    },
+    "gen_ai.request.temperature": {
+      "brief": "The temperature setting for the GenAI request.",
+      "type": "double"
+    },
+    "gen_ai.request.top_k": {
+      "brief": "The top-K sampling setting for the GenAI request: restricts token generation at each step to the K most likely next tokens.",
+      "type": "int"
+    },
+    "gen_ai.request.top_p": {
+      "brief": "The top_p sampling setting for the GenAI request.",
+      "type": "double"
+    },
+    "gen_ai.response.finish_reasons": {
+      "brief": "Array of reasons the model stopped generating tokens, corresponding to each generation received.",
+      "type": "string[]"
+    },
+    "gen_ai.response.id": {
+      "brief": "The unique identifier for the completion.",
+      "type": "string"
+    },
+    "gen_ai.response.model": {
+      "brief": "The name of the model that generated the response.",
+      "type": "string"
+    },
+    "gen_ai.response.status": {
+      "brief": "The lifecycle status of a generated response, as reported by the provider when the response is fetched or polled.",
+      "type": "enum",
+      "values": [
+        "cancelled",
+        "completed",
+        "failed",
+        "in_progress",
+        "incomplete",
+        "queued"
+      ]
+    },
+    "gen_ai.response.time_to_first_chunk": {
+      "brief": "Time to first chunk in a streaming response, measured from request issuance, in seconds. The value is measured from when the client issues the generation request to when the first chunk is received in the response stream.",
+      "type": "double"
+    },
+    "gen_ai.retrieval.documents": {
+      "brief": "The documents retrieved.",
+      "type": "any"
+    },
+    "gen_ai.retrieval.query.text": {
+      "brief": "The query text used for retrieval.",
+      "type": "string"
+    },
+    "gen_ai.retrieval.top_k": {
+      "brief": "The maximum number of documents the retriever was asked to return for the query (also known as `k`, `limit`, or `max_num_results`).",
+      "type": "int"
+    },
+    "gen_ai.system_instructions": {
+      "brief": "The system message or instructions provided to the GenAI model separately from the chat history.",
+      "type": "any"
+    },
+    "gen_ai.token.modality": {
+      "brief": "The modality of the tokens being counted.",
+      "type": "enum",
+      "values": [
+        "audio",
+        "image",
+        "text",
+        "unknown"
+      ]
+    },
+    "gen_ai.tool.call.arguments": {
+      "brief": "Parameters passed to the tool call.",
+      "type": "any"
+    },
+    "gen_ai.tool.call.id": {
+      "brief": "The tool call identifier.",
+      "type": "string"
+    },
+    "gen_ai.tool.call.result": {
+      "brief": "The result returned by the tool call (if any and if execution was successful).",
+      "type": "any"
+    },
+    "gen_ai.tool.definitions": {
+      "brief": "The list of tool definitions available to the GenAI agent or model.",
+      "type": "any"
+    },
+    "gen_ai.tool.description": {
+      "brief": "The tool description.",
+      "type": "string"
+    },
+    "gen_ai.tool.name": {
+      "brief": "Name of the tool utilized by the agent.",
+      "type": "string"
+    },
+    "gen_ai.tool.type": {
+      "brief": "Type of the tool utilized by the agent",
+      "type": "string"
+    },
+    "gen_ai.usage.audio.cache_read.input_tokens": {
+      "brief": "The number of audio input tokens served from a provider-managed cache.",
+      "type": "int"
+    },
+    "gen_ai.usage.audio.input_tokens": {
+      "brief": "The number of audio input tokens.",
+      "type": "int"
+    },
+    "gen_ai.usage.audio.output_tokens": {
+      "brief": "The number of audio output tokens.",
+      "type": "int"
+    },
+    "gen_ai.usage.cache_read.input_tokens": {
+      "brief": "The number of input tokens served from a provider-managed cache.",
+      "type": "int"
+    },
+    "gen_ai.usage.cache_write.input_tokens": {
+      "brief": "The number of input tokens written to a provider-managed cache.",
+      "type": "int"
+    },
+    "gen_ai.usage.image.cache_read.input_tokens": {
+      "brief": "The number of image input tokens served from a provider-managed cache.",
+      "type": "int"
+    },
+    "gen_ai.usage.image.input_tokens": {
+      "brief": "The number of image input tokens.",
+      "type": "int"
+    },
+    "gen_ai.usage.image.output_tokens": {
+      "brief": "The number of image output tokens.",
+      "type": "int"
+    },
+    "gen_ai.usage.input_tokens": {
+      "brief": "The number of tokens used in the GenAI input (prompt).",
+      "type": "int"
+    },
+    "gen_ai.usage.output_tokens": {
+      "brief": "The number of tokens used in the GenAI response (completion).",
+      "type": "int"
+    },
+    "gen_ai.usage.reasoning.output_tokens": {
+      "brief": "The number of output tokens used for reasoning (e.g. chain-of-thought, extended thinking).",
+      "type": "int"
+    },
+    "gen_ai.usage.text.cache_read.input_tokens": {
+      "brief": "The number of text input tokens served from a provider-managed cache.",
+      "type": "int"
+    },
+    "gen_ai.usage.text.input_tokens": {
+      "brief": "The number of text input tokens.",
+      "type": "int"
+    },
+    "gen_ai.usage.text.output_tokens": {
+      "brief": "The number of text output tokens.",
+      "type": "int"
+    },
+    "gen_ai.workflow.name": {
+      "brief": "Human-readable name of the GenAI workflow provided by the application.",
+      "type": "string"
+    }
+  },
+  "deprecated": {
+    "gen_ai.agent.description": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.agent.id": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.agent.name": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.agent.version": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.completion": {
+      "replacement": null,
+      "status": "removed"
+    },
+    "gen_ai.conversation.id": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.data_source.id": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.embeddings.dimension.count": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.evaluation.explanation": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.evaluation.name": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.evaluation.score.label": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.evaluation.score.value": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.input.messages": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.openai.request.response_format": {
+      "replacement": "gen_ai.output.type",
+      "status": "renamed"
+    },
+    "gen_ai.openai.request.seed": {
+      "replacement": "gen_ai.request.seed",
+      "status": "renamed"
+    },
+    "gen_ai.openai.request.service_tier": {
+      "replacement": "openai.request.service_tier",
+      "status": "renamed"
+    },
+    "gen_ai.openai.response.service_tier": {
+      "replacement": "openai.response.service_tier",
+      "status": "renamed"
+    },
+    "gen_ai.openai.response.system_fingerprint": {
+      "replacement": "openai.response.system_fingerprint",
+      "status": "renamed"
+    },
+    "gen_ai.operation.name": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.output.messages": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.output.type": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.prompt": {
+      "replacement": null,
+      "status": "removed"
+    },
+    "gen_ai.prompt.name": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.provider.name": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.choice.count": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.encoding_formats": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.frequency_penalty": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.max_tokens": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.model": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.presence_penalty": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.seed": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.stop_sequences": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.stream": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.temperature": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.top_k": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.request.top_p": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.response.finish_reasons": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.response.id": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.response.model": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.response.time_to_first_chunk": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.retrieval.documents": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.retrieval.query.text": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.system": {
+      "replacement": "gen_ai.provider.name",
+      "status": "renamed"
+    },
+    "gen_ai.system_instructions": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.token.type": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.call.arguments": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.call.id": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.call.result": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.definitions": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.description": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.name": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.tool.type": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.usage.cache_creation.input_tokens": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.usage.cache_read.input_tokens": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.usage.completion_tokens": {
+      "replacement": "gen_ai.usage.output_tokens",
+      "status": "renamed"
+    },
+    "gen_ai.usage.input_tokens": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.usage.output_tokens": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.usage.prompt_tokens": {
+      "replacement": "gen_ai.usage.input_tokens",
+      "status": "renamed"
+    },
+    "gen_ai.usage.reasoning.output_tokens": {
+      "replacement": null,
+      "status": "moved"
+    },
+    "gen_ai.workflow.name": {
+      "replacement": null,
+      "status": "moved"
+    }
+  },
+  "external_attributes": [
+    "error.type",
+    "server.address",
+    "server.port"
+  ],
+  "source": {
+    "fetched": "2026-09-22",
+    "files": [
+      {
+        "commit": "8ffdf568e1b4391a99adb081db16e8102e36918e",
+        "path": "model/gen-ai/registry.yaml",
+        "repo": "open-telemetry/semantic-conventions-genai"
+      },
+      {
+        "commit": "8ffdf568e1b4391a99adb081db16e8102e36918e",
+        "path": "model/gen-ai/spans.yaml",
+        "repo": "open-telemetry/semantic-conventions-genai"
+      },
+      {
+        "commit": "v1.44.0",
+        "path": "model/gen-ai/deprecated/registry-deprecated.yaml",
+        "repo": "open-telemetry/semantic-conventions"
+      }
+    ]
+  },
+  "spans": {
+    "gen_ai.create_agent.client": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.agent.description": "conditionally_required",
+        "gen_ai.agent.id": "conditionally_required",
+        "gen_ai.agent.name": "conditionally_required",
+        "gen_ai.agent.version": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.provider.name": "required",
+        "gen_ai.request.model": "conditionally_required",
+        "gen_ai.system_instructions": "opt_in",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "create_agent {gen_ai.agent.name}"
+    },
+    "gen_ai.embeddings.client": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.embeddings.dimension.count": "recommended",
+        "gen_ai.operation.name": "required",
+        "gen_ai.provider.name": "required",
+        "gen_ai.request.encoding_formats": "recommended",
+        "gen_ai.request.model": "conditionally_required",
+        "gen_ai.response.model": "recommended",
+        "gen_ai.usage.input_tokens": "recommended",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "{gen_ai.operation.name} {gen_ai.request.model}"
+    },
+    "gen_ai.execute_tool.internal": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.agent.name": "conditionally_required",
+        "gen_ai.conversation.id": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.tool.call.arguments": "opt_in",
+        "gen_ai.tool.call.id": "recommended",
+        "gen_ai.tool.call.result": "opt_in",
+        "gen_ai.tool.description": "recommended",
+        "gen_ai.tool.name": "required",
+        "gen_ai.tool.type": "recommended"
+      },
+      "kind": "internal",
+      "name_template": "execute_tool {gen_ai.tool.name}"
+    },
+    "gen_ai.fetch_response.client": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.output.messages": "opt_in",
+        "gen_ai.provider.name": "required",
+        "gen_ai.request.stream_cursor": "conditionally_required",
+        "gen_ai.response.finish_reasons": "recommended",
+        "gen_ai.response.id": "required",
+        "gen_ai.response.model": "recommended",
+        "gen_ai.response.status": "recommended",
+        "gen_ai.system_instructions": "opt_in",
+        "gen_ai.tool.definitions": "opt_in",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "{gen_ai.operation.name}"
+    },
+    "gen_ai.inference.client": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.conversation.compacted": "recommended",
+        "gen_ai.conversation.id": "conditionally_required",
+        "gen_ai.input.messages": "opt_in",
+        "gen_ai.operation.name": "required",
+        "gen_ai.output.messages": "opt_in",
+        "gen_ai.output.type": "conditionally_required",
+        "gen_ai.prompt.name": "conditionally_required",
+        "gen_ai.prompt.variable": "opt_in",
+        "gen_ai.prompt.version": "conditionally_required",
+        "gen_ai.provider.name": "required",
+        "gen_ai.request.choice.count": "conditionally_required",
+        "gen_ai.request.frequency_penalty": "recommended",
+        "gen_ai.request.max_tokens": "recommended",
+        "gen_ai.request.model": "conditionally_required",
+        "gen_ai.request.presence_penalty": "recommended",
+        "gen_ai.request.previous_response.id": "recommended",
+        "gen_ai.request.reasoning.level": "recommended",
+        "gen_ai.request.seed": "conditionally_required",
+        "gen_ai.request.stop_sequences": "recommended",
+        "gen_ai.request.stream": "conditionally_required",
+        "gen_ai.request.temperature": "recommended",
+        "gen_ai.request.top_k": "conditionally_required",
+        "gen_ai.request.top_p": "recommended",
+        "gen_ai.response.finish_reasons": "recommended",
+        "gen_ai.response.id": "recommended",
+        "gen_ai.response.model": "recommended",
+        "gen_ai.response.time_to_first_chunk": "recommended",
+        "gen_ai.system_instructions": "opt_in",
+        "gen_ai.tool.definitions": "opt_in",
+        "gen_ai.usage.audio.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.audio.input_tokens": "recommended",
+        "gen_ai.usage.audio.output_tokens": "recommended",
+        "gen_ai.usage.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.cache_write.input_tokens": "recommended",
+        "gen_ai.usage.image.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.image.input_tokens": "recommended",
+        "gen_ai.usage.image.output_tokens": "recommended",
+        "gen_ai.usage.input_tokens": "recommended",
+        "gen_ai.usage.output_tokens": "recommended",
+        "gen_ai.usage.reasoning.output_tokens": "recommended",
+        "gen_ai.usage.text.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.text.input_tokens": "recommended",
+        "gen_ai.usage.text.output_tokens": "recommended",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "{gen_ai.operation.name} {gen_ai.request.model}"
+    },
+    "gen_ai.invoke_agent.client": {
+      "attributes": {
+        "gen_ai.agent.description": "conditionally_required",
+        "gen_ai.agent.id": "conditionally_required",
+        "gen_ai.agent.name": "recommended",
+        "gen_ai.agent.version": "conditionally_required",
+        "gen_ai.conversation.id": "conditionally_required",
+        "gen_ai.data_source.id": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.output.type": "conditionally_required",
+        "gen_ai.provider.name": "required",
+        "gen_ai.request.choice.count": "conditionally_required",
+        "gen_ai.request.frequency_penalty": "recommended",
+        "gen_ai.request.max_tokens": "recommended",
+        "gen_ai.request.model": "recommended",
+        "gen_ai.request.presence_penalty": "recommended",
+        "gen_ai.request.previous_response.id": "recommended",
+        "gen_ai.request.seed": "conditionally_required",
+        "gen_ai.request.stop_sequences": "recommended",
+        "gen_ai.request.temperature": "recommended",
+        "gen_ai.request.top_p": "recommended",
+        "gen_ai.response.finish_reasons": "recommended",
+        "gen_ai.usage.audio.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.audio.input_tokens": "recommended",
+        "gen_ai.usage.audio.output_tokens": "recommended",
+        "gen_ai.usage.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.cache_write.input_tokens": "recommended",
+        "gen_ai.usage.image.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.image.input_tokens": "recommended",
+        "gen_ai.usage.image.output_tokens": "recommended",
+        "gen_ai.usage.text.cache_read.input_tokens": "recommended",
+        "gen_ai.usage.text.input_tokens": "recommended",
+        "gen_ai.usage.text.output_tokens": "recommended",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "invoke_agent {gen_ai.agent.name}"
+    },
+    "gen_ai.invoke_agent.internal": {
+      "attributes": {
+        "gen_ai.agent.description": "conditionally_required",
+        "gen_ai.agent.name": "recommended",
+        "gen_ai.conversation.id": "conditionally_required",
+        "gen_ai.data_source.id": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.output.type": "conditionally_required",
+        "gen_ai.request.choice.count": "conditionally_required",
+        "gen_ai.request.frequency_penalty": "recommended",
+        "gen_ai.request.max_tokens": "recommended",
+        "gen_ai.request.model": "recommended",
+        "gen_ai.request.presence_penalty": "recommended",
+        "gen_ai.request.seed": "conditionally_required",
+        "gen_ai.request.stop_sequences": "recommended",
+        "gen_ai.request.temperature": "recommended",
+        "gen_ai.request.top_p": "recommended",
+        "gen_ai.response.finish_reasons": "recommended"
+      },
+      "kind": "internal",
+      "name_template": "invoke_agent {gen_ai.agent.name}"
+    },
+    "gen_ai.invoke_workflow.internal": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.conversation.id": "conditionally_required",
+        "gen_ai.input.messages": "opt_in",
+        "gen_ai.operation.name": "required",
+        "gen_ai.output.messages": "opt_in",
+        "gen_ai.workflow.name": "conditionally_required"
+      },
+      "kind": "internal",
+      "name_template": "invoke_workflow {gen_ai.workflow.name}"
+    },
+    "gen_ai.memory.client": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.memory.query.text": "opt_in",
+        "gen_ai.memory.record.count": "recommended",
+        "gen_ai.memory.record.id": "conditionally_required",
+        "gen_ai.memory.records": "opt_in",
+        "gen_ai.memory.store.id": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.provider.name": "conditionally_required",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "{gen_ai.operation.name}"
+    },
+    "gen_ai.plan.internal": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.agent.name": "conditionally_required",
+        "gen_ai.operation.name": "required"
+      },
+      "kind": "internal",
+      "name_template": "plan {gen_ai.agent.name}"
+    },
+    "gen_ai.retrieval.client": {
+      "attributes": {
+        "error.type": "conditionally_required",
+        "gen_ai.data_source.id": "conditionally_required",
+        "gen_ai.operation.name": "required",
+        "gen_ai.provider.name": "conditionally_required",
+        "gen_ai.request.model": "conditionally_required",
+        "gen_ai.retrieval.documents": "opt_in",
+        "gen_ai.retrieval.query.text": "opt_in",
+        "gen_ai.retrieval.top_k": "recommended",
+        "server.address": "recommended",
+        "server.port": "conditionally_required"
+      },
+      "kind": "client",
+      "name_template": "{gen_ai.operation.name} {gen_ai.data_source.id}"
+    }
+  }
+}
