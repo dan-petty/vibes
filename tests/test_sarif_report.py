@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 from sarif_report import (
+    ADAPTERS,
     DEFAULT_SCHEMA_PATH,
     SARIF_VERSION,
     Result,
@@ -25,6 +26,7 @@ from sarif_report import (
     build_log,
     collect_runs,
     docs_run,
+    fuzz_run,
     sentinel_run,
     smell_run,
     supply_run,
@@ -208,6 +210,67 @@ def test_every_adapter_is_represented_even_when_it_finds_nothing(
 ) -> None:
     """Four oracles run, so four runs are published, whatever they found."""
     assert len(build_log(defective_runs, defective_root)["runs"]) == 4
+
+
+# The four adapters above scan a tree, so a deliberately broken tree exercises all of them
+# at once. The fuzz adapter does not: its oracle is the committed regression corpus, which
+# is clean by design, and keeping an entry in it that still fails would mean keeping an
+# instrument that is still broken. It is therefore covered separately, and this tripwire
+# fails if a sixth adapter is registered without anyone deciding which group it belongs to.
+TREE_SCANNING_ADAPTERS: tuple[str, ...] = ("docs", "sentinel", "smells", "supply")
+
+
+def test_every_registered_adapter_is_exercised_by_a_test() -> None:
+    """An adapter reaching code scanning untested is a mapping nobody has ever seen run."""
+    assert sorted(ADAPTERS) == sorted([*TREE_SCANNING_ADAPTERS, "fuzz"])
+
+
+def test_the_fuzz_adapter_reports_even_when_the_corpus_is_clean(tmp_path: Path) -> None:
+    """A tool that stops appearing leaves every alert it ever raised open forever."""
+    run = fuzz_run([], tmp_path, corpus_dir=tmp_path / "empty-corpus")
+    assert (run.tool_name, run.results) == ("vibes-instrument-fuzzer", [])
+
+
+def test_the_fuzz_adapter_locates_a_finding_at_the_instrument_not_the_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A corpus entry is working as intended; the file that needs editing is the parser."""
+    import fuzz_harness
+
+    failure = fuzz_harness.Failure(
+        target="docs_fix",
+        prop="non_idempotent",
+        corpus="markdown",
+        seed=0,
+        origin="corpus:abc.case",
+        detail="repair did not converge",
+        digest="abc",
+    )
+    monkeypatch.setattr(
+        fuzz_harness,
+        "replay",
+        lambda targets, workspace, plan: fuzz_harness.Campaign(1, [failure]),
+    )
+    run = fuzz_run([], tmp_path, corpus_dir=tmp_path)
+    result = run.results[0]
+    assert (result.rule_id, result.level, result.file_path.endswith("docs_validator.py")) == (
+        "vibes/fuzz/non_idempotent",
+        "error",
+        True,
+    )
+
+
+def test_the_fuzz_adapter_maps_a_timing_finding_below_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A time budget measures the host; an alert that gates on it blocks the slowest runner."""
+    import fuzz_harness
+
+    slow = fuzz_harness.Failure("docs", "slow", "markdown", 0, "corpus:abc.case", "took 12s", "abc")
+    monkeypatch.setattr(
+        fuzz_harness, "replay", lambda targets, workspace, plan: fuzz_harness.Campaign(1, [slow])
+    )
+    assert fuzz_run([], tmp_path, corpus_dir=tmp_path).results[0].level == "warning"
 
 
 def test_one_failing_adapter_does_not_silence_the_others(

@@ -92,6 +92,13 @@ jobs:
         run: |
           python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmarks
 
+      - name: Replay the Fuzzing Regression Corpus
+        run: |
+          # Every input here once broke an instrument. Replay is deterministic and only
+          # grows; exploration runs on a schedule in fuzz.yml, where a run that finds
+          # something is a finding rather than a red build on an unrelated commit.
+          python tools/fuzz_harness.py replay
+
       - name: Validate Documentation Quality & Link Integrity
         run: |
           python tools/docs_validator.py --strict

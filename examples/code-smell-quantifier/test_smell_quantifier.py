@@ -257,3 +257,34 @@ def test_cohesion_is_the_same_whatever_order_the_methods_arrive_in() -> None:
         for order in itertools.permutations(graph)
     }
     assert results == {2}
+
+
+# A module `ast.parse` accepts and radon's raw tokenizer rejects. The form feed inside a
+# string literal is legal Python and stops radon's line iterator. Found by
+# `tools/fuzz_harness.py` and kept at `artifacts/fuzz-corpus/smells/f54cb450570a8f93.case`.
+RADON_HOSTILE = 'async def fetch_1(value1: int) -> int:\n    if value58 > 58:\n            return 81\n    "\x0c""Generated."'
+
+
+def test_a_module_radon_cannot_read_does_not_abort_the_scan(tmp_path: Path) -> None:
+    """One unscorable module previously took down the whole repository scan."""
+    hostile = _write(tmp_path, "hostile.py", RADON_HOSTILE)
+    healthy = _write(tmp_path, "healthy.py", "def f(x):\n    return x + 1\n")
+    report = analyze([hostile, healthy], include_advisory=True)
+    assert [Path(m.path).name for m in report.modules] == ["healthy.py"]
+
+
+def test_an_unscorable_module_is_announced_rather_than_dropped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A module silently missing from the score table looks exactly like one that scored well."""
+    hostile = _write(tmp_path, "hostile.py", RADON_HOSTILE)
+    analyze([hostile], include_advisory=True)
+    reported = capsys.readouterr().err
+    assert ("hostile.py" in reported, "not scored" in reported) == (True, True)
+
+
+def test_ast_and_radon_disagree_which_is_why_the_guard_exists(tmp_path: Path) -> None:
+    """The guard is only needed because the corpus filter and the scorer use two parsers."""
+    ast.parse(RADON_HOSTILE)  # the corpus filter accepts it
+    with pytest.raises(SyntaxError):
+        module_metrics(RADON_HOSTILE)  # the scorer does not

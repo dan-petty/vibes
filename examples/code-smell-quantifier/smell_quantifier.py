@@ -544,14 +544,32 @@ class SmellReport:
         return dict(sorted(tally.items()))
 
 
-def _score_module(path: Path, source: str) -> ModuleScore:
-    """Quantify one module with radon, before any threshold is applied."""
+def _module_scores(path: Path, source: str) -> list[ModuleScore]:
+    """Quantify one module with radon, or report and skip it when radon cannot read it.
+
+    Returns zero or one score, because the module may not be scorable. `_parse_module`
+    guards the corpus with `ast.parse`, and radon tokenizes independently — the two do not
+    accept the same language. A module holding a form feed inside a string literal parses
+    as valid Python and raises `SyntaxError` out of radon's raw analyser, which previously
+    aborted the entire repository scan from one file. A quantifier that stops at the first
+    module it cannot score reports nothing about the hundreds it could.
+
+    The skip is announced rather than swallowed: a module silently missing from the score
+    table is indistinguishable from one that scored well. Found by
+    `tools/fuzz_harness.py`; the input is kept as a regression case.
+    """
+    try:
+        maintainability, volume, complexity = module_metrics(source)
+    except (SyntaxError, ValueError) as err:
+        print(f"⚠️  {path}: not scored, radon could not read it ({err})", file=sys.stderr)
+        return []
     loc = len([ln for ln in source.splitlines() if ln.strip() and not ln.strip().startswith("#")])
-    maintainability, volume, complexity = module_metrics(source)
-    return ModuleScore(
-        path=str(path), loc=loc, halstead_volume=volume, max_complexity=complexity,
-        maintainability=maintainability,
-    )
+    return [
+        ModuleScore(
+            path=str(path), loc=loc, halstead_volume=volume, max_complexity=complexity,
+            maintainability=maintainability,
+        )
+    ]
 
 
 def _parse_module(file_path: Path) -> tuple[str, ast.AST] | None:
@@ -584,7 +602,7 @@ def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport
         source, tree = parsed
         trees[file_path] = tree
         if include_advisory:
-            report.modules.append(_score_module(file_path, source))
+            report.modules.extend(_module_scores(file_path, source))
         report.findings.extend(f for d in detectors for f in d(tree, file_path))
 
     report.findings.extend(detect_import_cycles(trees))

@@ -30,6 +30,7 @@ import argparse
 import hashlib
 import json
 import sys
+import tempfile
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -345,11 +346,56 @@ def supply_run(paths: Sequence[Path], root: Path) -> Run:
     return Run("vibes-supply-chain-audit", list(rules.values()), results)
 
 
+def fuzz_run(paths: Sequence[Path], root: Path, corpus_dir: Path | None = None) -> Run:
+    """Collect regression-corpus failures: crashes, hash-seed divergence, non-convergent repairs.
+
+    Replays the committed corpus rather than exploring. Exploration is a random search
+    whose result depends on how long it was allowed to run, and a code scanning alert that
+    appears and disappears with the seed is worse than none: it trains the reader to
+    dismiss the category. The corpus is deterministic and only grows.
+
+    The location is the instrument, not the input. A fixture in `artifacts/fuzz-corpus/`
+    is working as intended; the file that needs editing is the parser it broke.
+    """
+    from fuzz_harness import TARGETS, Plan, replay
+
+    corpus = corpus_dir or TOOLING_ROOT / "artifacts" / "fuzz-corpus"
+    rules: dict[str, Rule] = {}
+    results: list[Result] = []
+    with tempfile.TemporaryDirectory(prefix="vibes-fuzz-sarif-") as scratch:
+        findings = replay(list(TARGETS.values()), Path(scratch), Plan(corpus_dir=corpus)).failures
+    for finding in findings:
+        rule_id = f"vibes/fuzz/{finding.prop}"
+        level = "error" if finding.severity == "error" else "warning"
+        rules.setdefault(
+            rule_id,
+            Rule(
+                rule_id=rule_id,
+                name=finding.prop,
+                short_description=f"Fuzzing property violated: {finding.prop}",
+                level=level,
+            ),
+        )
+        results.append(
+            Result(
+                rule_id=rule_id,
+                level=level,
+                message=f"{finding.target} on {finding.digest}: {finding.detail}",
+                file_path=str(TOOLING_ROOT / TARGETS[finding.target].module),
+                line=1,
+                subject=f"{finding.target}/{finding.prop}",
+            )
+        )
+    del paths, root
+    return Run("vibes-instrument-fuzzer", list(rules.values()), results)
+
+
 ADAPTERS: Final[dict[str, Any]] = {
     "sentinel": sentinel_run,
     "smells": smell_run,
     "docs": docs_run,
     "supply": supply_run,
+    "fuzz": fuzz_run,
 }
 
 

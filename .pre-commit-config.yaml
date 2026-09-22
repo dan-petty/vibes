@@ -46,6 +46,18 @@ repos:
         # dependencies as ci.yml: pyyaml and markdown-it-py, not just the runner.
         additional_dependencies: [pytest, pytest-asyncio, jsonschema, markdown-it-py, networkx, pyyaml, radon, vulture]
 
+      - id: fuzz-replay
+        name: Fuzz Regression Corpus (crashes, divergence, non-convergent repairs)
+        language: python
+        entry: python tools/fuzz_harness.py replay
+        # Deliberately whole-corpus and not per-file: a stored case is an input that broke
+        # an instrument, and which files changed says nothing about which instrument it
+        # breaks. Exploration is not run here — a random search that must pass is a gate
+        # that fails on the run that happened to find something.
+        pass_filenames: false
+        stages: [pre-push]
+        additional_dependencies: [jsonschema, markdown-it-py, networkx, pyyaml, radon, vulture]
+
       - id: mypy
         name: mypy (tools/)
         language: python

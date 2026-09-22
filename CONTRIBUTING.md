@@ -157,6 +157,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors, including the 5-section observation structure |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
 | **Workflow lint** | `actionlint` (pinned, checksum-verified) | Zero expression, shell, or injection findings |
+| **Fuzzing regression corpus** | `fuzz_harness.py replay` | Zero crashes, hash-seed divergences, or non-convergent repairs |
 | **Reliability objectives** | `reliability_slo.py status --history docs/reliability/iterations` | No exhausted or burning error budget |
 | **JSON schema lint** | `python -m json.tool` | Valid JSON |
 

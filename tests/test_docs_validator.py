@@ -22,6 +22,7 @@ from doc_rules_structure import check_directory_maps
 from docs_validator import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     DocsValidator,
+    auto_fix_content,
     contrast_ratio,
 )
 from docs_validator import (
@@ -414,6 +415,30 @@ def test_docs_validator_auto_fix(tmp_path: Path) -> None:
         "target.md" in remediated,
         remediated.endswith("```\n") or remediated.endswith("```"),
     ) == (True, True, True, True, True)
+
+
+def test_auto_fix_is_a_round_trip_when_there_is_nothing_to_fix() -> None:
+    """A repair pass that reports no repairs must return the document it was given.
+
+    `splitlines()` discards the final terminator and the rejoin used to restore it only
+    when the joined text did not already end in a newline. A document ending in two or
+    more newlines splits to a trailing empty element, so the join ended in a newline for
+    the wrong reason and one blank line was dropped on every call — silently, because the
+    repair count stayed at zero. Found by `tools/fuzz_harness.py`, which minimized it to
+    the four-line case kept in `artifacts/fuzz-corpus/docs_fix/`.
+    """
+    documents = ["```mermaid\n```\n\n\n", "# Heading\n\n\n\n", "text\n\n", "text\n", "text", ""]
+    results = [auto_fix_content(document, Path("case.md")) for document in documents]
+    assert [text for text, _ in results] == documents
+    assert [count for _, count in results] == [0] * len(documents)
+
+
+def test_auto_fix_converges_in_one_application() -> None:
+    """A repair a second pass would change again is a hook that never reaches a fixed point."""
+    broken = "```python\nprint(1)\n\n\n"
+    once, _ = auto_fix_content(broken, Path("case.md"))
+    twice, second_pass = auto_fix_content(once, Path("case.md"))
+    assert (twice, second_pass) == (once, 0)
 
 
 def _run_concurrent_validations(

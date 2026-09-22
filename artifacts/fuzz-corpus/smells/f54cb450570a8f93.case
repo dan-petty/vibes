@@ -1,0 +1,4 @@
+async def fetch_1(value1: int) -> int:
+    if value58 > 58:
+            return 81
+    """Generated."

@@ -62,6 +62,7 @@ __all__ = [
     "DocFinding",
     "DocValidationReport",
     "DocsValidator",
+    "auto_fix_content",
     "contrast_ratio",
     "main",
 ]
@@ -786,8 +787,15 @@ def auto_fix_content(content: str, doc_path: Path = Path("document.md")) -> tupl
     lines = content.splitlines()
     lines, fence_fixes = _fix_unclosed_fences(lines)
     lines, mermaid_fixes = _fix_mermaid_blocks(lines)
+    # `splitlines()` discards the final terminator, so rejoining must always restore it
+    # when the original had one. The guard that used to stand here — append only if the
+    # join did not already end in a newline — looked equivalent and was not: a document
+    # ending in two newlines splits to a trailing empty element, the join therefore ends
+    # in a newline already, and the terminator was dropped. Each call removed one more
+    # blank line while reporting zero repairs, so the text changed and the count said it
+    # had not. Found by `tools/fuzz_harness.py`; the input is kept as a regression case.
     reconstituted = "\n".join(lines)
-    if content.endswith("\n") and not reconstituted.endswith("\n"):
+    if content.endswith("\n"):
         reconstituted += "\n"
     final_content, link_fixes = _fix_absolute_links(reconstituted, doc_path)
     return final_content, fence_fixes + mermaid_fixes + link_fixes

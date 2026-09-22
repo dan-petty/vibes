@@ -1,0 +1,70 @@
+name: Scheduled Instrument Fuzzing
+
+# Exploration runs here and nowhere else. `ci.yml` replays the committed corpus, which is
+# deterministic; a random search that must pass would fail the build on whichever commit
+# happened to be under test when the search got lucky, and pass on the next one. Splitting
+# them keeps the gate honest and keeps the search free to run long.
+on:
+  schedule:
+    # 04:17 UTC daily. Off the hour on purpose: the top of the hour is when every other
+    # repository's cron fires and GitHub delays the queue.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Inputs generated per target"
+        required: false
+        default: "1500"
+
+permissions:
+  contents: read
+
+jobs:
+  explore:
+    name: Search For New Failing Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: pip install --editable "."
+
+      - name: Explore
+        env:
+          # The seed is the run number, so two scheduled runs never repeat the same search
+          # and any finding names a seed that regenerates it.
+          FUZZ_SEED: ${{ github.run_number }}
+          FUZZ_CASES: ${{ inputs.cases || '1500' }}
+        run: |
+          python tools/fuzz_harness.py run \
+            --cases "$FUZZ_CASES" --seed "$((FUZZ_SEED * 100000))" \
+            --corpus-dir artifacts/fuzz-corpus \
+            --report fuzz-report.json
+
+      - name: Cross-Check Determinism Across Hash Seeds
+        # Separate from the search because it costs an interpreter start per case per seed.
+        # This is the check that would have caught the cohesion detector reporting 15, 16
+        # and 17 findings on three consecutive runs of unchanged files.
+        if: always()
+        run: |
+          python tools/fuzz_harness.py crosscheck --cases 40 --seed "${{ github.run_number }}"
+
+      - name: Publish What Was Found
+        # Deliberately not a commit. A new corpus entry is a claim that an instrument is
+        # broken, and that claim belongs in a pull request a human or an agent reads —
+        # not in a bot push to `main`. The artifact carries the minimized inputs.
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-findings
+          path: |
+            fuzz-report.json
+            artifacts/fuzz-corpus/
+          if-no-files-found: ignore
+          retention-days: 30
