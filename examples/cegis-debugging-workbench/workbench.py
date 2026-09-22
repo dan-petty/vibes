@@ -345,7 +345,11 @@ def main() -> None:
 
     # 6. Sandboxed container / simulator evaluation
     print("\n--- Sandboxed Container / Process Group Evaluation ---")
-    evaluator = SandboxedPatchEvaluator(force_simulator=True)
+    # The demo's whole point here is a candidate that never terminates, so it uses a short
+    # explicit budget rather than the default. The default has headroom for a legitimate
+    # patch on a loaded host; waiting two seconds to prove an infinite loop is an infinite
+    # loop is time spent demonstrating nothing.
+    evaluator = SandboxedPatchEvaluator(timeout_seconds=0.1, force_simulator=True)
     res_runaway = evaluator.evaluate_code(
         CANDIDATE_PATCH_RUNAWAY_LOOP,
         "parse_manifest_runaway",
