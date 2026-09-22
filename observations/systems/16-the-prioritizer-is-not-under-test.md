@@ -103,7 +103,17 @@ def test_a_vendored_directory_is_invisible_to_every_scanner(tmp_path: Path) -> N
     scanned = ResourceScanner.scan_directory(tmp_path, include_docs=True)
 ```
 
-It builds its own vendored directory in a fixture, so it holds whether or not the machine running it happens to have a Node toolchain installed. A test that compared the two instruments against the *real* repository would pass vacuously in CI, where the install step has not yet run.
+It builds its own vendored directory in a fixture, so it holds whether or not the machine running it happens to have a Node toolchain installed.
+
+The companion test that compares the two instruments against the *real* repository is weaker in exactly the way the blind spot predicts: it passes vacuously wherever the install step has not yet run. Rather than drop it, CI now runs this file a second time, deliberately placed **after** `npm install`:
+
+```yaml
+      - name: Verify Instruments Agree On the Corpus (Dependencies Installed)
+        run: |
+          python -m pytest tests/test_source_tree_policy.py -q -o addopts= -p no:cacheprovider
+```
+
+The same assertion is trivially true in a clean checkout and load-bearing in a dirtied one. This is the narrowest gate that would have caught the original defect, and it is a gate on an *invariant* — instruments agree — rather than on the health score, which is a steering signal and must not fail a build.
 
 > [!IMPORTANT]
 > Ask of every self-improving loop: *what would have to break for this to confidently recommend the wrong work, and which gate would go red?* If the answer to the second half is "none", the loop's steering is unverified no matter how thoroughly its output is gated.
@@ -116,7 +126,7 @@ Pruning also moved into the traversal. `rglob` cannot prune, so it descends into
 
 - **Health restored 91.2 CRITICAL → 100.0 HEALTHY**; 45 phantom findings eliminated; the top-ranked work item is a real deliverable again.
 - **Four exclusion rules collapsed to one**, with the dead `_is_valid_py_file` alias deleted rather than kept as a shim.
-- **Corpus agreement is now a gated invariant**, held by a fixture-built vendored directory rather than by the environment the suite happens to run in.
+- **Corpus agreement is now a gated invariant**, held by a fixture-built vendored directory rather than by the environment the suite happens to run in, and re-asserted by a CI step placed after the dependency install so the check runs in the environment that can actually fail it.
 - **Discovery cost 5.62s → 0.63s** by pruning during the walk instead of filtering after it.
 - **An environment change is a change.** The commit that broke the loop's judgement touched no source file and appeared in no diff. Tools whose input is "the filesystem" have a far larger input surface than their signatures suggest.
 - **Duplicated policy is not merely redundant — it is a divergence waiting for a trigger.** Four copies of a rule agreed for as long as nothing exercised their differences. A dependency install was enough.

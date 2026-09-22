@@ -70,6 +70,13 @@ jobs:
           npm install --no-save mermaid@11 jsdom
           node tools/verify_mermaid.mjs .
 
+      # Deliberately after the npm install above. Every earlier gate runs against a
+      # clean checkout, so none of them can see an instrument that mistakes a vendored
+      # dependency for repository source; that defect only exists once one is on disk.
+      - name: Verify Instruments Agree On the Corpus (Dependencies Installed)
+        run: |
+          python -m pytest tests/test_source_tree_policy.py -q -o addopts= -p no:cacheprovider
+
       - name: Validate FastMCP JSON Schema Manifests
         run: |
           python -m json.tool artifacts/schemas/fastmcp-agent-tool-manifest-spec.json > /dev/null
