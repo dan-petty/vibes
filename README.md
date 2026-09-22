@@ -293,7 +293,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 12-gates-catch-their-author-first.md
 │       ├── 13-verify-the-finding-before-you-fix-it.md
 │       ├── 14-defect-shaped-loops-and-the-feature-blind-spot.md
-│       └── 15-a-count-is-not-a-cost.md
+│       ├── 15-a-count-is-not-a-cost.md
+│       └── 16-the-prioritizer-is-not-under-test.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
