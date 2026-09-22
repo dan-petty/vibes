@@ -46,6 +46,7 @@ from doc_rules_mermaid import (
     check_mermaid_diagrams,
     contrast_ratio,
 )
+from source_tree_policy import iter_source_files
 from doc_rules_structure import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     check_directory_maps,
@@ -673,14 +674,8 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
 
 
 def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[Path]:
-    """Discover markdown files while pruning hidden directories and caches."""
-    md_files: list[Path] = []
-    ext_set = {ext.lower() for ext in extensions}
-    for root, dirs, files in os.walk(dir_path):
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in (".venv", "node_modules", "__pycache__")]
-        matching = [Path(root) / f for f in files if (Path(root) / f).suffix.lower() in ext_set]
-        md_files.extend(matching)
-    return sorted(md_files)
+    """Discover the repository's own markdown files."""
+    return sorted(iter_source_files(dir_path, extensions))
 
 
 def _fix_mermaid_line(line: str) -> tuple[str, int]:

@@ -28,6 +28,7 @@ import sys
 import time
 
 from sanitization_policy import is_documentable
+from source_tree_policy import iter_source_files
 from typing import Any, Sequence
 
 # Canonical quality thresholds
@@ -378,20 +379,6 @@ def _load_docs_validator_cls() -> type[Any]:
         return DocsValidator
 
 
-def _is_excluded_py_path(path: Path) -> bool:
-    """Predicate determining if Python path is in virtual environment or cache."""
-    parts = path.parts
-    return (".venv" in parts) or ("__pycache__" in parts)
-
-
-def _is_excluded_doc_path(path: Path) -> bool:
-    """Predicate determining if markdown documentation path should be excluded."""
-    parts = path.parts
-    if ".venv" in parts:
-        return True
-    return any(p.startswith(".") for p in parts)
-
-
 def _imported_stems(path: Path) -> set[str]:
     """Return the final component of every module name a file imports."""
     try:
@@ -555,15 +542,22 @@ class ResourceScanner:
             complexity_violations=violations,
         )
 
+    @staticmethod
+    def discover(root_dir: Path, suffix: str) -> list[Path]:
+        """List the repository's own files of one suffix, in stable order.
+
+        Named separately from scanning so that which files the workbench considers part
+        of the repository can be asserted without paying to parse every one of them.
+        """
+        return sorted(iter_source_files(root_dir, (suffix,)))
+
     @classmethod
     def scan_directory(cls, root_dir: Path, include_docs: bool = True) -> list[ResourceScanMetrics]:
         """Recursively scan directory for Python files and markdown documentation."""
-        py_files = [p for p in sorted(root_dir.rglob("*.py")) if not _is_excluded_py_path(p)]
-        results = [cls.scan_python_file(p) for p in py_files]
+        results = [cls.scan_python_file(p) for p in cls.discover(root_dir, ".py")]
         if not include_docs:
             return results
-        doc_files = [p for p in sorted(root_dir.rglob("*.md")) if not _is_excluded_doc_path(p)]
-        results.extend(cls.scan_doc_file(p) for p in doc_files)
+        results.extend(cls.scan_doc_file(p) for p in cls.discover(root_dir, ".md"))
         return results
 
     @staticmethod
@@ -1310,10 +1304,6 @@ class ResourceWatcher:
     """Event-driven continuous file-watcher triggering recursive iteration cycles."""
 
     @staticmethod
-    def _is_valid_py_file(path: Path) -> bool:
-        return not (".venv" in path.parts or "__pycache__" in path.parts)
-
-    @staticmethod
     def _safe_mtime(path: Path) -> float | None:
         try:
             return path.stat().st_mtime
@@ -1324,7 +1314,7 @@ class ResourceWatcher:
     def snapshot(cls, root_dir: Path) -> dict[str, float]:
         """Scan directory and return mapping of Python file paths to their modification times."""
         manifest: dict[str, float] = {}
-        targets = (p for p in sorted(root_dir.rglob("*.py")) if cls._is_valid_py_file(p))
+        targets = iter(sorted(iter_source_files(root_dir, (".py",))))
         for py_path in targets:
             mtime = cls._safe_mtime(py_path)
             if mtime is not None:
