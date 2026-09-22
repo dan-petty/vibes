@@ -38,8 +38,14 @@ jobs:
       - name: Audit Self-Hardening in Diff
         id: audit
         if: steps.classify.outputs.is_defect == 'true'
+        env:
+          # A ref name is attacker-controlled on a fork's pull request and may contain
+          # shell metacharacters; a merge SHA is not, but both travel the same way so the
+          # rule needs no per-value judgement. See `pr-sentinel.yml` for the full reason.
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.merge_commit_sha }} > /tmp/pr_diff.patch
+          git diff "origin/${BASE_REF}...${MERGE_SHA}" > /tmp/pr_diff.patch
           
           python tools/project_tooling.py verify-hardening \
             --diff-file /tmp/pr_diff.patch \

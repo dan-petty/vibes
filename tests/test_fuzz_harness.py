@@ -262,3 +262,116 @@ def test_the_committed_corpus_is_inert_on_disk() -> None:
     corpus = Path(__file__).resolve().parent.parent / "artifacts" / "fuzz-corpus"
     strays = [p for p in corpus.rglob("*") if p.is_file() and p.suffix not in (".case", ".md")]
     assert strays == []
+
+
+# --- CLI plumbing ---------------------------------------------------------------------
+#
+# `replay` is what `ci.yml` and the pre-push hook execute, and until these tests it was
+# reachable only through those two — the untested-entry-point gap this repository has hit
+# twice before, in `project_tooling.main()` and the sentinel's. A gate whose exit code is
+# never asserted cannot be distinguished from one that always returns zero.
+
+
+def _corpus_with(tmp_path: Path, target: str, text: str = "anything\n") -> Path:
+    """Build a one-entry corpus directory for a named target."""
+    directory = tmp_path / "corpus" / target
+    directory.mkdir(parents=True)
+    (directory / "deadbeefdeadbeef.case").write_text(text, encoding="utf-8")
+    return tmp_path / "corpus"
+
+
+def test_replay_exits_non_zero_when_a_stored_case_still_breaks_an_instrument(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """This exit code is the gate. Nothing else makes CI go red on a regression."""
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_boom))
+    corpus = _corpus_with(tmp_path, "probe")
+    code = main(["replay", "--targets", "probe", "--corpus-dir", str(corpus)])
+    printed = capsys.readouterr().out
+    assert (code, "probe/crash" in printed, "1 error(s)" in printed) == (1, True, True)
+
+
+def test_replay_exits_zero_once_the_instrument_is_repaired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A corpus entry that can never go green would make the gate permanently red."""
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_clean))
+    code = main(["replay", "--targets", "probe", "--corpus-dir", str(_corpus_with(tmp_path, "probe"))])
+    assert (code, "0 error(s)" in capsys.readouterr().out) == (0, True)
+
+
+def test_a_timing_finding_alone_does_not_fail_the_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Gating on a host-sensitive budget would fail the build on whichever runner was slow."""
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_clean))
+    corpus = _corpus_with(tmp_path, "probe")
+    code = main(["replay", "--targets", "probe", "--corpus-dir", str(corpus), "--budget", "0"])
+    assert (code, "probe/slow" in capsys.readouterr().out) == (0, True)
+
+
+def test_run_reports_and_can_explore_without_growing_the_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--no-save` is how a campaign is investigated without committing what it found."""
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_boom))
+    corpus = tmp_path / "corpus"
+    code = main(["run", "--targets", "probe", "--cases", "2", "--no-save", "--corpus-dir", str(corpus)])
+    assert (code, corpus.exists(), "Explored" in capsys.readouterr().out) == (1, False, True)
+
+
+def test_run_writes_the_minimized_case_into_the_corpus_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An exploration that found something and kept nothing has to be run again to act on it."""
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_boom))
+    corpus = tmp_path / "corpus"
+    main(["run", "--targets", "probe", "--cases", "2", "--corpus-dir", str(corpus)])
+    capsys.readouterr()
+    assert len(list((corpus / "probe").glob("*.case"))) == 1
+
+
+def test_the_report_is_machine_readable_for_ci_and_the_sarif_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A finding that reaches only a terminal is the CI log this repository built SARIF to escape."""
+    import json
+
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_boom))
+    report = tmp_path / "nested" / "fuzz.json"
+    main(["replay", "--targets", "probe", "--corpus-dir", str(_corpus_with(tmp_path, "probe")),
+          "--report", str(report)])
+    capsys.readouterr()
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert (payload["executed"], payload["failures"][0]["severity"]) == (1, "error")
+
+
+def test_targets_lists_every_instrument_with_its_stored_case_count(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The listing is how an agent discovers what is under test and what it may raise."""
+    code = main(["targets", "--corpus-dir", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert (code, all(name in printed for name in TARGETS)) == (0, True)
+
+
+def test_fingerprint_without_an_input_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    """The crosscheck worker is invoked by argv; a silent zero here would compare nothing."""
+    code = main(["fingerprint", "--targets", "docs"])
+    assert (code, "requires --input" in capsys.readouterr().err) == (2, True)
+
+
+def test_an_unknown_target_is_rejected_rather_than_ignored() -> None:
+    """Silently dropping an unrecognized name would run a smaller campaign than was asked for."""
+    with pytest.raises(SystemExit):
+        main(["replay", "--targets", "no-such-instrument"])
+
+
+def test_crosscheck_exits_non_zero_when_the_seeds_disagree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`fuzz.yml` branches on this exit code; the subprocess layer is mocked, the wiring is not."""
+    monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_clean))
+    monkeypatch.setattr(fuzz_harness, "_seed_fingerprint", lambda target, path, seed: seed)
+    code = main(["crosscheck", "--targets", "probe", "--cases", "1", "--corpus-dir", str(tmp_path)])
+    assert (code, "probe/nondeterministic" in capsys.readouterr().out) == (1, True)
