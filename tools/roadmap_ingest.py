@@ -35,11 +35,14 @@ DEFAULT_ROADMAP = Path("docs/ROADMAP.md")
 DEFAULT_BACKLOG = Path(".data/sdlc_backlog.json")
 
 # `- [ ] **Title (P0 - Critical)**:` — the roadmap's own item grammar.
-# Trailing annotations after the bold title — "(partially delivered)", "(blocked)" — are
-# common and must not cause the item to be dropped. An ingester that silently skips an
-# entry reports a shorter backlog than the project actually has.
+# Trailing annotations after the bold title — "(partially delivered)", "(blocked: why)" —
+# are common and must not cause the item to be dropped. An ingester that silently skips
+# an entry reports a shorter backlog than the project actually has. The note group is
+# non-greedy rather than "everything up to a colon" so that an annotation may contain
+# one; under the old pattern "(blocked: reason)" failed to match the line at all, which
+# discarded exactly the items someone had taken the trouble to annotate.
 _OPEN_ITEM_RE: Final[re.Pattern[str]] = re.compile(
-    r"^- \[ \] \*\*(?P<title>.+?)(?:\s*\((?P<priority>P[0-3])\s*-\s*[A-Za-z]+\))?\*\*(?P<note>[^:]*):?\s*$"
+    r"^- \[ \] \*\*(?P<title>.+?)(?:\s*\((?P<priority>P[0-3])\s*-\s*[A-Za-z]+\))?\*\*(?P<note>.*?):?\s*$"
 )
 _MILESTONE_RE: Final[re.Pattern[str]] = re.compile(r"^### (?P<name>.+?)\s*\((?P<version>v[\d.]+)")
 _CONTEXT_RE: Final[re.Pattern[str]] = re.compile(r"^\s+- \*(?P<label>[^*]+)\*:\s*(?P<text>.+)$")
@@ -60,6 +63,14 @@ PRIORITY_NAMES: Final[dict[str, str]] = {
 # Sections recording decisions not to build something.
 REJECTED_MARKERS: Final[tuple[str, ...]] = ("Anti-Patterns", "Rejected")
 
+# `(blocked: reason)` in an item's trailing annotation. The roadmap grammar already
+# tolerated a "(blocked)" note but nothing acted on it, so a deliberate deferral was
+# discarded and the prioritizer proposed the same item on the next pass. A reason is
+# mandatory: a blocker nobody can read is indistinguishable from an excuse.
+_BLOCKED_RE: Final[re.Pattern[str]] = re.compile(
+    r"\(\s*blocked\s*:\s*(?P<reason>[^)]+?)\s*\)", re.IGNORECASE
+)
+
 
 @dataclass
 class RoadmapItem:
@@ -77,9 +88,15 @@ class RoadmapItem:
     # presenting an assumed number with the same confidence as a recorded one.
     sized_from_matrix: bool = True
     note: str = ""
+    blocked_reason: str = ""
 
     def _guidance(self) -> str:
         """Describe the deliverable and how confidently it was sized."""
+        if self.blocked_reason:
+            return (
+                f"Blocked: {self.blocked_reason}. Recorded in docs/ROADMAP.md; the item "
+                "stays ranked but is not schedulable until the annotation is removed."
+            )
         base = self.context or f"Deliverable scheduled for {self.milestone}."
         annotation = f" Roadmap note: {self.note}." if self.note else ""
         if self.sized_from_matrix:
@@ -92,17 +109,21 @@ class RoadmapItem:
 
     def to_backlog_task(self, number: int) -> dict[str, object]:
         """Render as an SDLC backlog task, matching the workbench's export schema."""
+        labels = ["enhancement", "roadmap", self.milestone]
+        if self.blocked_reason:
+            labels.append("blocked")
         return {
             "resource_id": f"roadmap-{number}",
             "kind": "issue",
             "number": number,
             "title": f"[ROADMAP] {self.title}",
-            "labels": ["enhancement", "roadmap", self.milestone],
+            "labels": labels,
             "lifecycle_state": "Backlog",
             "priority": self.priority,
             "milestone": self.milestone,
             "effort_points": self.effort_points,
             "business_value": self.business_value,
+            "blocked_reason": self.blocked_reason,
             "prescriptive_guidance": self._guidance(),
             "suggested_action": "Design, implement and verify the deliverable, then check it off in docs/ROADMAP.md.",
         }
@@ -203,6 +224,8 @@ def _build_item(
     title = match.group("title").strip()
     sizing = _match_sizing(title, matrix)
     value, effort = sizing or (VALUE_POINTS["Medium"], EFFORT_POINTS["Medium"])
+    note = (match.group("note") or "").strip()
+    blocked = _BLOCKED_RE.search(note)
     return RoadmapItem(
         title=re.sub(r"[*`]", "", title),
         milestone=milestone,
@@ -211,7 +234,8 @@ def _build_item(
         effort_points=effort,
         line_number=line_number,
         sized_from_matrix=sizing is not None,
-        note=(match.group("note") or "").strip(),
+        note=note,
+        blocked_reason=blocked.group("reason").strip() if blocked else "",
     )
 
 

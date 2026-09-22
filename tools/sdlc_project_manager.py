@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 import re
 import sys
-from typing import Any, Sequence
+from typing import Any, Final, Sequence
 
 # Canonical priority weights
 # Passes are cheap; the interval exists so a watch does not spin.
@@ -87,6 +87,11 @@ class SDLCResource:
     unresolved_review_threads: int = 0
     depends_on: list[int] = field(default_factory=list)
     blocks: list[int] = field(default_factory=list)
+    # Why this item cannot be worked yet, when the obstacle is not another tracked item.
+    # `depends_on` can only express "waits for issue #N"; a deliverable waiting on a
+    # precondition outside the repository has no number to point at, so a decision to
+    # defer it had nowhere to live and the prioritizer re-proposed it every pass.
+    blocked_reason: str = ""
     effort_points: int = 2
     business_value: int = 5
     calculated_score: float = 0.0
@@ -240,7 +245,24 @@ class SDLCProjectManager:
             return False
         if res.lifecycle_state not in (LifecycleState.READY, LifecycleState.BACKLOG):
             return False
+        if res.blocked_reason:
+            return False
         return not self.dep_graph.is_blocked(res.number)
+
+    def deferred_candidates(self) -> list[SDLCResource]:
+        """Return ranked items that would have been picked but for a recorded blocker.
+
+        Reported rather than silently filtered: an item that quietly stops appearing is
+        indistinguishable from one that was finished, and a stale blocker that nobody
+        sees is how work disappears without a decision.
+        """
+        return [
+            res
+            for res in self.get_ranked_resources()
+            if res.blocked_reason
+            and res.kind == SDLCResourceKind.ISSUE
+            and res.lifecycle_state in (LifecycleState.READY, LifecycleState.BACKLOG)
+        ]
 
     def _find_unblocked_issue_action(self, ranked: list[SDLCResource]) -> AgentActionRecommendation | None:
         """Find top unblocked issue ready for implementation."""
@@ -270,8 +292,14 @@ class SDLCProjectManager:
         if issue_action:
             return issue_action
 
-        # Fallback: Progress top ranked item
-        top = ranked[0]
+        # Fallback: progress the top ranked item that is not held by a blocker. Rule 2
+        # already refuses blocked issues; without the same filter here a blocked item
+        # simply came back under a different action type, which is the whole point of
+        # a gate that does not cover every path out of the function.
+        schedulable = [res for res in ranked if not res.blocked_reason]
+        if not schedulable:
+            return None
+        top = schedulable[0]
         return AgentActionRecommendation(
             action_type="PROGRESS_ITEM",
             target_resource=top,
@@ -342,6 +370,7 @@ def _resource_from_dict(item: dict[str, Any]) -> SDLCResource:
         unresolved_review_threads=int(item.get("unresolved_review_threads", 0)),
         depends_on=[int(n) for n in item.get("depends_on", [])],
         blocks=[int(n) for n in item.get("blocks", [])],
+        blocked_reason=str(item.get("blocked_reason", "")),
         effort_points=int(item.get("effort_points", 2)),
         business_value=int(item.get("business_value", 5)),
     )
@@ -404,13 +433,31 @@ def _handle_next(manager: SDLCProjectManager) -> int:
     rec = manager.recommend_next_agent_action()
     if not rec:
         print("No actionable tasks available.")
+        _print_deferred(manager)
         return 0
     print("🤖 RECOMMENDED AGENT NEXT ACTION:")
     print(f"  Action:    {rec.action_type}")
     print(f"  Target:    #{rec.target_resource.number} ({rec.target_resource.kind.value}) — {rec.target_resource.title}")
     print(f"  Score:     {rec.priority_score}")
     print(f"  Rationale: {rec.rationale}")
+    _print_deferred(manager)
     return 0
+
+
+def _print_deferred(manager: SDLCProjectManager) -> None:
+    """List items held back by a recorded blocker, highest ranked first.
+
+    Printed alongside the recommendation rather than in place of it: the risk with a
+    deferral is not that it is wrong but that it becomes permanent unnoticed, so the
+    blockers stay in view of whoever reads the next action.
+    """
+    deferred = manager.deferred_candidates()
+    if not deferred:
+        return
+    print(f"\n⏸️  DEFERRED ({len(deferred)}) — ranked, not schedulable until unblocked:")
+    for res in deferred:
+        print(f"  #{res.number}: {res.title}")
+        print(f"      blocked: {res.blocked_reason}")
 
 
 def _sync_once(backlog: Path, scan: Path) -> ReconciliationResult:
@@ -477,18 +524,20 @@ class ReconciliationResult:
     opened: list[str] = field(default_factory=list)
     closed: list[str] = field(default_factory=list)
     advanced: list[str] = field(default_factory=list)
+    refreshed: list[str] = field(default_factory=list)
     unchanged: int = 0
 
     @property
     def changed(self) -> bool:
         """Return whether the pass moved anything."""
-        return bool(self.opened or self.closed or self.advanced)
+        return bool(self.opened or self.closed or self.advanced or self.refreshed)
 
     def summary(self) -> str:
         """Render a one-line description of the pass."""
         return (
             f"opened {len(self.opened)}, closed {len(self.closed)}, "
-            f"advanced {len(self.advanced)}, unchanged {self.unchanged}"
+            f"advanced {len(self.advanced)}, refreshed {len(self.refreshed)}, "
+            f"unchanged {self.unchanged}"
         )
 
 
@@ -507,6 +556,22 @@ def _is_roadmap_card(task: dict[str, Any]) -> bool:
     return str(task.get("resource_id", "")).startswith("roadmap-")
 
 
+# What the roadmap declares about an item, as opposed to what the board decides. The
+# board owns `lifecycle_state`: a card promoted to Ready must not fall back to Backlog
+# because the roadmap was re-read.
+ROADMAP_DECLARED_FIELDS: Final[tuple[str, ...]] = (
+    "title",
+    "labels",
+    "milestone",
+    "priority",
+    "effort_points",
+    "business_value",
+    "blocked_reason",
+    "prescriptive_guidance",
+    "suggested_action",
+)
+
+
 def reconcile_backlog(
     existing: Sequence[dict[str, Any]], current: Sequence[dict[str, Any]]
 ) -> tuple[list[dict[str, Any]], ReconciliationResult]:
@@ -516,19 +581,24 @@ def reconcile_backlog(
     reported the defect is fixed, and leaving the card open makes the board a record of
     what was once wrong rather than of what is wrong now.
 
-    Roadmap cards are exempt: their absence from a scan means nothing, since no scan can
-    observe an unbuilt feature. They close when the roadmap says so, which ingestion
-    handles by replacing them wholesale.
+    A roadmap card cannot be judged the same way, because no scan can observe an unbuilt
+    feature. It is judged against ingestion instead: when the scan carries roadmap cards
+    at all, that set is the complete list of *open* deliverables, so a card missing from
+    it has been checked off in the roadmap and is done. A scan with no roadmap cards is a
+    plain defect export that says nothing either way, and the roadmap is left alone —
+    without that guard, ranking a defect scan would close the entire roadmap.
     """
     result = ReconciliationResult()
     current_by_id = {_card_identity(task): task for task in current}
     merged: list[dict[str, Any]] = []
+    roadmap_ingested = any(_is_roadmap_card(task) for task in current)
 
     for task in existing:
         identity = _card_identity(task)
         if _is_roadmap_card(task):
-            merged.append(task)
-            result.unchanged += 1
+            merged.extend(
+                _reconcile_roadmap_card(task, identity, current_by_id, roadmap_ingested, result)
+            )
         elif identity in current_by_id:
             merged.append(task)
             result.unchanged += 1
@@ -543,6 +613,46 @@ def reconcile_backlog(
             merged.append(task)
             result.opened.append(identity)
     return merged, result
+
+
+def _reconcile_roadmap_card(
+    task: dict[str, Any],
+    identity: str,
+    current_by_id: dict[str, dict[str, Any]],
+    roadmap_ingested: bool,
+    result: ReconciliationResult,
+) -> list[dict[str, Any]]:
+    """Refresh, close, or carry forward one roadmap card, recording which happened."""
+    if identity in current_by_id:
+        refreshed = _refresh_roadmap_card(task, current_by_id)
+        if refreshed != task:
+            result.refreshed.append(identity)
+        else:
+            result.unchanged += 1
+        return [refreshed]
+    if roadmap_ingested and task.get("lifecycle_state") != LifecycleState.DONE.value:
+        result.closed.append(identity)
+        return [{**task, "lifecycle_state": LifecycleState.DONE.value}]
+    result.unchanged += 1
+    return [task]
+
+
+def _refresh_roadmap_card(
+    task: dict[str, Any], current_by_id: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Re-read a roadmap card's declared fields, keeping the lifecycle state the board owns.
+
+    Roadmap cards are exempt from closing, and were previously carried forward verbatim
+    for the same reason. That also froze everything the roadmap declares about them: a
+    re-prioritised item, a re-sized one, or one annotated `(blocked: ...)` kept whatever
+    it was first ingested with, so a deferral recorded in the roadmap never reached the
+    prioritizer and the same item was proposed again on the next pass.
+    """
+    fresh = current_by_id.get(_card_identity(task))
+    if fresh is None:
+        return task
+    declared = {key: fresh[key] for key in ROADMAP_DECLARED_FIELDS if key in fresh}
+    return {**task, **declared}
 
 
 def advance_ready_item(

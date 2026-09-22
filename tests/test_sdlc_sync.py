@@ -130,3 +130,125 @@ def test_sync_watch_stops_after_max_passes(tmp_path: Path, capsys: pytest.Captur
 
     assert main(["sync", "--file", str(board), "--watch", "--interval", "0", "--max-passes", "3"]) == 0
     assert capsys.readouterr().out.count("[sync ") == 3
+
+
+def test_a_blocked_item_is_never_recommended_however_highly_it_ranks() -> None:
+    """A recorded blocker outranks score: the top item must be skipped, not proposed."""
+    resources = load_resources_from_dicts(
+        [
+            {
+                "resource_id": "roadmap-1",
+                "kind": "issue",
+                "number": 2002,
+                "title": "High value but blocked",
+                "lifecycle_state": "Backlog",
+                "priority": "P0_CRITICAL",
+                "business_value": 8,
+                "effort_points": 2,
+                "blocked_reason": "needs live review threads this repository does not produce",
+            },
+            {
+                "resource_id": "roadmap-2",
+                "kind": "issue",
+                "number": 2003,
+                "title": "Lower value but actionable",
+                "lifecycle_state": "Backlog",
+                "priority": "P2_MEDIUM",
+                "business_value": 5,
+                "effort_points": 5,
+            },
+        ]
+    )
+    manager = SDLCProjectManager(resources)
+    recommendation = manager.recommend_next_agent_action()
+    deferred = manager.deferred_candidates()
+
+    assert recommendation is not None
+    assert (
+        recommendation.target_resource.number,
+        [res.number for res in deferred],
+        deferred[0].blocked_reason.startswith("needs live review threads"),
+    ) == (2003, [2002], True)
+
+
+def test_deferred_items_are_reported_rather_than_silently_dropped() -> None:
+    """A blocker that nobody can see is how work disappears without a decision."""
+    resources = load_resources_from_dicts(
+        [
+            {
+                "resource_id": "roadmap-1",
+                "kind": "issue",
+                "number": 2002,
+                "title": "Blocked thing",
+                "lifecycle_state": "Backlog",
+                "blocked_reason": "upstream API does not exist yet",
+            }
+        ]
+    )
+    manager = SDLCProjectManager(resources)
+    assert (
+        manager.recommend_next_agent_action(),
+        [(res.number, res.blocked_reason) for res in manager.deferred_candidates()],
+    ) == (None, [(2002, "upstream API does not exist yet")])
+
+
+def _roadmap_card(number: int, title: str, **overrides: object) -> dict:
+    """Build a roadmap card. Roadmap origin is carried by the resource_id prefix."""
+    return _card(
+        number,
+        title,
+        resource_id=f"roadmap-{number}",
+        labels=["enhancement", "roadmap", "v0.5.0"],
+        **overrides,
+    )
+
+
+def test_a_roadmap_card_takes_a_new_blocker_from_the_roadmap() -> None:
+    """A deferral recorded in the roadmap must reach the board, not stop at ingestion."""
+    existing = [_roadmap_card(2002, "[ROADMAP] Thing", lifecycle_state="Ready")]
+    current = [_roadmap_card(2002, "[ROADMAP] Thing", blocked_reason="needs an upstream API")]
+    merged, result = reconcile_backlog(existing, current)
+
+    assert (
+        merged[0]["blocked_reason"],
+        merged[0]["lifecycle_state"],
+        result.refreshed,
+    ) == ("needs an upstream API", "Ready", ["[ROADMAP] Thing"])
+
+
+def test_refreshing_a_roadmap_card_does_not_reset_the_lifecycle_state() -> None:
+    """The roadmap declares value and blockers; the board owns how far a card has moved."""
+    existing = [_roadmap_card(2002, "[ROADMAP] Thing", lifecycle_state="Ready")]
+    current = [_roadmap_card(2002, "[ROADMAP] Thing", business_value=8, lifecycle_state="Backlog")]
+    merged, _ = reconcile_backlog(existing, current)
+
+    assert (merged[0]["lifecycle_state"], merged[0]["business_value"]) == ("Ready", 8)
+
+
+def test_a_roadmap_item_checked_off_closes_its_card() -> None:
+    """Ingestion reports only open deliverables, so absence from it means delivered."""
+    existing = [
+        _roadmap_card(2003, "[ROADMAP] Delivered", lifecycle_state="Ready"),
+        _roadmap_card(2001, "[ROADMAP] Still open"),
+    ]
+    merged, result = reconcile_backlog(existing, [_roadmap_card(2001, "[ROADMAP] Still open")])
+    states = {task["title"]: task["lifecycle_state"] for task in merged}
+
+    assert (states["[ROADMAP] Delivered"], states["[ROADMAP] Still open"], result.closed) == (
+        "Done",
+        "Backlog",
+        ["[ROADMAP] Delivered"],
+    )
+
+
+def test_a_defect_only_scan_never_closes_the_roadmap() -> None:
+    """A scan carrying no roadmap cards says nothing about the roadmap and must not act.
+
+    Without this guard, ranking a plain workbench export would mark every unbuilt
+    deliverable delivered.
+    """
+    existing = [_roadmap_card(2001, "[ROADMAP] Unbuilt"), _card(1, "[DECAY] a defect")]
+    merged, result = reconcile_backlog(existing, [_card(1, "[DECAY] a defect")])
+    states = {task["title"]: task["lifecycle_state"] for task in merged}
+
+    assert (states["[ROADMAP] Unbuilt"], result.closed) == ("Backlog", [])

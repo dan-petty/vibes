@@ -140,3 +140,53 @@ def test_main_dry_run_writes_nothing(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert main(["ingest", "--roadmap", str(doc), "--backlog", str(backlog), "--dry-run"]) == 0
     assert not backlog.exists()
     assert "nothing written" in capsys.readouterr().out
+
+
+def test_blocked_annotation_is_parsed_with_its_reason(tmp_path: Path) -> None:
+    """A recorded blocker carries its reason out of the roadmap and into the backlog."""
+    roadmap = tmp_path / "ROADMAP.md"
+    roadmap.write_text(
+        "### Milestone (v0.3.0)\n\n"
+        "- [ ] **Blocked Thing (P0 - Critical)** (blocked: needs live review threads):\n"
+        "- [ ] **Open Thing (P1 - High)**:\n",
+        encoding="utf-8",
+    )
+    items = {item.title: item for item in parse_roadmap(roadmap)}
+    assert (
+        sorted(items),
+        items["Blocked Thing"].blocked_reason,
+        items["Open Thing"].blocked_reason,
+    ) == (["Blocked Thing", "Open Thing"], "needs live review threads", "")
+
+
+def test_a_blocked_annotation_does_not_drop_the_item(tmp_path: Path) -> None:
+    """The colon inside the annotation must not stop the item's line from matching.
+
+    The previous grammar ended the note at the first colon, so annotating an item was
+    enough to delete it from the backlog entirely — silently losing exactly the items
+    someone had taken the trouble to explain.
+    """
+    roadmap = tmp_path / "ROADMAP.md"
+    roadmap.write_text(
+        "### Milestone (v0.3.0)\n\n"
+        "- [ ] **Alpha** (blocked: waiting on an upstream release):\n"
+        "- [ ] **Beta** (partially delivered):\n"
+        "- [ ] **Gamma (P2 - Medium)**:\n",
+        encoding="utf-8",
+    )
+    assert sorted(item.title for item in parse_roadmap(roadmap)) == ["Alpha", "Beta", "Gamma"]
+
+
+def test_blocked_items_are_labelled_and_explained_in_the_backlog(tmp_path: Path) -> None:
+    """The backlog task records the blocker so the prioritizer can act on it."""
+    roadmap = tmp_path / "ROADMAP.md"
+    roadmap.write_text(
+        "### Milestone (v0.3.0)\n\n- [ ] **Thing** (blocked: no upstream API yet):\n",
+        encoding="utf-8",
+    )
+    task = parse_roadmap(roadmap)[0].to_backlog_task(2001)
+    assert (
+        task["blocked_reason"],
+        "blocked" in task["labels"],
+        str(task["prescriptive_guidance"]).startswith("Blocked: no upstream API yet."),
+    ) == ("no upstream API yet", True, True)
