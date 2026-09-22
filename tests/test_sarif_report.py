@@ -334,3 +334,45 @@ def test_cli_refuses_to_write_a_log_that_fails_the_schema(
         False,
         True,
     )
+
+
+def test_a_baselined_finding_is_suppressed_but_its_run_still_reports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run emptied by the baseline must still appear, or its old alerts never resolve."""
+    import sarif_report
+    from finding_baseline import save_baseline
+
+    result = _result(level="error")
+    monkeypatch.setitem(sarif_report.ADAPTERS, "supply", lambda paths, root: _run([result]))
+    baseline = tmp_path / "baseline.json"
+    save_baseline(baseline, [result])
+    out = tmp_path / "f.sarif"
+    code = sarif_main(
+        ["--root", str(tmp_path), "--out", str(out), "--sources", "supply",
+         "--schema", str(SCHEMA), "--baseline", str(baseline), "--fail-on-error"]
+    )
+    printed = capsys.readouterr().out
+    log = json.loads(out.read_text(encoding="utf-8"))
+    assert (code, len(log["runs"]), log["runs"][0]["results"]) == (0, 1, [])
+    assert "1 accepted by baseline" in printed
+
+
+def test_a_finding_absent_from_the_baseline_still_fails_the_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Adoption must not become amnesty: anything new is reported exactly as before."""
+    import sarif_report
+    from finding_baseline import save_baseline
+
+    monkeypatch.setitem(
+        sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(subject="fresh")])
+    )
+    baseline = tmp_path / "baseline.json"
+    save_baseline(baseline, [_result(subject="old")])
+    code = sarif_main(
+        ["--root", str(tmp_path), "--out", str(tmp_path / "f.sarif"), "--sources", "supply",
+         "--schema", str(SCHEMA), "--baseline", str(baseline), "--fail-on-error"]
+    )
+    capsys.readouterr()
+    assert code == 1

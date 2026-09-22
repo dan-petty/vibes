@@ -47,6 +47,8 @@ capabilities:
       - secret_scanning
       - pre_commit_hook
       - sarif_output
+      - per_file_baseline
+      - baseline_diff
     alternatives:
       - repo: rubik/xenon
         has:
@@ -83,6 +85,8 @@ capabilities:
       - import_cycles
       - cohesion_metric
       - sarif_output
+      - per_file_baseline
+      - baseline_diff
     alternatives:
       - repo: rubik/radon
         has:
@@ -114,6 +118,8 @@ capabilities:
       - markdown_structure
       - secret_scanning
       - auto_fix
+      - per_file_baseline
+      - baseline_diff
     alternatives:
       - repo: DavidAnson/markdownlint
         has:

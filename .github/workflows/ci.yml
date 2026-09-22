@@ -36,6 +36,17 @@ jobs:
         # verdict on the same findings would only ever disagree with the first.
         run: python tools/sarif_report.py --out findings.sarif
 
+      - name: Verify the Finding Baseline Is Not Stale
+        # An accepted finding that no longer exists goes on suppressing that finding if it
+        # is ever reintroduced, so the gate quietly stops covering code it used to cover.
+        # This repository's baseline is empty and a unit test keeps it that way; the check
+        # exists so the mechanism is exercised rather than merely shipped.
+        run: |
+          python tools/finding_baseline.py status \
+            --source findings.sarif \
+            --baseline artifacts/finding-baseline.json \
+            --strict
+
       - name: Upload to Code Scanning
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4

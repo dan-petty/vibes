@@ -197,6 +197,7 @@ flowchart LR
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
 - [**Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**](./tools/ast_refactorer.py): Mechanical AST rewriting engine auto-decomposing branching ladders ($M \ge 7$) and nesting depth into table dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples with round-trip safety verification.
 - [**Documentation Syntax & Link Validator (`tools/docs_validator.py`)**](./tools/docs_validator.py): High-performance documentation validator checking nested code fences, Mermaid AST, markdown table column alignments, local anchor slugs, and embedded snippet syntax.
+- [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
 - [**Instrument Fuzzer (`tools/fuzz_harness.py`)**](./tools/fuzz_harness.py): Turns the oracles on themselves. Generates and mutates Python modules, Markdown documents, roadmaps and manifests, then asserts four mechanically decidable properties of each instrument — that it raises nothing it has not declared, answers identically for identical input across hash seeds, converges when it repairs, and finishes. Every input that breaks one is minimized by delta debugging and kept in [`artifacts/fuzz-corpus/`](./artifacts/fuzz-corpus/), which is replayed as a gate; the random search runs on a schedule, where a lucky run is a finding rather than a red build.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
@@ -331,6 +332,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── task-harnesses/
 │   │   ├── structured-task-spec-template.md
 │   │   └── sample-completed-task-spec.md
+│   ├── finding-baseline.json          # Findings this repository accepts; empty, and tested so
 │   ├── fuzz-corpus/                   # Inputs that broke an instrument; replayed as a gate
 │   └── schemas/
 │       ├── fastmcp-agent-tool-manifest-spec.json
@@ -377,6 +379,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog
 │   ├── landscape_survey.py            # Maturity, feature comparison and gap-to-roadmap survey
 │   ├── roadmap_emit.py                # Shared: machine findings to idempotent roadmap proposals
+│   ├── finding_baseline.py            # Accepts existing findings so a gate can be adopted
 │   ├── fuzz_core.py                   # Shared: corpus generation, mutation and delta shrinking
 │   ├── fuzz_harness.py                # Fuzzes the instruments themselves; replays what broke them
 │   ├── sarif_report.py                # Every oracle's findings as one schema-valid SARIF log
@@ -396,6 +399,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_roadmap_ingest.py         # Unit tests for roadmap deliverable ingestion
     ├── test_sdlc_sync.py              # Unit tests for backlog reconciliation and promotion
     ├── test_landscape_survey.py       # Unit tests for maturity scoring and gap-to-roadmap emission
+    ├── test_finding_baseline.py       # Unit tests for baseline acceptance, staleness and pruning
     ├── test_fuzz_core.py              # Unit tests for input generation, mutation and shrinking
     ├── test_fuzz_harness.py           # Asserts every fuzzing property fires on a broken instrument
     ├── test_sarif_report.py           # Unit tests for SARIF emission and schema conformance
