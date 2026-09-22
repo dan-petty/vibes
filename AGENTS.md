@@ -487,6 +487,12 @@ Every defect in this section was found by a measurement and survived a first, wr
    - **Store a case under a suffix nothing else reads.** A corpus of `.md` files is swept up by the documentation validator's whole-repository pass and a corpus of `.py` files by the sentinel, ruff and mypy; every fixture is then reported as a defect in the repository that keeps it. `.case` on disk, real suffix in scratch.
    - **Verify the entry fails before the fix, not only that it passes after.** Revert the repair, run `replay`, watch it exit non-zero, restore. An entry that never failed the build is a souvenir.
 
+7. **A Suppression That Cannot Expire Is Not a Baseline**:
+   - [`tools/finding_baseline.py`](./tools/finding_baseline.py) exists so a gate can be adopted by a codebase that does not pass it yet. A gate reporting hundreds of pre-existing findings at once is indistinguishable from one reporting nothing: nobody reads it, and nobody can tell which finding arrived with the change in front of them.
+   - **Prune what was fixed.** An entry kept after its finding was repaired goes on suppressing that finding when it is reintroduced, so the gate stops covering code it used to cover and nothing says so. This is why long-lived whitelists end up worse than no gate. `status --strict` fails when the baseline holds an entry the oracles no longer produce, and `ci.yml` runs it.
+   - **Baseline the finding, not the rule.** Identity is the `partialFingerprints` value the producing tool assigned — rule, file and subject, deliberately excluding the line number. Suppressing a whole rule or a whole file hides the next defect of that kind as well as the current one.
+   - **Never baseline this repository's own findings.** §10's architectural invariants are non-negotiable; `artifacts/finding-baseline.json` is empty and [`tests/test_finding_baseline.py`](./tests/test_finding_baseline.py) asserts it stays empty. A feature whose own repository starts using it to defer violations has changed from adoption machinery into an amnesty.
+
 ---
 
 ## 11. The Closed-Loop Feedback Inversion Dynamic

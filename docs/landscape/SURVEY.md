@@ -29,12 +29,13 @@ Ours: [`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invaria
 | Feature | vibes | `xenon` | `lizard` | `ruff` | `pylint` |
 |---|---|---|---|---|---|
 | **auto_fix** — Rewrites source to remove the finding, not only report it | — | ? | ? | ✅ | ? |
+| **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ? | ? |
 | **config_presets** — Ships selectable rule presets rather than one fixed rule set | — | ? | ? | ✅ | ✅ |
 | **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **editor_lsp** — Provides a language server or first-party editor integration | — | ? | ? | ✅ | ? |
 | **multi_language** — Analyses languages beyond Python | — | — | ✅ | — | ? |
 | **nesting_depth** — Flags block nesting deeper than a configured ceiling | ✅ | ? | ? | ? | ? |
-| **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | — | ? | ✅ | ? | ? |
+| **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ✅ | ? | ? |
 | **pre_commit_hook** — Ships a documented pre-commit integration | ✅ | ? | ? | ✅ | ? |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? | ✅ | ? |
 | **secret_scanning** — Detects credentials or private network addresses in source | ✅ | ? | ? | ? | ? |
@@ -47,7 +48,7 @@ Ours: [`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code
 
 | Feature | vibes | `radon` | `vulture` | `wily` | `jscpd` |
 |---|---|---|---|---|---|
-| **baseline_diff** — Reports only findings introduced relative to a base revision | — | ? | ? | ✅ | ? |
+| **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ✅ | ? |
 | **clone_detection** — Detects duplicated or near-duplicated blocks | ✅ | ? | ? | ? | ✅ |
 | **cohesion_metric** — Reports a class cohesion measure such as LCOM | ✅ | ? | ? | ? | ? |
 | **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | — | ✅ | ? | ? | ? |
@@ -56,7 +57,7 @@ Ours: [`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code
 | **import_cycles** — Detects circular imports between modules | ✅ | ? | ? | ? | ? |
 | **maintainability_index** — Reports a normalized maintainability score per module | ✅ | ✅ | ? | ✅ | ? |
 | **multi_language** — Analyses languages beyond Python | — | ? | ? | ? | ✅ |
-| **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | — | ? | ✅ | ? | ? |
+| **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ✅ | ? | ? |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? | ? | ✅ |
 | **trend_over_time** — Tracks metric movement across git history rather than one snapshot | — | ? | ? | ✅ | ? |
 
@@ -69,11 +70,13 @@ Ours: [`tools/docs_validator.py`](../../tools/docs_validator.py)
 | Feature | vibes | `markdownlint` | `lychee` | `vale` |
 |---|---|---|---|---|
 | **auto_fix** — Rewrites source to remove the finding, not only report it | ✅ | ✅ | ? | ? |
+| **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ? |
 | **config_presets** — Ships selectable rule presets rather than one fixed rule set | — | ✅ | ? | ✅ |
 | **diagram_rendering** — Verifies embedded diagrams actually render | ✅ | ? | ? | ? |
 | **link_checking** — Verifies that document links resolve | ✅ | ? | ✅ | ? |
 | **markdown_structure** — Enforces document structure or heading conventions | ✅ | ✅ | ? | ? |
 | **multi_language** — Analyses languages beyond Python | — | ? | ✅ | ✅ |
+| **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ? | ? |
 | **prose_style** — Enforces prose style or terminology rules | — | ? | ? | ✅ |
 | **secret_scanning** — Detects credentials or private network addresses in source | ✅ | ? | ? | ? |
 
@@ -94,7 +97,7 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-16 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed.
+13 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed.
 
 - **Complexity gate: ships selectable rule presets rather than one fixed rule set**
   - Held by: `astral-sh/ruff`, `pylint-dev/pylint`
@@ -121,9 +124,6 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 - **Complexity gate: analyses languages beyond python**
   - Held by: `terryyin/lizard`
   - Evidence: terryyin/lizard: Documents C/C++, Java, JavaScript, Go, Rust, Swift and more
-- **Complexity gate: accepts existing violations so a gate can be adopted incrementally**
-  - Held by: `terryyin/lizard`
-  - Evidence: terryyin/lizard: -W whitelist file suppresses known warnings
 - **Docs validator: enforces prose style or terminology rules**
   - Held by: `vale-cli/vale`
   - Evidence: vale-cli/vale: Applies configurable prose style guides such as Microsoft or Google
@@ -133,18 +133,12 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 - **Prompt fuzzer: reports only findings introduced relative to a base revision**
   - Held by: `promptfoo/promptfoo`
   - Evidence: promptfoo/promptfoo: Evaluations compare prompt or model variants side by side
-- **Smell quantifier: reports only findings introduced relative to a base revision**
-  - Held by: `tonybaloney/wily`
-  - Evidence: tonybaloney/wily: wily diff reports metric change against a revision
 - **Smell quantifier: flags functions exceeding a cyclomatic complexity ceiling**
   - Held by: `rubik/radon`
   - Evidence: rubik/radon: radon cc ranks blocks A-F
 - **Smell quantifier: analyses languages beyond python**
   - Held by: `kucherenko/jscpd`
   - Evidence: kucherenko/jscpd: Documents over 150 formats
-- **Smell quantifier: accepts existing violations so a gate can be adopted incrementally**
-  - Held by: `jendrikseipp/vulture`
-  - Evidence: jendrikseipp/vulture: Whitelist files suppress known-live symbols
 - **Smell quantifier: tracks metric movement across git history rather than one snapshot**
   - Held by: `tonybaloney/wily`
   - Evidence: tonybaloney/wily: wily build indexes metrics across git revisions; wily graph and wily diff report movement

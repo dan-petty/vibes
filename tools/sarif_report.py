@@ -433,10 +433,40 @@ def _source_paths(root: Path) -> list[Path]:
     return sorted(iter_source_files(root, (".py",)))
 
 
+def _apply_baseline(runs: Sequence[Run], baseline_path: Path | None) -> tuple[list[Run], int]:
+    """Drop findings a committed baseline already accepts, keeping every run.
+
+    A run emptied by the baseline is still published. Code scanning resolves an alert only
+    when the tool that raised it reports again without it, so a run that disappears because
+    everything in it was accepted would leave its old alerts open forever — the same reason
+    `build_log` never filters empty runs.
+    """
+    if baseline_path is None:
+        return list(runs), 0
+    from finding_baseline import load_baseline, partition
+
+    baseline = load_baseline(baseline_path)
+    filtered: list[Run] = []
+    suppressed = 0
+    for run in runs:
+        split = partition(run.results, baseline)
+        suppressed += len(split.known)
+        filtered.append(Run(run.tool_name, run.rules, split.new))
+    return filtered, suppressed
+
+
 def _handle_report(args: argparse.Namespace) -> int:
     """Build, validate and write the SARIF log."""
     paths = _source_paths(args.root)
     runs = list(collect_runs(args.sources, paths, args.root, args.include_advisory))
+    if args.write_baseline is not None:
+        from finding_baseline import save_baseline
+
+        recorded = save_baseline(
+            args.write_baseline, [r for run in runs for r in run.results]
+        )
+        print(f"Recorded {recorded} finding(s) into {args.write_baseline}.")
+    runs, suppressed = _apply_baseline(runs, args.baseline)
     log = build_log(runs, args.root)
     errors = validate_log(log, args.schema)
     if errors:
@@ -447,7 +477,8 @@ def _handle_report(args: argparse.Namespace) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(log, indent=2) + "\n", encoding="utf-8")
     total = sum(len(run.results) for run in runs)
-    print(f"Wrote {args.out}: {len(log['runs'])} run(s), {total} result(s), schema valid.")
+    accepted = f", {suppressed} accepted by baseline" if suppressed else ""
+    print(f"Wrote {args.out}: {len(log['runs'])} run(s), {total} result(s){accepted}, schema valid.")
     for run in runs:
         levels = _level_counts(run)
         print(f"  {run.tool_name:<34} {len(run.results):>4} " + levels)
@@ -487,6 +518,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--fail-on-error",
         action="store_true",
         help="Exit non-zero when any result is error level",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help="Suppress findings this baseline already accepts (see tools/finding_baseline.py)",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        type=Path,
+        default=None,
+        help="Record every current finding as accepted, then report against it",
     )
     return parser
 
