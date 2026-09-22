@@ -143,28 +143,70 @@ def triage_issue_content(issue_number: int, title: str, body: str) -> TriageResu
     )
 
 
-GUARDRAIL_INDICATORS = ("mandate", "rule", "guardrail", "prohibited", "must always")
+AGENTS_FILENAME = "AGENTS.md"
+# Both header forms. A real `git diff` emits `diff --git`, but a patch fragment or a plain
+# `diff -u` carries only the `+++` line, and a parser that recognized one form would report
+# zero additions for the other -- silently, which is the failure this function exists to end.
+_DIFF_HEADER = re.compile(r"^diff --git a/(?P<path>\S+) b/\S+")
+_TARGET_HEADER = re.compile(r"^\+\+\+ (?:b/)?(?P<path>\S+)")
 
 
-def _is_guardrail_addition(line: str) -> bool:
-    """Check if a diff line represents an added guardrail indicator."""
-    if not line.startswith("+") or line.startswith("+++"):
-        return False
-    low = line.lower()
-    return any(term in low for term in GUARDRAIL_INDICATORS)
+def _file_under_diff(line: str) -> str | None:
+    """Return the file a diff header introduces, tolerating both header forms."""
+    match = _DIFF_HEADER.match(line) or _TARGET_HEADER.match(line)
+    return match.group("path") if match else None
+
+
+def _agents_md_additions(diff_text: str) -> list[str]:
+    """Return the lines a unified diff adds to AGENTS.md, and only those.
+
+    Scoped to the file. The previous implementation scanned the whole patch for five
+    literal keywords, so a line containing the word "rule" in any file at all counted as
+    hardening AGENTS.md — including a diff that never touched it.
+    """
+    added: list[str] = []
+    in_agents = False
+    for line in diff_text.splitlines():
+        current = _file_under_diff(line)
+        if current is not None:
+            in_agents = current == AGENTS_FILENAME
+        elif in_agents and line.startswith("+"):
+            added.append(line[1:])
+    return added
 
 
 def count_guardrail_lines(diff_text: str) -> int:
-    """Count added lines containing architectural guardrail indicators."""
-    return sum(1 for line in diff_text.splitlines() if _is_guardrail_addition(line))
+    """Count the instruction lines a diff adds to AGENTS.md.
+
+    Counts lines rather than matching keywords. The keyword list — `mandate`, `rule`,
+    `guardrail`, `prohibited`, `must always` — rejected a guardrail reading "Never rebuild
+    text by splitting on a marker and re-joining it", which is an instruction in the
+    imperative containing none of those five words, and the workflow opened an issue
+    demanding hardening that had already been written. A keyword scan over prose is a
+    proxy with an unbounded false-negative surface and a one-word workaround; what the
+    audit can actually observe is whether the file gained instruction.
+    """
+    return sum(1 for line in _agents_md_additions(diff_text) if line.strip())
 
 
-def generate_hardening_summary(is_defect_fix: bool, is_compliant: bool, new_guardrails: int) -> str:
-    """Produce actionable summary of self-hardening audit."""
+def generate_hardening_summary(
+    is_defect_fix: bool, is_compliant: bool, new_guardrails: int, agents_md_touched: bool = False
+) -> str:
+    """Produce an actionable summary that says which of the two failures occurred.
+
+    "AGENTS.md was not updated" was reported for a pull request that had updated it,
+    because the keyword scan found nothing. A verdict that misnames its own cause sends
+    the reader to the wrong file, so the touched-but-empty case now says so.
+    """
     if not is_defect_fix:
         return "Standard deliverable (no defect tag); AGENTS.md hardening is optional."
     if is_compliant:
-        return f"Positive recursive hardening verified! AGENTS.md updated with {new_guardrails} guardrail line(s)."
+        return f"Positive recursive hardening verified! AGENTS.md gained {new_guardrails} line(s)."
+    if agents_md_touched:
+        return (
+            "Recursive hardening violation: This PR fixes a defect and changed AGENTS.md, but "
+            "added no instruction to it. Codify the guardrail that prevents this defect class."
+        )
     return (
         "Recursive hardening violation: This PR fixes a defect, but AGENTS.md was not updated. "
         "Autonomous engineering requires codifying preventative instructions on every defect fix."
@@ -173,10 +215,14 @@ def generate_hardening_summary(is_defect_fix: bool, is_compliant: bool, new_guar
 
 def audit_self_hardening(diff_text: str, is_defect_fix: bool = False) -> HardeningAuditResult:
     """Verify that a defect fix pull request includes updates to AGENTS.md."""
-    agents_md_touched = "diff --git a/AGENTS.md" in diff_text or "+++ b/AGENTS.md" in diff_text
-    new_guardrails = count_guardrail_lines(diff_text) if agents_md_touched else 0
-    is_compliant = not is_defect_fix or (agents_md_touched and new_guardrails > 0)
-    summary = generate_hardening_summary(is_defect_fix, is_compliant, new_guardrails)
+    agents_md_touched = any(
+        _file_under_diff(line) == AGENTS_FILENAME for line in diff_text.splitlines()
+    )
+    new_guardrails = count_guardrail_lines(diff_text)
+    is_compliant = not is_defect_fix or new_guardrails > 0
+    summary = generate_hardening_summary(
+        is_defect_fix, is_compliant, new_guardrails, agents_md_touched
+    )
 
     return HardeningAuditResult(
         is_defect_fix=is_defect_fix,
