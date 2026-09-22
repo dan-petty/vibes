@@ -145,6 +145,11 @@ capabilities:
     title: Executable documentation quality and link integrity gate
     short: Docs validator
     path: tools/docs_validator.py
+    paths:
+      - tools/docs_validator.py
+      - tools/doc_core.py
+      - tools/doc_rules_mermaid.py
+      - tools/doc_rules_structure.py
     ours:
       - link_checking
       - diagram_rendering
@@ -317,6 +322,11 @@ capabilities:
     title: Contract-driven application scaffolding
     short: App factory
     path: tools/app_factory.py
+    # Every file the capability is implemented in, so a capability that outgrows one module
+    # is not handed back to the location fallback and counted as an instrument.
+    paths:
+      - tools/app_factory.py
+      - tools/contract_variables.py
     ours:
       - contract_driven
       - gate_clean_output
