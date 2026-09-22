@@ -107,8 +107,36 @@ def _numstat_row(line: str) -> tuple[int, str] | None:
     return int(parts[0]), parts[2]
 
 
-def _classify_path(path: str) -> str:
-    """Return which side of the ledger a touched file falls on."""
+def declared_kinds(manifest_path: Path) -> dict[str, str]:
+    """Map each declared capability's path to its kind, longest path first.
+
+    Sorted by length so the most specific declaration wins: `examples/` alone would
+    classify the sentinel and the crawler identically, and they are opposite kinds.
+    """
+    document = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    declared = {
+        str(entry["path"]).rstrip("/"): str(entry.get("kind", "undeclared"))
+        for entry in document.get("capabilities", [])
+        if entry.get("path")
+    }
+    return dict(sorted(declared.items(), key=lambda item: -len(item[0])))
+
+
+def _classify_path(path: str, declared: dict[str, str] | None = None) -> str:
+    """Return which side of the ledger a touched file falls on.
+
+    The manifest decides where it can. Location alone gets this wrong in both directions:
+    `tools/app_factory.py` builds applications and `examples/ast-invariant-sentinel/` judges
+    them, so the first version reported building the factory as *quality* investment and
+    moved the ratio the wrong way — an instrument disagreeing with the thing it measures
+    on the very change that was made to correct it.
+
+    Location remains the fallback, because most files are not a declared capability and
+    dropping them would leave the ratio measuring a handful of paths.
+    """
+    for prefix, kind in (declared or {}).items():
+        if path == prefix or path.startswith(prefix + "/"):
+            return kind
     if path.startswith(CAPABILITY_PREFIXES):
         return "capability"
     if path.startswith(QUALITY_PREFIXES):
@@ -116,7 +144,7 @@ def _classify_path(path: str) -> str:
     return "other"
 
 
-def investment(window: int, root: Path) -> Balance:
+def investment(window: int, root: Path, manifest_path: Path | None = None) -> Balance:
     """Count lines added per area over a window of commits.
 
     Counts added lines, not touched files. The first version of this function counted
@@ -130,9 +158,10 @@ def investment(window: int, root: Path) -> Balance:
     improves. What it is good for is the question that prompted it: whether a stretch of
     work touched one side of the repository and not the other.
     """
+    declared = declared_kinds(manifest_path) if manifest_path else {}
     tally: dict[str, int] = collections.Counter()
     for added, path in _added_lines(window, root):
-        tally[_classify_path(path)] += added
+        tally[_classify_path(path, declared)] += added
     counted = {kind: total for kind, total in tally.items() if kind != "other"}
     return Balance(f"investment/{window} (lines added)", counted)
 
@@ -150,7 +179,7 @@ def render(measurements: list[Balance]) -> list[str]:
 
 def _handle_report(args: argparse.Namespace) -> int:
     """Report both ratios, and say when recent work touched no capability at all."""
-    measurements = [portfolio(args.manifest), investment(args.window, args.root)]
+    measurements = [portfolio(args.manifest), investment(args.window, args.root, args.manifest)]
     if args.json:
         print(json.dumps([m.to_json() for m in measurements], indent=2))
         return 0

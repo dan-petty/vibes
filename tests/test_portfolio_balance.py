@@ -24,6 +24,7 @@ from portfolio_balance import (
     Balance,
     _classify_path,
     _numstat_row,
+    declared_kinds,
     investment,
     portfolio,
 )
@@ -112,3 +113,67 @@ def test_every_capability_in_the_real_manifest_declares_a_kind() -> None:
     document = yaml.safe_load((REPO_ROOT / DEFAULT_MANIFEST).read_text(encoding="utf-8"))
     undeclared = [c["key"] for c in document["capabilities"] if "kind" not in c]
     assert undeclared == []
+
+
+# --- Classification by declaration ----------------------------------------------------
+#
+# Location alone is wrong in both directions: `tools/app_factory.py` builds applications and
+# `examples/ast-invariant-sentinel/` judges them. The first version of this measurement
+# reported building the factory as quality investment, moving the ratio the wrong way on the
+# very change made to correct the imbalance.
+
+_DECLARED = {
+    "tools/app_factory.py": "capability",
+    "examples/ast-invariant-sentinel/sentinel.py": "quality",
+    "examples/adaptive-web-crawler/": "capability",
+}
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("tools/app_factory.py", "capability"),
+        ("examples/ast-invariant-sentinel/sentinel.py", "quality"),
+        ("examples/adaptive-web-crawler/crawler.py", "capability"),
+        ("tools/sarif_report.py", "quality"),
+        ("examples/polyglot-cst-parser/parser.py", "capability"),
+        ("AGENTS.md", "other"),
+    ],
+)
+def test_a_declaration_outranks_a_location(path: str, expected: str) -> None:
+    """Undeclared paths still fall back to location, or the ratio measures a handful of files."""
+    declared = {k.rstrip("/"): v for k, v in _DECLARED.items()}
+    ordered = dict(sorted(declared.items(), key=lambda item: -len(item[0])))
+    assert _classify_path(path, ordered) == expected
+
+
+def test_the_most_specific_declaration_wins() -> None:
+    """`examples/` alone would classify the sentinel and the crawler identically."""
+    declared = declared_kinds(REPO_ROOT / DEFAULT_MANIFEST)
+    lengths = [len(path) for path in declared]
+    assert lengths == sorted(lengths, reverse=True)
+
+
+def test_the_real_manifest_classifies_the_factory_as_a_capability() -> None:
+    """The regression in one line: this is the case that made the metric disagree with itself."""
+    declared = declared_kinds(REPO_ROOT / DEFAULT_MANIFEST)
+    assert _classify_path("tools/app_factory.py", declared) == "capability"
+
+
+def test_investment_reads_the_manifest_when_it_is_given_one(tmp_path: Path) -> None:
+    """Without the manifest the fallback applies, which is the behaviour that was wrong."""
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    _git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "maker.py").write_text("x = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "seed")
+    manifest = tmp_path / "capabilities.yaml"
+    manifest.write_text(
+        yaml.safe_dump({"capabilities": [{"key": "m", "kind": "capability", "path": "tools/maker.py"}]}),
+        encoding="utf-8",
+    )
+    without = investment(5, tmp_path)
+    with_manifest = investment(5, tmp_path, manifest)
+    assert (without.counts, with_manifest.counts) == ({"quality": 1}, {"capability": 1})
