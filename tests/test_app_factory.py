@@ -22,7 +22,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 sys.path.insert(0, str(REPO_ROOT / "examples" / "ast-invariant-sentinel"))
 
-from app_factory import Contract, ContractError, generate, load_contract, schema_for
+from app_factory import (
+    ANSWERS_FILENAME,
+    Contract,
+    ContractError,
+    generate,
+    load_contract,
+    main,
+    schema_for,
+)
 from docs_validator import DocsValidator
 from sentinel import audit_targets
 
@@ -176,3 +184,51 @@ def test_the_worked_contract_declares_more_than_the_simplest_case() -> None:
     contract: Contract = load_contract(WORKED_CONTRACT)
     optional = [a for op in contract.operations for a in op.arguments if not a.required]
     assert (len(contract.operations) >= 2, len(optional) >= 1) == (True, True)
+
+
+# --- Variables reach the emitted application -------------------------------------------
+
+
+def test_an_answer_reaches_the_generated_module_and_readme(tmp_path: Path) -> None:
+    """A variable nothing renders is a question asked for no reason."""
+    contract = load_contract(WORKED_CONTRACT, {"entity": "shipment"})
+    generate(contract, tmp_path)
+    module = (tmp_path / contract.slug / "reconciler.py").read_text(encoding="utf-8")
+    readme = (tmp_path / contract.slug / "README.md").read_text(encoding="utf-8")
+    assert ("Reconcile submitted shipments" in module, "shipment" in readme) == (True, True)
+
+
+def test_the_answers_are_recorded_beside_the_application_and_replay(tmp_path: Path) -> None:
+    """A regeneration that repeats the dialogue is a regeneration nobody runs twice."""
+    generate(load_contract(WORKED_CONTRACT, {"entity": "shipment"}), tmp_path)
+    recorded = tmp_path / "invoice-reconciler" / ANSWERS_FILENAME
+    replayed = load_contract(WORKED_CONTRACT, yaml.safe_load(recorded.read_text(encoding="utf-8")))
+    assert replayed.answers["entity"] == "shipment"
+
+
+def test_generating_never_prompts_without_a_terminal(tmp_path: Path) -> None:
+    """The failure this prevents is not an error but a wait, on the machine least able to answer.
+
+    pytest's stdin is not a terminal, so a factory that prompted unconditionally would hang
+    this test rather than fail it — which is exactly how it would behave in CI.
+    """
+    code = main(["new", "--contract", str(WORKED_CONTRACT), "--out", str(tmp_path)])
+    assert (code, (tmp_path / "invoice-reconciler" / "reconciler.py").exists()) == (0, True)
+
+
+def test_a_contract_gated_after_rendering_still_passes_the_sentinel(tmp_path: Path) -> None:
+    """The acid test has to run on rendered output, or it only ever gated the defaults."""
+    contract = load_contract(WORKED_CONTRACT, {"entity": "consignment", "tolerance_unit": "percent"})
+    generate(contract, tmp_path)
+    report = audit_targets([tmp_path / contract.slug])
+    assert (report.violations, report.files_checked >= 3) == ([], True)
+
+
+def test_a_variable_that_renders_an_unusable_slug_is_refused(tmp_path: Path) -> None:
+    """Validation runs on the rendered contract, so an answer is judged where it lands."""
+    path = _contract_file(tmp_path, slug="{{ target }}", variables=[
+        {"name": "target", "prompt": "Where", "default": "demo-app"},
+    ])
+    load_contract(path)
+    with pytest.raises(ContractError, match="slug"):
+        load_contract(path, {"target": "Not A Slug"})

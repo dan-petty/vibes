@@ -1,24 +1,35 @@
 # A worked contract, built by `tests/test_app_factory.py` and gated with the repository's
 # own instruments. It exists so the factory's claim -- that its output passes every gate
-# with no edit -- is executed against something with optional arguments and more than one
-# operation, rather than against the simplest possible case.
+# with no edit -- is executed against something with optional arguments, more than one
+# operation and declared variables, rather than against the simplest possible case.
+variables:
+  - name: entity
+    prompt: What does this application reconcile
+    type: string
+    default: invoice
+  - name: tolerance_unit
+    prompt: Unit the tolerance argument is expressed in
+    type: choice
+    choices: [currency, percent]
+    default: currency
+
 name: Invoice Reconciler
 slug: invoice-reconciler
 module: reconciler
-purpose: Reconcile submitted invoices against recorded payments and report discrepancies.
+purpose: Reconcile submitted {{ entity }}s against recorded payments and report discrepancies.
 operations:
   - name: reconcile
-    summary: Compare one invoice against recorded payments and return the discrepancy.
+    summary: Compare one {{ entity }} against recorded payments and return the discrepancy.
     arguments:
       - name: invoice_id
         type: string
-        description: Identifier of the invoice under reconciliation.
+        description: Identifier of the {{ entity }} under reconciliation.
       - name: tolerance
         type: number
         required: false
-        description: Absolute difference tolerated before a discrepancy is reported.
+        description: Absolute difference, in {{ tolerance_unit }}, tolerated before a discrepancy is reported.
   - name: summarise
-    summary: Summarise every unreconciled invoice for a reporting period.
+    summary: Summarise every unreconciled {{ entity }} for a reporting period.
     arguments:
       - name: period
         type: string
@@ -26,4 +37,4 @@ operations:
       - name: include_resolved
         type: boolean
         required: false
-        description: Whether invoices already reconciled appear in the summary.
+        description: Whether {{ entity }}s already reconciled appear in the summary.

@@ -30,12 +30,35 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
 import yaml
+from contract_variables import (
+    ContractError,
+    Variable,
+    load_variables,
+    parse_assignments,
+    render,
+    resolve,
+)
+
+__all__ = [
+    "Argument",
+    "Contract",
+    "ContractError",
+    "Generated",
+    "Operation",
+    "emit_handlers",
+    "emit_module",
+    "emit_readme",
+    "emit_tests",
+    "generate",
+    "load_contract",
+    "schema_for",
+]
 
 # JSON Schema primitives, mapped to the Python types the generated runtime checks against
 # and to the annotations it writes. One table, so the schema and the runtime cannot drift.
@@ -83,34 +106,46 @@ class Operation:
 
 @dataclass(frozen=True)
 class Contract:
-    """A whole application, as declared."""
+    """A whole application, as declared and as answered."""
 
     name: str
     slug: str
     module: str
     purpose: str
     operations: tuple[Operation, ...]
+    variables: tuple[Variable, ...] = ()
+    answers: Mapping[str, Any] = field(default_factory=dict)
 
 
-class ContractError(ValueError):
-    """Raised when a contract cannot produce a valid application.
+def load_contract(
+    path: Path,
+    provided: Mapping[str, Any] | None = None,
+    *,
+    interactive: bool = False,
+    ask: Callable[[str], str] = input,
+) -> Contract:
+    """Parse, answer, render and validate a contract, refusing anything that would emit
+    invalid Python.
 
-    A distinct type because the caller's response differs: a malformed contract is the
-    author's to fix, where an OSError while writing is the environment's.
+    The order matters. Answers are substituted into the *parsed* document, so a value
+    carrying a colon or a brace cannot restructure it, and validation runs on the rendered
+    result, so a variable that produces an unusable slug is refused here rather than
+    discovered as a directory nothing can import.
     """
-
-
-def load_contract(path: Path) -> Contract:
-    """Parse and validate a contract, refusing anything that would emit invalid Python."""
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         raise ContractError(f"{path}: expected a mapping at the top level")
+    variables = load_variables(document)
+    answers = resolve(variables, provided or {}, interactive=interactive, ask=ask)
+    rendered = render({key: value for key, value in document.items() if key != "variables"}, answers)
     contract = Contract(
-        name=str(document.get("name", "")).strip(),
-        slug=str(document.get("slug", "")).strip(),
-        module=str(document.get("module", "")).strip(),
-        purpose=str(document.get("purpose", "")).strip(),
-        operations=tuple(_operation(entry) for entry in document.get("operations", [])),
+        name=str(rendered.get("name", "")).strip(),
+        slug=str(rendered.get("slug", "")).strip(),
+        module=str(rendered.get("module", "")).strip(),
+        purpose=str(rendered.get("purpose", "")).strip(),
+        operations=tuple(_operation(entry) for entry in rendered.get("operations", [])),
+        variables=variables,
+        answers=answers,
     )
     _reject_invalid(contract)
     return contract
@@ -577,6 +612,11 @@ def _json_arguments(operation: Operation) -> str:
 # the one file a developer edits is the one file the factory refuses to touch twice.
 REGENERATED: Final[tuple[str, ...]] = ("module", "tests", "readme")
 
+# Recorded beside the application so a regeneration can replay the dialogue instead of
+# repeating it. `copier` writes `.copier-answers.yml` for the same reason, and it is what
+# re-applying a contract to an existing project will need when that lands.
+ANSWERS_FILENAME: Final[str] = ".factory-answers.yaml"
+
 
 @dataclass
 class Generated:
@@ -605,26 +645,61 @@ def generate(contract: Contract, out_dir: Path) -> Generated:
     else:
         handlers.write_text(emit_handlers(contract), encoding="utf-8")
         result.written.append(handlers)
+    if contract.variables:
+        answers = target / ANSWERS_FILENAME
+        answers.write_text(yaml.safe_dump(dict(contract.answers), sort_keys=True), encoding="utf-8")
+        result.written.append(answers)
     return result
+
+
+def _supplied(args: argparse.Namespace) -> dict[str, Any]:
+    """Merge answers from a file with answers from the command line.
+
+    `--set` wins, because it is the more specific of the two and the one typed most
+    recently: a recorded file is a starting point and a flag is a correction to it.
+    """
+    from_file: dict[str, Any] = {}
+    if args.answers:
+        loaded = yaml.safe_load(args.answers.read_text(encoding="utf-8")) or {}
+        if not isinstance(loaded, dict):
+            raise ContractError(f"{args.answers}: expected a mapping of answers")
+        from_file = {str(key): value for key, value in loaded.items()}
+    return {**from_file, **parse_assignments(args.set or [])}
+
+
+def _interactive(args: argparse.Namespace) -> bool:
+    """Decide whether to ask, erring towards not asking.
+
+    Never prompt without a terminal on the other end. A generator that prompts into a pipe
+    does not fail, it waits, and it waits on the machine least able to answer it — which
+    is why every variable carries a default and this returns False whenever it is unsure.
+    """
+    return not args.no_input and sys.stdin.isatty()
 
 
 def _handle_new(args: argparse.Namespace) -> int:
     """Generate an application from a contract."""
-    contract = load_contract(args.contract)
+    contract = load_contract(args.contract, _supplied(args), interactive=_interactive(args))
     result = generate(contract, args.out)
     for path in result.written:
         print(f"  wrote     {path}")
     for path in result.preserved:
         print(f"  preserved {path}  (domain logic is never regenerated)")
     print(f"{contract.name}: {len(result.written)} file(s) written.")
+    if contract.variables:
+        print(f"Replay: --answers {args.out / contract.slug / ANSWERS_FILENAME}")
     print(f"Next: cd {args.out / contract.slug} && pytest test_{contract.module}.py")
     return 0
 
 
 def _handle_validate(args: argparse.Namespace) -> int:
-    """Check a contract without writing anything."""
-    contract = load_contract(args.contract)
+    """Check a contract without writing anything, resolving variables but never asking."""
+    supplied = _supplied(args)
+    contract = load_contract(args.contract, supplied)
     operations = ", ".join(operation.name for operation in contract.operations)
+    for variable in contract.variables:
+        source = "supplied" if variable.name in supplied else "default"
+        print(f"  {variable.name} = {contract.answers[variable.name]!r}  ({source})")
     print(f"{contract.name} ({contract.slug}): {len(contract.operations)} operation(s): {operations}")
     return 0
 
@@ -638,6 +713,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("command", choices=sorted(_HANDLERS))
     parser.add_argument("--contract", type=Path, required=True, help="Contract YAML to build from")
     parser.add_argument("--out", type=Path, default=Path("."), help="Directory to generate into")
+    parser.add_argument("--answers", type=Path, help="YAML file of answers to the contract's variables")
+    parser.add_argument("--set", action="append", metavar="NAME=VALUE", help="Answer one variable")
+    parser.add_argument("--no-input", action="store_true", help="Never prompt; take defaults")
     return parser
 
 

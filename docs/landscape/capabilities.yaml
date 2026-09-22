@@ -321,6 +321,7 @@ capabilities:
       - contract_driven
       - gate_clean_output
       - regeneration_safe
+      - interactive_prompts
     alternatives:
       - repo: cookiecutter/cookiecutter
         has:
