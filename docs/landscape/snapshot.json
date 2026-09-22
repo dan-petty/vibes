@@ -29,7 +29,7 @@
         "openai",
         "sonnet"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -66,7 +66,7 @@
         "vercel",
         "vertex"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -99,7 +99,7 @@
         "tree-sitter",
         "typescript"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -107,9 +107,9 @@
       "full_name": "astral-sh/ruff",
       "stars": 49734,
       "forks": 2430,
-      "open_issues": 2196,
+      "open_issues": 2199,
       "created_at": "2022-08-09T17:17:44Z",
-      "pushed_at": "2026-09-22T19:13:09Z",
+      "pushed_at": "2026-09-22T19:34:53Z",
       "archived": false,
       "license": "MIT",
       "releases": 100,
@@ -128,7 +128,51 @@
         "style-guide",
         "styleguide"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
+      "error": null
+    },
+    {
+      "requested": "cookiecutter/cookiecutter",
+      "full_name": "cookiecutter/cookiecutter",
+      "stars": 25104,
+      "forks": 2281,
+      "open_issues": 318,
+      "created_at": "2013-07-14T18:31:22Z",
+      "pushed_at": "2026-04-01T17:46:44Z",
+      "archived": false,
+      "license": "BSD-3-Clause",
+      "releases": 31,
+      "latest_release_at": "2026-03-04T04:16:14Z",
+      "release_source": "releases",
+      "topics": [
+        "cookiecutter",
+        "python"
+      ],
+      "fetched_at": "2026-09-22T19:36:35Z",
+      "error": null
+    },
+    {
+      "requested": "copier-org/copier",
+      "full_name": "copier-org/copier",
+      "stars": 3588,
+      "forks": 275,
+      "open_issues": 144,
+      "created_at": "2011-11-01T19:22:44Z",
+      "pushed_at": "2026-09-18T18:11:56Z",
+      "archived": false,
+      "license": "MIT",
+      "releases": 76,
+      "latest_release_at": "2026-09-07T13:19:00Z",
+      "release_source": "releases",
+      "topics": [
+        "cookiecutter",
+        "copier-template",
+        "hacktoberfest",
+        "project-template",
+        "python",
+        "scaffolding"
+      ],
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -150,7 +194,7 @@
         "markdown",
         "nodejs"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -186,7 +230,7 @@
         "software",
         "typescript"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -213,17 +257,17 @@
         "virtual-machine",
         "virtualization"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
       "requested": "firecrawl/firecrawl",
       "full_name": "firecrawl/firecrawl",
-      "stars": 183334,
+      "stars": 183340,
       "forks": 9886,
-      "open_issues": 639,
+      "open_issues": 640,
       "created_at": "2024-04-15T21:02:29Z",
-      "pushed_at": "2026-09-22T18:44:40Z",
+      "pushed_at": "2026-09-22T19:36:05Z",
       "archived": false,
       "license": "AGPL-3.0",
       "releases": 35,
@@ -250,7 +294,7 @@
         "web-search",
         "webscraping"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -272,7 +316,7 @@
         "leak-detection",
         "test-helper"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -280,9 +324,9 @@
       "full_name": "google/gvisor",
       "stars": 19391,
       "forks": 1999,
-      "open_issues": 817,
+      "open_issues": 816,
       "created_at": "2018-04-26T21:28:49Z",
-      "pushed_at": "2026-09-22T19:15:01Z",
+      "pushed_at": "2026-09-22T19:34:44Z",
       "archived": false,
       "license": "Apache-2.0",
       "releases": 4,
@@ -297,7 +341,7 @@
         "oci",
         "sandbox"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -317,7 +361,7 @@
         "dead-code-removal",
         "python"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -355,7 +399,7 @@
         "static-analysis",
         "typescript"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -380,7 +424,7 @@
         "link-checking",
         "validator"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -403,7 +447,7 @@
         "security-scanners",
         "vulnerability-assessment"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -439,7 +483,7 @@
         "testing",
         "vulnerability-scanners"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -464,7 +508,7 @@
         "static-analysis",
         "static-code-analysis"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -487,7 +531,7 @@
         "quality-assurance",
         "static-analysis"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -504,7 +548,7 @@
       "latest_release_at": "2024-10-21T10:26:40Z",
       "release_source": "tags",
       "topics": [],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -530,7 +574,7 @@
         "web-scraping",
         "web-scraping-python"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -547,7 +591,7 @@
       "latest_release_at": "2026-08-19T00:03:37Z",
       "release_source": "releases",
       "topics": [],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -570,7 +614,7 @@
         "python",
         "quality"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -606,7 +650,7 @@
         "opentelemetry-python",
         "python"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -631,7 +675,7 @@
         "tree-sitter",
         "wasm"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -648,13 +692,13 @@
       "latest_release_at": "2023-10-24T16:29:11Z",
       "release_source": "releases",
       "topics": [],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
       "requested": "unclecode/crawl4ai",
       "full_name": "unclecode/crawl4ai",
-      "stars": 84080,
+      "stars": 84081,
       "forks": 8687,
       "open_issues": 198,
       "created_at": "2024-05-09T09:48:50Z",
@@ -665,7 +709,7 @@
       "latest_release_at": "2026-08-31T11:34:14Z",
       "release_source": "releases",
       "topics": [],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
@@ -686,13 +730,13 @@
         "linting",
         "vale"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     },
     {
       "requested": "yamadashy/repomix",
       "full_name": "yamadashy/repomix",
-      "stars": 28462,
+      "stars": 28463,
       "forks": 1537,
       "open_issues": 144,
       "created_at": "2024-07-13T07:11:32Z",
@@ -724,7 +768,31 @@
         "openai",
         "typescript"
       ],
-      "fetched_at": "2026-09-22T19:18:48Z",
+      "fetched_at": "2026-09-22T19:36:35Z",
+      "error": null
+    },
+    {
+      "requested": "yeoman/generator",
+      "full_name": "yeoman/generator",
+      "stars": 1265,
+      "forks": 295,
+      "open_issues": 3,
+      "created_at": "2012-07-23T13:07:31Z",
+      "pushed_at": "2026-09-21T18:37:58Z",
+      "archived": false,
+      "license": "BSD-2-Clause",
+      "releases": 100,
+      "latest_release_at": "2026-09-14T21:06:02Z",
+      "release_source": "releases",
+      "topics": [
+        "generator",
+        "javascript",
+        "nodejs",
+        "scaffold",
+        "yeoman",
+        "yeoman-generator"
+      ],
+      "fetched_at": "2026-09-22T19:36:35Z",
       "error": null
     }
   ]
