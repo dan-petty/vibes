@@ -311,6 +311,14 @@ flowchart LR
      ```
 
    - **Finished is not passed.** `status: completed` says the run stopped, not that it succeeded; read `conclusion`, and read it for **every** job. A matrix entry that failed while its siblings passed is a failure, and `--exit-status` is what makes the shell agree.
+   - **`--exit-status` belongs to `gh run watch`, not to `gh pr checks`**, and a pipeline hides the difference. On `gh` 2.101.0 `gh pr checks <n> --watch --exit-status` prints `unknown flag`, dumps the help text and exits 1 — but `gh pr checks <n> --watch --exit-status | tail -12` exits **0**, because a shell pipeline reports the status of its last command. Hit here while watching PR #15: the output looked like an ordinary help page scrolling past, and nothing in the exit code said the watch had never run. Take the verdict from the rollup rather than from the exit status of a pipeline:
+
+     ```bash
+     gh pr checks <n> --watch --interval 15
+     gh pr view <n> --json mergeStateStatus,statusCheckRollup \
+       -q '.mergeStateStatus, (.statusCheckRollup[] | "\(.name // .context) \(.conclusion // .state)")'
+     ```
+
    - **An empty check list is not a passing check list.** `gh pr checks <n> --watch` exits **0** printing `no checks reported` when no check has registered yet, which on a freshly opened pull request is the normal state for the first several seconds. Observed here on PR #4: the watch returned success immediately, and the five checks that were about to run all appeared afterwards. Wait until at least one check exists before believing the verdict, or watch the run identifiers directly:
 
      ```bash
