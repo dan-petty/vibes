@@ -23,7 +23,7 @@ This document provides foundational context, architectural standards, and operat
 
   - **A generator's output is held to the same gates as hand-written code.** [`tools/app_factory.py`](./tools/app_factory.py) exists because this repository could measure, judge and fuzz code and could not produce an application. Generated code fails gates in predictable ways — dispatchers that branch past the complexity ceiling, modules with no docstring, READMEs with no structure — so a generator whose output fails them has handed its user a cleanup task and called it a scaffold. [`tests/test_app_factory.py`](./tests/test_app_factory.py) runs the real sentinel, ruff, mypy, documentation validator and generated suite over the real output, because "the output is compliant" is a claim and claims in this repository are executed.
   - **Generate the contract layer; never generate over the domain logic.** One declaration drives the dispatch table, the argument schema and the negative tests, which hand-written agree exactly until someone adds a parameter. `handlers.py` is written once and preserved on every regeneration: a factory that owns the code its user edits is a framework nobody can leave.
-  - **The work generators inherit whatever domain they were given.** [Observation 14](./observations/systems/14-defect-shaped-loops-and-the-feature-blind-spot.md) found the loop defect-shaped and roadmap ingestion was the fix; the landscape survey was then added to look outward. Its manifest listed four capabilities, all of them analysis tools, so every gap it could emit was a linter feature and twelve of sixteen sample applications were invisible to it. When an agent asked it what to build next, it answered with a linter feature, and the citation made that read as rigour. **Before acting on what an instrument proposes, check what it can see.**
+  - **The work generators inherit whatever domain they were given.** [Observation 14](./observations/systems/14-defect-shaped-loops-and-the-feature-blind-spot.md) found the loop defect-shaped and roadmap ingestion was the fix; the landscape survey was then added to look outward. Its manifest listed four capabilities, all of them analysis tools, so every gap it could emit was a linter feature and thirteen of sixteen sample applications were invisible to it. When an agent asked it what to build next, it answered with a linter feature, and the citation made that read as rigour. **Before acting on what an instrument proposes, check what it can see.** The narrowing survived the correction by moving out of the code and into the manifest, which is code that nothing executes — see [Observation 18](./observations/systems/18-a-correction-inherits-the-frame-it-corrects.md).
 
 ---
 
@@ -311,6 +311,14 @@ flowchart LR
      ```
 
    - **Finished is not passed.** `status: completed` says the run stopped, not that it succeeded; read `conclusion`, and read it for **every** job. A matrix entry that failed while its siblings passed is a failure, and `--exit-status` is what makes the shell agree.
+   - **`--exit-status` belongs to `gh run watch`, not to `gh pr checks`**, and a pipeline hides the difference. On `gh` 2.101.0 `gh pr checks <n> --watch --exit-status` prints `unknown flag`, dumps the help text and exits 1 — but `gh pr checks <n> --watch --exit-status | tail -12` exits **0**, because a shell pipeline reports the status of its last command. Hit here while watching PR #15: the output looked like an ordinary help page scrolling past, and nothing in the exit code said the watch had never run. Take the verdict from the rollup rather than from the exit status of a pipeline:
+
+     ```bash
+     gh pr checks <n> --watch --interval 15
+     gh pr view <n> --json mergeStateStatus,statusCheckRollup \
+       -q '.mergeStateStatus, (.statusCheckRollup[] | "\(.name // .context) \(.conclusion // .state)")'
+     ```
+
    - **An empty check list is not a passing check list.** `gh pr checks <n> --watch` exits **0** printing `no checks reported` when no check has registered yet, which on a freshly opened pull request is the normal state for the first several seconds. Observed here on PR #4: the watch returned success immediately, and the five checks that were about to run all appeared afterwards. Wait until at least one check exists before believing the verdict, or watch the run identifiers directly:
 
      ```bash
