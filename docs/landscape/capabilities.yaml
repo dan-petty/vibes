@@ -54,6 +54,12 @@ feature_catalog:
   semantic_conventions: Follows published semantic conventions for AI spans
   cost_attribution: Attributes token or currency cost to spans
   waterfall_rendering: Renders a trace as a readable waterfall
+  contract_driven: Generates from a declared interface rather than free-form template variables
+  gate_clean_output: Emits code that passes the generating project's own quality gates unedited
+  regeneration_safe: Regenerates without overwriting hand-written code
+  interactive_prompts: Collects values from the author interactively
+  template_ecosystem: Offers a published library of community templates
+  update_in_place: Re-applies a newer template to a project already generated from it
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a
@@ -305,3 +311,26 @@ capabilities:
         has:
           otel_export: "OpenTelemetry instrumentation for AI frameworks"
           semantic_conventions: "Publishes the semantic conventions it instruments against"
+
+  - key: application-scaffolding
+    kind: capability
+    title: Contract-driven application scaffolding
+    short: App factory
+    path: tools/app_factory.py
+    ours:
+      - contract_driven
+      - gate_clean_output
+      - regeneration_safe
+    alternatives:
+      - repo: cookiecutter/cookiecutter
+        has:
+          interactive_prompts: "Prompts for each variable declared in cookiecutter.json"
+          template_ecosystem: "A large published index of community templates"
+      - repo: copier-org/copier
+        has:
+          interactive_prompts: "Questions declared in copier.yml are asked at generation time"
+          update_in_place: "copier update re-applies a newer template revision to an existing project"
+      - repo: yeoman/generator
+        has:
+          interactive_prompts: "Generators prompt through an interactive dialogue"
+          template_ecosystem: "A published registry of installable generators"

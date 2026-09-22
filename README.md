@@ -197,6 +197,7 @@ flowchart LR
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
 - [**Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**](./tools/ast_refactorer.py): Mechanical AST rewriting engine auto-decomposing branching ladders ($M \ge 7$) and nesting depth into table dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples with round-trip safety verification.
 - [**Documentation Syntax & Link Validator (`tools/docs_validator.py`)**](./tools/docs_validator.py): High-performance documentation validator checking nested code fences, Mermaid AST, markdown table column alignments, local anchor slugs, and embedded snippet syntax.
+- [**Application Factory (`tools/app_factory.py`)**](./tools/app_factory.py): A contract declaring an application's operations and their argument types becomes a runnable application — dispatch table, JSON Schema with `additionalProperties: false`, prescriptive rejections listing every breach at once, timed invocations, CLI, contract tests and a structured README. What makes it a factory for *this* repository is the acceptance test: the emitted application passes the AST invariant sentinel, ruff, mypy, the documentation validator and its own generated suite with no edit, and [`tests/test_app_factory.py`](./tests/test_app_factory.py) runs those real gates over the real output. `handlers.py` is written once and never regenerated, because a factory that owns the domain logic becomes a framework nobody can leave.
 - [**Portfolio Balance (`tools/portfolio_balance.py`)**](./tools/portfolio_balance.py): Reports what the repository *has* against where its recent lines *went*. The drift it exists to surface is invisible from inside any single change — every tooling commit is defensible and the aggregate is not. Counts added lines rather than touched files, because a repository-wide lint sweep touches many locations and builds nothing: on the window that prompted this, touches read 52/48 and lines read 7/93. Steers, never gates.
 - [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
 - [**Instrument Fuzzer (`tools/fuzz_harness.py`)**](./tools/fuzz_harness.py): Turns the oracles on themselves. Generates and mutates Python modules, Markdown documents, roadmaps and manifests, then asserts four mechanically decidable properties of each instrument — that it raises nothing it has not declared, answers identically for identical input across hash seeds, converges when it repairs, and finishes. Every input that breaks one is minimized by delta debugging and kept in [`artifacts/fuzz-corpus/`](./artifacts/fuzz-corpus/), which is replayed as a gate; the random search runs on a schedule, where a lucky run is a finding rather than a red build.
@@ -333,6 +334,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── task-harnesses/
 │   │   ├── structured-task-spec-template.md
 │   │   └── sample-completed-task-spec.md
+│   ├── contracts/                     # Application contracts the factory builds from
 │   ├── finding-baseline.json          # Findings this repository accepts; empty, and tested so
 │   ├── fuzz-corpus/                   # Inputs that broke an instrument; replayed as a gate
 │   └── schemas/
@@ -378,6 +380,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
 │   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog
+│   ├── app_factory.py                 # Contract in, gate-clean runnable application out
 │   ├── landscape_survey.py            # Maturity, feature comparison and gap-to-roadmap survey
 │   ├── portfolio_balance.py           # What the repository builds against what it judges
 │   ├── roadmap_emit.py                # Shared: machine findings to idempotent roadmap proposals
@@ -392,6 +395,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_app_factory.py            # Runs the real gates over the factory's own output
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources

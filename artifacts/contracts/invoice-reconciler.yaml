@@ -1,0 +1,29 @@
+# A worked contract, built by `tests/test_app_factory.py` and gated with the repository's
+# own instruments. It exists so the factory's claim -- that its output passes every gate
+# with no edit -- is executed against something with optional arguments and more than one
+# operation, rather than against the simplest possible case.
+name: Invoice Reconciler
+slug: invoice-reconciler
+module: reconciler
+purpose: Reconcile submitted invoices against recorded payments and report discrepancies.
+operations:
+  - name: reconcile
+    summary: Compare one invoice against recorded payments and return the discrepancy.
+    arguments:
+      - name: invoice_id
+        type: string
+        description: Identifier of the invoice under reconciliation.
+      - name: tolerance
+        type: number
+        required: false
+        description: Absolute difference tolerated before a discrepancy is reported.
+  - name: summarise
+    summary: Summarise every unreconciled invoice for a reporting period.
+    arguments:
+      - name: period
+        type: string
+        description: Reporting period in ISO 8601 form, such as 2026-Q1.
+      - name: include_resolved
+        type: boolean
+        required: false
+        description: Whether invoices already reconciled appear in the summary.
