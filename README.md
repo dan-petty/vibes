@@ -328,7 +328,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   │   ├── structured-task-spec-template.md
 │   │   └── sample-completed-task-spec.md
 │   └── schemas/
-│       └── fastmcp-agent-tool-manifest-spec.json
+│       ├── fastmcp-agent-tool-manifest-spec.json
+│       └── sarif-schema-2.1.0.json     # OASIS SARIF 2.1.0 schema: the code scanning oracle
 │
 ├── resources/                         # Infrastructure & Observability configurations
 │   ├── observability/                 # OTel Collector, Prometheus alerts, Grafana dashboard
@@ -371,6 +372,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog
 │   ├── landscape_survey.py            # Maturity, feature comparison and gap-to-roadmap survey
 │   ├── roadmap_emit.py                # Shared: machine findings to idempotent roadmap proposals
+│   ├── sarif_report.py                # Every oracle's findings as one schema-valid SARIF log
 │   ├── supply_chain_audit.py          # Dependency, action, package and egress audit with fixes
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   ├── upstream_facts.py              # Shared: GitHub repository facts and maturity scoring
@@ -387,6 +389,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_roadmap_ingest.py         # Unit tests for roadmap deliverable ingestion
     ├── test_sdlc_sync.py              # Unit tests for backlog reconciliation and promotion
     ├── test_landscape_survey.py       # Unit tests for maturity scoring and gap-to-roadmap emission
+    ├── test_sarif_report.py           # Unit tests for SARIF emission and schema conformance
     ├── test_source_tree_policy.py     # Unit tests pinning one corpus definition across instruments
     ├── test_supply_chain_audit.py     # Unit tests for dependency inventory, risk and mechanical fixes
     ├── test_upstream_facts.py         # Unit tests for repository facts and maturity scoring

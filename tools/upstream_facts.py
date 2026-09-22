@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import subprocess
+import urllib.parse
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -282,7 +283,11 @@ def discover_candidates(query: str, limit: int) -> list[dict[str, Any]]:
     not evidence of comparability, and a survey that adopted its own search results would
     be citing itself.
     """
-    endpoint = f"/search/repositories?q={query}&sort=stars&order=desc&per_page={limit}"
+    # The query is user text and reaches the API as a URL, so spaces and qualifier
+    # punctuation have to be encoded. Passing it raw made every multi-word search fail
+    # with a transport-level protocol error rather than anything that named the cause.
+    encoded = urllib.parse.quote(query, safe="")
+    endpoint = f"/search/repositories?q={encoded}&sort=stars&order=desc&per_page={limit}"
     items = gh_json(endpoint, ".items") or []
     return [
         {

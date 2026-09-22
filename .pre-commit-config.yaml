@@ -34,7 +34,7 @@ repos:
         # from the changed files alone (a rename breaks inbound links in untouched docs).
         pass_filenames: false
         # Mirrors the runtime dependencies declared in pyproject.toml.
-        additional_dependencies: [markdown-it-py, networkx, pyyaml, radon, vulture]
+        additional_dependencies: [jsonschema, markdown-it-py, networkx, pyyaml, radon, vulture]
 
       - id: pytest-collection-check
         name: Pytest Collection Sanity Check
@@ -44,7 +44,7 @@ repos:
         stages: [pre-push]
         # Collection imports every test module, so this env needs the same runtime
         # dependencies as ci.yml: pyyaml and markdown-it-py, not just the runner.
-        additional_dependencies: [pytest, pytest-asyncio, markdown-it-py, networkx, pyyaml, radon, vulture]
+        additional_dependencies: [pytest, pytest-asyncio, jsonschema, markdown-it-py, networkx, pyyaml, radon, vulture]
 
       - id: mypy
         name: mypy (tools/)
@@ -56,7 +56,7 @@ repos:
         files: ^tools/.*\.py$
         pass_filenames: false
         stages: [pre-push]
-        additional_dependencies: [mypy>=1.11, types-PyYAML, markdown-it-py, networkx, pyyaml, radon, vulture]
+        additional_dependencies: [mypy>=2.0, types-PyYAML, types-jsonschema, jsonschema, markdown-it-py, networkx, pyyaml, radon, vulture]
 
       - id: json-schema-lint
         name: JSON Schema Lint (FastMCP Manifests)

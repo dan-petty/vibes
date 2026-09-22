@@ -46,6 +46,7 @@ capabilities:
       - nesting_depth
       - secret_scanning
       - pre_commit_hook
+      - sarif_output
     alternatives:
       - repo: rubik/xenon
         has:
@@ -81,6 +82,7 @@ capabilities:
       - dead_code
       - import_cycles
       - cohesion_metric
+      - sarif_output
     alternatives:
       - repo: rubik/radon
         has:

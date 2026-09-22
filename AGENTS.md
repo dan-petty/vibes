@@ -255,21 +255,35 @@ flowchart LR
    - The defect was not the auto-fix. It was that the re-export was **implicit**: nothing in the file said those names were public. The durable repair is `__all__`, not re-adding the imports.
    - The same pass wrapped a long `from X import Y  # type: ignore[...]` onto a continuation line, moving the comment to where mypy no longer reads it. `line-length` is now set so the import rule leaves those lines alone.
    - Apply mechanical fixes in one batch, then run tests, lints and type checks together. Fixes that satisfy one tool by breaking another are common where two tools own the same line.
-5. **The Mandatory Self-Hardening Rule**:
+5. **Publish Findings Where They Are Read**:
+   - A CI log is where a finding goes to be ignored: nobody opens it unless the build is already red, and a `note`-level observation never turns it red. [`tools/sarif_report.py`](./tools/sarif_report.py) emits every oracle's findings as one SARIF 2.1.0 log so code scanning renders them on the pull request that introduced them.
+
+     ```bash
+     python3 tools/sarif_report.py --out findings.sarif    # all four oracles, schema-validated
+     python3 tools/sarif_report.py --include-advisory      # adds the informative ones
+     ```
+
+   - **Validate before writing.** The OASIS schema is committed at `artifacts/schemas/sarif-schema-2.1.0.json` and every log is checked against it, because GitHub rejects a malformed upload with a message naming neither the field nor the run.
+   - **A tool that found nothing still reports.** Code scanning resolves an alert only when the tool that raised it reports again without it; a tool that simply stops appearing leaves every alert it ever raised open forever. Never filter out empty runs.
+   - **Fingerprints must exclude the line number.** An import added above a defect is not a new defect. `partialFingerprints` is what stops an unrelated edit re-alerting the whole file.
+   - **Advisory findings are opt-in.** They need judgement, and eighty-nine of them arriving as alerts bury the two that gate a release — the same reason the workbench keeps them out of the backlog.
+   - Adding an oracle means adding an adapter, not a second workflow. Each adapter owns its own severity mapping, because only the oracle knows whether its finding stops a release or merely informs one.
+
+6. **The Mandatory Self-Hardening Rule**:
    - Whenever authoring a pull request that addresses an issue labeled `bug`, `defect`, or `regression`, the agent **MUST ALWAYS MODIFY `AGENTS.md`** to add a concrete preventative rule or guardrail.
    - PRs addressing defects that do not touch `AGENTS.md` will fail the automated `recursive-hardening.yml` check.
-6. **Multi-Path CLI Contracts (Never Silently Truncate argv)**:
+7. **Multi-Path CLI Contracts (Never Silently Truncate argv)**:
    - Every tool invoked by `.pre-commit-config.yaml` with `pass_filenames: true` receives **N staged filenames per invocation**, not one. Entrypoints MUST accept `nargs="*"` and audit every supplied path.
    - Reading only `argv[1]` is a **silent certification failure**: the sentinel prints `✅ All architectural invariants PASSED!` after inspecting the first file and never opening the rest. A gate that reports success on unread input is worse than no gate.
    - Parse arguments with `argparse`, never by hand-slicing `sys.argv` or filtering tokens by prefix. Unknown flags must exit non-zero rather than be discarded.
    - When adding a hook, verify the multi-file path explicitly: `python <tool> <clean_file> <violating_file>` must exit non-zero.
-7. **Acting on an Inbound Review (Verify the Batch Before Fixing Anything)**:
+8. **Acting on an Inbound Review (Verify the Batch Before Fixing Anything)**:
    - An external review arrives as a list of confident, located, severity-ranked claims. Treat the list as hypotheses. A 286-finding review of this repository carried executable verification criteria on 274 items and executed none of them, so a wrong location, an inverted polarity, and a deliberate teaching artifact all reached the report as CRITICAL.
    - **Verify the whole batch before fixing any of it.** Withdrawals are cheap, and a systematic error — a stale line map, an inverted check — is far easier to see across findings than within one.
    - For each finding: run the criteria, quote the cited lines, state observed beside expected, and check whether the construct is declared deliberate in its own file. See [Findings Must Carry Their Own Falsification](./patterns/findings-must-carry-their-own-falsification.md).
    - **Fix the class, not the instance.** Three separate findings about private addresses in prose meant markdown was never checked at all; the durable fix was the `sanitization` rule, not three edits.
    - Record which findings were false and why. A review pipeline that never learns its false-positive rate cannot improve, and the next batch carries the same class.
-8. **Autonomous Review Thread Resolution**:
+9. **Autonomous Review Thread Resolution**:
    - If the `pr-sentinel.yml` bot leaves a review comment or request for remediation, the agent must treat the sentinel feedback as an unyielding boundary condition, refactor the code to satisfy the metric, and re-push.
 
 ---

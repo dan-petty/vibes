@@ -36,7 +36,7 @@ Ours: [`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invaria
 | **nesting_depth** — Flags block nesting deeper than a configured ceiling | ✅ | ? | ? | ? | ? |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | — | ? | ✅ | ? | ? |
 | **pre_commit_hook** — Ships a documented pre-commit integration | ✅ | ? | ? | ✅ | ? |
-| **sarif_output** — Emits SARIF for code scanning and security dashboards | — | ? | ? | ✅ | ? |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? | ✅ | ? |
 | **secret_scanning** — Detects credentials or private network addresses in source | ✅ | ? | ? | ? | ? |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
@@ -57,7 +57,7 @@ Ours: [`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code
 | **maintainability_index** — Reports a normalized maintainability score per module | ✅ | ✅ | ? | ✅ | ? |
 | **multi_language** — Analyses languages beyond Python | — | ? | ? | ? | ✅ |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | — | ? | ✅ | ? | ? |
-| **sarif_output** — Emits SARIF for code scanning and security dashboards | — | ? | ? | ? | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? | ? | ✅ |
 | **trend_over_time** — Tracks metric movement across git history rather than one snapshot | — | ? | ? | ✅ | ? |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
@@ -94,7 +94,7 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-18 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed.
+16 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed.
 
 - **Complexity gate: ships selectable rule presets rather than one fixed rule set**
   - Held by: `astral-sh/ruff`, `pylint-dev/pylint`
@@ -124,9 +124,6 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 - **Complexity gate: accepts existing violations so a gate can be adopted incrementally**
   - Held by: `terryyin/lizard`
   - Evidence: terryyin/lizard: -W whitelist file suppresses known warnings
-- **Complexity gate: emits sarif for code scanning and security dashboards**
-  - Held by: `astral-sh/ruff`
-  - Evidence: astral-sh/ruff: --output-format sarif
 - **Docs validator: enforces prose style or terminology rules**
   - Held by: `vale-cli/vale`
   - Evidence: vale-cli/vale: Applies configurable prose style guides such as Microsoft or Google
@@ -148,9 +145,6 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 - **Smell quantifier: accepts existing violations so a gate can be adopted incrementally**
   - Held by: `jendrikseipp/vulture`
   - Evidence: jendrikseipp/vulture: Whitelist files suppress known-live symbols
-- **Smell quantifier: emits sarif for code scanning and security dashboards**
-  - Held by: `kucherenko/jscpd`
-  - Evidence: kucherenko/jscpd: Reporters include sarif
 - **Smell quantifier: tracks metric movement across git history rather than one snapshot**
   - Held by: `tonybaloney/wily`
   - Evidence: tonybaloney/wily: wily build indexes metrics across git revisions; wily graph and wily diff report movement

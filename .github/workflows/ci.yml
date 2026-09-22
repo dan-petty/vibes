@@ -10,6 +10,39 @@ permissions:
   contents: read
 
 jobs:
+  code-scanning:
+    name: Publish Findings to Code Scanning
+    runs-on: ubuntu-latest
+    # A fork's pull request has no write token, so the upload would fail for a contributor
+    # who did nothing wrong. Generation still runs everywhere; only publication is gated.
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: pip install --editable "."
+
+      - name: Emit SARIF From Every Oracle
+        # Deliberately not --fail-on-error: the gates in `certify` already decide whether
+        # the build passes. This job exists to put findings in the diff, and a second
+        # verdict on the same findings would only ever disagree with the first.
+        run: python tools/sarif_report.py --out findings.sarif
+
+      - name: Upload to Code Scanning
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
+        with:
+          sarif_file: findings.sarif
+          category: vibes-oracles
+
   certify:
     name: Verify Invariants & Test Suites
     runs-on: ubuntu-latest
