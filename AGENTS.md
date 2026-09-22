@@ -203,6 +203,10 @@ Every pattern must then provide an actionable operational playbook:
 ## 7. Continuous Curation & Self-Hardening
 
 - **Prompt Defect Tracking**: If an AI agent encounters a formatting error, broken link, or ambiguity while operating in `vibes`, the agent MUST immediately fix the underlying cause and update `AGENTS.md` with defensive instructions.
+- **Fix the Class, Then Close the Hole That Let It In**: Repairing the defect is half the work. The other half is asking *what was supposed to catch this, and why didn't it*. Every entry in [§10a](#10a-measuring-and-believing-what-you-measured) exists because a defect was fixed and the same question was then asked about the gate.
+  - If the answer is "nothing was looking", configure something and gate it — do not rely on the next agent repeating your one-off audit.
+  - If the answer is "a gate exists but never fires on this input", the gate is the defect. A cap that is never reached, an `except` never entered, and a rule never evaluated are all indistinguishable from passing.
+  - If the answer is "a decision was made and not recorded", record it where the tooling reads. A judgement an agent has to re-derive every pass will be re-litigated every pass — see the deferral contract in §9.
 - **Zero Zombie Code & Stale Artifacts**: Ruthlessly remove obsolete notes or broken links. Keep the repository clean, modern, and exemplary at all times.
 - **The Delete-On-Sight Rule Is Version-Scoped**: "Remove obsolete code immediately" is correct **only while the major version is 0**. Nothing in a source tree announces which regime is in force, so an agent that infers the policy from tree cleanliness will keep deleting straight through the 1.0 boundary and break callers who were promised otherwise.
   - **Pre-1.0**: delete on sight. No shims, no compatibility layers, no deprecation ceremony.
@@ -231,21 +235,41 @@ flowchart LR
 2. **Pre-Push Local Sentinel Certification**:
    - Before opening a pull request, run `python examples/ast-invariant-sentinel/sentinel.py <modified_files>`.
    - Verify that cyclomatic complexity remains $\le 10$, nesting depth $\le 5$, and zero RFC 1918 private IPs are exposed.
-3. **The Mandatory Self-Hardening Rule**:
+   - Run the full static set, which `ci.yml` and `.pre-commit-config.yaml` also run:
+
+     ```bash
+     ruff check tools tests examples benchmarks
+     (cd tools && mypy .)              # tools/ is the source root; see pyproject.toml
+     python -m pytest -q
+     python tools/docs_validator.py .
+     ```
+
+3. **A Finding Nobody Looks For Is Not a Finding**:
+   - This repository ran for its entire life with no linter and no type checker configured. When one was finally pointed at it, **192 findings** were waiting, and they were not all style: an undefined `logger` in an error handler that could therefore only raise `NameError`, three `zip()` calls truncating silently on length mismatch, five mutable class attributes shared across instances, a `return x if ok else x`, and a measured elapsed time computed and thrown away.
+   - None of those were hard to detect. Nothing was detecting.
+   - **Never leave an analysis tool installed but unconfigured.** If a tool is worth running once to see what it says, it is worth adding to `pyproject.toml` and the gates. A one-off cleanup decays back to the same state; a gate does not.
+   - Where a rule genuinely does not fit this repository, **turn it off in configuration with the reason written down** — `RUF002`/`RUF003` are disabled because the prose uses en and em dashes deliberately. Silence from an unconfigured tool and silence from a deliberately disabled rule look identical in the terminal and are opposites in fact.
+
+4. **Never Apply a Mechanical Fix Without Re-Running the Suite**:
+   - `ruff check --fix` removed six names from `docs_validator.py` that were re-exported for consumers. The module did not use them, so they were unused by the letter of the rule, and the test suite stopped collecting.
+   - The defect was not the auto-fix. It was that the re-export was **implicit**: nothing in the file said those names were public. The durable repair is `__all__`, not re-adding the imports.
+   - The same pass wrapped a long `from X import Y  # type: ignore[...]` onto a continuation line, moving the comment to where mypy no longer reads it. `line-length` is now set so the import rule leaves those lines alone.
+   - Apply mechanical fixes in one batch, then run tests, lints and type checks together. Fixes that satisfy one tool by breaking another are common where two tools own the same line.
+5. **The Mandatory Self-Hardening Rule**:
    - Whenever authoring a pull request that addresses an issue labeled `bug`, `defect`, or `regression`, the agent **MUST ALWAYS MODIFY `AGENTS.md`** to add a concrete preventative rule or guardrail.
    - PRs addressing defects that do not touch `AGENTS.md` will fail the automated `recursive-hardening.yml` check.
-4. **Multi-Path CLI Contracts (Never Silently Truncate argv)**:
+6. **Multi-Path CLI Contracts (Never Silently Truncate argv)**:
    - Every tool invoked by `.pre-commit-config.yaml` with `pass_filenames: true` receives **N staged filenames per invocation**, not one. Entrypoints MUST accept `nargs="*"` and audit every supplied path.
    - Reading only `argv[1]` is a **silent certification failure**: the sentinel prints `✅ All architectural invariants PASSED!` after inspecting the first file and never opening the rest. A gate that reports success on unread input is worse than no gate.
    - Parse arguments with `argparse`, never by hand-slicing `sys.argv` or filtering tokens by prefix. Unknown flags must exit non-zero rather than be discarded.
    - When adding a hook, verify the multi-file path explicitly: `python <tool> <clean_file> <violating_file>` must exit non-zero.
-5. **Acting on an Inbound Review (Verify the Batch Before Fixing Anything)**:
+7. **Acting on an Inbound Review (Verify the Batch Before Fixing Anything)**:
    - An external review arrives as a list of confident, located, severity-ranked claims. Treat the list as hypotheses. A 286-finding review of this repository carried executable verification criteria on 274 items and executed none of them, so a wrong location, an inverted polarity, and a deliberate teaching artifact all reached the report as CRITICAL.
    - **Verify the whole batch before fixing any of it.** Withdrawals are cheap, and a systematic error — a stale line map, an inverted check — is far easier to see across findings than within one.
    - For each finding: run the criteria, quote the cited lines, state observed beside expected, and check whether the construct is declared deliberate in its own file. See [Findings Must Carry Their Own Falsification](./patterns/findings-must-carry-their-own-falsification.md).
    - **Fix the class, not the instance.** Three separate findings about private addresses in prose meant markdown was never checked at all; the durable fix was the `sanitization` rule, not three edits.
    - Record which findings were false and why. A review pipeline that never learns its false-positive rate cannot improve, and the next batch carries the same class.
-6. **Autonomous Review Thread Resolution**:
+8. **Autonomous Review Thread Resolution**:
    - If the `pr-sentinel.yml` bot leaves a review comment or request for remediation, the agent must treat the sentinel feedback as an unyielding boundary condition, refactor the code to satisfy the metric, and re-push.
 
 ---
@@ -271,7 +295,21 @@ To foster an autonomous, creative, and continuously self-improving engineering i
      python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json
      ```
 
-   - `sync` closes defect cards whose finding a scan no longer reports and promotes exactly one card to Ready. Roadmap cards are exempt from closing, because no scan can observe an unbuilt feature and its absence therefore means nothing. Add `--watch` to reconcile continuously.
+   - `sync` closes defect cards whose finding a scan no longer reports and promotes exactly one card to Ready. Add `--watch` to reconcile continuously.
+   - A roadmap card cannot be judged by a scan's silence, so it is judged against ingestion: when the scan carries roadmap cards at all, that set is the complete list of *open* deliverables, and a card missing from it has been checked off. A defect-only export says nothing either way and leaves the roadmap untouched. Without that distinction the board kept recommending work that had already shipped.
+   - A roadmap card's **declared** fields — priority, sizing, blocker, guidance — are re-read from the roadmap on every pass; its `lifecycle_state` belongs to the board and is never reset by a re-read.
+
+4. **Record a Deferral, Do Not Re-Decide It**:
+   - Passing over the same item twice on the same grounds is a defect in the loop, not a preference. The prioritizer has no memory, so an unrecorded judgement is re-derived — and re-litigated — on every pass.
+   - Annotate the roadmap item itself. The reason is mandatory and travels with the card:
+
+     ```markdown
+     - [ ] **Some Deliverable (P1 - High)** (blocked: needs live review threads this repo does not produce):
+     ```
+
+   - `roadmap_ingest.py` lifts the reason into `blocked_reason`, and the prioritizer refuses to schedule the item on **every** path. Blocking only the implement path is not enough: the fallback simply returned the same card under a different action type.
+   - Deferred items are **printed alongside the recommendation**, never hidden. The risk with a deferral is not that it is wrong but that it becomes permanent unnoticed. Removing the annotation is the entire cost of re-enabling the work.
+   - Do not express a deferral by deleting the item, marking it rejected, or lowering its priority. Those destroy the reason; only the blocker preserves it.
 
    - Defects outrank features by construction, so a healthy repository advances the roadmap and an unhealthy one repairs itself first. Items whose value and effort are absent from the prioritization matrix are ranked on defaults and say so: add a matrix row to rank one deliberately rather than by assumption.
    - Rejected work is never ingested. The roadmap's anti-pattern rows record decisions *not* to build things, and a loop that schedules them has inverted the decision it was given.
@@ -297,6 +335,37 @@ Stochastic language generation must always be bounded by deterministic mechanica
 5. **Defensive Filesystem, Symlink & Resource Containment**:
    - Always enforce pre-flight file size caps (`MAX_FILE_SIZE_BYTES` $\le 5$MB) before reading files into memory to mitigate denial-of-service from minified bundles or binary dumps (CWE-400).
    - Always verify that resolved filesystem symlinks remain strictly confined within the workspace root (`resolved_path.is_relative_to(base_root)`), catching `(OSError, RuntimeError)` to prevent circular symlink recursion (`ELOOP`) and traversal escapes.
+
+---
+
+## 10a. Measuring, and Believing What You Measured
+
+Every defect in this section was found by a measurement and survived a first, wrong reading of it. The rules are about the reading, not the instrument.
+
+1. **A Count Is Not a Cost**:
+   - A performance claim needs a **count** and a **unit cost**, and at least one of the two must be measured *in the environment under test*. A syscall count felt rigorous — it was deterministic, which the wall clock on this host is not — and led straight to "the filesystem is not the bottleneck" because 547 operations were multiplied by an unexamined intuition. A `stat` costs ~1.8ms on the virtualised mount this repository is developed on and ~0.001ms on tmpfs. It was most of the runtime.
+   - Reconcile the product against the wall clock before acting. If `count × unit` does not account for what you measured, a cause is still unidentified and the fix is premature.
+   - **Treat any profiler `cumtime` exceeding the wall clock as instrument error.** `cProfile` attributed 11.4s to a function inside a 2.6s run, because it sums what threads and recursion overlapped. Its ranking is a hypothesis about *where*, never evidence of *how much*. See [Observation 15](./observations/systems/15-a-count-is-not-a-cost.md).
+
+2. **An Instrument That Answers Differently for Identical Input Is Broken**:
+   - Before trusting a new detector, run it twice on an unchanged tree. The cohesion detector reported 15, 16 and 17 findings on three consecutive runs of the same files.
+   - The cause was an **asymmetric relation in a symmetric algorithm**: "A shares an attribute with B" is symmetric, "A calls B" is not, and only the second direction was tested. Which cluster a method joined depended on which element `set.pop()` returned, and string hashing is randomised per process.
+   - Any connectivity, clustering or equivalence computation must either use a symmetric relation or explicitly close it. Iterate `sorted()` rather than raw set order so results are reproducible, and assert stability across `PYTHONHASHSEED` values in a test.
+   - Non-determinism was the symptom, not the defect. The old code was wrong in *every* ordering — 3 or 4 where the answer was 2. A metric that is merely unstable is still telling you it cannot be trusted.
+
+3. **Every Instrument Must Share One Definition of the Corpus**:
+   - Four call sites independently decided whether a path belonged to this repository and no two agreed; only one excluded `node_modules`. Installing a documentation dependency moved self-reported health from 100.0 to 91.2 CRITICAL and put a vendored package's README top of the backlog.
+   - Discovery goes through [`tools/source_tree_policy.py`](./tools/source_tree_policy.py) and nowhere else. Never write an ad-hoc `.venv`/`__pycache__` exclusion list; import `is_repository_source` or `iter_source_files`.
+   - Prune **during** traversal. `rglob` cannot prune, so it descends into every vendored package before discarding the result: 5.62s against 0.63s for `os.walk` on the same tree.
+   - Instruments that disagree about what the corpus *is* cannot be reconciled about what is wrong with it. See [Observation 16](./observations/systems/16-the-prioritizer-is-not-under-test.md).
+
+4. **An Error Path That Has Never Run Is Not Known to Work**:
+   - The handler guarding an optional dependency referenced an undefined `logger`. It could only raise `NameError` — turning a degradation into a crash — and survived precisely because nothing had ever taken that branch.
+   - Every `except` branch written to degrade gracefully needs a test that forces it. Monkeypatch the dependency to raise, then assert both that the caller survived and that the failure was reported.
+   - Degrade **visibly**. A handler that swallows its error silently is indistinguishable from one that never ran, which is how this one hid.
+
+5. **The Gate Will Catch Its Author First, Repeatedly**:
+   - In one session the complexity gate flagged `listing`, `iter_source_files`, `_count_disjoint_clusters` and `_handle_sync` — every one written minutes earlier to *fix* something else. This is the normal case, not an embarrassment: re-run the gates after your own fix, before committing, and expect to decompose what you just wrote.
 
 ---
 
