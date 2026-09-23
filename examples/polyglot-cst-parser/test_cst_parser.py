@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ sys.path.insert(0, str(_app_dir))
 
 from parser import (
     LanguageDetector,
+    PolyglotComplexityCalculator,
     PolyglotCSTParser,
     SymbolKind,
     main,
@@ -227,3 +229,38 @@ def test_cli_demo_and_scan(capsys: Any, tmp_path: Path) -> None:
     assert exit_scan == 0
     captured_scan = capsys.readouterr().out
     assert "run_job" in captured_scan
+
+
+def test_node_decision_weights_and_extractor_dispatch() -> None:
+    """Verify AST node decision counting and extractor table dispatch."""
+    # Test comprehension with multiple if clauses
+    comp_ast = ast.parse("[x for x in items if x > 0 if x < 10]").body[0].value.generators[0]  # type: ignore[attr-defined]
+    comp_weight = PolyglotComplexityCalculator._node_decision_count(comp_ast)
+
+    # Test match cases (concrete vs wildcard)
+    match_ast = ast.parse("match val:\n    case 1:\n        pass\n    case _:\n        pass")
+    cases = match_ast.body[0].cases  # type: ignore[attr-defined]
+    case_weights = (
+        PolyglotComplexityCalculator._node_decision_count(cases[0]),
+        PolyglotComplexityCalculator._node_decision_count(cases[1]),
+    )
+
+    # Test BoolOp
+    bool_ast = ast.parse("a and b and c").body[0].value  # type: ignore[attr-defined]
+    bool_weight = PolyglotComplexityCalculator._node_decision_count(bool_ast)
+
+    # Test non-decision node
+    pass_ast = ast.parse("pass").body[0]
+    pass_weight = PolyglotComplexityCalculator._node_decision_count(pass_ast)
+
+    # Test unsupported language dispatch
+    parser = PolyglotCSTParser()
+    unknown_syms = parser._extract_symbols("content", "unsupported_lang")
+
+    assert (comp_weight, case_weights, bool_weight, pass_weight, unknown_syms) == (
+        3,
+        (1, 0),
+        2,
+        0,
+        [],
+    )
