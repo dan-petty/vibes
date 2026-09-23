@@ -13,13 +13,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import yaml
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 from landscape_survey import (
     DEFAULT_MILESTONE,
     Manifest,
     RepoFacts,
+    declared_dependencies,
     find_gaps,
     gap_marker,
     insert_gap_items,
@@ -48,6 +51,10 @@ capabilities:
     ours: [nesting_depth]
     alternatives:
       - repo: someone/tracker
+        package: tracker-pkg
+        license: MIT
+        adoptable: true
+        adoption_note: "MIT, pure Python"
         has:
           trend_over_time: "wily-style index across revisions"
           nesting_depth: "documented depth ceiling"
@@ -301,3 +308,62 @@ def test_cli_discover_marks_projects_already_curated(
         True,
         True,
     )
+
+
+# --- Build, adopt, or integrate ---------------------------------------------------------
+
+
+def test_a_gap_held_by_a_declared_dependency_is_an_integration(tmp_path: Path) -> None:
+    """The cheapest gap there is, and the one this repository missed hardest.
+
+    A gap used to be defined as "an alternative has this and we do not", which is already
+    the answer *build it* before anyone has asked whether to use the alternative. That
+    framing is upstream of the 59 audit findings against components that reimplemented a
+    solved problem — two of whose reference implementations were already declared
+    dependencies, with the manifest stating what they were for.
+    """
+    gaps = find_gaps(_manifest(tmp_path), installed={"tracker-pkg"})
+    gap = next(g for g in gaps if g.feature == "trend_over_time")
+    assert (gap.disposition, gap.adopt_via) == ("integrate", "someone/tracker")
+    assert "already a dependency" in gap.roadmap_title()
+
+
+def test_an_adoptable_alternative_is_an_adoption_not_a_build(tmp_path: Path) -> None:
+    """Declared, never inferred: an alternative says whether it is adoptable and why."""
+    gaps = find_gaps(_manifest(tmp_path), installed=set())
+    gap = next(g for g in gaps if g.feature == "trend_over_time")
+    assert (gap.disposition, gap.adopt_via) == ("adopt", "someone/tracker")
+
+
+def test_a_capability_may_declare_a_feature_its_own_to_build(tmp_path: Path) -> None:
+    """Some features are the differentiator and must not be delegated away.
+
+    Without this, a capability whose whole point is a bespoke implementation would be told
+    to adopt the thing it exists to improve on.
+    """
+    manifest_path = tmp_path / "capabilities.yaml"
+    manifest_path.write_text(MANIFEST_YAML, encoding="utf-8")
+    document = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    document["capabilities"][0]["build_only"] = ["trend_over_time"]
+    manifest_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+    gap = next(g for g in find_gaps(load_manifest(manifest_path), installed={"tracker-pkg"})
+               if g.feature == "trend_over_time")
+    assert gap.disposition == "build"
+
+
+def test_integrations_are_ranked_above_adoptions_and_builds(tmp_path: Path) -> None:
+    """Order by what it costs to close, not only by how many alternatives hold it."""
+    ranks = [g.disposition for g in find_gaps(_manifest(tmp_path), installed={"tracker-pkg"})]
+    assert ranks == sorted(ranks, key=lambda d: {"integrate": 0, "adopt": 1, "build": 2}[d])
+
+
+def test_dependencies_are_parsed_from_the_manifest_not_pattern_matched() -> None:
+    """The first version scanned `pyproject.toml` with a regular expression.
+
+    It returned `e402`, `apache-2.0` and `readme.md` among the dependencies — a partial
+    pattern over a format that has had a parser in the standard library since 3.11, which
+    is exactly what §6 forbids.
+    """
+    declared = declared_dependencies(REPO_ROOT)
+    assert {"radon", "markdown-it-py", "ruff", "vulture"} <= declared
+    assert not any(name.startswith(("e4", "apache", "readme")) for name in declared)
