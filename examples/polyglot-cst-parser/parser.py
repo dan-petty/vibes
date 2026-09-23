@@ -196,7 +196,18 @@ class PolyglotComplexityCalculator:
 
     @staticmethod
     def _node_decision_count(node: ast.AST) -> int:
+        """Count the decisions one node contributes, as mccabe and radon count them.
+
+        `match` and comprehensions used to contribute nothing, so a seven-line `match` with
+        three arms measured 1 where ruff's C901 reports 3 — a dispatcher could grow without
+        limit and the metric would never move.
+        """
         branch_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler, ast.Assert, ast.IfExp)
+        if isinstance(node, ast.comprehension):
+            return 1 + len(node.ifs)
+        if isinstance(node, ast.match_case):
+            wildcard = isinstance(node.pattern, ast.MatchAs) and node.pattern.pattern is None
+            return 0 if wildcard else 1
         if isinstance(node, branch_types):
             return 1
         if isinstance(node, ast.BoolOp):
@@ -206,7 +217,15 @@ class PolyglotComplexityCalculator:
     @classmethod
     def _calculate_py_depth(cls, tree: ast.AST) -> int:
         def _get_depth(node: ast.AST, cur: int) -> int:
-            nesting_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith, ast.Try)
+            # `match`/`case` and PEP 654's `try`/`except*` are compound statements that open
+            # a suite, so leaving them out under-reported a genuinely six-deep function as
+            # two. `TryStar` is a distinct node type from `Try` and had to be named.
+            # Kept in step with `examples/ast-invariant-sentinel/sentinel.py`: two
+            # components measuring the same property must not disagree about what a level is.
+            nesting_types = (
+                ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith,
+                ast.Try, ast.TryStar, ast.ExceptHandler, ast.Match, ast.match_case,
+            )
             next_cur = cur + 1 if isinstance(node, nesting_types) else cur
             children = list(ast.iter_child_nodes(node))
             if not children:

@@ -23,7 +23,7 @@ import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ElementTree
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -446,6 +446,21 @@ def _public_function_nodes(tree: ast.Module) -> list[ast.FunctionDef | ast.Async
     ]
 
 
+def _junit_cases(root: Any) -> Iterator[Any]:
+    """Yield every `testcase` element under every `testsuite`."""
+    for suite in root.iter("testsuite"):
+        yield from suite.iter("testcase")
+
+
+def _accumulate_case(totals: dict[str, list[Any]], case: Any) -> None:
+    """Fold one test case into the per-file (passed, failed, seconds) tally."""
+    entry = totals.setdefault(case.get("file", ""), [0, 0, 0.0])
+    failed = any(child.tag in ("failure", "error") for child in case)
+    entry[0] += 0 if failed else 1
+    entry[1] += 1 if failed else 0
+    entry[2] += float(case.get("time", 0.0) or 0.0)
+
+
 class ResourceScanner:
     """Scans repository files and computes structured baseline metrics."""
 
@@ -661,14 +676,9 @@ class ResourceRunner:
             root = ElementTree.parse(xml_path).getroot()
         except (OSError, ElementTree.ParseError):
             return {}
-        suites = root.iter("testsuite")
         totals: dict[str, list[Any]] = {}
-        for case in (case for suite in suites for case in suite.iter("testcase")):
-            entry = totals.setdefault(case.get("file", ""), [0, 0, 0.0])
-            failed = any(child.tag in ("failure", "error") for child in case)
-            entry[0] += 0 if failed else 1
-            entry[1] += 1 if failed else 0
-            entry[2] += float(case.get("time", 0.0) or 0.0)
+        for case in _junit_cases(root):
+            _accumulate_case(totals, case)
         return {path: (p, f, round(t, 3)) for path, (p, f, t) in totals.items() if path}
 
     @classmethod

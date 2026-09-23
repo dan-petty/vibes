@@ -723,3 +723,32 @@ def test_a_document_full_of_markdown_examples_validates_clean(tmp_path: Path) ->
         encoding="utf-8",
     )
     assert [f for f in DocsValidator().validate_file(document) if f.category == "link"] == []
+
+
+@pytest.mark.parametrize(
+    ("address", "leaks"),
+    [
+        ("0.0.0.0", False),
+        ("255.255.255.255", False),
+        ("127.0.0.1", False),
+        ("8.8.8.8", False),
+        ("10.1.2.3", True),
+        ("192.168.1.5", True),
+        ("172.16.0.9", True),
+        ("100.64.0.1", True),
+    ],
+)
+def test_a_bind_address_is_not_a_homelab_leak(address: str, leaks: bool) -> None:
+    """`is_private` is not RFC 1918, and the difference was a false positive.
+
+    CPython documents `is_private` as "not globally reachable by iana-ipv4-special-registry",
+    which also covers `0.0.0.0` and `255.255.255.255`. That made the sanitization rule reject
+    `endpoint: 0.0.0.0:4317` — a bind-to-all directive copied from this repository's own
+    collector config, naming nobody's machine — as a leak, in the one rule whose false
+    positives are the most expensive to argue with.
+    """
+    import ipaddress
+
+    from doc_rules_structure import _leaks
+
+    assert _leaks(ipaddress.ip_address(address)) is leaks

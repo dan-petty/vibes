@@ -2,10 +2,14 @@
 
 # sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting this sentinel detects private IPs and subdomains
 
+import ast
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
-from sentinel import audit_file, audit_targets, main
+import pytest
+from sentinel import ComplexityVisitor, audit_file, audit_targets, main
 
 
 def test_clean_code_passes_all_invariants():
@@ -283,3 +287,73 @@ def test_a_subdomain_after_a_compliant_url_is_still_caught(tmp_path: Path) -> No
     report = audit_targets([source])
     assert [v.invariant for v in report.violations] == ["ZeroTrustSanitization"]
     assert "mirror.example.com" in report.violations[0].message
+
+
+# --- Agreement with the reference implementation -------------------------------------------
+
+RADON_CORPUS: dict[str, str] = {
+    "plain": "def p(a):\n    return a\n",
+    "if_else": "def w(a):\n    if a:\n        pass\n    else:\n        pass\n",
+    "elif_chain": "def w(a):\n    if a == 1: return 1\n    elif a == 2: return 2\n    else: return 3\n",
+    "boolop": "def w(a, b, c):\n    return a and b and c\n",
+    "listcomp": "def f(rows):\n    return [r for r in rows if r.a if r.b]\n",
+    "genexp": "def k(xs):\n    return sum(x for x in xs if x)\n",
+    "dictcomp": "def m(xs):\n    return {k: v for k, v in xs if k if v}\n",
+    "nested_comp": "def n(xs):\n    return [y for x in xs for y in x if y]\n",
+    "while_else": "def w(a):\n    while a:\n        a -= 1\n    else:\n        pass\n",
+    "for_else": "def w(a):\n    for i in a:\n        pass\n    else:\n        pass\n",
+    "try_else": "def w(a):\n    try:\n        pass\n    except ValueError:\n        pass\n    else:\n        pass\n",
+    "try_two_handlers": "def w(a):\n    try:\n        pass\n    except ValueError:\n        pass\n    except KeyError:\n        pass\n",
+    "match_plain": 'def d(c):\n    match c:\n        case "a": return 1\n        case "b": return 2\n        case _: return 0\n',
+    "match_guard": "def g(x):\n    match x:\n        case int() if x > 0: return 1\n        case _: return 0\n",
+    "match_no_wildcard": "def g(x):\n    match x:\n        case 1: return 1\n        case 2: return 2\n",
+    "match_eleven": (
+        "def d(c):\n    match c:\n"
+        + "".join(f'        case "{chr(97 + i)}": return {i}\n' for i in range(11))
+        + "        case _: return -1\n"
+    ),
+    "ternary": "def w(a):\n    return 1 if a else 2\n",
+    "assert_stmt": "def w(a):\n    assert a\n",
+    "with_stmt": "def w(a):\n    with open(a) as f:\n        return f.read()\n",
+}
+
+
+def _radon_complexity(path: Path) -> int:
+    """Return the complexity radon reports for the single function in a file."""
+    proc = subprocess.run(
+        [sys.executable, "-m", "radon", "cc", "-s", str(path)],
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    return int(proc.stdout.strip().splitlines()[-1].split("(")[-1].rstrip(")"))
+
+
+@pytest.mark.parametrize("name", sorted(RADON_CORPUS))
+def test_complexity_agrees_with_radon(name: str, tmp_path: Path) -> None:
+    """The gate is measured against the tool it cites, not against a restatement of the rules.
+
+    This is the durable half of the fix. The previous implementation carried a hand-written
+    list of branching constructs that stopped at `If`/`While`/`For`/`ExceptHandler`/
+    `Assert`/`IfExp`/`BoolOp`, and the language moved on without it: comprehensions and
+    `match` both scored zero, so four functions in this repository passed the M<=10 gate
+    while radon scored them 11 to 13, and an eleven-case dispatcher measured 1. A list of
+    constructs falls behind; an agreement test does not.
+    """
+    source = tmp_path / f"{name}.py"
+    source.write_text(RADON_CORPUS[name], encoding="utf-8")
+    visitor = ComplexityVisitor(str(source))
+    mine = visitor._calculate_complexity(ast.parse(RADON_CORPUS[name]).body[0])
+    assert mine == _radon_complexity(source)
+
+
+def test_the_gate_is_never_laxer_than_its_reference(tmp_path: Path) -> None:
+    """One deliberate divergence, stated rather than discovered.
+
+    radon scores `except*` as zero because it predates PEP 654. A handler is a branch, so
+    it is counted here — and a gate stricter than its reference is safe, where a laxer one
+    is the defect this was written to fix.
+    """
+    source = tmp_path / "starred.py"
+    body = "def w(a):\n    try:\n        pass\n    except* ValueError:\n        pass\n"
+    source.write_text(body, encoding="utf-8")
+    mine = ComplexityVisitor(str(source))._calculate_complexity(ast.parse(body).body[0])
+    assert (mine, _radon_complexity(source)) == (2, 1)

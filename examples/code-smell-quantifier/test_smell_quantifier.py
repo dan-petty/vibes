@@ -288,3 +288,59 @@ def test_ast_and_radon_disagree_which_is_why_the_guard_exists(tmp_path: Path) ->
     ast.parse(RADON_HOSTILE)  # the corpus filter accepts it
     with pytest.raises(SyntaxError):
         module_metrics(RADON_HOSTILE)  # the scorer does not
+
+
+# --- Agreement with pylint, whose thresholds these are --------------------------------------
+
+
+def _gating(source: str, tmp_path: Path) -> list[str]:
+    """Return the gating smells the quantifier reports for one module."""
+    module = tmp_path / "sample.py"
+    module.write_text(source, encoding="utf-8")
+    report = analyze([module], include_advisory=False)
+    return [f"{f.smell.name}:{f.measured}" for f in report.findings]
+
+
+def test_a_private_helper_is_not_a_public_method(tmp_path: Path) -> None:
+    """R0904 is `max-public-methods`, and pylint counts only names not starting with `_`.
+
+    Counting private helpers against a public-method ceiling punishes the decomposition the
+    ceiling exists to encourage: this facade scored 21 here and nothing under real pylint.
+    """
+    source = "class Facade:\n" + "".join(f"    def pub{i:02d}(self): pass\n" for i in range(1, 11))
+    source += "".join(f"    def _h{i:02d}(self): pass\n" for i in range(1, 12))
+    assert _gating(source, tmp_path) == []
+
+
+def test_star_args_are_not_counted_as_parameters(tmp_path: Path) -> None:
+    """R0913 excludes `*args` and `**kwargs`; every forwarding wrapper was flagged for them."""
+    assert _gating("def wide(a, b, c, d, e, *args, **kwargs):\n    return a\n", tmp_path) == []
+
+
+def test_the_def_and_its_docstring_are_not_statements(tmp_path: Path) -> None:
+    """R0915 counts neither, so a 49-statement function measured 51 against a ceiling of 50."""
+    source = 'def f():\n    """Doc."""\n' + "".join(f"    x{i} = {i}\n" for i in range(48)) + "    return 1\n"
+    assert _gating(source, tmp_path) == []
+
+
+def test_one_statement_over_the_ceiling_is_still_reported(tmp_path: Path) -> None:
+    """Aligning with pylint must not turn the detector off."""
+    source = 'def f():\n    """Doc."""\n' + "".join(f"    x{i} = {i}\n" for i in range(51)) + "    return 1\n"
+    assert _gating(source, tmp_path) == ["LONG_FUNCTION:52"]
+
+
+def test_a_package_relative_submodule_import_draws_an_edge(tmp_path: Path) -> None:
+    """The commonest circular import in a package drew no edge at all.
+
+    `from pkg import b` was read as an import of `pkg`, never of `b`, so `pkg/a.py` and
+    `pkg/b.py` importing each other produced an empty graph. CPython refuses that program
+    at runtime; this detector called it clean.
+    """
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "a.py").write_text("from pkg import b\n\n\ndef fa():\n    return b\n", encoding="utf-8")
+    (package / "b.py").write_text("from pkg import a\n\n\ndef fb():\n    return a\n", encoding="utf-8")
+    cycles = [f for f in analyze([package], include_advisory=False).findings
+              if f.smell.name == "IMPORT_CYCLE"]
+    assert len(cycles) == 1

@@ -188,11 +188,21 @@ BRANCH_NODE_TYPES = (
 
 
 def _node_complexity_weight(node: ast.AST) -> int:
-    """Calculate cyclomatic complexity branch contribution for an AST node."""
+    """Return the decisions one node contributes, as radon and ruff's C901 count them.
+
+    `match` and comprehensions contributed nothing, so the auditor this fuzzer uses to
+    grade a model's output scored a thirteen-arm dispatcher at 1 while ruff reports 13 —
+    the metric this component calls M did not measure what the name says.
+    """
+    if isinstance(node, ast.comprehension):
+        return 1 + len(node.ifs)
+    if isinstance(node, ast.match_case):
+        wildcard = isinstance(node.pattern, ast.MatchAs) and node.pattern.pattern is None
+        return 0 if wildcard else 1
     if isinstance(node, BRANCH_NODE_TYPES):
         return 1
     if isinstance(node, ast.BoolOp):
-        return len(node.values) - 1
+        return max(0, len(node.values) - 1)
     return 0
 
 

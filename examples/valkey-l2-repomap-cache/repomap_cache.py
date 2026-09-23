@@ -294,15 +294,18 @@ class ASTFeatureExtractor:
 
     @staticmethod
     def _count_ast_features(tree: ast.AST) -> dict[str, int]:
-        nodes = list(ast.walk(tree))
-        return {
-            "functions": sum(1 for n in nodes if isinstance(n, FN_TYPES)),
-            "classes": sum(1 for n in nodes if isinstance(n, ast.ClassDef)),
-            "branches": sum(1 for n in nodes if isinstance(n, BRANCH_TYPES)),
-            "calls": sum(1 for n in nodes if isinstance(n, ast.Call)),
-            "returns": sum(1 for n in nodes if isinstance(n, RETURN_TYPES)),
-            "docstrings": sum(1 for n in nodes if _is_docstring_node(n)),
-        }
+        """Count every structural feature in one pass over the tree.
+
+        Six generator expressions, each with its own `for` and `if`, scored 13 — the tree
+        was also walked six times. A table of predicates and a single walk is both simpler
+        to read and cheaper to run.
+        """
+        counts = dict.fromkeys(_FEATURE_TESTS, 0)
+        for node in ast.walk(tree):
+            for name, test in _FEATURE_TESTS.items():
+                if test(node):
+                    counts[name] += 1
+        return counts
 
     @staticmethod
     def _normalize_vector(vec: list[float]) -> list[float]:
@@ -310,6 +313,18 @@ class ASTFeatureExtractor:
         if norm == 0.0:
             return [0.0] * len(vec)
         return [round(x / norm, 6) for x in vec]
+
+
+# One predicate per structural feature, so adding a feature is a row rather than another
+# generator expression over another walk of the same tree.
+_FEATURE_TESTS: dict[str, Callable[[ast.AST], bool]] = {
+    "functions": lambda n: isinstance(n, FN_TYPES),
+    "classes": lambda n: isinstance(n, ast.ClassDef),
+    "branches": lambda n: isinstance(n, BRANCH_TYPES),
+    "calls": lambda n: isinstance(n, ast.Call),
+    "returns": lambda n: isinstance(n, RETURN_TYPES),
+    "docstrings": _is_docstring_node,
+}
 
 
 class EmbeddingDriftAuditor:

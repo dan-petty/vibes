@@ -19,7 +19,7 @@ import os
 import re
 import sys
 import tokenize
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -77,13 +77,92 @@ class AuditReport:
         return len(self.violations) == 0
 
 
+# Every construct that puts a branch in the control flow graph. The list used to stop at
+# `If`/`While`/`For`/`ExceptHandler`/`Assert`/`IfExp`/`BoolOp`, which left two whole
+# families of decision scoring zero:
+#
+#   * comprehensions and generator expressions, whose `for` is a loop and whose `if`
+#     clauses are predicates — `[r for r in rows if r.a if r.b]` is three branches;
+#   * `match`, whose every `case` is an arm of a multiway decision — NIST SP 500-235 §4.1
+#     handles a multiway decision by counting its arms.
+#
+# The consequence was not theoretical: four functions in this repository passed the M<=10
+# gate while radon scored them 11 to 13, and an eleven-case `match` dispatcher — the shape
+# §10.1 steers agents toward — measured 1. `test_sentinel.py` now asserts agreement with
+# radon over a corpus rather than restating the rules, because a hand-maintained list of
+# branch constructs is a list that falls behind the language.
+def _loop_weight(node: ast.AST) -> int:
+    """A loop is a decision; its `else` is a second exit path and radon counts it too."""
+    return 1 + (1 if getattr(node, "orelse", None) else 0)
+
+
+def _try_weight(node: ast.AST) -> int:
+    """`try` is not a decision; its `else` runs only when no handler did. Handlers count alone."""
+    return 1 if getattr(node, "orelse", None) else 0
+
+
+def _comprehension_weight(node: ast.AST) -> int:
+    """The `for` itself, plus one per `if` clause attached to it."""
+    return 1 + len(getattr(node, "ifs", ()))
+
+
+def _match_case_weight(node: ast.AST) -> int:
+    """Every arm is a decision except the wildcard, which is the fall-through.
+
+    A guard adds nothing: radon scores `case int() if x > 0` the same as `case int()`, and
+    this gate's declared reference is radon (§1a — prefer the tool's own metric to a
+    recomputation of it). Measured, not assumed.
+    """
+    pattern = getattr(node, "pattern", None)
+    wildcard = isinstance(pattern, ast.MatchAs) and pattern.pattern is None
+    return 0 if wildcard else 1
+
+
+def _boolop_weight(node: ast.AST) -> int:
+    """`a and b and c` is two decisions, not one."""
+    return max(0, len(getattr(node, "values", ())) - 1)
+
+
+def _one(_node: ast.AST) -> int:
+    """A plain decision node."""
+    return 1
+
+
+# Table dispatch on the exact node type (§10.1). The predecessor was a chain of `isinstance`
+# checks that stopped at `If`/`While`/`For`/`ExceptHandler`/`Assert`/`IfExp`/`BoolOp`, which
+# left two whole families of decision scoring zero: comprehensions, whose `for` is a loop and
+# whose `if` clauses are predicates, and `match`, whose every arm is a multiway decision.
+#
+# The consequence was not theoretical. Four functions in this repository passed the M<=10
+# gate while radon scored them 11 to 13, and an eleven-case `match` dispatcher — the shape
+# §10.1 steers agents toward — measured 1. `test_sentinel.py` asserts agreement with radon
+# over a corpus rather than restating these rules, because a hand-maintained list of
+# branching constructs is a list that falls behind the language.
+#
+# The one deliberate divergence: radon scores `except*` as zero, because it predates
+# PEP 654. A handler is a branch, so it is counted here, and the gate is therefore never
+# *lower* than radon — a gate stricter than its reference is safe, a laxer one is the defect
+# this table was rewritten to fix.
+_WEIGHTS: dict[type[ast.AST], Callable[[ast.AST], int]] = {
+    ast.While: _loop_weight,
+    ast.For: _loop_weight,
+    ast.AsyncFor: _loop_weight,
+    ast.Try: _try_weight,
+    ast.TryStar: _try_weight,
+    ast.comprehension: _comprehension_weight,
+    ast.match_case: _match_case_weight,
+    ast.BoolOp: _boolop_weight,
+    ast.If: _one,
+    ast.IfExp: _one,
+    ast.ExceptHandler: _one,
+    ast.Assert: _one,
+}
+
+
 def _ast_node_complexity(node: ast.AST) -> int:
-    """Return cyclomatic complexity weight contributed by an AST node."""
-    if isinstance(node, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler, ast.Assert, ast.IfExp)):
-        return 1
-    if isinstance(node, ast.BoolOp):
-        return max(0, len(node.values) - 1)
-    return 0
+    """Return the cyclomatic complexity weight contributed by one AST node."""
+    handler = _WEIGHTS.get(type(node))
+    return handler(node) if handler else 0
 
 
 class ComplexityVisitor(ast.NodeVisitor):
@@ -147,6 +226,13 @@ class ComplexityVisitor(ast.NodeVisitor):
             ast.AsyncWith,
             ast.Try,
             ast.ExceptHandler,
+            # Every compound statement that opens a suite. `match` and its `case` blocks are
+            # two indentation levels the language reference lists and this tuple did not, and
+            # PEP 654's `try`/`except*` parses to `TryStar`, a distinct node type from `Try` —
+            # so a genuinely six-deep function measured two and the depth ceiling never saw it.
+            ast.TryStar,
+            ast.Match,
+            ast.match_case,
         )
 
         def _walk_depth(node: ast.AST, current_depth: int) -> int:
