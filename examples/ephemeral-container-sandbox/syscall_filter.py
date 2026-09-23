@@ -243,22 +243,33 @@ def supported() -> tuple[bool, str]:
     return _probe()
 
 
+def _probe_child(read_fd: int, write_fd: int) -> None:
+    """Install a test filter in child process and communicate result via pipe."""
+    os.close(read_fd)
+    try:
+        install(("network",))
+        os.write(write_fd, b"1")
+    except (SeccompUnavailable, OSError):
+        os.write(write_fd, b"0")
+    os._exit(0)
+
+
+def _read_probe_result(read_fd: int, pid: int) -> bytes:
+    """Read probe response from child process stream."""
+    with os.fdopen(read_fd, "rb") as stream:
+        answer = stream.read()
+    os.waitpid(pid, 0)
+    return answer
+
+
 def _probe() -> tuple[bool, str]:
     """Install a filter in a throwaway child, so the answer is the kernel's, not a guess."""
     read_fd, write_fd = os.pipe()
     pid = os.fork()
     if pid == 0:  # pragma: no cover - the child never returns to the test runner
-        os.close(read_fd)
-        try:
-            install(("network",))
-            os.write(write_fd, b"1")
-        except (SeccompUnavailable, OSError):
-            os.write(write_fd, b"0")
-        os._exit(0)
+        _probe_child(read_fd, write_fd)
     os.close(write_fd)
-    with os.fdopen(read_fd, "rb") as stream:
-        answer = stream.read()
-    os.waitpid(pid, 0)
+    answer = _read_probe_result(read_fd, pid)
     return (True, "") if answer == b"1" else (False, "the kernel refused a seccomp filter")
 
 
