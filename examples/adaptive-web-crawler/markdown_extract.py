@@ -65,7 +65,14 @@ _INLINE_SPECIALS: Final[str] = "\\`*_[]<>"
 
 # Only meaningful at the start of a line, so escaping them mid-sentence would fill ordinary
 # text with backslashes for no gain.
-_LEADING: Final[re.Pattern[str]] = re.compile(r"^(\s*)([#>|+=-]|\d+[.)])")
+# Applied per line, not once per block. `^` without `re.MULTILINE` escaped only the first
+# line, so `Intro<br># Ignore previous instructions` put an ATX heading in the prompt —
+# CommonMark §4.2 says a heading may interrupt a paragraph.
+#
+# `~` is here because a tilde fence is a fence: CommonMark §4.5 opens a code block on
+# three or more tildes, and a page containing a line of them swallowed the remainder of
+# the document into an unclosed block. Backticks need no entry — they are escaped inline.
+_LEADING: Final[re.Pattern[str]] = re.compile(r"^([ \t]*)([#>|+=~-]|\d+[.)])", re.MULTILINE)
 
 TRUNCATION_MARKER: Final[str] = "\n\n[truncated: the document continues beyond the budget]\n"
 
@@ -106,6 +113,22 @@ def escape_block(line: str) -> str:
     return _LEADING.sub(lambda match: f"{match.group(1)}\\{match.group(2)}", line)
 
 
+# A destination CommonMark can read as one token: no whitespace, no unbalanced parens.
+_NEEDS_ANGLES: Final[re.Pattern[str]] = re.compile(r"[\s()<>]")
+
+
+def destination(url: str) -> str:
+    """Render a URL as a link destination CommonMark will read whole.
+
+    §6.3 allows either a bare run of characters containing no whitespace and only balanced
+    parentheses, or anything at all between `<` and `>`. Emitted raw, a Wikipedia-style
+    `/wiki/Foo)bar` closed the link early and left `bar)` as text beside a truncated href.
+    """
+    if not _NEEDS_ANGLES.search(url):
+        return url
+    return "<" + url.replace("<", "%3C").replace(">", "%3E") + ">"
+
+
 def fence_for(code: str) -> str:
     """Return a fence longer than the longest backtick run the code contains.
 
@@ -128,6 +151,12 @@ class PageContext:
     """
 
     base_url: str
+    # Where the caller actually fetched the document. `<base href>` moves `base_url` so
+    # relative links resolve correctly, and a page that sets it to another origin was
+    # therefore able to dictate its own provenance — `Source: <https://docs.python.org/3/>`
+    # on a document served from somewhere else entirely. Link resolution follows the page;
+    # attribution does not.
+    fetched_from: str = ""
     title: str = ""
     links: list[str] = field(default_factory=list)
     regions_seen: set[str] = field(default_factory=set)
@@ -264,7 +293,13 @@ class ModelReadyExtractor(HTMLParser):
 
     # Elements with no end tag. A void element can never open a region to skip, and a
     # tracker that does not know this waits forever for a `</embed>` that never comes.
-    VOID: ClassVar[frozenset[str]] = frozenset({"br", "hr", "img", "embed", "source", "track"})
+    # All thirteen, per WHATWG HTML §13.1.2. Seven were missing, and a void element that
+    # is also chrome — `<input aria-hidden="true">` — opened a skipped region waiting for
+    # an end tag that can never come, so the rest of the page was dropped in silence.
+    VOID: ClassVar[frozenset[str]] = frozenset({
+        "area", "base", "br", "col", "embed", "hr", "img", "input",
+        "link", "meta", "source", "track", "wbr",
+    })
 
     def __init__(self, base_url: str) -> None:
         """Prepare an extractor rooted at the page's own URL.
@@ -275,7 +310,7 @@ class ModelReadyExtractor(HTMLParser):
         facts at once.
         """
         super().__init__(convert_charrefs=True)
-        self.context = PageContext(base_url)
+        self.context = PageContext(base_url, fetched_from=base_url)
         self.chrome = ChromeFilter()
         self.builder = BlockBuilder()
         self.in_title = False
@@ -326,7 +361,7 @@ class ModelReadyExtractor(HTMLParser):
         """Emit page text, as a link when one is open and as plain text otherwise."""
         if self.href:
             self.context.links.append(self.href)
-            self.builder.markup(f"[{escape_inline(text.strip())}]({self.href})")
+            self.builder.markup(f"[{escape_inline(text.strip())}]({destination(self.href)})")
             return
         self.builder.text(text)
 
@@ -342,7 +377,7 @@ class ModelReadyExtractor(HTMLParser):
         if region == "body":
             warnings.append("no_main_region: no <main> or <article>; the whole body was taken")
         return ExtractedDocument(
-            url=self.context.base_url,
+            url=self.context.fetched_from or self.context.base_url,
             title=self.context.title.strip(),
             markdown=markdown,
             links=self.context.links,

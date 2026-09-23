@@ -752,3 +752,88 @@ def test_a_bind_address_is_not_a_homelab_leak(address: str, leaks: bool) -> None
     from doc_rules_structure import _leaks
 
     assert _leaks(ipaddress.ip_address(address)) is leaks
+
+
+# --- CommonMark conformance ------------------------------------------------------------------
+
+
+def test_a_link_title_is_not_part_of_the_destination(tmp_path: Path) -> None:
+    """CommonMark §6.3: `[text](destination "title")`, title optional and separated.
+
+    Capturing everything up to `)` resolved the path `README.md "The project readme"`,
+    which exists nowhere — a false broken link on every correctly-titled link.
+    """
+    (tmp_path / "README.md").write_text("# R\n", encoding="utf-8")
+    index = tmp_path / "index.md"
+    index.write_text('# I\n\n[Readme](README.md "The project readme")\n', encoding="utf-8")
+    assert [f for f in DocsValidator().validate_file(index) if f.category == "link"] == []
+
+
+def test_an_angle_bracketed_destination_resolves(tmp_path: Path) -> None:
+    """§6.3's other form: anything at all between `<` and `>`."""
+    (tmp_path / "a b.md").write_text("# A\n", encoding="utf-8")
+    index = tmp_path / "index.md"
+    index.write_text("# I\n\n[Spaced](<a b.md>)\n", encoding="utf-8")
+    assert [f for f in DocsValidator().validate_file(index) if f.category == "link"] == []
+
+
+def test_a_tilde_block_does_not_silence_the_rest_of_the_document(tmp_path: Path) -> None:
+    """§4.5: a closing fence must use the same character as the opener.
+
+    Toggling on any line starting with ``` or ~~~ meant a `~~~markdown` block containing a
+    backtick fence closed early and inverted the state — every link, tag and heading after
+    it judged in the wrong context, and judged silently.
+    """
+    document = tmp_path / "x.md"
+    document.write_text(
+        "# Fencing\n\nTo open a fenced block, write:\n\n~~~markdown\n```\n~~~\n\n"
+        "## Reference\n\nSee [the plan](does-not-exist.md) and <details>.\n",
+        encoding="utf-8",
+    )
+    categories = sorted({f.category for f in DocsValidator().validate_file(document)})
+    assert categories == ["html_tag", "link"]
+
+
+@pytest.mark.parametrize(
+    ("heading", "slug"),
+    [
+        ("Setup & Install", "setup--install"),
+        ("snake_case heading", "snake_case-heading"),
+        ("A  Double  Space", "a--double--space"),
+        ("Plain Heading", "plain-heading"),
+        ("8. Protocol & Tooling", "8-protocol--tooling"),
+    ],
+)
+def test_heading_slugs_match_the_generator_github_uses(heading: str, slug: str) -> None:
+    """`github-slugger` strips rejected characters then replaces **each** space with one hyphen.
+
+    Folding runs and underscores to single hyphens made the validator reject the anchors
+    GitHub actually emits — and, worse, accept two links in this repository's own AGENTS.md
+    that are broken on GitHub today. The corrected algorithm found them on its first run.
+    """
+    from docs_validator import slugify_heading
+
+    assert slugify_heading(heading) == slug
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [
+        (["~~~md", "```", "~~~", "after"], [True, True, True, False]),
+        (["```py", "x = 1", "```", "after"], [True, True, True, False]),
+        (["````", "```", "````", "after"], [True, True, True, False]),
+        (["```", "~~~", "```", "after"], [True, True, True, False]),
+        (["```", "text", "``` info", "still inside"], [True, True, True, True]),
+    ],
+)
+def test_fence_tracking_honours_the_marker_its_length_and_the_info_string(
+    lines: list[str], expected: list[bool]
+) -> None:
+    """One implementation, because five call sites had the same naive toggle.
+
+    The last case is §4.5's rule that a closing fence carries no info string, so ```` info`
+    does not close the block it appears in.
+    """
+    from doc_core import fenced_line_flags
+
+    assert fenced_line_flags(lines) == expected
