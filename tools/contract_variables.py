@@ -108,7 +108,9 @@ _MISSING: Final[_Missing] = _Missing()
 def _declaration_problems(variables: tuple[Variable, ...]) -> list[str]:
     """Return every breach across the whole block, so one run reports all of them."""
     names = [variable.name for variable in variables]
-    problems = [f"variable name {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)]
+    problems = [
+        f"variable name {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)
+    ]
     problems += [f"duplicate variable {n!r}" for n in sorted({n for n in names if names.count(n) > 1})]
     for variable in variables:
         problems += _one_declaration_problems(variable)
@@ -234,15 +236,21 @@ def resolve(
     if unknown:
         declared = sorted(variable.name for variable in variables)
         raise ContractError(f"undeclared variable(s) {unknown}; declared: {declared}")
-    answers: dict[str, Any] = {}
-    for variable in variables:
-        if variable.name in provided:
-            answers[variable.name] = _coerce_supplied(variable, provided[variable.name])
-        elif interactive:
-            answers[variable.name] = _ask(variable, ask)
-        else:
-            answers[variable.name] = coerce(variable, variable.default)
-    return answers
+    return {variable.name: _resolve_one(variable, provided, interactive, ask) for variable in variables}
+
+
+def _resolve_one(
+    variable: Variable,
+    provided: Mapping[str, Any],
+    interactive: bool,
+    ask: Callable[[str], str],
+) -> Any:
+    """Resolve a single variable from provided map, interactive prompt, or default."""
+    if variable.name in provided:
+        return _coerce_supplied(variable, provided[variable.name])
+    if interactive:
+        return _ask(variable, ask)
+    return coerce(variable, variable.default)
 
 
 def _coerce_supplied(variable: Variable, raw: Any) -> Any:
@@ -253,6 +261,21 @@ def _coerce_supplied(variable: Variable, raw: Any) -> Any:
         raise ContractError(f"{variable.name}: {err}") from None
 
 
+def _prompt_one_attempt(variable: Variable, ask: Callable[[str], str]) -> tuple[bool, Any]:
+    """Execute a single interactive prompt attempt, returning (success, value)."""
+    try:
+        entered = ask(variable.describe()).strip()
+    except EOFError:
+        return True, coerce(variable, variable.default)
+    if not entered:
+        return True, coerce(variable, variable.default)
+    try:
+        return True, coerce(variable, entered)
+    except ContractError as err:
+        print(f"  ↳ {err}")
+        return False, None
+
+
 def _ask(variable: Variable, ask: Callable[[str], str]) -> Any:
     """Ask until the answer converts, or until the attempt ceiling is reached.
 
@@ -260,16 +283,9 @@ def _ask(variable: Variable, ask: Callable[[str], str]) -> Any:
     is the commonest answer, and it must always mean something.
     """
     for _ in range(MAX_ATTEMPTS):
-        try:
-            entered = ask(variable.describe()).strip()
-        except EOFError:
-            return coerce(variable, variable.default)
-        if not entered:
-            return coerce(variable, variable.default)
-        try:
-            return coerce(variable, entered)
-        except ContractError as err:
-            print(f"  ↳ {err}")
+        success, value = _prompt_one_attempt(variable, ask)
+        if success:
+            return value
     raise ContractError(f"{variable.name}: no valid answer after {MAX_ATTEMPTS} attempts")
 
 

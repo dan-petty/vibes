@@ -525,6 +525,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 9. **Workflow Contract Decomposition & Scoped Iterators**:
    - Validating YAML workflow structures across multi-level hierarchies (jobs $\to$ steps $\to$ command lines $\to$ outputs) by nesting loops and lookups in test bodies triggers high nesting depth ($depth \ge 4$) and elevated complexity ($M \ge 8$).
    - Decompose inspection into job-level and step-level query helpers (`_unwritten_outputs_in_job`, `_step_cli_invocations`, `_missing_cli_flags`, `_is_unpinned_action`). This limits nesting depth to $\le 2$ and preserves compact test function complexity ($M \le 4$).
+10. **Interactive Dialogue & Resolution Decomposition**:
+    - Multi-attempt prompting loops that nest exception handlers and user input conditionals within retry iterations compound nesting depth ($depth \ge 4$).
+    - Factor each prompt attempt into an isolated single-attempt helper (`_prompt_one_attempt`), and isolate per-variable lookup and coercion into `_resolve_one`. This limits function nesting depth to $\le 2$ and preserves compact McCabe complexity ($M \le 3$).
 
 ---
 
