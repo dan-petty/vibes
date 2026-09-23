@@ -22,7 +22,7 @@ import argparse
 import ast
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -159,8 +159,8 @@ class BoundaryGuard:
         if base_root is None:
             return True, resolved, ""
 
-        ok, err = cls._check_root_containment(resolved, base_root)
-        return ok, resolved, err
+        ok, root_err = cls._check_root_containment(resolved, base_root)
+        return ok, resolved, root_err
 
     @staticmethod
     def _verify_size(resolved: Path, max_size_bytes: int) -> tuple[bool, str]:
@@ -171,6 +171,41 @@ class BoundaryGuard:
         except (OSError, RuntimeError) as err:
             return False, f"File stat error ({str(err)[:200]})"
         return True, ""
+
+
+def _is_wildcard_match(pattern: ast.AST | None) -> bool:
+    """Return True if match_case pattern is a wildcard catch-all."""
+    return isinstance(pattern, ast.MatchAs) and pattern.pattern is None
+
+
+def _match_case_weight(node: ast.AST) -> int:
+    """Every arm is a decision except the wildcard, which is the fall-through."""
+    pattern = getattr(node, "pattern", None)
+    return 0 if _is_wildcard_match(pattern) else 1
+
+
+def _comprehension_weight(node: ast.AST) -> int:
+    """The comprehension loop plus one decision per attached if predicate."""
+    return 1 + len(getattr(node, "ifs", ()))
+
+
+def _boolop_weight(node: ast.AST) -> int:
+    """Count boolean operator decisions (n - 1)."""
+    return max(0, len(getattr(node, "values", ())) - 1)
+
+
+_DECISION_WEIGHTS: dict[type[ast.AST], Callable[[ast.AST], int]] = {
+    ast.If: lambda _node: 1,
+    ast.While: lambda _node: 1,
+    ast.For: lambda _node: 1,
+    ast.AsyncFor: lambda _node: 1,
+    ast.ExceptHandler: lambda _node: 1,
+    ast.Assert: lambda _node: 1,
+    ast.IfExp: lambda _node: 1,
+    ast.comprehension: _comprehension_weight,
+    ast.match_case: _match_case_weight,
+    ast.BoolOp: _boolop_weight,
+}
 
 
 class PolyglotComplexityCalculator:
@@ -202,17 +237,8 @@ class PolyglotComplexityCalculator:
         three arms measured 1 where ruff's C901 reports 3 — a dispatcher could grow without
         limit and the metric would never move.
         """
-        branch_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler, ast.Assert, ast.IfExp)
-        if isinstance(node, ast.comprehension):
-            return 1 + len(node.ifs)
-        if isinstance(node, ast.match_case):
-            wildcard = isinstance(node.pattern, ast.MatchAs) and node.pattern.pattern is None
-            return 0 if wildcard else 1
-        if isinstance(node, branch_types):
-            return 1
-        if isinstance(node, ast.BoolOp):
-            return len(node.values) - 1
-        return 0
+        handler = _DECISION_WEIGHTS.get(type(node))
+        return handler(node) if handler is not None else 0
 
     @classmethod
     def _calculate_py_depth(cls, tree: ast.AST) -> int:
@@ -223,8 +249,17 @@ class PolyglotComplexityCalculator:
             # Kept in step with `examples/ast-invariant-sentinel/sentinel.py`: two
             # components measuring the same property must not disagree about what a level is.
             nesting_types = (
-                ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith,
-                ast.Try, ast.TryStar, ast.ExceptHandler, ast.Match, ast.match_case,
+                ast.If,
+                ast.While,
+                ast.For,
+                ast.AsyncFor,
+                ast.With,
+                ast.AsyncWith,
+                ast.Try,
+                ast.TryStar,
+                ast.ExceptHandler,
+                ast.Match,
+                ast.match_case,
             )
             next_cur = cur + 1 if isinstance(node, nesting_types) else cur
             children = list(ast.iter_child_nodes(node))
@@ -309,7 +344,9 @@ class PolyglotCSTParser:
         """Parse source content string and extract symbols and metrics."""
         symbols = self._extract_symbols(content, language)
         complexity, depth = PolyglotComplexityCalculator.calculate(content, language)
-        loc = len([ln for ln in content.splitlines() if ln.strip() and not ln.strip().startswith(("#", "//"))])
+        loc = len(
+            [ln for ln in content.splitlines() if ln.strip() and not ln.strip().startswith(("#", "//"))]
+        )
 
         metrics = FileMetrics(
             cyclomatic_complexity=complexity,
@@ -327,17 +364,16 @@ class PolyglotCSTParser:
         )
 
     def _extract_symbols(self, content: str, language: str) -> list[PolyglotSymbol]:
-        if language == "python":
-            return self._extract_python_symbols(content)
-        if language == "rust":
-            return self._extract_rust_symbols(content)
-        if language == "go":
-            return self._extract_go_symbols(content)
-        if language in ("typescript", "javascript"):
-            return self._extract_ts_symbols(content)
-        if language == "bash":
-            return self._extract_bash_symbols(content)
-        return []
+        extractors = {
+            "python": self._extract_python_symbols,
+            "rust": self._extract_rust_symbols,
+            "go": self._extract_go_symbols,
+            "typescript": self._extract_ts_symbols,
+            "javascript": self._extract_ts_symbols,
+            "bash": self._extract_bash_symbols,
+        }
+        extractor = extractors.get(language)
+        return extractor(content) if extractor is not None else []
 
     @classmethod
     def _extract_python_symbols(cls, content: str) -> list[PolyglotSymbol]:
@@ -397,40 +433,78 @@ class PolyglotCSTParser:
     def _extract_rust_symbols(content: str) -> list[PolyglotSymbol]:
         symbols: list[PolyglotSymbol] = []
         for match in RUST_STRUCT_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.STRUCT, f"struct {match.group(1)}", 1, 1, "", "rust"))
+            symbols.append(
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.STRUCT, f"struct {match.group(1)}", 1, 1, "", "rust"
+                )
+            )
         for match in RUST_TRAIT_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.TRAIT, f"trait {match.group(1)}", 1, 1, "", "rust"))
+            symbols.append(
+                PolyglotSymbol(match.group(1), SymbolKind.TRAIT, f"trait {match.group(1)}", 1, 1, "", "rust")
+            )
         for match in RUST_FN_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"fn {match.group(1)}", 1, 1, "", "rust"))
+            symbols.append(
+                PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"fn {match.group(1)}", 1, 1, "", "rust")
+            )
         return symbols
 
     @staticmethod
     def _extract_go_symbols(content: str) -> list[PolyglotSymbol]:
         symbols: list[PolyglotSymbol] = []
         for match in GO_TYPE_STRUCT_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.STRUCT, f"type {match.group(1)} struct", 1, 1, "", "go"))
+            symbols.append(
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.STRUCT, f"type {match.group(1)} struct", 1, 1, "", "go"
+                )
+            )
         for match in GO_TYPE_INTERFACE_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.INTERFACE, f"type {match.group(1)} interface", 1, 1, "", "go"))
+            symbols.append(
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.INTERFACE, f"type {match.group(1)} interface", 1, 1, "", "go"
+                )
+            )
         for match in GO_FUNC_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"func {match.group(1)}", 1, 1, "", "go"))
+            symbols.append(
+                PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"func {match.group(1)}", 1, 1, "", "go")
+            )
         return symbols
 
     @staticmethod
     def _extract_ts_symbols(content: str) -> list[PolyglotSymbol]:
         symbols: list[PolyglotSymbol] = []
         for match in TS_CLASS_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.CLASS, f"class {match.group(1)}", 1, 1, "", "typescript"))
+            symbols.append(
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.CLASS, f"class {match.group(1)}", 1, 1, "", "typescript"
+                )
+            )
         for match in TS_INTERFACE_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.INTERFACE, f"interface {match.group(1)}", 1, 1, "", "typescript"))
+            symbols.append(
+                PolyglotSymbol(
+                    match.group(1),
+                    SymbolKind.INTERFACE,
+                    f"interface {match.group(1)}",
+                    1,
+                    1,
+                    "",
+                    "typescript",
+                )
+            )
         for match in TS_FUNC_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"function {match.group(1)}", 1, 1, "", "typescript"))
+            symbols.append(
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.FUNCTION, f"function {match.group(1)}", 1, 1, "", "typescript"
+                )
+            )
         return symbols
 
     @staticmethod
     def _extract_bash_symbols(content: str) -> list[PolyglotSymbol]:
         symbols: list[PolyglotSymbol] = []
         for match in BASH_FUNC_RE.finditer(content):
-            symbols.append(PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"{match.group(1)}()", 1, 1, "", "bash"))
+            symbols.append(
+                PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"{match.group(1)}()", 1, 1, "", "bash")
+            )
         return symbols
 
 
@@ -440,8 +514,12 @@ def run_demo_matrix() -> list[tuple[str, str, int, int]]:
     samples = [
         ("Python", "def process_data(x):\n    if x > 0: return x * 2\n    return 0", "python"),
         ("Rust", "pub struct Queue;\npub fn push(val: u32) { if val > 0 {} }", "rust"),
-        ("Go", "type Store struct{}\nfunc (s Store) Get() string { return \"ok\" }", "go"),
-        ("TypeScript", "interface Event { id: string }\nfunction handle(e: Event) { return e.id }", "typescript"),
+        ("Go", 'type Store struct{}\nfunc (s Store) Get() string { return "ok" }', "go"),
+        (
+            "TypeScript",
+            "interface Event { id: string }\nfunction handle(e: Event) { return e.id }",
+            "typescript",
+        ),
         ("Bash", "backup_db() { if [ -f /tmp/db ]; then cp /tmp/db /backup; fi }", "bash"),
     ]
 
@@ -455,8 +533,12 @@ def run_demo_matrix() -> list[tuple[str, str, int, int]]:
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint for polyglot source scanning and demonstration."""
     arg_parser = argparse.ArgumentParser(description="Polyglot CST Ingestion Engine")
-    arg_parser.add_argument("--demo", action="store_true", help="Execute multi-language ingestion demonstration")
-    arg_parser.add_argument("--scan", type=str, help="Scan a file path and print extracted symbols and metrics")
+    arg_parser.add_argument(
+        "--demo", action="store_true", help="Execute multi-language ingestion demonstration"
+    )
+    arg_parser.add_argument(
+        "--scan", type=str, help="Scan a file path and print extracted symbols and metrics"
+    )
     args = arg_parser.parse_args(argv)
 
     if args.scan:
@@ -475,7 +557,9 @@ def _print_file_node(node: PolyglotFileNode) -> None:
     if node.skipped:
         print(f"  [SKIPPED] {node.skip_reason}")
         return
-    print(f"  LOC: {node.metrics.lines_of_code} | Complexity (M): {node.metrics.cyclomatic_complexity} | Depth: {node.metrics.max_nesting_depth}")
+    print(
+        f"  LOC: {node.metrics.lines_of_code} | Complexity (M): {node.metrics.cyclomatic_complexity} | Depth: {node.metrics.max_nesting_depth}"
+    )
     print(f"  Symbols Extracted ({len(node.symbols)}):")
     for s in node.symbols:
         print(f"    - [{s.kind.value}] {s.name:<24} {s.signature}")

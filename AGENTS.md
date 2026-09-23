@@ -513,6 +513,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 5. **Defensive Filesystem, Symlink & Resource Containment**:
    - Always enforce pre-flight file size caps (`MAX_FILE_SIZE_BYTES` $\le 5$MB) before reading files into memory to mitigate denial-of-service from minified bundles or binary dumps (CWE-400).
    - Always verify that resolved filesystem symlinks remain strictly confined within the workspace root (`resolved_path.is_relative_to(base_root)`), catching `(OSError, RuntimeError)` to prevent circular symlink recursion (`ELOOP`) and traversal escapes.
+6. **AST Decision Weight Decomposition & Dispatch Tables**:
+   - Evaluating branching constructs across AST nodes (`If`, `While`, `For`, `AsyncFor`, `ExceptHandler`, `Assert`, `IfExp`, `comprehension`, `match_case`, `BoolOp`) via iterative `isinstance` chains inflates cyclomatic complexity ($M \ge 7$).
+   - Decompose node evaluation into table-driven dispatch mappings (`_DECISION_WEIGHTS: dict[type[ast.AST], Callable[[ast.AST], int]]`) paired with pure predicate helpers (`_is_wildcard_match`, `_match_case_weight`, `_comprehension_weight`, `_boolop_weight`). This guarantees $M \le 2$ and depth $\le 1$ while keeping AST weight semantics aligned with reference linters.
 
 ---
 
