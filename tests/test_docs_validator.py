@@ -837,3 +837,78 @@ def test_fence_tracking_honours_the_marker_its_length_and_the_info_string(
     from doc_core import fenced_line_flags
 
     assert fenced_line_flags(lines) == expected
+
+
+# --- Driven off the parser, not off the lines -------------------------------------------
+
+
+def _link_findings(body: str, tmp_path: Path) -> list[str]:
+    """Return the link findings for one document, with a real README beside it."""
+    (tmp_path / "README.md").write_text("# R\n", encoding="utf-8")
+    document = tmp_path / "doc.md"
+    document.write_text(body, encoding="utf-8")
+    return [f.message for f in DocsValidator().validate_file(document) if f.category == "link"]
+
+
+@pytest.mark.parametrize(
+    ("body", "clean"),
+    [
+        ('[Readme](README.md "The project readme")\n', True),
+        ("Use `[text](does-not-exist.md)` in prose.\n", True),
+        ("# T\n\n    example [a](does-not-exist.md)\n", True),
+        ("# T\n\n<!-- multi\nline [c](does-not-exist.md) -->\n", True),
+        ("# T\n\n[gone](does-not-exist.md)\n", False),
+    ],
+    ids=["title", "code-span", "indented-code", "html-comment", "really-broken"],
+)
+def test_links_come_from_the_parser_not_from_the_lines(
+    body: str, clean: bool, tmp_path: Path
+) -> None:
+    """Four defects dissolve rather than get fixed.
+
+    A link title is an attribute, so it can never be read as part of the destination; a
+    `[text](url)` in a code span is a `code_inline` child and never a link; an indented
+    chunk is a `code_block`; a multi-line `<!-- -->` is one `html_block`. None of that
+    needed a rule — it needed the parser that was already imported in this file.
+    """
+    assert (_link_findings(body, tmp_path) == []) is clean
+
+
+def test_a_percent_encoded_target_resolves_to_the_file_it_names(tmp_path: Path) -> None:
+    """RFC 3986 §2.1: `%20` is a space, so a link to a file with one must write it that way.
+
+    Resolving the raw text reported a file that exists as missing, and the author's only
+    remedy was to break the link.
+    """
+    (tmp_path / "a b.md").write_text("# AB\n", encoding="utf-8")
+    assert _link_findings("# T\n\n[e](a%20b.md)\n", tmp_path) == []
+
+
+def test_a_setext_heading_produces_an_anchor() -> None:
+    """The line scan knew only the ATX form, so links to setext headings were reported broken."""
+    from docs_validator import extract_heading_anchors
+
+    anchors = extract_heading_anchors("Setext Heading\n--------------\n\n## Setup & Install\n")
+    assert anchors == {"setext-heading", "setup--install"}
+
+
+def test_an_anchor_must_match_exactly(tmp_path: Path) -> None:
+    """The substring test accepted `#install` against a page whose only heading is Installation.
+
+    In both directions — a link GitHub cannot resolve passed the gate whose job is
+    resolving links.
+    """
+    body = "# Installation\n\nJump to [it](#install).\n"
+    assert _link_findings(body, tmp_path) != []
+
+
+@pytest.mark.parametrize("colour", ["#abc", "#abcd", "#aabbcc", "#aabbccdd"])
+def test_every_css_hex_length_is_a_colour(colour: str) -> None:
+    """CSS Color 4 §5.1 defines four lengths; two of them raised `ValueError` out of `int()`.
+
+    Uncaught, so a 4-digit fill killed the single-file run and, through
+    `ThreadPoolExecutor.map`, the whole directory sweep — a traceback in place of a finding.
+    """
+    from doc_rules_mermaid import contrast_ratio
+
+    assert contrast_ratio(colour, "#ffffff") > 0

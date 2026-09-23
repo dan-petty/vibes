@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
+from urllib.parse import unquote
 
 import yaml
 from doc_core import (
@@ -34,6 +35,7 @@ from doc_core import (
     DocValidationReport,
     PathOracle,
     fenced_line_flags,
+    parse_document,
 )
 from doc_rules_mermaid import (
     _MERMAID_EDGE_RE,
@@ -130,18 +132,50 @@ def _extract_html_anchors(line: str) -> list[str]:
     ]
 
 
+class _LintingParser(MarkdownIt):
+    """A CommonMark parser that keeps every link, including the ones a renderer would drop."""
+
+    # Spelled as upstream spells it; this overrides a method markdown-it defines.
+    def validateLink(self, url: str) -> bool:
+        """Accept every scheme, because nothing here is rendered."""
+        return True
+
+
+_PARSERS: Final[threading.local] = threading.local()
+
+
+def commonmark_parser() -> MarkdownIt:
+    """Return this thread's CommonMark parser, configured for linting rather than rendering.
+
+    `validateLink` is markdown-it's renderer-safety filter: by default it refuses `file:`,
+    `data:`, `javascript:` and `vbscript:` destinations, dropping them so a hostile document
+    cannot emit them into HTML. That is right for a renderer and wrong for a linter — this
+    validator has a rule that exists *specifically* to report `file:///` links, and the
+    parser was silently removing them before the rule could see them.
+
+    Accepting every scheme is safe here because nothing is rendered; the tokens are read and
+    discarded. A library's defaults are part of its contract, and this one is tuned for a
+    job we are not doing.
+    """
+    if not hasattr(_PARSERS, "parser"):
+        _PARSERS.parser = _LintingParser("commonmark")
+    return _PARSERS.parser
+
+
 def extract_heading_anchors(content: str) -> set[str]:
-    """Extract all heading anchor slugs and explicit HTML anchors from markdown."""
-    anchors: set[str] = set()
+    """Extract all heading anchor slugs and explicit HTML anchors from markdown.
+
+    Headings come from the parser, so a setext heading — underlined with `===` or `---`
+    rather than prefixed with `#` — produces an anchor like any other. The line scan only
+    recognised the ATX form, so every in-page link to a setext heading was reported broken
+    against an anchor GitHub emits perfectly well.
+    """
+    document = parse_document(commonmark_parser(), content)
+    anchors = {slug for heading in document.headings if (slug := slugify_heading(heading.text))}
     lines = content.splitlines()
-    for line, fenced in zip(lines, fenced_line_flags(lines), strict=True):
-        stripped = line.strip()
-        if fenced:
-            continue
-        slug = _extract_heading_slug(stripped)
-        if slug:
-            anchors.add(slug)
-        anchors.update(_extract_html_anchors(line))
+    for number, line in enumerate(lines, 1):
+        if number not in document.code_lines:
+            anchors.update(_extract_html_anchors(line))
     return anchors
 
 
@@ -358,12 +392,19 @@ def _check_local_anchor(
     line_no: int,
     known_anchors: dict[Path, set[str]],
 ) -> DocFinding | None:
-    """Validate internal document heading anchor reference."""
+    """Validate internal document heading anchor reference.
+
+    Compared for equality. The substring test accepted `#install` against a page whose only
+    heading is `Installation`, and `#setup-and-install-the-thing` against `#setup` — in both
+    directions — so a link GitHub cannot resolve passed the gate whose whole job is
+    resolving links. Now that headings come from the parser, setext forms produce anchors
+    too, which removes the one class of false negative the loose comparison was hiding.
+    """
     if file_path not in known_anchors:
         return None
     target_anchors = known_anchors[file_path]
     clean_frag = re.sub(r"[^\w-]", "", fragment.lower())
-    if not any(clean_frag in a or a in clean_frag for a in target_anchors):
+    if clean_frag not in target_anchors:
         return DocFinding(
             file_path=str(file_path),
             line_number=line_no,
@@ -376,7 +417,14 @@ def _check_local_anchor(
 def _check_path_target(
     path_part: str, file_path: Path, line_no: int, oracle: PathOracle
 ) -> DocFinding | None:
-    """Validate relative target path on filesystem."""
+    """Validate relative target path on filesystem.
+
+    Percent-decoded first. RFC 3986 §2.1 makes `%20` the encoding of a space, and a link to
+    a file whose name contains one must write it that way — so resolving the raw text
+    reported a file that exists as missing, and the author's only remedy was to break the
+    link. `unquote` is the inverse the standard defines.
+    """
+    path_part = unquote(path_part)
     target_path = file_path.parent / path_part
     if oracle.exists(target_path):
         return None
@@ -488,18 +536,41 @@ def check_markdown_links(
     known_anchors: dict[Path, set[str]] | None = None,
     oracle: PathOracle | None = None,
 ) -> list[DocFinding]:
-    """Inspect all markdown links for broken paths, missing anchors, and host-specific URIs."""
+    """Inspect all markdown links for broken paths, missing anchors, and host-specific URIs.
+
+    Links come from the CommonMark parser, which settles four things a line scan could not:
+    a link title is an attribute and can never be read as part of the destination; a
+    `[text](url)` inside a code span is a `code_inline` child and never a link, without
+    masking anything; an indented code block is a `code_block` and its example links are not
+    resolved as paths; and a multi-line `<!-- ... -->` is one `html_block`, so links inside a
+    commented-out section are not chased.
+
+    The whitespace-malformation check stays a line scan, because `[a] (b)` is not a link at
+    all — the parser has nothing to report and the reader still wants telling.
+    """
     file_str = str(file_path)
-    findings: list[DocFinding] = []
+    content = "\n".join(lines)
+    document = parse_document(commonmark_parser(), content)
+    skip = document.code_lines | document.html_lines
     context = LinkContext(
         anchors=_resolve_effective_anchors(file_path, lines, known_anchors),
         paths=oracle if oracle is not None else PathOracle(),
     )
 
-    for idx, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
-        if not fenced:
-            findings.extend(_check_line_links(line, idx, file_path, file_str, context))
-    return findings
+    findings: list[DocFinding] = []
+    for link in document.links:
+        if link.line in skip:
+            continue
+        finding = _validate_link_target(link.href.strip(), file_path, link.line, context)
+        if finding:
+            findings.append(finding)
+    for idx, line in enumerate(lines, 1):
+        if idx not in skip and _SPACE_LINK_RE.search(mask_code_spans(line)):
+            findings.append(DocFinding(
+                file_path=file_str, line_number=idx, category="link",
+                message=f"Malformed link with whitespace between brackets: '{line.strip()}'",
+            ))
+    return sorted(findings, key=lambda f: (f.line_number, f.message))
 
 
 def _validate_python_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
