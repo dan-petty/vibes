@@ -947,3 +947,57 @@ def test_every_css_hex_length_is_a_colour(colour: str) -> None:
     from doc_rules_mermaid import contrast_ratio
 
     assert contrast_ratio(colour, "#ffffff") > 0
+
+
+def test_link_collector_helpers(tmp_path: Path) -> None:
+    """Verify parsed link and whitespace malformation collector helpers."""
+    from doc_core import MarkdownLink, PathOracle
+    from docs_validator import (
+        LinkContext,
+        _collect_parsed_link_findings,
+        _collect_whitespace_link_findings,
+    )
+
+    doc_file = tmp_path / "test_doc.md"
+    doc_file.write_text("# Test\n", encoding="utf-8")
+    context = LinkContext(anchors={}, paths=PathOracle())
+
+    links = [
+        MarkdownLink(href="nonexistent.md", title="Missing", line=2),
+        MarkdownLink(href="skipped.md", title="Skipped", line=5),
+    ]
+    parsed_findings = _collect_parsed_link_findings(links, doc_file, skip=frozenset({5}), context=context)
+
+    lines = [
+        "Normal line",
+        "[valid](path.md)",
+        "[malformed] (path.md)",
+        "[in-skip] (path.md)",
+    ]
+    ws_findings = _collect_whitespace_link_findings(lines, str(doc_file), skip=frozenset({4}))
+
+    assert (
+        [(f.line_number, f.category) for f in parsed_findings],
+        [(f.line_number, f.category) for f in ws_findings],
+    ) == (
+        [(2, "link")],
+        [(3, "link")],
+    )
+
+
+def test_apply_fixes_helper(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify _apply_fixes invokes remediation and emits console output."""
+    from docs_validator import DocsValidator, _apply_fixes
+
+    bad_doc = tmp_path / "fixable.md"
+    bad_doc.write_text("# Doc\n\n```python\nprint(1)\n", encoding="utf-8")
+
+    validator = DocsValidator()
+    _apply_fixes([bad_doc], validator)
+
+    captured = capsys.readouterr()
+    content = bad_doc.read_text(encoding="utf-8")
+    assert (
+        "Applied" in captured.out,
+        content.endswith("```\n") or content.endswith("```"),
+    ) == (True, True)

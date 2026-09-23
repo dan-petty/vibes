@@ -33,6 +33,7 @@ import yaml
 from doc_core import (
     DocFinding,
     DocValidationReport,
+    MarkdownLink,
     PathOracle,
     fenced_line_flags,
     parse_document,
@@ -83,14 +84,6 @@ VOID_HTML_TAGS: Final[frozenset[str]] = frozenset({"br", "hr", "img", "input"})
 
 _FENCE_RE: Final[re.Pattern[str]] = re.compile(r"^(`{3,}|~{3,})(.*)$")
 _SPACE_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]+)\]\s+\(([^)]+)\)")
-# CommonMark §6.3: an inline link is `[text](destination "title")`, where the optional
-# title is separated by whitespace and quoted. Capturing everything up to `)` made
-# `[Readme](README.md "The project readme")` resolve the path
-# `README.md "The project readme"`, which exists nowhere — a false broken link on every
-# correctly-titled link in the repository. The destination may also be angle-bracketed.
-_MARKDOWN_LINK_RE: Final[re.Pattern[str]] = re.compile(
-    r"!?\[([^\]]*)\]\(\s*(?:<([^>]*)>|([^\s)]*))(?:\s+[\"\'(][^)]*)?\s*\)"
-)
 _HTML_TAG_RE: Final[re.Pattern[str]] = re.compile(r"<(/)?([a-zA-Z0-9]+)(?:\s+[^>]*)?>")
 _FILE_URI_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]*)\]\(file://(/[^)#\s]+)(#[^)\s]*)?\)")
 
@@ -126,10 +119,7 @@ def _extract_heading_slug(line: str) -> str | None:
 
 def _extract_html_anchors(line: str) -> list[str]:
     """Extract explicit HTML anchor name and id attributes from line."""
-    return [
-        m.group(1)
-        for m in re.finditer(r'<a\s+[^>]*(?:name|id)=["\']([^"\']+)["\']', line, re.I)
-    ]
+    return [m.group(1) for m in re.finditer(r'<a\s+[^>]*(?:name|id)=["\']([^"\']+)["\']', line, re.I)]
 
 
 class _LintingParser(MarkdownIt):
@@ -189,7 +179,7 @@ def _evaluate_fence_token(token: Any, file_str: str) -> DocFinding | None:
             file_path=file_str,
             line_number=start_l + 1,
             category="code_fence",
-            message=f"Suspicious unclosed or empty code fence at lines {start_l+1}-{end_l}",
+            message=f"Suspicious unclosed or empty code fence at lines {start_l + 1}-{end_l}",
         )
     return None
 
@@ -270,9 +260,7 @@ def _check_line_fences(lines: Sequence[str], file_str: str) -> list[DocFinding]:
     return findings
 
 
-def check_code_fences(
-    lines: Sequence[str], file_path: Path, parser: MarkdownIt
-) -> list[DocFinding]:
+def check_code_fences(lines: Sequence[str], file_path: Path, parser: MarkdownIt) -> list[DocFinding]:
     """Verify code fences for unclosed blocks and premature termination via inner fences."""
     file_str = str(file_path)
     try:
@@ -328,11 +316,15 @@ def _process_table_line(
     if _is_table_delimiter_row(raw_cells):
         return True, len(raw_cells), None
     if in_table and len(raw_cells) != header_cols:
-        return True, header_cols, DocFinding(
-            file_path=file_str,
-            line_number=line_no,
-            category="table",
-            message=f"Table row column count mismatch: expected {header_cols}, found {len(raw_cells)}",
+        return (
+            True,
+            header_cols,
+            DocFinding(
+                file_path=file_str,
+                line_number=line_no,
+                category="table",
+                message=f"Table row column count mismatch: expected {header_cols}, found {len(raw_cells)}",
+            ),
         )
     return in_table, header_cols, None
 
@@ -362,17 +354,13 @@ def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFind
         if fenced:
             in_table = False
             continue
-        in_table, header_cols, finding = _evaluate_table_line(
-            stripped, in_table, header_cols, idx, file_str
-        )
+        in_table, header_cols, finding = _evaluate_table_line(stripped, in_table, header_cols, idx, file_str)
         if finding:
             findings.append(finding)
     return findings
 
 
-def _check_host_or_web_target(
-    target: str, file_str: str, line_no: int
-) -> tuple[bool, DocFinding | None]:
+def _check_host_or_web_target(target: str, file_str: str, line_no: int) -> tuple[bool, DocFinding | None]:
     """Inspect link target for absolute host URIs or external web links."""
     if target.startswith("file:///"):
         return True, DocFinding(
@@ -490,34 +478,6 @@ def mask_code_spans(line: str) -> str:
     return _CODE_SPAN_RE.sub(lambda match: " " * len(match.group(0)), line)
 
 
-def _check_line_links(
-    line: str,
-    line_no: int,
-    file_path: Path,
-    file_str: str,
-    context: LinkContext,
-) -> list[DocFinding]:
-    """Inspect a single markdown line for whitespace malformations and target link targets."""
-    line_findings: list[DocFinding] = []
-    line = mask_code_spans(line)
-    if _SPACE_LINK_RE.search(line):
-        line_findings.append(
-            DocFinding(
-                file_path=file_str,
-                line_number=line_no,
-                category="link",
-                message=f"Malformed link with whitespace between brackets: '{line.strip()}'",
-            )
-        )
-    for match in _MARKDOWN_LINK_RE.finditer(line):
-        # Angle-bracketed destination in group 2, bare destination in group 3.
-        target = (match.group(2) or match.group(3) or "").strip()
-        finding = _validate_link_target(target, file_path, line_no, context)
-        if finding:
-            line_findings.append(finding)
-    return line_findings
-
-
 def _resolve_effective_anchors(
     file_path: Path,
     lines: Sequence[str],
@@ -528,6 +488,43 @@ def _resolve_effective_anchors(
     if file_path not in anchors:
         anchors[file_path] = extract_heading_anchors("\n".join(lines))
     return anchors
+
+
+def _collect_parsed_link_findings(
+    links: Sequence[MarkdownLink],
+    file_path: Path,
+    skip: frozenset[int],
+    context: LinkContext,
+) -> list[DocFinding]:
+    """Validate target destinations for non-skipped parsed markdown links."""
+    findings: list[DocFinding] = []
+    for link in links:
+        if link.line in skip:
+            continue
+        finding = _validate_link_target(link.href.strip(), file_path, link.line, context)
+        if finding:
+            findings.append(finding)
+    return findings
+
+
+def _collect_whitespace_link_findings(
+    lines: Sequence[str],
+    file_str: str,
+    skip: frozenset[int],
+) -> list[DocFinding]:
+    """Scan raw lines for malformed links containing whitespace between brackets."""
+    findings: list[DocFinding] = []
+    for idx, line in enumerate(lines, 1):
+        if idx not in skip and _SPACE_LINK_RE.search(mask_code_spans(line)):
+            findings.append(
+                DocFinding(
+                    file_path=file_str,
+                    line_number=idx,
+                    category="link",
+                    message=f"Malformed link with whitespace between brackets: '{line.strip()}'",
+                )
+            )
+    return findings
 
 
 def check_markdown_links(
@@ -548,7 +545,6 @@ def check_markdown_links(
     The whitespace-malformation check stays a line scan, because `[a] (b)` is not a link at
     all — the parser has nothing to report and the reader still wants telling.
     """
-    file_str = str(file_path)
     content = "\n".join(lines)
     document = parse_document(commonmark_parser(), content)
     skip = document.code_lines | document.html_lines
@@ -556,20 +552,8 @@ def check_markdown_links(
         anchors=_resolve_effective_anchors(file_path, lines, known_anchors),
         paths=oracle if oracle is not None else PathOracle(),
     )
-
-    findings: list[DocFinding] = []
-    for link in document.links:
-        if link.line in skip:
-            continue
-        finding = _validate_link_target(link.href.strip(), file_path, link.line, context)
-        if finding:
-            findings.append(finding)
-    for idx, line in enumerate(lines, 1):
-        if idx not in skip and _SPACE_LINK_RE.search(mask_code_spans(line)):
-            findings.append(DocFinding(
-                file_path=file_str, line_number=idx, category="link",
-                message=f"Malformed link with whitespace between brackets: '{line.strip()}'",
-            ))
+    findings = _collect_parsed_link_findings(document.links, file_path, skip, context)
+    findings.extend(_collect_whitespace_link_findings(lines, str(file_path), skip))
     return sorted(findings, key=lambda f: (f.line_number, f.message))
 
 
@@ -637,9 +621,7 @@ def _validate_yaml_snippet(code: str, start_line: int, file_str: str) -> DocFind
         )
 
 
-_SNIPPET_VALIDATORS: Final[
-    dict[str, Callable[[str, int, str], DocFinding | None]]
-] = {
+_SNIPPET_VALIDATORS: Final[dict[str, Callable[[str, int, str], DocFinding | None]]] = {
     "python": _validate_python_snippet,
     "py": _validate_python_snippet,
     "json": _validate_json_snippet,
@@ -769,16 +751,6 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     return findings
 
 
-
-
-
-
-
-
-
-
-
-
 def _discover_markdown_files(dir_path: Path, extensions: Sequence[str]) -> list[Path]:
     """Discover the repository's own markdown files."""
     return sorted(iter_source_files(dir_path, extensions))
@@ -805,9 +777,7 @@ def _fix_mermaid_line(line: str) -> tuple[str, int]:
     return new_line, fixes
 
 
-def _process_mermaid_line(
-    line: str, in_mermaid: bool
-) -> tuple[str, bool, int]:
+def _process_mermaid_line(line: str, in_mermaid: bool) -> tuple[str, bool, int]:
     """Process a single markdown line and apply Mermaid fixes if inside diagram."""
     stripped = line.strip()
     if stripped.startswith("```mermaid"):
@@ -922,9 +892,7 @@ class DocsValidator:
         """Remediate documentation issues in file in-place."""
         return auto_fix_file(file_path)
 
-    def fix_directory(
-        self, dir_path: Path, extensions: Sequence[str] = (".md", ".markdown")
-    ) -> int:
+    def fix_directory(self, dir_path: Path, extensions: Sequence[str] = (".md", ".markdown")) -> int:
         """Remediate documentation issues across directory in-place."""
         md_files = _discover_markdown_files(dir_path, extensions)
         return sum(auto_fix_file(f) for f in md_files)
@@ -1141,12 +1109,21 @@ def _determine_exit_code(report: DocValidationReport, strict: bool) -> int:
     return 0
 
 
+def _apply_fixes(targets: Sequence[Path], validator: DocsValidator) -> None:
+    """Run autofix remediation on targets and notify console."""
+    fixes = sum(_fix_target(target, validator) for target in targets)
+    if fixes > 0:
+        print(f"🔧 Applied {fixes} automatic remediation fix(es) to documentation.")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint for standalone vibes doc validator."""
     parser = argparse.ArgumentParser(description="Vibes Documentation Syntax & Link Validator")
     parser.add_argument("paths", nargs="*", default=[], help="File or directory paths to validate")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as errors")
-    parser.add_argument("--fix", action="store_true", help="Automatically remediate fixable documentation issues")
+    parser.add_argument(
+        "--fix", action="store_true", help="Automatically remediate fixable documentation issues"
+    )
     parser.add_argument("--json", action="store_true", help="Emit report as JSON")
     parser.add_argument("--rule", help="Filter findings by category rule")
     args = parser.parse_args(argv)
@@ -1155,9 +1132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     validator = DocsValidator()
 
     if args.fix:
-        fixes = sum(_fix_target(target, validator) for target in targets)
-        if fixes > 0:
-            print(f"🔧 Applied {fixes} automatic remediation fix(es) to documentation.")
+        _apply_fixes(targets, validator)
 
     report = _merge_reports([_resolve_report(target, validator) for target in targets])
     _filter_report_by_rule(report, args.rule)
