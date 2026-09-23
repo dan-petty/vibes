@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 from urllib.parse import urldefrag, urljoin, urlparse
 
 # Importable whether this file is run from its own directory, imported by a test runner
@@ -41,6 +42,10 @@ ALLOWED_TEST_NETWORKS = [
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("2001:db8::/32"),
 ]
+
+# RFC 9110 places no ceiling on redirect depth, so the client must impose one or a
+# redirect loop is an unbounded fetch.
+MAX_REDIRECTS = 5
 
 DEFAULT_BROWSER_HEADERS = {
     "User-Agent": (
@@ -377,15 +382,43 @@ class AdaptiveWebCrawler:
         )
 
     def _default_http_fetcher(self, url: str, headers: dict[str, str]) -> tuple[int, str]:
-        """Default HTTP fetcher using httpx or fallback."""
+        """Fetch one page, revalidating the destination at every redirect hop.
+
+        `follow_redirects=True` was the whole vulnerability. The SSRF gate ran once, on the
+        URL the caller supplied, and the client then followed `Location` wherever it led —
+        RFC 9110 §15.4 says a user agent MAY do exactly that, and httpx's
+        `_send_handling_redirects` offers no hook that can veto the next connection. A page
+        on an attacker-controlled public host answering `302 Location:
+        http://169.254.169.254/latest/meta-data/...` therefore returned the cloud metadata
+        document as page content, and the strategy store recorded the crawl as a success.
+
+        Redirects are followed here instead, one hop at a time, with `validate_url_security`
+        applied to every hop. The check has to sit where the connection is opened, not where
+        the caller's intent is expressed.
+        """
         try:
             import httpx
-            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
-                res = client.get(url, headers=headers)
-                return res.status_code, res.text
+            with httpx.Client(timeout=10.0, follow_redirects=False) as client:
+                return self._follow_redirects(client, url, headers)
+        except ValueError:
+            raise
         except Exception as exc:
             logger.warning("HTTP fetch failed for %s: %s", url, str(exc)[:256])
             return 500, f"<html><body>Fetch error: {str(exc)[:256]}</body></html>"
+
+    def _follow_redirects(self, client: Any, url: str, headers: dict[str, str]) -> tuple[int, str]:
+        """Walk the redirect chain, validating each destination before it is requested."""
+        current = url
+        for _ in range(MAX_REDIRECTS):
+            response = client.get(current, headers=headers)
+            location = response.headers.get("location")
+            if not response.has_redirect_location or not location:
+                return int(response.status_code), str(response.text)
+            # Resolved against the current URL, because `Location` may be relative
+            # (RFC 9110 §10.2.2), and validated before the next request is made.
+            current = urljoin(current, location)
+            validate_url_security(current)
+        raise ValueError(f"Redirect limit of {MAX_REDIRECTS} exceeded starting at {url}")
 
     def _default_headless_fetcher(self, url: str, wait_selector: str) -> tuple[int, str]:
         """Fallback headless browser executor or simulated environment."""

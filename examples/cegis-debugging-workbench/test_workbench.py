@@ -150,3 +150,19 @@ def test_workbench_main_demo(capsys: object) -> None:
     assert "CEGIS Debugging Workbench Demo" in captured
     assert "Sandboxed Container / Process Group Evaluation" in captured
     assert "successfully converged" in captured
+
+
+def test_the_evaluator_reports_what_its_engine_does_not_confine() -> None:
+    """The README claimed rootless containers on a path that never used one.
+
+    `force_simulator=True` is the default, and that path cannot give a patch a read-only
+    root filesystem or a private tmpfs — both need a mount namespace an unprivileged
+    process does not have — so an untrusted patch can write anywhere the invoking user can.
+    A caller running untrusted code is entitled to the runtime's answer, not the policy's.
+    """
+    report = SandboxedPatchEvaluator().enforcement()
+    assert report is not None
+    assert report.unenforced == [
+        "CIS-5.1 (Read-only Root Filesystem)",
+        "CIS-5.8 (Hardened Tmpfs Scratch Mount)",
+    ]

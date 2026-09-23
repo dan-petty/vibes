@@ -137,3 +137,22 @@ def test_streaming_sanitizer_empty_and_partial_flush() -> None:
         flush_res.visible_chunk,
         sanitizer.metrics.visible_chars > 0,
     ) == ("", "Ending on partial ", "<th", True)
+
+
+def test_a_stream_that_opens_its_thought_in_the_prompt_does_not_leak_it() -> None:
+    """The parser could only start in EMITTING, so a closing-tag-only stream leaked entirely.
+
+    Some model templates put the opening tag in the prompt rather than the completion, so
+    the stream begins *inside* the thought and carries only `</think>`. Started in EMITTING,
+    every reasoning token was treated as visible output and handed to whatever consumes the
+    "clean" stream — the exact leak this component exists to prevent.
+    """
+    chunks = ["Deciding what to commit.", "</think>", 'git commit -m "x"']
+    visible, thoughts, _ = sanitize_reasoning_stream(chunks, starts_thinking=True)
+    assert (visible, thoughts) == ('git commit -m "x"', "Deciding what to commit.")
+
+
+def test_a_closing_tag_while_emitting_is_recorded_rather_than_passed_through() -> None:
+    """A caller who got the flag wrong finds out, instead of shipping the leak silently."""
+    visible, _, metrics = sanitize_reasoning_stream(["thought", "</think>", "answer"])
+    assert (metrics.unopened_close_tags, "</think>" in visible) == (1, False)

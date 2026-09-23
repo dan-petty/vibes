@@ -45,6 +45,11 @@ class SanitizerMetrics:
     open_tags_detected: int = 0
     close_tags_detected: int = 0
     unclosed_stream: bool = False
+    # A close tag arriving while emitting means the stream began inside a thought and
+    # the parser was not told. Everything before it was already emitted as visible
+    # output, so this cannot be undone — but a caller that reads its metrics finds out
+    # it is misconfigured instead of shipping the leak silently.
+    unopened_close_tags: int = 0
 
 
 class StreamingReasoningSanitizer:
@@ -62,12 +67,18 @@ class StreamingReasoningSanitizer:
         open_tag: str = DEFAULT_OPEN_TAG,
         close_tag: str = DEFAULT_CLOSE_TAG,
         max_thought_chars: int = DEFAULT_MAX_THOUGHT_CHARS,
+        starts_thinking: bool = False,
     ) -> None:
         self.open_tag = open_tag
         self.close_tag = close_tag
         self.max_thought_chars = max_thought_chars
 
-        self._state = ParserState.EMITTING
+        # Some models emit a *closing* tag with no opening one, because the template put
+        # the opener in the prompt rather than the completion. A parser that can only start
+        # in EMITTING treats that entire chain of thought as visible output and hands it to
+        # whatever consumes the "clean" stream — the exact leak this component exists to
+        # prevent, on the model family that made reasoning streams common.
+        self._state = ParserState.THINKING if starts_thinking else ParserState.EMITTING
         self._buffer: str = ""
         self._collected_thoughts: list[str] = []
         self._metrics = SanitizerMetrics()
@@ -132,6 +143,14 @@ class StreamingReasoningSanitizer:
             self._metrics.open_tags_detected += 1
             return text[idx + len(self.open_tag) :]
 
+        closing = text.find(self.close_tag)
+        if closing != -1:
+            # Seen while emitting: the stream opened its thought before this parser was
+            # handed it. Record it rather than passing the tag through as visible text.
+            self._metrics.unopened_close_tags += 1
+            visible_out.append(text[:closing])
+            return text[closing + len(self.close_tag) :]
+
         cutoff = self._find_potential_prefix(text, self.open_tag)
         if cutoff < len(text):
             visible_out.append(text[:cutoff])
@@ -190,12 +209,18 @@ def sanitize_reasoning_stream(
     open_tag: str = DEFAULT_OPEN_TAG,
     close_tag: str = DEFAULT_CLOSE_TAG,
     max_thought_chars: int = DEFAULT_MAX_THOUGHT_CHARS,
+    starts_thinking: bool = False,
 ) -> tuple[str, str, SanitizerMetrics]:
-    """Sanitize an entire sequence of streaming chunks in a single call."""
+    """Sanitize an entire sequence of streaming chunks in a single call.
+
+    Pass `starts_thinking=True` for a model whose template opens the thought in the prompt,
+    so the completion contains a closing tag and no opening one.
+    """
     sanitizer = StreamingReasoningSanitizer(
         open_tag=open_tag,
         close_tag=close_tag,
         max_thought_chars=max_thought_chars,
+        starts_thinking=starts_thinking,
     )
     visible_fragments: list[str] = []
 

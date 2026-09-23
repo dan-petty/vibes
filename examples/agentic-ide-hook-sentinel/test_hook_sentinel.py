@@ -4,8 +4,11 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
+import hook_sentinel
+import pytest
 from hook_sentinel import (
     HookDecision,
     IdeHookSentinel,
@@ -155,3 +158,45 @@ def test_evaluate_lsp_diagnostics() -> None:
         "Type 'str' is not assignable" in err_eval.prescriptive_guidance,
     ) == (False, 1, 1, True, True)
 
+
+
+# --- Notations a resolver accepts and a strict parser does not -----------------------------
+
+
+@pytest.mark.parametrize(
+    ("literal", "private"),
+    [
+        ("172.16.0.2", True),
+        ("172.020.0.2", True),
+        ("0xac.0x10.0.2", True),
+        ("10.0.0.1", True),
+        ("192.0.2.5", False),
+        ("8.8.8.8", False),
+        ("not.an.ip.at.all", False),
+    ],
+)
+def test_an_octal_or_hex_octet_is_still_a_private_address(literal: str, private: bool) -> None:
+    """The guard parsed strictly and treated a rejection as "not an address", failing open.
+
+    `ipaddress.ip_address` refuses any octet with a leading zero, because `0177` meant octal
+    historically and decimal now. `inet_aton` and every libc-backed client still accept it —
+    `curl http://172.020.0.2/` reaches `172.16.0.2` — so the one notation an attacker would
+    choose was the one notation that sailed through.
+    """
+    assert hook_sentinel._check_private_ip(literal) is private
+
+
+def test_a_child_that_ignores_sigterm_still_returns_within_the_grace_period() -> None:
+    """SIGTERM is a request; `communicate()` with no timeout waits for a reply that never comes.
+
+    Observed before this: a 0.5-second contract ran past 25 seconds and would have blocked
+    for the child's full 120. SIGKILL cannot be caught, blocked or ignored.
+    """
+    sentinel = hook_sentinel.IdeHookSentinel(workspace_root=Path("."))
+    started = time.monotonic()
+    result = sentinel.run_isolated_command(
+        ["python3", "-c", "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(120)"],
+        timeout_seconds=0.5,
+    )
+    elapsed = time.monotonic() - started
+    assert (result.timed_out, elapsed < 30.0) == (True, True)

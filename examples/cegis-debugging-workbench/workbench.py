@@ -178,6 +178,20 @@ class SandboxedPatchEvaluator:
         self.force_simulator = force_simulator
         self._harness = self._create_harness()
 
+    def enforcement(self) -> Any:
+        """Report which containment controls the engine about to run actually applies.
+
+        Exposed because the README used to claim rootless containers on a path that never
+        used one. A caller running untrusted patches is entitled to the runtime's answer
+        rather than the policy's, and `unenforced` names what it cannot do — on the default
+        path that is the read-only root filesystem and the private tmpfs, so a patch can
+        write anywhere the invoking user can.
+        """
+        mod = _load_sandbox_module()
+        if mod is None or self._harness is None or not hasattr(mod, "RuntimeEnforcementAuditor"):
+            return None
+        return mod.RuntimeEnforcementAuditor.audit(self._harness.policy, self._harness.engine)
+
     def _create_harness(self) -> Any:
         mod = _load_sandbox_module()
         if mod is None or not hasattr(mod, "ContainerSandboxHarness"):

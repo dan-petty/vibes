@@ -8,6 +8,7 @@ file bounds (CWE-400), POSIX process group containment, and LSP diagnostic inges
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 import os
 import re
@@ -36,6 +37,9 @@ PROTECTED_PATH_PATTERNS: Final[tuple[str, ...]] = (
 IPV4_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 # RFC 5737 Documentation blocks + loopback are allowed for safe testing
+# How long a process group is given to honour SIGTERM before SIGKILL follows.
+GRACE_SECONDS: Final[float] = 2.0
+
 ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network, ...]] = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
@@ -82,14 +86,54 @@ class DiagnosticEvaluation:
     prescriptive_guidance: str
 
 
-def _check_private_ip(ip_str: str) -> bool:
-    """Return True if IP is private RFC 1918 and not an allowed documentation IP."""
-    try:
-        addr = ipaddress.ip_address(ip_str)
-    except ValueError:
-        return False
+def _normalize_ipv4(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Parse a dotted quad the way a resolver does, or return None if it is not one.
 
-    if not addr.is_private:
+    `ipaddress.ip_address` is deliberately strict and rejects any octet with a leading
+    zero, because the historical interpretation of `0177` is octal and the modern one is
+    decimal. `inet_aton` and every libc-backed client still accept it, so `curl` given an
+    octet written with a leading zero connects to the same private host the decimal form
+    names — the address this module exists to block. A guard that parses strictly and treats a
+    `ValueError` as "not an address" therefore fails **open** on exactly the notation an
+    attacker would choose.
+
+    Each octet is re-read here with the base the C resolver would use, so the guard judges
+    the address the connection will actually go to.
+    """
+    parts = ip_str.split(".")
+    if len(parts) != 4:
+        return _strict(ip_str)
+    try:
+        octets = [_octet(part) for part in parts]
+    except ValueError:
+        return _strict(ip_str)
+    if any(value < 0 or value > 255 for value in octets):
+        return _strict(ip_str)
+    return ipaddress.ip_address(".".join(str(value) for value in octets))
+
+
+def _octet(part: str) -> int:
+    """Read one octet as a resolver would: 0x hex, leading-zero octal, else decimal."""
+    lowered = part.lower()
+    if lowered.startswith("0x"):
+        return int(lowered, 16)
+    if lowered.startswith("0") and len(lowered) > 1:
+        return int(lowered, 8)
+    return int(lowered, 10)
+
+
+def _strict(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Fall back to the strict parser for anything that is not a dotted quad."""
+    try:
+        return ipaddress.ip_address(ip_str)
+    except ValueError:
+        return None
+
+
+def _check_private_ip(ip_str: str) -> bool:
+    """Return True if the address is private and not an allowed documentation address."""
+    addr = _normalize_ipv4(ip_str)
+    if addr is None or not addr.is_private:
         return False
 
     return not any(addr in net for net in ALLOWED_TEST_NETWORKS)
@@ -208,7 +252,15 @@ class IdeHookSentinel:
             )
         except subprocess.TimeoutExpired:
             self._kill_process_group(proc.pid)
-            stdout, stderr = proc.communicate()
+            # Bounded. `communicate()` with no timeout blocks until the group exits, so a
+            # child that ignores SIGTERM held the call open for its full runtime — a
+            # 0.5-second contract observed to run past 25 seconds. The escalation below
+            # guarantees this returns.
+            try:
+                stdout, stderr = proc.communicate(timeout=GRACE_SECONDS)
+            except subprocess.TimeoutExpired:
+                self._kill_process_group(proc.pid, signal.SIGKILL)
+                stdout, stderr = proc.communicate()
             return CommandResult(
                 command=cmd_tuple,
                 exit_code=-1,
@@ -218,13 +270,15 @@ class IdeHookSentinel:
             )
 
     @staticmethod
-    def _kill_process_group(pid: int) -> None:
-        """Kill entire POSIX process group to prevent orphan grandchild zombie leaks."""
-        try:
-            pgid = os.getpgid(pid)
-            os.killpg(pgid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            pass
+    def _kill_process_group(pid: int, sig: int = signal.SIGTERM) -> None:
+        """Signal the entire POSIX process group, so grandchildren die with the child.
+
+        SIGTERM is a request and a process may decline it; SIGKILL cannot be caught,
+        blocked or ignored. Sending only the request and then waiting without a bound is
+        how a timeout becomes advisory.
+        """
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(os.getpgid(pid), sig)
 
     @staticmethod
     def evaluate_lsp_diagnostics(

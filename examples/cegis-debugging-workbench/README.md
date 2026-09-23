@@ -16,7 +16,10 @@ When an autonomous AI agent encounters a bug, the default behavior is often sing
 1. **Hypothesis Formulation**: State a falsifiable theory explaining the root cause.
 2. **Counterexample Isolation**: Author an executable test asserting the failure (`ConstraintSpec`).
 3. **Oracle Verification**: Evaluate candidate patches against both baseline specifications and accumulated counterexamples.
-4. **Sandboxed Patch Evaluation (`SandboxedPatchEvaluator`)**: Untrusted candidate patches are executed inside isolated rootless containers (`ContainerSandboxHarness` / POSIX process groups) with cgroup memory and bounded timeout containment, preventing runaway loops (`while True: pass`) from hanging host execution.
+4. **Sandboxed Patch Evaluation (`SandboxedPatchEvaluator`)**: Untrusted candidate patches are executed through [`ContainerSandboxHarness`](../ephemeral-container-sandbox/), which uses a rootless container when `docker` or `podman` is present and otherwise confines the process directly: an unprivileged seccomp-BPF filter denying network, privilege, tracing, mount, kernel and keyring syscalls, `RLIMIT_AS`/`RLIMIT_CPU`/`RLIMIT_NPROC`/`RLIMIT_CORE`, a POSIX process group killed as a unit, and a bounded timeout — so a runaway loop (`while True: pass`) cannot hang the host.
+
+   > [!WARNING]
+   > **`force_simulator=True` is the default, and that path does not confine the filesystem.** A patch can write anywhere the invoking user can, including `$HOME`. The engine-less path enforces 6 of the 8 controls its policy declares; read-only rootfs and a private tmpfs need a mount namespace an unprivileged process does not have. `evaluator.enforcement()` returns exactly which controls are applied, and this README used to claim containers on a path that never used them — see [Observation 19](../../observations/systems/19-self-consistency-is-not-conformance.md).
 5. **Convergence**: Only declare completion when all constraints are certified green.
 
 ```mermaid
