@@ -20,6 +20,8 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 from contract_variables import (
     ContractError,
     Variable,
+    _prompt_one_attempt,
+    _resolve_one,
     coerce,
     load_variables,
     parse_assignments,
@@ -30,8 +32,9 @@ from contract_variables import (
 
 ENTITY = Variable(name="entity", prompt="What is reconciled", type="string", default="invoice")
 COUNT = Variable(name="count", prompt="How many", type="integer", default=3)
-UNIT = Variable(name="unit", prompt="Which unit", type="choice", default="currency",
-                choices=("currency", "percent"))
+UNIT = Variable(
+    name="unit", prompt="Which unit", type="choice", default="currency", choices=("currency", "percent")
+)
 
 
 def _declare(**overrides: object) -> dict[str, Any]:
@@ -75,15 +78,20 @@ def test_a_declaration_that_could_not_be_answered_is_refused(
 
 def test_every_breach_in_the_block_is_reported_at_once() -> None:
     """One run, every problem: a caller fixing one declaration per run is the cost avoided."""
-    document = {"variables": [
-        {"name": "Bad", "prompt": "", "default": "x"},
-        {"name": "other", "prompt": "What", "type": "integer", "default": "nope"},
-    ]}
+    document = {
+        "variables": [
+            {"name": "Bad", "prompt": "", "default": "x"},
+            {"name": "other", "prompt": "What", "type": "integer", "default": "nope"},
+        ]
+    }
     with pytest.raises(ContractError) as caught:
         load_variables(document)
     message = str(caught.value)
-    assert ("lowercase identifier" in message, "prompt is required" in message,
-            "default is invalid" in message) == (True, True, True)
+    assert (
+        "lowercase identifier" in message,
+        "prompt is required" in message,
+        "default is invalid" in message,
+    ) == (True, True, True)
 
 
 def test_two_variables_of_one_name_are_refused() -> None:
@@ -155,6 +163,7 @@ def test_nothing_supplied_and_nobody_asked_still_resolves() -> None:
 
 def test_a_supplied_answer_is_never_asked_for() -> None:
     """Prompting for what was already answered turns a scripted run into an interactive one."""
+
     def refuse(_: str) -> str:
         raise AssertionError("asked for an answer that was supplied")
 
@@ -163,7 +172,10 @@ def test_a_supplied_answer_is_never_asked_for() -> None:
 
 def test_an_empty_line_accepts_the_default() -> None:
     """Pressing return is the commonest answer, which is why a default is mandatory."""
-    assert resolve((ENTITY, COUNT), {}, interactive=True, ask=lambda _: "") == {"entity": "invoice", "count": 3}
+    assert resolve((ENTITY, COUNT), {}, interactive=True, ask=lambda _: "") == {
+        "entity": "invoice",
+        "count": 3,
+    }
 
 
 def test_an_invalid_answer_is_asked_again() -> None:
@@ -180,6 +192,7 @@ def test_asking_is_bounded() -> None:
 
 def test_stdin_closing_mid_dialogue_falls_back_to_the_default() -> None:
     """A closed pipe is not an answer, and it is not a reason to abandon a generation run."""
+
     def closed(_: str) -> str:
         raise EOFError
 
@@ -257,3 +270,15 @@ def test_every_malformed_assignment_is_reported_at_once() -> None:
 def test_the_prompt_line_states_the_choices_and_the_default() -> None:
     """A prompt that hides the default hides the thing pressing return will do."""
     assert UNIT.describe() == "Which unit [currency/percent] (currency): "
+
+
+def test_resolve_one_and_prompt_attempt_helpers() -> None:
+    """Verify single variable resolution and prompt attempt helper behavior."""
+    v = Variable(name="count", prompt="How many?", type="integer", default=1)
+
+    ans1 = _resolve_one(v, {"count": "5"}, interactive=False, ask=lambda _: "ignored")
+    ans2 = _resolve_one(v, {}, interactive=False, ask=lambda _: "ignored")
+    succ3, val3 = _prompt_one_attempt(v, lambda _: "10")
+    succ4, val4 = _prompt_one_attempt(v, lambda _: "invalid")
+
+    assert (ans1, ans2, succ3, val3, succ4, val4) == (5, 1, True, 10, False, None)
