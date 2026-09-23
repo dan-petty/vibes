@@ -139,7 +139,14 @@ class FastMCPGateway:
     def _calculate_jittered_backoff(self, attempt: int, retry_after: float | None) -> float:
         """Calculate exponential backoff with full jitter, honoring retry_after if given."""
         if retry_after is not None and retry_after > 0:
-            return min(self.config.max_backoff_seconds, retry_after)
+            # The server's instruction is a floor, never a ceiling. RFC 9110 §10.2.3 defines
+            # `Retry-After` as the time after which the client *may* retry, so taking the
+            # minimum of it and a local cap retried *earlier* than permitted — a 429 with
+            # `Retry-After: 60` slept 5 seconds under the default config and re-issued the
+            # request 55 seconds early, which is what turns a primary rate limit into a
+            # secondary one. `max_backoff_seconds` bounds this client's own exponential
+            # growth; it does not bound what a server asked for.
+            return retry_after
 
         raw_backoff = self.config.base_backoff_seconds * (2**attempt)
         capped_backoff = min(self.config.max_backoff_seconds, raw_backoff)

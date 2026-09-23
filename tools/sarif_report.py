@@ -78,9 +78,17 @@ class Result:
     line: int = 1
     subject: str = ""
 
-    def fingerprint(self) -> str:
-        """Return a stable identity that survives the finding moving down the file."""
-        material = f"{self.rule_id}|{self.file_path}|{self.subject or self.message}"
+    def fingerprint(self, root: Path | None = None) -> str:
+        """Return a stable identity that survives the finding moving down the file.
+
+        The path is normalised to the same repository-relative URI the result itself
+        carries. Hashing the raw filesystem path made the identity depend on where the
+        checkout happened to live, so the same finding in the same file scanned as `.` and
+        as an absolute path produced two different fingerprints — and a baseline recorded on
+        a developer's machine suppressed nothing in CI, which is the one job a baseline has.
+        """
+        located = _relative_uri(self.file_path, root) if root is not None else self.file_path
+        material = f"{self.rule_id}|{located}|{self.subject or self.message}"
         return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
     def to_sarif(self, root: Path) -> dict[str, Any]:
@@ -97,7 +105,7 @@ class Result:
                     }
                 }
             ],
-            "partialFingerprints": {"vibesFindingV1": self.fingerprint()},
+            "partialFingerprints": {"vibesFindingV1": self.fingerprint(root)},
         }
 
 
@@ -433,7 +441,9 @@ def _source_paths(root: Path) -> list[Path]:
     return sorted(iter_source_files(root, (".py",)))
 
 
-def _apply_baseline(runs: Sequence[Run], baseline_path: Path | None) -> tuple[list[Run], int]:
+def _apply_baseline(
+    runs: Sequence[Run], baseline_path: Path | None, root: Path | None = None
+) -> tuple[list[Run], int]:
     """Drop findings a committed baseline already accepts, keeping every run.
 
     A run emptied by the baseline is still published. Code scanning resolves an alert only
@@ -449,7 +459,7 @@ def _apply_baseline(runs: Sequence[Run], baseline_path: Path | None) -> tuple[li
     filtered: list[Run] = []
     suppressed = 0
     for run in runs:
-        split = partition(run.results, baseline)
+        split = partition(run.results, baseline, root)
         suppressed += len(split.known)
         filtered.append(Run(run.tool_name, run.rules, split.new))
     return filtered, suppressed
@@ -473,10 +483,10 @@ def _handle_report(args: argparse.Namespace) -> int:
         from finding_baseline import save_baseline
 
         recorded = save_baseline(
-            args.write_baseline, [r for run in runs for r in run.results]
+            args.write_baseline, [r for run in runs for r in run.results], root=args.root
         )
         print(f"Recorded {recorded} finding(s) into {args.write_baseline}.")
-    runs, suppressed = _apply_baseline(runs, args.baseline)
+    runs, suppressed = _apply_baseline(runs, args.baseline, args.root)
     log = build_log(runs, args.root)
     if _report_schema_errors(validate_log(log, args.schema)):
         return 1

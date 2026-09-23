@@ -66,7 +66,12 @@ jobs:
           fi
 
       - name: Apply Certified Label on Success
-        if: success()
+        # A fork pull request runs with a read-only `GITHUB_TOKEN` whatever `permissions:`
+        # declares, so this step fails for every outside contributor -- turning their first
+        # contribution red for a labelling courtesy that has nothing to do with their change.
+        # The audit above is the gate; the label is decoration, and decoration must not fail
+        # a build. Skipped rather than `continue-on-error` so the reason is stated.
+        if: success() && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

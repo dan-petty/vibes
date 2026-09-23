@@ -71,8 +71,13 @@ class Finding(Protocol):
     def subject(self) -> str:
         """Return the finding's subject, which participates in its identity."""
 
-    def fingerprint(self) -> str:
-        """Return the finding's stable identity."""
+    def fingerprint(self, root: Path | None = None) -> str:
+        """Return the finding's stable identity, normalised against a repository root.
+
+        `root` is what keeps the identity independent of where the checkout lives. Without
+        it a baseline recorded from an absolute path suppressed nothing when CI scanned the
+        same tree as `.`.
+        """
 
 
 @dataclass(frozen=True)
@@ -134,11 +139,20 @@ def load_baseline(path: Path) -> dict[str, BaselineEntry]:
     return {entry.fingerprint: entry for entry in entries}
 
 
-def save_baseline(path: Path, findings: Iterable[Finding], recorded_at: str | None = None) -> int:
-    """Write a baseline from the current findings, sorted so re-recording diffs cleanly."""
+def save_baseline(
+    path: Path, findings: Iterable[Finding], recorded_at: str | None = None,
+    root: Path | None = None,
+) -> int:
+    """Write a baseline from the current findings, sorted so re-recording diffs cleanly.
+
+    `root` normalises each fingerprint's path to the same repository-relative URI the
+    SARIF result carries. Without it a baseline recorded from an absolute checkout path
+    suppressed nothing when CI scanned the same tree as `.`, which is the one job it has.
+    """
     stamp = recorded_at or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     entries = [
-        BaselineEntry(f.fingerprint(), f.rule_id, f.file_path, f.subject, stamp) for f in findings
+        BaselineEntry(f.fingerprint(root), f.rule_id, f.file_path, f.subject, stamp)
+        for f in findings
     ]
     unique = {entry.fingerprint: entry for entry in entries}
     ordered = sorted(unique.values(), key=lambda e: (e.rule_id, e.file_path, e.fingerprint))
@@ -152,13 +166,15 @@ def save_baseline(path: Path, findings: Iterable[Finding], recorded_at: str | No
     return len(ordered)
 
 
-def partition(findings: Sequence[Finding], baseline: dict[str, BaselineEntry]) -> Partition:
+def partition(
+    findings: Sequence[Finding], baseline: dict[str, BaselineEntry], root: Path | None = None
+) -> Partition:
     """Split current findings into new and already-accepted, and report what has been fixed."""
     seen: set[str] = set()
     new: list[Any] = []
     known: list[Any] = []
     for finding in findings:
-        digest = finding.fingerprint()
+        digest = finding.fingerprint(root)
         seen.add(digest)
         (known if digest in baseline else new).append(finding)
     resolved = [entry for digest, entry in sorted(baseline.items()) if digest not in seen]
@@ -207,8 +223,13 @@ class SarifFinding:
     subject: str
     digest: str
 
-    def fingerprint(self) -> str:
-        """Return the identity the emitting tool already computed."""
+    def fingerprint(self, root: Path | None = None) -> str:
+        """Return the identity the emitting tool already computed.
+
+        `root` is accepted and ignored: this finding was read back out of a SARIF log, where
+        the producer has already normalised the path and written the digest. Recomputing it
+        here would be a second opinion about an identity that is not ours to assign.
+        """
         return self.digest
 
 

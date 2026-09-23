@@ -135,6 +135,12 @@ def _parse_bulk_string(data: bytes, newline_idx: int) -> tuple[str | None, int]:
         return None, newline_idx + 2
     start = newline_idx + 2
     end = start + length
+    if len(data) < end + 2:
+        # The declared length has not arrived yet. Slicing anyway produced a short string
+        # with a plausible consumed count and no error at all, so a value split across TCP
+        # segments — which a conformant server may do, and Valkey does above roughly 16 KB —
+        # came back silently clipped. `0` consumed is the signal to read more.
+        return None, 0
     val = data[start:end].decode("utf-8", errors="replace")
     return val, end + 2
 
@@ -145,6 +151,30 @@ RESP_PARSERS: dict[str, Callable[[bytes, int], tuple[Any, int]]] = {
     ":": _resp_int,
     "$": _parse_bulk_string,
 }
+
+
+def read_resp_reply(sock: Any, chunk: int = 65536) -> Any:
+    """Read until one complete RESP reply has arrived, then decode it.
+
+    A single `recv` is not a reply. TCP delivers a stream, and a conformant server is free
+    to write the `$<len>\\r\\n` header and the payload in separate segments — which Valkey
+    does above roughly 16 KB. `decode_resp_response` then parsed a truncated buffer and
+    returned a short string with no error, so a large cached value came back silently
+    clipped and every consumer treated the fragment as the whole entry.
+
+    `decode_resp_response` reports how many bytes it consumed and returns `(None, 0)` when
+    it has not yet seen a whole reply, which is exactly the signal a read loop needs.
+    """
+    buffer = b""
+    while True:
+        value, consumed = decode_resp_response(buffer)
+        if consumed:
+            return value
+        received = sock.recv(chunk)
+        if not received:
+            # The peer closed before completing the reply; a partial answer is not an answer.
+            return None
+        buffer += received
 
 
 def decode_resp_response(data: bytes) -> tuple[Any, int]:
@@ -176,8 +206,7 @@ class ValkeyL2Client:
         try:
             with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
                 s.sendall(encode_resp_command("PING"))
-                resp = s.recv(1024)
-                val, _ = decode_resp_response(resp)
+                val = read_resp_reply(s)
                 self.is_connected = bool(val == "PONG")
         except OSError:
             self.is_connected = False
@@ -189,8 +218,7 @@ class ValkeyL2Client:
         try:
             with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
                 s.sendall(encode_resp_command("GET", key))
-                resp = s.recv(65536)
-                val, _ = decode_resp_response(resp)
+                val = read_resp_reply(s)
                 return str(val) if val is not None else None
         except OSError:
             return self._fallback_store.get(key)
@@ -206,8 +234,7 @@ class ValkeyL2Client:
                 cmd.extend(["EX", str(ttl_seconds)])
             with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
                 s.sendall(encode_resp_command(*cmd))
-                resp = s.recv(1024)
-                val, _ = decode_resp_response(resp)
+                val = read_resp_reply(s)
                 return bool(val == "OK")
         except OSError:
             self._fallback_store[key] = value

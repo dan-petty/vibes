@@ -15,6 +15,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add directory to sys.path for direct imports
 _curr_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_curr_dir))
@@ -106,3 +108,34 @@ def test_cli_scan_file(tmp_path: Path) -> None:
     clean_file.write_text(SAMPLE_CLEAN_TRACE, encoding="utf-8")
     rc_clean = main(["--scan", str(clean_file), "--json"])
     assert rc_clean == 0
+
+
+def test_a_system_traceback_header_is_parsed() -> None:
+    """`GOTRACEBACK=system` adds runtime fields between the id and the state.
+
+    Requiring the bracket to follow the id with only whitespace between rejected every
+    header those levels emit, so a dump full of blocked goroutines parsed to nothing and the
+    sentinel reported CLEAN 100.0/100 — a leak detector that could not read the dump.
+    """
+    header = "goroutine 1 gp=0xc0000061c0 m=0 mp=0x5f8a40 [chan send]:"
+    match = GoroutineStackParser._HEADER_RE.match(header)
+    assert match is not None
+    assert (match.group(1), match.group(2)) == ("1", "chan send")
+
+
+@pytest.mark.parametrize(
+    ("frame", "name"),
+    [
+        ("testing.(*T).Run(0xc0000b8340, {0x545b69?, 0x0?}, 0x54f830)", "testing.(*T).Run"),
+        ("main.worker(0xc000112000)", "main.worker"),
+        ("runtime.gopark(0x0?, 0x0?)", "runtime.gopark"),
+    ],
+)
+def test_a_method_frame_keeps_its_receiver(frame: str, name: str) -> None:
+    """Go spells a pointer receiver `(*T)` inside the name, so the first `(` is not the args.
+
+    Splitting there truncated `testing.(*T).Run` to `testing.`, which meant the exclusion
+    list for runtime frames could never match and the runtime's own goroutines were counted
+    as leaks.
+    """
+    assert GoroutineStackParser._function_name(frame) == name

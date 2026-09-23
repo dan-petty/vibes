@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 
+import pytest
 from context_packer import (
     ContextDetailLevel,
     binary_search_pack_symbols,
@@ -106,3 +107,38 @@ def test_extract_symbols_syntax_error() -> None:
     """Ensure invalid syntax returns empty list gracefully without raising exception."""
     symbols = extract_ast_symbols("def broken_syntax(")
     assert (len(symbols), symbols) == (0, [])
+
+
+# --- The packed context must be parsable Python ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("source", "budget"),
+    [
+        ('def f():\n    \'\'\'Say "hi"\'\'\'\n    return 1\n\ndef g():\n    \'\'\'other\'\'\'\n    return 2\n', 30),
+        ("def f(): return 1\n\ndef g(): return 2\n\ndef h(): return 3\n", 4),
+        ('HEADER = "x"\n\x0c\ndef target():\n    return 42\n', 5000),
+    ],
+    ids=["quoted-docstring", "inline-suite", "form-feed"],
+)
+def test_packed_output_always_parses(source: str, budget: int) -> None:
+    """The tier exists to hand a model something it can read as code.
+
+    Three ways it emitted Python that will not parse: a docstring re-wrapped between two
+    triple quotes without escaping, an inline suite whose body shares the declaration line
+    (leaving a bare `:`), and `splitlines()` breaking on boundaries the tokenizer does not —
+    a single form feed shifted every `ast` line number after it by one.
+    """
+    packed, _, _ = pack_source_to_budget(source, budget_tokens=budget)
+    ast.parse(packed)
+
+
+def test_the_token_estimate_counts_bytes_not_code_points() -> None:
+    """tiktoken's rule of thumb is roughly four *bytes* per token.
+
+    Applied to `len(text)` it under-counted every non-ASCII source by up to four times, so
+    the packer reported a budget met and handed over four times what was asked for.
+    """
+    ascii_text = "x" * 40
+    japanese = "デ" * 40
+    assert estimate_tokens(japanese) > estimate_tokens(ascii_text) * 2

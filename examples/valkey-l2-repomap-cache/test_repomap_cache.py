@@ -29,6 +29,7 @@ from repomap_cache import (
     ValkeyL2Client,
     decode_resp_response,
     encode_resp_command,
+    read_resp_reply,
     run_demo,
 )
 
@@ -176,3 +177,32 @@ def test_embedding_drift_auditor_significant_drift() -> None:
 def test_run_demo() -> None:
     """Verify that interactive demo runs to completion."""
     assert run_demo() == 0
+
+
+class _SplitSocket:
+    """A conformant server writing the bulk-string header and payload as separate writes."""
+
+    def __init__(self, payload: bytes) -> None:
+        self.chunks = [b"$%d\r\n" % len(payload), payload[:100], payload[100:] + b"\r\n"]
+
+    def recv(self, _size: int) -> bytes:
+        """Return the next scripted segment, then end of stream."""
+        return self.chunks.pop(0) if self.chunks else b""
+
+
+def test_a_reply_split_across_writes_is_read_whole() -> None:
+    """One `recv` is not a reply.
+
+    TCP delivers a stream, and a conformant server may write the `$<len>` header and the
+    payload separately — which Valkey does above roughly 16 KB. The parser sliced the
+    buffer anyway and returned a short string with a plausible consumed count and no error,
+    so a large cached value came back silently clipped.
+    """
+    payload = b"x" * 5000
+    assert read_resp_reply(_SplitSocket(payload)) == payload.decode()
+
+
+def test_an_incomplete_bulk_string_asks_for_more_rather_than_guessing() -> None:
+    """`0` consumed is the signal a read loop needs; a short string is a silent lie."""
+    assert decode_resp_response(b"$5\r\nhel") == (None, 0)
+    assert decode_resp_response(b"$5\r\nhello\r\n") == ("hello", 11)

@@ -114,7 +114,12 @@ class ConcurrencyAuditReport:
 class GoroutineStackParser:
     """Parses raw text stack traces into structured GoroutineProfile models."""
 
-    _HEADER_RE = re.compile(r"^goroutine\s+(\d+)\s+\[([^\]]+)\]:")
+    # `GOTRACEBACK=system` and `=crash` add runtime fields between the id and the state —
+    # `goroutine 1 gp=0xc0000061c0 m=0 mp=0x5f8a40 [running]:`. Requiring the bracket to
+    # follow the id with only whitespace between rejected every header those levels emit,
+    # so a dump full of blocked goroutines parsed to nothing and the sentinel reported a
+    # CLEAN 100.0/100 — the failure mode of a leak detector that cannot read the dump.
+    _HEADER_RE = re.compile(r"^goroutine\s+(\d+)\s+(?:[^\[\]]*\s)?\[([^\]]+)\]:")
     _FRAME_RE = re.compile(r"^\s+(.+):(\d+)(?:\s+\+0x[0-9a-f]+)?$")
     _CREATED_RE = re.compile(r"^created by (.+) in goroutine \d+")
 
@@ -187,12 +192,26 @@ class GoroutineStackParser:
 
         return frames, created_by
 
+    @staticmethod
+    def _function_name(line: str) -> str:
+        """Return the qualified function name, dropping only its argument list.
+
+        Splitting on the *first* `(` truncated every method frame to its package:
+        `testing.(*T).Run(0xc0000b8340, ...)` became `testing.`, because Go spells a pointer
+        receiver `(*T)` inside the name itself. The exclusion list that skips
+        `testing.(*T).Run` could therefore never match, and the runtime's own frames were
+        counted as leaked goroutines. The argument list is the last parenthesised group, so
+        the last `(` is the one to cut at.
+        """
+        head, opener, _ = line.strip().rpartition("(")
+        return (head if opener else line).strip()
+
     @classmethod
     def _handle_trace_line(
         cls, line: str, current_fn: str | None, frames: list[StackFrame]
     ) -> str | None:
         if cls._is_function_line(line):
-            return line.split("(")[0].strip()
+            return cls._function_name(line)
         if current_fn:
             return cls._append_frame_if_match(line, current_fn, frames)
         return current_fn
