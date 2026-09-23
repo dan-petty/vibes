@@ -378,20 +378,20 @@ def test_crosscheck_exits_non_zero_when_the_seeds_disagree(
 
 
 def test_fuzz_harness_decomposed_case_helpers(tmp_path: Path) -> None:
-    """Verify single-case evaluation helpers for explore, replay, and crosscheck."""
-    from fuzz_harness import _crosscheck_case, _explore_case, _replay_case
+    """Verify single-target / single-case evaluation helpers for explore, replay, and crosscheck."""
+    from fuzz_harness import _crosscheck_case, _explore_target, _replay_case
 
     clean_target = _probe(_clean)
     boom_target = _probe(_boom)
     case = CASE
-    plan = Plan(save=False)
+    plan = Plan(cases=1, save=False)
 
     camp_explore_clean = Campaign()
     seen: set[tuple[str, str, str]] = set()
-    _explore_case(clean_target, case, tmp_path, plan, seen, camp_explore_clean)
+    _explore_target(clean_target, tmp_path, plan, seen, camp_explore_clean)
 
     camp_explore_boom = Campaign()
-    _explore_case(boom_target, case, tmp_path, plan, seen, camp_explore_boom)
+    _explore_target(boom_target, tmp_path, plan, seen, camp_explore_boom)
 
     camp_replay_clean = Campaign()
     camp_replay_boom = Campaign()
@@ -414,4 +414,5 @@ def test_fuzz_harness_decomposed_case_helpers(tmp_path: Path) -> None:
         (1, 1),
         1,
     )
+
 

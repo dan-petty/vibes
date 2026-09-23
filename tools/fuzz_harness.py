@@ -478,25 +478,25 @@ def _minimize(target: Target, case: Case, failure: Failure, workspace: Path, pla
     return Case(case.corpus, shrink(case.text, still_fails), case.seed, case.origin)
 
 
-def _explore_case(
+def _explore_target(
     target: Target,
-    case: Case,
     workspace: Path,
     plan: Plan,
     seen: set[tuple[str, str, str]],
     campaign: Campaign,
 ) -> None:
-    """Evaluate one generated case and record novel failures."""
-    campaign.executed += 1
-    failure = evaluate(target, case, workspace, plan.budget)
-    if failure is None:
-        return
-    f_class = _failure_class(failure)
-    if f_class in seen:
-        return
-    seen.add(f_class)
-    minimized = _minimize(target, case, failure, workspace, plan)
-    _record(campaign, target, failure, minimized, plan)
+    """Evaluate generated cases for one target and record novel failures."""
+    for case in _case_stream(target, plan.cases, plan.seed):
+        campaign.executed += 1
+        failure = evaluate(target, case, workspace, plan.budget)
+        if failure is None:
+            continue
+        f_class = _failure_class(failure)
+        if f_class in seen:
+            continue
+        seen.add(f_class)
+        minimized = _minimize(target, case, failure, workspace, plan)
+        _record(campaign, target, failure, minimized, plan)
 
 
 def explore(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
@@ -504,8 +504,7 @@ def explore(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
     campaign = Campaign()
     seen: set[tuple[str, str, str]] = set()
     for target in targets:
-        for case in _case_stream(target, plan.cases, plan.seed):
-            _explore_case(target, case, workspace, plan, seen, campaign)
+        _explore_target(target, workspace, plan, seen, campaign)
     return campaign
 
 
