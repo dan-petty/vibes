@@ -161,3 +161,47 @@ def test_verify_fails_when_a_span_names_an_attribute_nothing_defines(tmp_path: P
     path = tmp_path / "snapshot.json"
     path.write_text(json.dumps(broken), encoding="utf-8")
     assert main(["verify", "--snapshot", str(path)]) == 1
+
+
+def test_semconv_decomposed_helpers() -> None:
+    """Verify group expansion, direct attribute resolution, and deprecation iteration helpers."""
+    from semconv_snapshot import (
+        _expand_ref_group,
+        _iter_deprecated_attributes,
+        _resolve_direct_attribute,
+    )
+
+    groups = {"core": [("gen_ai.prompt", "required"), ("gen_ai.completion", "recommended")]}
+    expanded = _expand_ref_group({"ref_group": "core"}, "test_span", groups)
+
+    resolved = {"gen_ai.prompt": "recommended"}
+    override = _resolve_direct_attribute({"ref": "gen_ai.prompt", "requirement_level": "required"}, resolved)
+    unchanged = _resolve_direct_attribute({"ref": "gen_ai.prompt"}, resolved)
+    missing_ref = _resolve_direct_attribute({"invalid": "item"}, resolved)
+
+    doc = {
+        "groups": [
+            {
+                "attributes": [
+                    {"id": "gen_ai.old", "deprecated": {"note": "Moved to new repo."}},
+                    {"id": "gen_ai.active"},
+                ]
+            }
+        ]
+    }
+    dep_items = list(_iter_deprecated_attributes(doc))
+
+    assert (
+        expanded,
+        override,
+        unchanged,
+        missing_ref,
+        dep_items,
+    ) == (
+        {"gen_ai.prompt": "required", "gen_ai.completion": "recommended"},
+        ("gen_ai.prompt", "required"),
+        None,
+        None,
+        [("gen_ai.old", "Moved to new repo.")],
+    )
+

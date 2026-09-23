@@ -546,6 +546,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 16. **Case-Level Fuzzing Evaluation & Campaign Isolation**:
     - Evaluating test cases and crosscheck seed determinism inside nested target and case generator loops compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 5$).
     - Factor single-case evaluation into dedicated helpers: `_explore_case` for novel failure discovery and minimization, `_replay_case` for regression replay, and `_crosscheck_case` for cross-seed determinism checks. This preserves compact function complexity ($M \le 3$, depth $\le 2$) across all harness execution loops.
+17. **Semantic Attribute Group Resolution & Flattened Model Deprecations**:
+    - Expanding attribute groups, checking requirement level overrides, and traversing nested model hierarchies within monolithic resolvers compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 8$).
+    - Decompose group expansion into `_expand_ref_group` and direct requirement override into `_resolve_direct_attribute`. Flatten multi-tier model traversal by separating group-level attribute generators (`_all_attributes`) from single-attribute deprecation extractors (`_extract_deprecated_note`). This guarantees $M \le 4$, depth $\le 2$ across all semantic convention derivations.
 
 ---
 
