@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -64,9 +66,22 @@ class Gap:
     feature_summary: str
     holders: tuple[str, ...]
     evidence: tuple[str, ...]
+    # What to *do* about the gap, which the survey used to leave unasked. A gap was defined
+    # as "an alternative has this and we do not", which is already the answer "build it"
+    # before anyone has asked whether to use the alternative instead. That framing is
+    # upstream of the 59 findings a conformance audit later raised against components which
+    # reimplemented a solved problem — including two whose reference implementation was
+    # already a declared dependency of this repository.
+    disposition: str = "build"
+    adopt_via: str = ""
+    adopt_note: str = ""
 
     def roadmap_title(self) -> str:
         """Render the deliverable title this gap becomes on the roadmap."""
+        if self.disposition == "integrate":
+            return f"{self.capability_short}: use {self.adopt_via}, already a dependency, for {self.feature}"
+        if self.disposition == "adopt":
+            return f"{self.capability_short}: evaluate adopting {self.adopt_via} for {self.feature}"
         return f"{self.capability_short}: {self.feature_summary.lower()}"
 
 
@@ -115,26 +130,114 @@ def load_manifest(path: Path) -> Manifest:
 
 
 
-def find_gaps(manifest: Manifest) -> list[Gap]:
+# Priority order. `integrate` first because it is the cheapest and the most often missed:
+# the library is installed, the manifest says what it is for, and the code reimplemented it.
+_DISPOSITION_RANK: Final[dict[str, int]] = {"integrate": 0, "adopt": 1, "build": 2}
+
+
+def declared_dependencies(root: Path) -> set[str]:
+    """Return the distribution names this repository already depends on.
+
+    Read from `pyproject.toml` rather than from the environment, so the answer is what the
+    project declares and not what happens to be installed on one machine.
+    """
+    document = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    project = document.get("project", {})
+    requirements = list(project.get("dependencies", []))
+    for extra in (project.get("optional-dependencies") or {}).values():
+        requirements.extend(extra)
+    return {_distribution_name(req) for req in requirements} - {""}
+
+
+def _distribution_name(requirement: str) -> str:
+    """Return the distribution a PEP 508 requirement names, normalised per PEP 503.
+
+    Parsed rather than pattern-matched. The first version of this scanned the file with a
+    regular expression and returned `e402`, `apache-2.0` and `readme.md` among the
+    dependencies — a partial pattern over a format that has a parser, which is the thing
+    §6 forbids and `tomllib` has made unnecessary since 3.11.
+    """
+    name = re.split(r"[<>=!~;\[\s]", requirement.strip(), maxsplit=1)[0]
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _disposition(alternative: dict[str, Any], installed: set[str]) -> tuple[str, str]:
+    """Decide whether a gap held by this alternative is a build, an adopt, or an integrate.
+
+    Declared, never inferred, exactly as `kind` is. An alternative says whether it is
+    adoptable and names the package it ships as; nothing here guesses from a repository
+    name. The one mechanical step is matching that package against `pyproject.toml`, which
+    is the case worth catching automatically because it is the case that already happened.
+    """
+    package = str(alternative.get("package") or "").lower().replace("_", "-")
+    if package and package in installed:
+        return "integrate", f"{package} is already a declared dependency"
+    if alternative.get("adoptable") is True:
+        return "adopt", str(alternative.get("adoption_note") or "declared adoptable")
+    return "build", ""
+
+
+def find_gaps(manifest: Manifest, installed: set[str] | None = None) -> list[Gap]:
     """Return every feature a cited alternative has that the matching capability lacks.
 
     Reads `has:` entries only. A feature nobody recorded evidence for is unknown, and an
     unknown is not a gap — it is a question, and scheduling questions as work is how a
     loop manufactures a backlog out of its own ignorance.
     """
+    present = installed if installed is not None else set()
     gaps = [
         gap
         for capability in manifest.capabilities
-        for gap in _capability_gaps(manifest, capability)
+        for gap in _capability_gaps(manifest, capability, present)
     ]
-    return sorted(gaps, key=lambda g: (-len(g.holders), g.capability, g.feature))
+    return sorted(
+        gaps,
+        key=lambda g: (_DISPOSITION_RANK.get(g.disposition, 3), -len(g.holders), g.capability, g.feature),
+    )
 
 
-def _capability_gaps(manifest: Manifest, capability: dict[str, Any]) -> list[Gap]:
+@dataclass(frozen=True)
+class _Disposal:
+    """What one capability may do about a gap: who holds it, and what we already have.
+
+    A parameter object because the three travel together and mean nothing apart — and
+    because passing them separately put `_build_gap` at seven parameters, which the smell
+    quantifier refused on the commit that introduced them.
+    """
+
+    alternatives: dict[str, dict[str, Any]]
+    installed: frozenset[str]
+    build_only: frozenset[str]
+
+    @classmethod
+    def of(cls, capability: dict[str, Any], installed: set[str]) -> _Disposal:
+        """Build the disposal context for one capability."""
+        return cls(
+            alternatives={str(a["repo"]): a for a in capability.get("alternatives", [])},
+            installed=frozenset(installed),
+            build_only=frozenset(capability.get("build_only", [])),
+        )
+
+    def decide(self, feature: str, holders: list[tuple[str, str]]) -> tuple[str, str, str]:
+        """Return `(disposition, note, repo)` for one gap, cheapest option first."""
+        if feature in self.build_only:
+            return "build", "", ""
+        disposition, note, via = "build", "", ""
+        for repo, _ in holders:
+            candidate, candidate_note = _disposition(self.alternatives.get(repo, {}), set(self.installed))
+            if _DISPOSITION_RANK[candidate] < _DISPOSITION_RANK[disposition]:
+                disposition, note, via = candidate, candidate_note, repo
+        return disposition, note, via
+
+
+def _capability_gaps(
+    manifest: Manifest, capability: dict[str, Any], installed: set[str]
+) -> list[Gap]:
     """Return the cited features one capability is missing."""
     ours = set(capability.get("ours", []))
+    disposal = _Disposal.of(capability, installed)
     return [
-        _build_gap(manifest, capability, feature, holders)
+        _build_gap(manifest, capability, feature, holders, disposal)
         for feature, holders in _claimed_features(capability).items()
         if feature not in ours
     ]
@@ -151,9 +254,14 @@ def _claimed_features(capability: dict[str, Any]) -> dict[str, list[tuple[str, s
 
 
 def _build_gap(
-    manifest: Manifest, capability: dict[str, Any], feature: str, holders: list[tuple[str, str]]
+    manifest: Manifest,
+    capability: dict[str, Any],
+    feature: str,
+    holders: list[tuple[str, str]],
+    disposal: _Disposal,
 ) -> Gap:
-    """Assemble one gap with the citations that make it falsifiable."""
+    """Assemble one gap with the citations that make it falsifiable, and what to do about it."""
+    disposition, note, via = disposal.decide(feature, holders)
     return Gap(
         capability=str(capability["key"]),
         capability_title=str(capability["title"]),
@@ -162,6 +270,9 @@ def _build_gap(
         feature_summary=manifest.feature_catalog.get(feature, feature),
         holders=tuple(repo for repo, _ in holders),
         evidence=tuple(f"{repo}: {text}" for repo, text in holders),
+        disposition=disposition,
+        adopt_via=via,
+        adopt_note=note,
     )
 
 
@@ -267,7 +378,7 @@ def render_report(manifest: Manifest, snapshot: dict[str, RepoFacts]) -> str:
     ]
     lines += _maturity_table(manifest, snapshot)
     lines += list(_comparison_tables(manifest, snapshot))
-    lines += _gap_section(find_gaps(manifest))
+    lines += _gap_section(find_gaps(manifest, declared_dependencies(Path.cwd())))
     return "\n".join(lines) + "\n"
 
 
@@ -277,13 +388,22 @@ def _gap_section(gaps: Sequence[Gap]) -> list[str]:
     if not gaps:
         lines.append("No cited capability is missing from this repository.")
         return lines
+    counts: dict[str, int] = {}
+    for gap in gaps:
+        counts[gap.disposition] = counts.get(gap.disposition, 0) + 1
     lines.append(
         f"{len(gaps)} feature(s) that a cited alternative has and the matching capability "
-        "here does not. Each carries its evidence so it can be checked rather than believed."
+        "here does not. Each carries its evidence so it can be checked rather than believed, "
+        "and a disposition saying what to do about it: "
+        + ", ".join(f"**{n} {kind}**" for kind, n in sorted(counts.items()))
+        + ". `integrate` means the library is already a declared dependency of this "
+        "repository — the cheapest gap there is, and the one most often missed."
     )
     lines.append("")
     for gap in gaps:
         lines.append(f"- **{gap.roadmap_title()}**")
+        lines.append(f"  - Disposition: `{gap.disposition}`"
+                     + (f" — {gap.adopt_note}" if gap.adopt_note else ""))
         lines.append(f"  - Held by: {', '.join(f'`{h}`' for h in gap.holders)}")
         for citation in gap.evidence:
             lines.append(f"  - Evidence: {citation}")
@@ -365,7 +485,7 @@ def _handle_report(args: argparse.Namespace) -> int:
 
 def _handle_gaps(args: argparse.Namespace) -> int:
     """List capability gaps, as text or JSON."""
-    gaps = find_gaps(load_manifest(args.manifest))
+    gaps = find_gaps(load_manifest(args.manifest), declared_dependencies(Path.cwd()))
     if args.json:
         print(json.dumps([asdict(gap) for gap in gaps], indent=2))
         return 0
@@ -378,7 +498,7 @@ def _handle_gaps(args: argparse.Namespace) -> int:
 
 def _handle_roadmap(args: argparse.Namespace) -> int:
     """Propose roadmap deliverables for the gaps, writing only when asked."""
-    gaps = find_gaps(load_manifest(args.manifest))
+    gaps = find_gaps(load_manifest(args.manifest), declared_dependencies(Path.cwd()))
     if args.top:
         gaps = gaps[: args.top]
     original = args.roadmap.read_text(encoding="utf-8")

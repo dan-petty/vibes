@@ -86,11 +86,19 @@ capabilities:
           cyclomatic_complexity: "Fails the build on --max-absolute / --max-average / --max-modules thresholds"
         lacks: [multi_language]
       - repo: terryyin/lizard
+        package: lizard
+        license: MIT
+        adoptable: true
+        adoption_note: "MIT, pure Python, multi-language complexity"
         has:
           cyclomatic_complexity: "-C sets a CCN warning threshold and exits non-zero"
           multi_language: "Documents C/C++, Java, JavaScript, Go, Rust, Swift and more"
           per_file_baseline: "-W whitelist file suppresses known warnings"
       - repo: astral-sh/ruff
+        package: ruff
+        license: MIT
+        adoptable: true
+        adoption_note: "MIT, already a declared dependency in the lint extra"
         has:
           cyclomatic_complexity: "C901 via mccabe, max-complexity setting"
           auto_fix: "ruff check --fix rewrites source"
@@ -100,6 +108,10 @@ capabilities:
           config_presets: "select / extend-select rule families in pyproject.toml"
         lacks: [multi_language]
       - repo: pylint-dev/pylint
+        package: pylint
+        license: GPL-2.0-or-later
+        adoptable: false
+        adoption_note: "GPL-2.0-or-later fails 1a's Apache-2.0 compatibility bar; ruff covers its rules under MIT"
         has:
           cyclomatic_complexity: "R0912 too-many-branches and related design checks"
           config_presets: "Enable/disable by message family in pylintrc"
@@ -121,20 +133,36 @@ capabilities:
       - baseline_diff
     alternatives:
       - repo: rubik/radon
+        package: radon
+        license: MIT
+        adoptable: true
+        adoption_note: "MIT, already a declared runtime dependency"
         has:
           maintainability_index: "radon mi computes the maintainability index per module"
           halstead_metrics: "radon hal reports volume, difficulty and effort"
           cyclomatic_complexity: "radon cc ranks blocks A-F"
       - repo: jendrikseipp/vulture
+        package: vulture
+        license: MIT
+        adoptable: true
+        adoption_note: "MIT, already a declared runtime dependency"
         has:
           dead_code: "Reports unused code with a confidence percentage"
           per_file_baseline: "Whitelist files suppress known-live symbols"
       - repo: tonybaloney/wily
+        package: wily
+        license: Apache-2.0
+        adoptable: true
+        adoption_note: "Apache-2.0, tracks metrics across git history"
         has:
           trend_over_time: "wily build indexes metrics across git revisions; wily graph and wily diff report movement"
           maintainability_index: "Tracks radon maintainability index as an indexed metric"
           baseline_diff: "wily diff reports metric change against a revision"
       - repo: kucherenko/jscpd
+        package: jscpd
+        license: MIT
+        adoptable: false
+        adoption_note: "npm only; adopting it means a Node toolchain at gate time"
         has:
           clone_detection: "Token-based copy-paste detection with a --threshold failure gate"
           multi_language: "Documents over 150 formats"
@@ -227,6 +255,10 @@ capabilities:
       - cyclomatic_complexity
     alternatives:
       - repo: tree-sitter/tree-sitter
+        package: tree-sitter
+        license: MIT
+        adoptable: true
+        adoption_note: "MIT, official Python bindings on PyPI"
         has:
           multi_language: "Separate grammars per language, from one parsing engine"
           incremental_parsing: "Reparses an edited buffer without reparsing the file"
