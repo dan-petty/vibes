@@ -534,6 +534,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 12. **Link Inspection Pipelines & Dead Scanner Pruning**:
     - Validating both parsed AST document links and raw whitespace bracket malformations in a monolithic loop inflates function decision complexity ($M \ge 8$).
     - Decompose link validation into dedicated single-responsibility collectors: `_collect_parsed_link_findings` for parsed markdown AST targets and `_collect_whitespace_link_findings` for raw syntax malformations. Ruthlessly eliminate obsolete regex patterns (`_MARKDOWN_LINK_RE`) and vestigial line-by-line scanners (`_check_line_links`) after migrating to token-based document representations.
+13. **Reporting Pipeline Decomposition & Baseline Emission Isolation**:
+    - Coupling baseline file persistence, log schema serialization, and console breakdown rendering within monolithic command handlers inflates decision complexity ($M \ge 7$).
+    - Factor baseline capture into conditional helpers (`_record_baseline_if_requested`) and log emission/summary printing into dedicated output handlers (`_write_log_and_summarize`). This ensures CLI report handlers remain compact ($M \le 4$, depth $\le 1$) while isolating side effects.
 
 ---
 
