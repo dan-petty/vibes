@@ -288,6 +288,11 @@ def _octet(part: str) -> int:
     return int(lowered, 10)
 
 
+def _valid_octets(octets: Sequence[int]) -> bool:
+    """Validate that every decoded octet is within IPv4 byte boundaries (0-255)."""
+    return all(0 <= val <= 255 for val in octets)
+
+
 def _parse_dotted_quad(token: str) -> ipaddress.IPv4Address | None:
     """Parse dotted-quad with resolver octets (hex, octal, decimal)."""
     parts = token.split(".")
@@ -297,7 +302,7 @@ def _parse_dotted_quad(token: str) -> ipaddress.IPv4Address | None:
         octets = [_octet(part) for part in parts]
     except ValueError:
         return None
-    if not all(0 <= val <= 255 for val in octets):
+    if not _valid_octets(octets):
         return None
     return ipaddress.IPv4Address(".".join(str(val) for val in octets))
 
@@ -519,6 +524,19 @@ def _is_repository_dir(name: str) -> bool:
     )
 
 
+def _py_files_in_dir(parent: str, files: Sequence[str]) -> Iterator[Path]:
+    """Yield Python file paths from a single directory."""
+    parent_path = Path(parent)
+    return (parent_path / name for name in files if name.endswith(".py"))
+
+
+def _walk_repository_py_files(root: Path) -> Iterator[Path]:
+    """Walk directory tree yielding repository Python files."""
+    for parent, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
+        yield from _py_files_in_dir(parent, files)
+
+
 def _collect_py_targets(root_path: Path) -> list[Path]:
     """Expand one target into the repository's own Python files beneath it.
 
@@ -528,11 +546,7 @@ def _collect_py_targets(root_path: Path) -> list[Path]:
     """
     if root_path.is_file():
         return [root_path] if root_path.suffix == ".py" else []
-    found: list[Path] = []
-    for parent, dirs, files in os.walk(root_path):
-        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
-        found.extend(Path(parent) / name for name in files if name.endswith(".py"))
-    return sorted(found)
+    return sorted(_walk_repository_py_files(root_path))
 
 
 def _dedupe_key(path: Path) -> Path:
