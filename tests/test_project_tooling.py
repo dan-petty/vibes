@@ -278,3 +278,29 @@ def test_blank_added_lines_are_not_instruction() -> None:
     """Whitespace added to AGENTS.md is not a guardrail, and must not satisfy the mandate."""
     blank_only = "diff --git a/AGENTS.md b/AGENTS.md\n+++ b/AGENTS.md\n+\n+   \n"
     assert audit_self_hardening(blank_only, is_defect_fix=True).is_compliant is False
+
+
+def test_process_diff_line_helper() -> None:
+    """Verify diff line processing state machine and addition extraction."""
+    from project_tooling import _process_diff_line
+
+    transitions = (
+        _process_diff_line("diff --git a/AGENTS.md b/AGENTS.md", False),
+        _process_diff_line("+++ b/AGENTS.md", False),
+        _process_diff_line("+   - **Rule**: always test.", True),
+        _process_diff_line("- old text", True),
+        _process_diff_line(" unchanged context", True),
+        _process_diff_line("diff --git a/other.py b/other.py", True),
+        _process_diff_line("+ line in other", False),
+    )
+
+    assert transitions == (
+        (True, None),
+        (True, None),
+        (True, "   - **Rule**: always test."),
+        (True, None),
+        (True, None),
+        (False, None),
+        (False, None),
+    )
+

@@ -540,6 +540,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 14. **Manifest Declaration Matching & Location Fallback Decomposition**:
     - Coupling dictionary key iteration over manifest paths with fallback directory prefix classification within a single path classifier inflates McCabe complexity ($M \ge 7$) and nesting depth ($depth \ge 3$).
     - Decompose path classification into dedicated single-responsibility helpers: `_match_declared_kind` for manifest prefix lookups and `_classify_by_location` for directory heuristics (`CAPABILITY_PREFIXES`, `QUALITY_PREFIXES`). This reduces classifier complexity to $M = 2$, depth $\le 1$ while keeping path matching logic strictly modular.
+15. **Diff Line State Machine & Additions Collector Decomposition**:
+    - Parsing multi-file unified diff streams by nesting header checks, file state toggles, and added line prefixes inside line iteration loops compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 5$).
+    - Factor per-line transition and payload extraction into an isolated state-machine helper (`_process_diff_line(line, in_agents) -> tuple[bool, str | None]`). This limits loop nesting depth to $\le 2$ and preserves compact function complexity ($M \le 3$) while cleanly isolating line-level diff parsing rules.
 
 ---
 
