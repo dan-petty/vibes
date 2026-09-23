@@ -7,6 +7,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased — Milestone 5 Prep]
 
+### Added
+
+- **Automated Seccomp BPF Profile Synthesizer** (`tools/seccomp_synthesizer.py`): Delivers the final deliverable of Milestone 4 (v0.4.0), generating minimal, tool-specific Linux seccomp-bpf JSON filter profiles based on static Python AST symbol analysis and syscall trace profiling. Restricts agent tool execution strictly to required system calls under a zero-trust default-deny model (`defaultAction: SCMP_ACT_ERRNO`), targeting modern OCI / Docker seccomp specification format (`SCMP_ARCH_X86_64`, `SCMP_ARCH_AARCH64`). Features baseline Python interpreter runtime syscall inclusion, static import/call extraction, strace and JSON trace event parsing, high-risk syscall auditing (`ptrace`, `bpf`, `mount`), strict mode gate enforcement, and profile diffing. Accompanied by a comprehensive 15-test suite in `tests/test_seccomp_synthesizer.py` with structural tuple equality assertions and 96% coverage, with all functions certified at $M \le 5$, depth $\le 2$, and $\le 4$ parameters.
+
 ### Security
 
 - **SSRF across redirects in the adaptive web crawler** (`examples/adaptive-web-crawler/crawler.py`): `validate_url_security` ran once, on the URL the caller supplied, and the fetcher then used `httpx.Client(follow_redirects=True)`. RFC 9110 §15.4 permits a user agent to follow `Location` automatically and httpx exposes no hook that can veto the next connection, so any attacker-controlled public page answering a `302` to the link-local cloud metadata address returned the IAM credential document as `CrawledPage.markdown_content` — with the crawl recorded as a success, and the README claiming it validated *all* destination URLs. Redirects are now followed one hop at a time with the gate applied to every hop and a ceiling of 5, because RFC 9110 sets none. Reproduced end to end before and after with `httpx.MockTransport`.
