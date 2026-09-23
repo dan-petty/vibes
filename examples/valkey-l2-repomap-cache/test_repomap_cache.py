@@ -21,15 +21,18 @@ _app_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_app_dir))
 
 from repomap_cache import (
+    _FEATURE_TESTS,
     ASTFeatureExtractor,
     CacheTier,
     DriftVerdict,
     EmbeddingDriftAuditor,
     TwoTierRepomapCache,
     ValkeyL2Client,
+    _tally_node_features,
     decode_resp_response,
     encode_resp_command,
     read_resp_reply,
+    run_cli,
     run_demo,
 )
 
@@ -206,3 +209,28 @@ def test_an_incomplete_bulk_string_asks_for_more_rather_than_guessing() -> None:
     """`0` consumed is the signal a read loop needs; a short string is a silent lie."""
     assert decode_resp_response(b"$5\r\nhel") == (None, 0)
     assert decode_resp_response(b"$5\r\nhello\r\n") == ("hello", 11)
+
+
+def test_tally_node_features_tallies_correctly() -> None:
+    """Verify that _tally_node_features accurately increments matching feature buckets."""
+    counts = dict.fromkeys(_FEATURE_TESTS, 0)
+    func_node = ast.parse("def hello(): pass").body[0]
+    class_node = ast.parse("class Hello: pass").body[0]
+    branch_node = ast.parse("if True: pass").body[0]
+
+    _tally_node_features(func_node, counts)
+    _tally_node_features(class_node, counts)
+    _tally_node_features(branch_node, counts)
+
+    assert (counts["functions"], counts["classes"], counts["branches"]) == (1, 1, 1)
+
+
+def test_run_cli_with_files(tmp_path: Path) -> None:
+    """Verify run_cli execution with file and refactored arguments."""
+    f1 = tmp_path / "v1.py"
+    f2 = tmp_path / "v2.py"
+    f1.write_text(SAMPLE_PY_V1, encoding="utf-8")
+    f2.write_text(SAMPLE_PY_V2, encoding="utf-8")
+
+    res = run_cli(["--file", str(f1), "--refactored", str(f2)])
+    assert res == 0

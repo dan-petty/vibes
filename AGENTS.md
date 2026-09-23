@@ -519,6 +519,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 7. **Address Parsing & Multi-Network Policy Decomposition**:
    - Parsing non-canonical IPv4 representations (octal, hex) alongside strict standard-library addresses in network egress checks often compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 9$).
    - Decompose resolution into distinct single-responsibility stages: string quad splitting, octet parsing (`_try_parse_octets`), range validation (`_valid_octets`), and address construction (`_parse_dotted_quad`). Encapsulate multi-network containment checks in pure predicate helpers (`_in_network_list`) to preserve $M \le 4$ and depth $\le 2$ across all security perimeter audits.
+8. **AST Feature Traversal & Predicate Table Decomposition**:
+   - Accumulating multi-feature counters across AST nodes by nesting inner loops over predicate dictionaries within `ast.walk` loops creates nesting depth $depth = 4$.
+   - Extract node-level feature tallying into a dedicated pure helper (`_tally_node_features(node, counts)`), and isolate socket command dispatch into a shared helper (`_execute_command`). This reduces nesting depth to $\le 2$ and ensures all methods and functions remain Grade A complexity ($M \le 4$).
 
 ---
 

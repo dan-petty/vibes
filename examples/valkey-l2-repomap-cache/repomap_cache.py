@@ -193,7 +193,9 @@ def decode_resp_response(data: bytes) -> tuple[Any, int]:
 class ValkeyL2Client:
     """High-throughput Valkey / Redis client with in-memory mock fallback."""
 
-    def __init__(self, host: str = CANONICAL_MOCK_HOST, port: int = DEFAULT_VALKEY_PORT, timeout: float = 0.5) -> None:
+    def __init__(
+        self, host: str = CANONICAL_MOCK_HOST, port: int = DEFAULT_VALKEY_PORT, timeout: float = 0.5
+    ) -> None:
         """Initialize Valkey client with endpoint parameters."""
         self.host = host
         self.port = port
@@ -202,61 +204,72 @@ class ValkeyL2Client:
         self._fallback_store: dict[str, str] = {}
         self._check_connection()
 
-    def _check_connection(self) -> None:
+    def _execute_command(self, *cmd: str) -> Any:
         try:
             with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
-                s.sendall(encode_resp_command("PING"))
-                val = read_resp_reply(s)
-                self.is_connected = bool(val == "PONG")
+                s.sendall(encode_resp_command(*cmd))
+                return read_resp_reply(s)
         except OSError:
-            self.is_connected = False
+            return None
+
+    def _check_connection(self) -> None:
+        val = self._execute_command("PING")
+        self.is_connected = bool(val == "PONG")
 
     def get(self, key: str) -> str | None:
         """Fetch string value by key from Valkey or fallback store."""
         if not self.is_connected:
             return self._fallback_store.get(key)
-        try:
-            with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
-                s.sendall(encode_resp_command("GET", key))
-                val = read_resp_reply(s)
-                return str(val) if val is not None else None
-        except OSError:
+        val = self._execute_command("GET", key)
+        if val is None:
             return self._fallback_store.get(key)
+        return str(val)
 
     def set(self, key: str, value: str, ttl_seconds: int | None = None) -> bool:
         """Store string value by key into Valkey or fallback store."""
         if not self.is_connected:
             self._fallback_store[key] = value
             return True
-        try:
-            cmd = ["SET", key, value]
-            if ttl_seconds:
-                cmd.extend(["EX", str(ttl_seconds)])
-            with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
-                s.sendall(encode_resp_command(*cmd))
-                val = read_resp_reply(s)
-                return bool(val == "OK")
-        except OSError:
+        cmd = ["SET", key, value]
+        if ttl_seconds:
+            cmd.extend(["EX", str(ttl_seconds)])
+        val = self._execute_command(*cmd)
+        if val is None:
             self._fallback_store[key] = value
             return True
+        return bool(val == "OK")
 
     def delete(self, key: str) -> bool:
         """Remove key from store."""
         self._fallback_store.pop(key, None)
-        if not self.is_connected:
-            return True
-        try:
-            with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
-                s.sendall(encode_resp_command("DEL", key))
-                return True
-        except OSError:
-            return True
+        if self.is_connected:
+            self._execute_command("DEL", key)
+        return True
 
 
 def _is_docstring_node(node: ast.AST) -> bool:
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         return bool(ast.get_docstring(node))
     return False
+
+
+# One predicate per structural feature, so adding a feature is a row rather than another
+# generator expression over another walk of the same tree.
+_FEATURE_TESTS: dict[str, Callable[[ast.AST], bool]] = {
+    "functions": lambda n: isinstance(n, FN_TYPES),
+    "classes": lambda n: isinstance(n, ast.ClassDef),
+    "branches": lambda n: isinstance(n, BRANCH_TYPES),
+    "calls": lambda n: isinstance(n, ast.Call),
+    "returns": lambda n: isinstance(n, RETURN_TYPES),
+    "docstrings": _is_docstring_node,
+}
+
+
+def _tally_node_features(node: ast.AST, counts: dict[str, int]) -> None:
+    """Tally matching AST structural feature counts for a single syntax node."""
+    for name, test in _FEATURE_TESTS.items():
+        if test(node):
+            counts[name] += 1
 
 
 class ASTFeatureExtractor:
@@ -278,16 +291,23 @@ class ASTFeatureExtractor:
         return sorted(symbols, key=lambda s: s.lineno)
 
     @staticmethod
-    def _extract_function_symbol(node: ast.FunctionDef | ast.AsyncFunctionDef) -> ASTSymbol:
-        args = [a.arg for a in node.args.args if a.arg not in ("self", "cls")]
-        complexity = 1 + sum(1 for n in ast.walk(node) if isinstance(n, BRANCH_TYPES))
+    def _fn_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+        return [a.arg for a in node.args.args if a.arg not in ("self", "cls")]
+
+    @staticmethod
+    def _fn_complexity(node: ast.AST) -> int:
+        return 1 + sum(1 for n in ast.walk(node) if isinstance(n, BRANCH_TYPES))
+
+    @classmethod
+    def _extract_function_symbol(cls, node: ast.FunctionDef | ast.AsyncFunctionDef) -> ASTSymbol:
+        kind = "async_function" if isinstance(node, ast.AsyncFunctionDef) else "function"
         return ASTSymbol(
             name=node.name,
-            kind="async_function" if isinstance(node, ast.AsyncFunctionDef) else "function",
+            kind=kind,
             lineno=getattr(node, "lineno", 0),
-            complexity=complexity,
+            complexity=cls._fn_complexity(node),
             has_docstring=bool(ast.get_docstring(node)),
-            args=args,
+            args=cls._fn_args(node),
         )
 
     @staticmethod
@@ -321,37 +341,18 @@ class ASTFeatureExtractor:
 
     @staticmethod
     def _count_ast_features(tree: ast.AST) -> dict[str, int]:
-        """Count every structural feature in one pass over the tree.
-
-        Six generator expressions, each with its own `for` and `if`, scored 13 — the tree
-        was also walked six times. A table of predicates and a single walk is both simpler
-        to read and cheaper to run.
-        """
+        """Count every structural feature in one pass over the tree."""
         counts = dict.fromkeys(_FEATURE_TESTS, 0)
         for node in ast.walk(tree):
-            for name, test in _FEATURE_TESTS.items():
-                if test(node):
-                    counts[name] += 1
+            _tally_node_features(node, counts)
         return counts
 
     @staticmethod
     def _normalize_vector(vec: list[float]) -> list[float]:
-        norm = math.sqrt(sum(x * x for x in vec))
+        norm = math.hypot(*vec)
         if norm == 0.0:
             return [0.0] * len(vec)
         return [round(x / norm, 6) for x in vec]
-
-
-# One predicate per structural feature, so adding a feature is a row rather than another
-# generator expression over another walk of the same tree.
-_FEATURE_TESTS: dict[str, Callable[[ast.AST], bool]] = {
-    "functions": lambda n: isinstance(n, FN_TYPES),
-    "classes": lambda n: isinstance(n, ast.ClassDef),
-    "branches": lambda n: isinstance(n, BRANCH_TYPES),
-    "calls": lambda n: isinstance(n, ast.Call),
-    "returns": lambda n: isinstance(n, RETURN_TYPES),
-    "docstrings": _is_docstring_node,
-}
 
 
 class EmbeddingDriftAuditor:
@@ -383,13 +384,12 @@ class EmbeddingDriftAuditor:
 
     @staticmethod
     def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
-        if len(vec_a) != len(vec_b) or not vec_a:
+        if not vec_a or len(vec_a) != len(vec_b):
             return 0.0
-        dot = sum(a * b for a, b in zip(vec_a, vec_b, strict=True))
-        norm_a = math.sqrt(sum(a * a for a in vec_a))
-        norm_b = math.sqrt(sum(b * b for b in vec_b))
-        denom = norm_a * norm_b
-        return dot / denom if denom > 0.0 else 0.0
+        denom = math.hypot(*vec_a) * math.hypot(*vec_b)
+        if denom == 0.0:
+            return 0.0
+        return sum(a * b for a, b in zip(vec_a, vec_b, strict=True)) / denom
 
     @staticmethod
     def _classify_drift(distance: float) -> DriftVerdict:
@@ -528,26 +528,25 @@ def run_demo() -> int:
     return 0
 
 
+def _run_drift_cli(file1: str, file2: str) -> int:
+    """Execute drift analysis between two file revisions."""
+    cache = TwoTierRepomapCache()
+    rec1, _ = cache.get_repomap(Path(file1))
+    rec2, _ = cache.get_repomap(Path(file2))
+    report = EmbeddingDriftAuditor.calculate_drift(rec1, rec2)
+    print(f"Drift Analysis for {file1} vs {file2}:")
+    print(f"Distance: {report.cosine_distance:.4f} | Verdict: [{report.verdict.value}]")
+    return 0
+
+
 def run_cli(args: Sequence[str] | None = None) -> int:
     """Execute command-line interface for Repomap Cache."""
     parser = build_arg_parser()
     opts = parser.parse_args(args)
 
-    if opts.demo or (not opts.file and not opts.refactored):
-        return run_demo()
-
     if opts.file and opts.refactored:
-        p1 = Path(opts.file)
-        p2 = Path(opts.refactored)
-        cache = TwoTierRepomapCache()
-        rec1, _ = cache.get_repomap(p1)
-        rec2, _ = cache.get_repomap(p2)
-        report = EmbeddingDriftAuditor.calculate_drift(rec1, rec2)
-        print(f"Drift Analysis for {opts.file} vs {opts.refactored}:")
-        print(f"Distance: {report.cosine_distance:.4f} | Verdict: [{report.verdict.value}]")
-        return 0
-
-    return 0
+        return _run_drift_cli(opts.file, opts.refactored)
+    return run_demo()
 
 
 if __name__ == "__main__":
