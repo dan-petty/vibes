@@ -278,17 +278,48 @@ class ComplexityVisitor(ast.NodeVisitor):
         return max_seen
 
 
+def _octet(part: str) -> int:
+    """Read one octet as a resolver would: 0x hex, leading-zero octal, else decimal."""
+    lowered = part.lower()
+    if lowered.startswith("0x"):
+        return int(lowered, 16)
+    if lowered.startswith("0") and len(lowered) > 1:
+        return int(lowered, 8)
+    return int(lowered, 10)
+
+
+def _parse_address(token: str):
+    """Parse an address the way a resolver does, or return None if it is not one.
+
+    `ipaddress.ip_address` refuses any octet with a leading zero; `inet_aton` and every
+    libc-backed client accept it. A guard that reads the `ValueError` as "not an address"
+    therefore fails **open** on the one notation an attacker would choose. Kept in step with
+    `tools/sanitization_policy.py`; `tests/test_address_policy_agreement.py` asserts it.
+    """
+    parts = token.split(".")
+    if len(parts) == 4:
+        try:
+            octets = [_octet(part) for part in parts]
+        except ValueError:
+            octets = []
+        if octets and all(0 <= value <= 255 for value in octets):
+            return ipaddress.ip_address(".".join(str(value) for value in octets))
+    try:
+        return ipaddress.ip_address(token)
+    except ValueError:
+        return None
+
+
 def _is_prohibited_ip(match: str) -> bool:
     """Return True if match is a private IP not in allowed documentation networks."""
-    try:
-        ip_obj = ipaddress.ip_address(match)
-        if any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS if net.version == ip_obj.version):
-            return False
-        if ip_obj.is_loopback or ip_obj.is_unspecified:
-            return False
-        return any(ip_obj in net for net in PRIVATE_HOST_NETWORKS if net.version == ip_obj.version)
-    except ValueError:
+    ip_obj = _parse_address(match)
+    if ip_obj is None:
         return False
+    if any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS if net.version == ip_obj.version):
+        return False
+    if ip_obj.is_loopback or ip_obj.is_unspecified:
+        return False
+    return any(ip_obj in net for net in PRIVATE_HOST_NETWORKS if net.version == ip_obj.version)
 
 
 def _is_url_with_example(text: str) -> bool:
