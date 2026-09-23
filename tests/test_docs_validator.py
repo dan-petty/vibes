@@ -48,7 +48,7 @@ def test_docs_validator_clean_markdown(tmp_path: Path) -> None:
         "````\n\n"
         "```mermaid\n"
         "flowchart TD\n"
-        "    A[\"Valid Node (quoted)\"] --> B[\"Another\"]\n"
+        '    A["Valid Node (quoted)"] --> B["Another"]\n'
         "```\n",
         encoding="utf-8",
     )
@@ -70,14 +70,7 @@ def test_docs_validator_code_fences() -> None:
         unclosed_findings[0].line_number,
     ) == ("code_fence", "error", 1)
 
-    nested_bad = (
-        "```markdown\n"
-        "Code:\n"
-        "```python\n"
-        "print('inner')\n"
-        "```\n"
-        "```\n"
-    )
+    nested_bad = "```markdown\nCode:\n```python\nprint('inner')\n```\n```\n"
     nested_findings = validator.check_code_fences(nested_bad)
     assert any(f.category == "code_fence" and f.line_number == 3 for f in nested_findings)
 
@@ -116,11 +109,7 @@ def test_docs_validator_mermaid_validation() -> None:
 def test_docs_validator_table_columns() -> None:
     """Ensure markdown tables flag column count mismatches."""
     validator = DocsValidator()
-    bad_table = (
-        "| Header 1 | Header 2 |\n"
-        "|---|---|\n"
-        "| Cell 1 | Cell 2 | Cell 3 |\n"
-    )
+    bad_table = "| Header 1 | Header 2 |\n|---|---|\n| Cell 1 | Cell 2 | Cell 3 |\n"
     findings = validator.check_table_columns(bad_table)
     assert len(findings) == 1
     assert (findings[0].category, findings[0].line_number) == ("table", 3)
@@ -155,7 +144,7 @@ def test_docs_validator_code_snippets() -> None:
     bad_py = "```python\ndef broken(\n```\n"
     assert len(validator.check_code_snippets(bad_py)) == 1
 
-    bad_json = "```json\n{\"broken\": }\n```\n"
+    bad_json = '```json\n{"broken": }\n```\n'
     assert len(validator.check_code_snippets(bad_json)) == 1
 
     bad_yaml = "```yaml\nkey: [unclosed\n```\n"
@@ -202,7 +191,7 @@ def test_contrast_ratio_matches_wcag_reference_values() -> None:
 def test_mermaid_fill_without_explicit_color_is_flagged() -> None:
     """An inherited label color flips with the GitHub theme and must be rejected."""
     validator = DocsValidator()
-    content = "```mermaid\nflowchart TD\n    A[\"Node\"]\n    style A fill:#b3261e\n```\n"
+    content = '```mermaid\nflowchart TD\n    A["Node"]\n    style A fill:#b3261e\n```\n'
     findings = validator.validate_content(content, Path("doc.md"))
     assert [f.category for f in findings] == ["mermaid_style"]
     assert "no explicit 'color:'" in findings[0].message
@@ -211,7 +200,7 @@ def test_mermaid_fill_without_explicit_color_is_flagged() -> None:
 def test_mermaid_below_wcag_contrast_is_flagged() -> None:
     """Fill and label colors closer than 4.5:1 are illegible and must be rejected."""
     validator = DocsValidator()
-    content = "```mermaid\nflowchart TD\n    A[\"Node\"]\n    style A fill:#6a6,color:#fff\n```\n"
+    content = '```mermaid\nflowchart TD\n    A["Node"]\n    style A fill:#6a6,color:#fff\n```\n'
     findings = validator.validate_content(content, Path("doc.md"))
     assert [f.category for f in findings] == ["mermaid_style"]
     assert "2.80:1" in findings[0].message
@@ -222,7 +211,7 @@ def test_mermaid_palette_pairs_pass_contrast_check() -> None:
     palette = [("#b3261e", "#fff"), ("#1b5e20", "#fff"), ("#f2b705", "#000"), ("#4527a0", "#fff")]
     validator = DocsValidator()
     for fill, color in palette:
-        content = f"```mermaid\nflowchart TD\n    A[\"Node\"]\n    style A fill:{fill},color:{color}\n```\n"
+        content = f'```mermaid\nflowchart TD\n    A["Node"]\n    style A fill:{fill},color:{color}\n```\n'
         assert validator.validate_content(content, Path("doc.md")) == []
 
 
@@ -531,14 +520,15 @@ def test_observation_structure_non_observation_file(tmp_path: Path) -> None:
     assert (len(findings), findings) == (0, [])
 
 
-
-
 def test_pattern_header_requires_the_canonical_fields(tmp_path: Path) -> None:
     """Three competing header vocabularies had accumulated before this was mechanical."""
     patterns = tmp_path / "patterns"
     patterns.mkdir()
     doc = patterns / "some-pattern.md"
-    doc.write_text("# Pattern: Some Pattern\n\n> **Category**: Legacy vocabulary\n\n## Problem Statement\n", encoding="utf-8")
+    doc.write_text(
+        "# Pattern: Some Pattern\n\n> **Category**: Legacy vocabulary\n\n## Problem Statement\n",
+        encoding="utf-8",
+    )
 
     findings = DocsValidator().validate_file(doc)
     assert [f.category for f in findings] == ["pattern_header"]
@@ -585,9 +575,7 @@ def test_documentation_sanitization_permits_cidr_ranges_stating_the_rule(tmp_pat
 def test_documentation_sanitization_permits_rfc5737_and_metadata_constants(tmp_path: Path) -> None:
     """Flagging the mandated documentation ranges would forbid following the policy."""
     doc = tmp_path / "examples.md"
-    doc.write_text(
-        "Use 192.0.2.1, 198.51.100.7 or 203.0.113.9. Block 169.254.169.254.\n", encoding="utf-8"
-    )
+    doc.write_text("Use 192.0.2.1, 198.51.100.7 or 203.0.113.9. Block 169.254.169.254.\n", encoding="utf-8")
     assert DocsValidator().validate_file(doc) == []
 
 
@@ -839,6 +827,55 @@ def test_fence_tracking_honours_the_marker_its_length_and_the_info_string(
     assert fenced_line_flags(lines) == expected
 
 
+def test_fence_state_machine_helpers() -> None:
+    """Verify fence state transitions and closing boundary evaluations."""
+    from doc_core import _is_closing_fence, _update_fence_state
+
+    close_results = (
+        _is_closing_fence("```", "", "`", 3),
+        _is_closing_fence("````", "", "`", 3),
+        _is_closing_fence("```", "json", "`", 3),
+        _is_closing_fence("``", "", "`", 3),
+        _is_closing_fence("~~~", "", "`", 3),
+    )
+    state_results = (
+        _update_fence_state("```", "python", None, 0),
+        _update_fence_state("~~~", "", None, 0),
+        _update_fence_state("```", "", "`", 3),
+        _update_fence_state("`", "", "`", 3),
+    )
+    assert (close_results, state_results) == (
+        (True, True, False, False, False),
+        (("`", 3), ("~", 3), (None, 0), ("`", 3)),
+    )
+
+
+def test_inline_parser_helpers() -> None:
+    """Verify inline link extraction and line offset increments."""
+    from types import SimpleNamespace
+
+    from doc_core import MarkdownLink, _extract_link_from_child, _step_inline_line_offset
+
+    child_link = SimpleNamespace(type="link_open", attrs=[("href", "guide.md"), ("title", "Guide")])
+    extracted = _extract_link_from_child(child_link, 12)
+
+    softbreak = SimpleNamespace(type="softbreak", content="")
+    hardbreak = SimpleNamespace(type="hardbreak", content="")
+    link_token = SimpleNamespace(type="link_open", content="")
+    text_token = SimpleNamespace(type="text", content="hello\nworld\nfoo")
+
+    offsets = (
+        _step_inline_line_offset(softbreak),
+        _step_inline_line_offset(hardbreak),
+        _step_inline_line_offset(link_token),
+        _step_inline_line_offset(text_token),
+    )
+    assert (extracted, offsets) == (
+        MarkdownLink("guide.md", "Guide", 12),
+        (1, 1, 0, 2),
+    )
+
+
 # --- Driven off the parser, not off the lines -------------------------------------------
 
 
@@ -861,9 +898,7 @@ def _link_findings(body: str, tmp_path: Path) -> list[str]:
     ],
     ids=["title", "code-span", "indented-code", "html-comment", "really-broken"],
 )
-def test_links_come_from_the_parser_not_from_the_lines(
-    body: str, clean: bool, tmp_path: Path
-) -> None:
+def test_links_come_from_the_parser_not_from_the_lines(body: str, clean: bool, tmp_path: Path) -> None:
     """Four defects dissolve rather than get fixed.
 
     A link title is an attribute, so it can never be read as part of the destination; a
