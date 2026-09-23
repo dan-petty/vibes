@@ -16,10 +16,17 @@ from crawler import (
 )
 from markdown_extract import extract
 
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore[assignment]
+
+requires_httpx = pytest.mark.skipif(httpx is None, reason="httpx not installed in test environment")
+
 
 @pytest.fixture(autouse=True)
 def _fast_mock_dns(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Resolve mock host example.com deterministically without live network DNS queries."""
+    """Resolve mock host example.com deterministically and avoid politeness sleep delays."""
     orig_getaddrinfo = crawler.socket.getaddrinfo
 
     def _mock_getaddrinfo(host: str, *args: object, **kwargs: object) -> list[object]:
@@ -28,6 +35,7 @@ def _fast_mock_dns(monkeypatch: pytest.MonkeyPatch) -> None:
         return orig_getaddrinfo(host, *args, **kwargs)
 
     monkeypatch.setattr(crawler.socket, "getaddrinfo", _mock_getaddrinfo)
+    monkeypatch.setattr(crawler.time, "sleep", lambda _seconds: None)
 
 
 def test_clean_content_extractor_markdown() -> None:
@@ -283,7 +291,8 @@ def test_loopback_is_reachable_in_both_address_families(monkeypatch):
 
 def _redirect_client(handler: object) -> object:
     """Return an httpx.Client subclass bound to a mock transport."""
-    import httpx
+    if httpx is None:
+        return object
 
     class Bound(httpx.Client):
         def __init__(self, *a: object, **k: object) -> None:
@@ -293,6 +302,7 @@ def _redirect_client(handler: object) -> object:
     return Bound
 
 
+@requires_httpx
 def test_a_redirect_to_a_private_address_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """The gate ran once, on the URL the caller supplied, and the client followed Location.
 
@@ -301,8 +311,6 @@ def test_a_redirect_to_a_private_address_is_refused(monkeypatch: pytest.MonkeyPa
     host answering `302 Location: http://169.254.169.254/...` returned the cloud metadata
     document as page content, and the strategy store recorded the crawl as a success.
     """
-    import httpx
-
     meta = "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
     requested: list[str] = []
 
@@ -318,10 +326,9 @@ def test_a_redirect_to_a_private_address_is_refused(monkeypatch: pytest.MonkeyPa
     assert requested == ["http://example.com/doc"]
 
 
+@requires_httpx
 def test_an_ordinary_redirect_is_still_followed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Revalidating every hop must not stop the crawler following legitimate redirects."""
-    import httpx
-
     def handler(request: object) -> object:
         if str(request.url).endswith("/moved"):
             return httpx.Response(301, headers={"Location": "http://example.com/final"})
@@ -332,10 +339,9 @@ def test_an_ordinary_redirect_is_still_followed(monkeypatch: pytest.MonkeyPatch)
     assert "Arrived." in page.markdown_content
 
 
+@requires_httpx
 def test_a_redirect_loop_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """Following hops by hand means the ceiling is ours to impose; RFC 9110 sets none."""
-    import httpx
-
     def handler(request: object) -> object:
         return httpx.Response(302, headers={"Location": "http://example.com/again"})
 

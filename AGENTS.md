@@ -648,6 +648,7 @@ Record into [`docs/reliability/iterations/`](./docs/reliability/iterations/) —
    - **Confirm a backlog item is real before working it.** Acting on a toil signal in this repository found four of five items were measurement error: modules at 97-100% coverage reported as untested because no file carried the matching name, and decorator closures counted as undocumented public API. Satisfying either would have produced pure waste that looked like progress.
    - Before acting on any feedback item, agents MUST confirm the metric is actionable: if no possible change to the target file can satisfy the threshold, the defect is in the oracle, not in the resource. Fix the oracle.
    - Report irreducible harness cost separately (`RunExecutionResult.harness_overhead_seconds`) so systemic runner inefficiency is visible as its own roadmap item rather than smeared across every resource.
+   - **Isolate Real Sleeps and Politeness Delays in Test Suites**: When testing components that enforce rate-limiting, polling backoff, or politeness delays (e.g. `time.sleep`), test suites must always mock or isolate the delay mechanism via fixtures (e.g. `monkeypatch.setattr(time, "sleep", lambda _s: None)`). Unisolated real sleeps compound linearly across tests, turning sub-second suites into slow-test defects.
 
 
 
