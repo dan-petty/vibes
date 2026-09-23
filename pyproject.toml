@@ -28,6 +28,11 @@ test = [
     "pytest>=9.0",
     "pytest-asyncio>=1.0",
     "pytest-cov>=7.0",
+    # The crawler imports httpx lazily so the exhibit still runs without it, but the
+    # SSRF-across-redirects regression cannot be exercised without a transport that
+    # answers a 302. A security regression test that skips when a dependency is
+    # absent reports green on the machine least likely to have it.
+    "httpx>=0.28",
 ]
 # Static gates. Declared here for the same reason as the runtime list above: the versions
 # CI installs and the versions a contributor installs must come from one place.

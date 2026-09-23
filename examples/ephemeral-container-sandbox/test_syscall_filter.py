@@ -209,3 +209,23 @@ def test_unsupported_hosts_say_why_rather_than_reporting_false() -> None:
     """A sandbox that cannot confine must say so; one that says nothing is the defect."""
     ok, reason = sf.supported()
     assert ok or reason != ""
+
+
+@requires_seccomp
+def test_io_uring_is_denied_with_the_network_group() -> None:
+    """A second, complete path to every network operation the direct calls perform.
+
+    A ring submitting IORING_OP_SOCKET, IORING_OP_CONNECT and IORING_OP_SEND opens a
+    connection without ever issuing `socket(2)`, so a filter that denies the direct calls
+    and leaves the ring reachable denies nothing while reporting network isolation as
+    ENFORCED. Observed before this: `socket()` raised EPERM while `io_uring_setup(2)`
+    reached the kernel and returned EFAULT on its bad pointer.
+    """
+    payload = (
+        "import ctypes, ctypes.util\n"
+        "libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)\n"
+        "libc.syscall(425, 1, ctypes.c_void_p(0))\n"
+        "print('errno', ctypes.get_errno())\n"
+    )
+    proc = _run(payload, groups=("network",))
+    assert (proc.returncode, proc.stdout.strip()) == (0, "errno 1")

@@ -101,11 +101,20 @@ SYSCALLS: Final[dict[str, int]] = {
     "reboot": 169, "settimeofday": 164, "swapoff": 168, "swapon": 167, "userfaultfd": 323,
     "add_key": 248, "keyctl": 250, "request_key": 249,
     "clone": 56, "clone3": 435, "fork": 57, "vfork": 58,
+    "io_uring_setup": 425, "io_uring_enter": 426, "io_uring_register": 427,
 }
 
 DENY_GROUPS: Final[dict[str, tuple[str, ...]]] = {
+    # io_uring belongs here, not in a group of its own. It is a second, complete path to
+    # every operation the calls above perform: a ring submitting IORING_OP_SOCKET,
+    # IORING_OP_CONNECT and IORING_OP_SEND opens a connection without issuing `socket(2)`
+    # at all, so a filter that denies the direct calls and leaves the ring reachable denies
+    # nothing while reporting network isolation as ENFORCED. Container runtimes disable
+    # io_uring for exactly this reason. Verified here: under the default policy `socket()`
+    # raised EPERM while `io_uring_setup(2)` still reached the kernel.
     "network": ("socket", "socketpair", "bind", "connect", "listen", "accept", "accept4",
-                "sendto", "recvfrom", "sendmsg", "recvmsg"),
+                "sendto", "recvfrom", "sendmsg", "recvmsg",
+                "io_uring_setup", "io_uring_enter", "io_uring_register"),
     "privilege": ("setuid", "setgid", "setreuid", "setregid", "setresuid", "setresgid",
                   "capset", "ioperm", "iopl"),
     "tracing": ("ptrace", "process_vm_readv", "process_vm_writev", "perf_event_open"),
