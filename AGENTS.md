@@ -522,6 +522,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 8. **AST Feature Traversal & Predicate Table Decomposition**:
    - Accumulating multi-feature counters across AST nodes by nesting inner loops over predicate dictionaries within `ast.walk` loops creates nesting depth $depth = 4$.
    - Extract node-level feature tallying into a dedicated pure helper (`_tally_node_features(node, counts)`), and isolate socket command dispatch into a shared helper (`_execute_command`). This reduces nesting depth to $\le 2$ and ensures all methods and functions remain Grade A complexity ($M \le 4$).
+9. **Workflow Contract Decomposition & Scoped Iterators**:
+   - Validating YAML workflow structures across multi-level hierarchies (jobs $\to$ steps $\to$ command lines $\to$ outputs) by nesting loops and lookups in test bodies triggers high nesting depth ($depth \ge 4$) and elevated complexity ($M \ge 8$).
+   - Decompose inspection into job-level and step-level query helpers (`_unwritten_outputs_in_job`, `_step_cli_invocations`, `_missing_cli_flags`, `_is_unpinned_action`). This limits nesting depth to $\le 2$ and preserves compact test function complexity ($M \le 4$).
 
 ---
 

@@ -58,14 +58,17 @@ def test_at_least_one_workflow_is_present() -> None:
     assert len(WORKFLOWS) >= 5
 
 
+def _is_unpinned_action(uses: str | None) -> bool:
+    """Report whether a GitHub Action reference is unpinned to a full SHA."""
+    if not uses or uses.startswith("./"):
+        return False
+    return not bool(_SHA_PINNED.match(uses))
+
+
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_action_is_pinned_to_a_commit_sha(path: Path) -> None:
     """A moving tag is a dependency that can change under a workflow nobody ever runs."""
-    unpinned = [
-        step["uses"]
-        for _, step in _steps(path)
-        if "uses" in step and not step["uses"].startswith("./") and not _SHA_PINNED.match(step["uses"])
-    ]
+    unpinned = [step["uses"] for _, step in _steps(path) if _is_unpinned_action(step.get("uses"))]
     assert unpinned == []
 
 
@@ -98,42 +101,54 @@ def test_no_run_step_interpolates_a_workflow_expression(path: Path) -> None:
     assert offenders == []
 
 
+def _step_missing_scripts(step: dict[str, Any]) -> list[str]:
+    """Find scripts invoked by a step that do not exist on disk."""
+    body = step.get("run")
+    if not isinstance(body, str):
+        return []
+    return [script for script, _ in _PY_INVOCATION.findall(body) if not (REPO_ROOT / script).is_file()]
+
+
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_script_a_workflow_runs_exists(path: Path) -> None:
     """A renamed script fails at minute three of a workflow, or never, if it never runs."""
-    missing = [
-        script
-        for _, step in _steps(path)
-        if isinstance(step.get("run"), str)
-        for script, _ in _PY_INVOCATION.findall(step["run"])
-        if not (REPO_ROOT / script).is_file()
-    ]
+    missing = [script for _, step in _steps(path) for script in _step_missing_scripts(step)]
     assert missing == []
+
+
+def _dangling_step_refs_in_job(job_name: str, job: dict[str, Any]) -> list[str]:
+    """Find step output references in a job that reference undeclared step IDs."""
+    declared = {step["id"] for step in (job.get("steps") or []) if "id" in step}
+    referenced = {ref for ref, _ in _STEP_REF.findall(yaml.safe_dump(job))}
+    return [f"{job_name}:{ref}" for ref in sorted(referenced - declared)]
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_referenced_step_id_exists_in_its_job(path: Path) -> None:
     """`steps.typo.outputs.x` evaluates to empty rather than failing, so a condition silently inverts."""
     document = _load(path)
-    dangling: list[str] = []
-    for job_name, job in (document.get("jobs") or {}).items():
-        declared = {step["id"] for step in (job.get("steps") or []) if "id" in step}
-        referenced = {ref for ref, _ in _STEP_REF.findall(yaml.safe_dump(job))}
-        dangling += [f"{job_name}:{ref}" for ref in sorted(referenced - declared)]
+    jobs = (document.get("jobs") or {}).items()
+    dangling = [ref for job_name, job in jobs for ref in _dangling_step_refs_in_job(job_name, job)]
     assert dangling == []
+
+
+def _unwritten_outputs_in_job(job: dict[str, Any]) -> list[str]:
+    """Find referenced outputs in a job that the referenced step never writes."""
+    by_id = {step["id"]: step for step in (job.get("steps") or []) if "id" in step}
+    unwritten: list[str] = []
+    for ref, name in _STEP_REF.findall(yaml.safe_dump(job)):
+        step = by_id.get(ref)
+        if step is not None and not _writes_output(step, name):
+            unwritten.append(f"{ref}.{name}")
+    return unwritten
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_referenced_step_output_is_written_by_that_step(path: Path) -> None:
     """An output nobody writes is an empty string, and `if: ... > 0` on it is always false."""
     document = _load(path)
-    unwritten: list[str] = []
-    for job in (document.get("jobs") or {}).values():
-        by_id = {step["id"]: step for step in (job.get("steps") or []) if "id" in step}
-        for ref, name in _STEP_REF.findall(yaml.safe_dump(job)):
-            step = by_id.get(ref)
-            if step is not None and not _writes_output(step, name):
-                unwritten.append(f"{ref}.{name}")
+    jobs = (document.get("jobs") or {}).values()
+    unwritten = [out for job in jobs for out in _unwritten_outputs_in_job(job)]
     assert sorted(set(unwritten)) == []
 
 
@@ -144,25 +159,41 @@ def _writes_output(step: dict[str, Any], name: str) -> bool:
     return f"{name}=" in body or f"setOutput('{name}'" in script or f'setOutput("{name}"' in script
 
 
+def _step_cli_invocations(workflow_name: str, step: dict[str, Any]) -> list[tuple[str, str, tuple[str, ...]]]:
+    """Extract CLI invocations from a single workflow step."""
+    body = step.get("run")
+    if not isinstance(body, str):
+        return []
+    joined = body.replace("\\\n", " ")
+    return [
+        (workflow_name, script, tuple(shlex.split(rest))) for script, rest in _PY_INVOCATION.findall(joined)
+    ]
+
+
 def _cli_invocations() -> list[tuple[str, str, tuple[str, ...]]]:
     """Return every (workflow, script, argv) a `run:` step invokes against repository tooling."""
-    found: list[tuple[str, str, tuple[str, ...]]] = []
-    for path in WORKFLOWS:
-        for _, step in _steps(path):
-            body = step.get("run")
-            if not isinstance(body, str):
-                continue
-            joined = body.replace("\\\n", " ")
-            found += [
-                (path.name, script, tuple(shlex.split(rest)))
-                for script, rest in _PY_INVOCATION.findall(joined)
-            ]
-    return found
+    return [
+        inv
+        for path in WORKFLOWS
+        for _, step in _steps(path)
+        for inv in _step_cli_invocations(path.name, step)
+    ]
 
 
-@pytest.mark.parametrize(
-    "workflow,script,argv", _cli_invocations(), ids=lambda v: v if isinstance(v, str) else ""
-)
+def _workflow_param_id(val: Any) -> str:
+    """Produce test identifier for parameterized CLI invocation."""
+    return val if isinstance(val, str) else ""
+
+
+def _missing_cli_flags(script: str, argv: tuple[str, ...]) -> list[str]:
+    """Return command flags missing from the script or subcommand help output."""
+    subcommand = [token for token in argv[:1] if not token.startswith("-")]
+    flags = [token for token in argv if token.startswith("--")]
+    help_text = _help(script, subcommand)
+    return [flag for flag in flags if flag not in help_text]
+
+
+@pytest.mark.parametrize("workflow,script,argv", _cli_invocations(), ids=_workflow_param_id)
 def test_every_cli_contract_a_workflow_depends_on_still_exists(
     workflow: str, script: str, argv: tuple[str, ...]
 ) -> None:
@@ -173,10 +204,8 @@ def test_every_cli_contract_a_workflow_depends_on_still_exists(
     accepts — so a renamed subcommand or a dropped flag is discovered when the workflow
     runs, which for three of these workflows has been never.
     """
+    missing = _missing_cli_flags(script, argv)
     subcommand = [token for token in argv[:1] if not token.startswith("-")]
-    flags = [token for token in argv if token.startswith("--")]
-    help_text = _help(script, subcommand)
-    missing = [flag for flag in flags if flag not in help_text]
     assert missing == [], f"{workflow}: {script} {' '.join(subcommand)} rejects {missing}"
 
 
@@ -216,15 +245,15 @@ def test_a_generated_diff_is_checked_for_emptiness_before_it_is_judged(path: Pat
     assert unchecked == []
 
 
+def _job_shell_body(job: dict[str, Any]) -> str:
+    """Concatenate shell script lines for run steps in a job."""
+    return "\n".join(step["run"] for step in (job.get("steps") or []) if isinstance(step.get("run"), str))
+
+
 def _jobs_with_diffs(path: Path) -> dict[str, str]:
     """Return each job's concatenated shell, for the jobs that generate a diff file."""
     document = _load(path)
-    bodies = {
-        name: "\n".join(
-            step["run"] for step in (job.get("steps") or []) if isinstance(step.get("run"), str)
-        )
-        for name, job in (document.get("jobs") or {}).items()
-    }
+    bodies = {name: _job_shell_body(job) for name, job in (document.get("jobs") or {}).items()}
     return {name: body for name, body in bodies.items() if _DIFF_TO_FILE.search(body)}
 
 
