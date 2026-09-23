@@ -281,11 +281,27 @@ class IdeHookSentinel:
 
         return HookEvaluation(decision=HookDecision.ALLOW, reason="File write verified safe")
 
+    def _reap_timed_out_process(
+        self, proc: subprocess.Popen[str], grace_seconds: float
+    ) -> tuple[str, str]:
+        """Terminate process group, escalating from SIGTERM to SIGKILL if grace period expires."""
+        self._kill_process_group(proc.pid, signal.SIGTERM)
+        # Bounded. `communicate()` with no timeout blocks until the group exits, so a
+        # child that ignores SIGTERM held the call open for its full runtime — a
+        # 0.5-second contract observed to run past 25 seconds. The escalation below
+        # guarantees this returns.
+        try:
+            return proc.communicate(timeout=grace_seconds)
+        except subprocess.TimeoutExpired:
+            self._kill_process_group(proc.pid, signal.SIGKILL)
+            return proc.communicate()
+
     def run_isolated_command(
         self,
         command: Sequence[str],
         cwd: Path | None = None,
         timeout_seconds: float = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        grace_seconds: float = GRACE_SECONDS,
     ) -> CommandResult:
         """Execute command in dedicated POSIX process group with clean termination."""
         work_dir = cwd or self.workspace_root
@@ -302,37 +318,24 @@ class IdeHookSentinel:
 
         try:
             stdout, stderr = proc.communicate(timeout=timeout_seconds)
-            return CommandResult(
-                command=cmd_tuple,
-                exit_code=proc.returncode,
-                stdout=stdout,
-                stderr=stderr,
-                timed_out=False,
-            )
+            timed_out = False
         except subprocess.TimeoutExpired:
-            self._kill_process_group(proc.pid)
-            # Bounded. `communicate()` with no timeout blocks until the group exits, so a
-            # child that ignores SIGTERM held the call open for its full runtime — a
-            # 0.5-second contract observed to run past 25 seconds. The escalation below
-            # guarantees this returns.
-            try:
-                stdout, stderr = proc.communicate(timeout=GRACE_SECONDS)
-            except subprocess.TimeoutExpired:
-                self._kill_process_group(proc.pid, signal.SIGKILL)
-                stdout, stderr = proc.communicate()
-            return CommandResult(
-                command=cmd_tuple,
-                # The signal that actually reaped it, not a placeholder. The success branch
-                # reports `proc.returncode`, where POSIX convention spells a signal death as
-                # `-N`, so a hardcoded `-1` claimed the child died of SIGHUP — a signal
-                # nothing here sends. A reader distinguishing "timed out and was terminated"
-                # from "was hung up on" could not, and the real value is -15, or -9 once the
-                # escalation above fires.
-                exit_code=proc.returncode,
-                stdout=stdout,
-                stderr=stderr,
-                timed_out=True,
-            )
+            stdout, stderr = self._reap_timed_out_process(proc, grace_seconds)
+            timed_out = True
+
+        return CommandResult(
+            command=cmd_tuple,
+            # The signal that actually reaped it, not a placeholder. The success branch
+            # reports `proc.returncode`, where POSIX convention spells a signal death as
+            # `-N`, so a hardcoded `-1` claimed the child died of SIGHUP — a signal
+            # nothing here sends. A reader distinguishing "timed out and was terminated"
+            # from "was hung up on" could not, and the real value is -15, or -9 once the
+            # escalation above fires.
+            exit_code=proc.returncode,
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=timed_out,
+        )
 
     @staticmethod
     def _kill_process_group(pid: int, sig: int = signal.SIGTERM) -> None:
