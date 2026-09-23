@@ -39,7 +39,11 @@ VALID_MERMAID_TYPES: Final[frozenset[str]] = frozenset(
 
 _MERMAID_NODE_RE: Final[re.Pattern[str]] = re.compile(r"([A-Za-z0-9_]+)\[([^\]]+)\]")
 _MERMAID_EDGE_RE: Final[re.Pattern[str]] = re.compile(r"(-->|-\.->|==>)\|([^|]+)\|")
-_MERMAID_FILL_RE: Final[re.Pattern[str]] = re.compile(r"fill:\s*(#[0-9a-fA-F]{3,6})")
+# All four CSS hex lengths. `{3,6}` also matched a 5-digit run, which is not a colour at
+# all, and stopped short of the 8-digit form Mermaid accepts.
+_MERMAID_FILL_RE: Final[re.Pattern[str]] = re.compile(
+    r"fill:\s*(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3}))\b"
+)
 _MERMAID_TEXT_COLOR_RE: Final[re.Pattern[str]] = re.compile(r"(?<![\w-])color:\s*(#[0-9a-fA-F]{3,6})")
 _LEGACY_MERMAID_HEADER_RE: Final[re.Pattern[str]] = re.compile(r"^graph\s+(?:TB|TD|BT|RL|LR)\b")
 _SEQUENCE_STATEMENT_RE: Final[re.Pattern[str]] = re.compile(
@@ -105,9 +109,19 @@ def _check_mermaid_edge_label(line: str, line_no: int, file_str: str) -> list[Do
 
 
 def _expand_hex_color(hex_color: str) -> tuple[int, int, int]:
-    """Expand a 3- or 6-digit hex color into its 8-bit RGB channels."""
+    """Expand a CSS hex colour into its 8-bit RGB channels, alpha discarded.
+
+    CSS Color 4 §5.1 defines four lengths: `#rgb`, `#rgba`, `#rrggbb` and `#rrggbbaa`. Only
+    the first and third were handled, and a 4-digit colour sliced into an empty string and
+    raised `ValueError` out of `int()` — which was not caught anywhere, so it killed the
+    single-file run and, through `ThreadPoolExecutor.map`, the entire directory sweep, with
+    a traceback in place of a finding. The repository's own pinned Mermaid parses all four.
+
+    Alpha is dropped rather than composited: WCAG contrast is defined against an opaque
+    backdrop, and guessing what a translucent node sits on would be inventing the answer.
+    """
     digits = hex_color.lstrip("#")
-    if len(digits) == 3:
+    if len(digits) in (3, 4):
         digits = "".join(channel * 2 for channel in digits)
     return int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16)
 

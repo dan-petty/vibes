@@ -202,3 +202,135 @@ def fenced_line_flags(lines: Sequence[str]) -> list[bool]:
             marker, length = None, 0
         flags.append(True)
     return flags
+
+
+@dataclass(frozen=True)
+class MarkdownLink:
+    """One inline link, as the CommonMark parser resolved it."""
+
+    href: str
+    title: str
+    line: int
+
+
+@dataclass(frozen=True)
+class MarkdownHeading:
+    """One heading, however it was spelled."""
+
+    text: str
+    line: int
+
+
+@dataclass(frozen=True)
+class ParsedDocument:
+    """A document read through the CommonMark parser rather than through regexes.
+
+    Every rule that used to scan raw lines can be expressed against this, and several
+    defects disappear rather than getting fixed:
+
+    * a `~~~` block containing a backtick fence is one `fence` token, so no toggle can
+      desynchronise;
+    * an indented code block is a `code_block` token, so its example links are not resolved
+      as paths;
+    * a multi-line `<!-- ... -->` is one `html_block`, so tags inside it are not counted as
+      live markup;
+    * a setext heading is a `heading_open`, so it produces an anchor like any other;
+    * `[text](url)` inside a code span is a `code_inline` child and never a link, without
+      masking anything;
+    * a link's title is an attribute, so it can never be mistaken for part of the
+      destination, and `<a b.md>` and `a%20b.md` arrive already normalised.
+    """
+
+    links: tuple[MarkdownLink, ...]
+    headings: tuple[MarkdownHeading, ...]
+    code_lines: frozenset[int]
+    html_lines: frozenset[int]
+
+
+def parse_document(parser: Any, content: str) -> ParsedDocument:
+    """Read a document once and return what the rules need from it."""
+    state = _ParseState()
+    for token in parser.parse(content):
+        handler = _TOKEN_HANDLERS.get(token.type)
+        if handler:
+            handler(state, token)
+    return ParsedDocument(
+        links=tuple(state.links),
+        headings=tuple(state.headings),
+        code_lines=frozenset(state.code_lines),
+        html_lines=frozenset(state.html_lines),
+    )
+
+
+@dataclass
+class _ParseState:
+    """What one pass over the token stream accumulates."""
+
+    links: list[MarkdownLink] = field(default_factory=list)
+    headings: list[MarkdownHeading] = field(default_factory=list)
+    code_lines: set[int] = field(default_factory=set)
+    html_lines: set[int] = field(default_factory=set)
+    pending_heading: int | None = None
+
+
+def _on_code(state: _ParseState, token: Any) -> None:
+    """Record the lines a fenced or indented code block occupies."""
+    state.code_lines.update(_token_lines(token))
+
+
+def _on_html(state: _ParseState, token: Any) -> None:
+    """Record the lines an HTML block occupies, comments included."""
+    state.html_lines.update(_token_lines(token))
+
+
+def _on_heading(state: _ParseState, token: Any) -> None:
+    """Remember that the next inline token is a heading's text."""
+    state.pending_heading = (token.map[0] + 1) if token.map else 0
+
+
+def _on_inline(state: _ParseState, token: Any) -> None:
+    """Collect the links in one inline run, and its text if it is a heading."""
+    state.links.extend(_inline_links(token))
+    if state.pending_heading is not None:
+        state.headings.append(MarkdownHeading(token.content.strip(), state.pending_heading))
+        state.pending_heading = None
+
+
+# Table dispatch per §10.1. The predecessor was an `elif` ladder whose nesting the sentinel
+# refused at depth 7 against a ceiling of 5.
+_TOKEN_HANDLERS: dict[str, Any] = {
+    "fence": _on_code,
+    "code_block": _on_code,
+    "html_block": _on_html,
+    "heading_open": _on_heading,
+    "inline": _on_inline,
+}
+
+
+def _token_lines(token: Any) -> range:
+    """Return the 1-based line numbers a block token spans."""
+    if not token.map:
+        return range(0)
+    return range(token.map[0] + 1, token.map[1] + 1)
+
+
+def _inline_links(token: Any) -> list[MarkdownLink]:
+    """Return every link in one inline token, with the line it actually sits on.
+
+    An inline token spans a whole paragraph, so `token.map` gives the block's first line and
+    not the link's. Four links on four consecutive lines all reported the first, which moves
+    a finding away from the thing it is about. `softbreak` and `hardbreak` are the children
+    that represent a newline inside a paragraph, so counting them walks the line forward
+    exactly.
+    """
+    line = (token.map[0] + 1) if token.map else 0
+    found: list[MarkdownLink] = []
+    for child in token.children or []:
+        if child.type in ("softbreak", "hardbreak"):
+            line += 1
+        elif child.type == "link_open":
+            attrs = dict(child.attrs or {})
+            found.append(MarkdownLink(str(attrs.get("href", "")), str(attrs.get("title", "")), line))
+        else:
+            line += child.content.count("\n")
+    return found
