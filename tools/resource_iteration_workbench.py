@@ -40,6 +40,23 @@ CANONICAL_MOCK_DOMAIN = "example.com"
 # Allowed documentation networks for zero-trust compliance
 
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+WAIVER_PRAGMA_RE = re.compile(
+    r"^#\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
+)
+MIN_WAIVER_JUSTIFICATION_CHARS = 12
+
+
+def _has_sanitization_waiver(content: str) -> bool:
+    """Return True if the module header declares an authorized ZeroTrustSanitization waiver."""
+    for line in content.splitlines()[:15]:
+        match = WAIVER_PRAGMA_RE.match(line.strip())
+        if (
+            match
+            and match.group(1) == "ZeroTrustSanitization"
+            and len(match.group("reason").strip()) >= MIN_WAIVER_JUSTIFICATION_CHARS
+        ):
+            return True
+    return False
 PYTEST_PASSED_RE = re.compile(r"(\d+)\s+passed")
 PYTEST_FAILED_RE = re.compile(r"(\d+)\s+failed")
 PYTEST_WARNINGS_RE = re.compile(r"(\d+)\s+warnings?")
@@ -490,9 +507,10 @@ class ResourceScanner:
         for fn in func_nodes:
             agg.update(cls._inspect_function(fn))
 
-        # Test suites often contain intentional mock IP strings to test sanitizers
+        # Test suites and explicitly waived policy fixtures declare ZeroTrustSanitization waivers
         is_test = cls._classify_resource_type(path) == ResourceType.TEST_SUITE
-        sanitization_violations = [] if is_test else ASTMetricCalculator.check_sanitization(tree)
+        is_waived = is_test or _has_sanitization_waiver(content)
+        sanitization_violations = [] if is_waived else ASTMetricCalculator.check_sanitization(tree)
 
         return ResourceScanMetrics(
             file_path=str(path),

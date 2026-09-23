@@ -311,6 +311,16 @@ def _charset_from(content_type: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _try_decode(raw: bytes, encoding: str | None) -> str | None:
+    """Attempt decoding raw bytes with a candidate encoding, returning None on failure."""
+    if not encoding:
+        return None
+    try:
+        return raw.decode(encoding, errors="replace")
+    except LookupError:
+        return None
+
+
 def decode_body(raw: bytes, content_type: str = "") -> str:
     """Decode a response body the way a browser would, in the order the standard gives.
 
@@ -322,12 +332,11 @@ def decode_body(raw: bytes, content_type: str = "") -> str:
         if raw.startswith(bom):
             return raw.decode(encoding, errors="replace")
     for candidate in (_charset_from(content_type), _meta_charset(raw)):
-        if candidate:
-            try:
-                return raw.decode(candidate, errors="replace")
-            except LookupError:
-                continue
+        decoded = _try_decode(raw, candidate)
+        if decoded is not None:
+            return decoded
     return raw.decode("utf-8", errors="replace")
+
 
 
 def _meta_charset(raw: bytes) -> str | None:
