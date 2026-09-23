@@ -141,9 +141,7 @@ def closing_fence_index(lines: Sequence[str], start: int) -> int:
     return next(closers, len(lines))
 
 
-def extract_fenced_blocks(
-    lines: Sequence[str], info: str
-) -> list[tuple[int, list[tuple[int, str]]]]:
+def extract_fenced_blocks(lines: Sequence[str], info: str) -> list[tuple[int, list[tuple[int, str]]]]:
     """Extract every fenced block carrying the given info string.
 
     Returns (1-based opening line, [(1-based line number, raw text)]). Shared by the
@@ -175,6 +173,20 @@ def first_directive_line(m_lines: Sequence[str]) -> str:
 _FENCE_LINE: Final[re.Pattern[str]] = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
+def _is_closing_fence(run: str, info: str, marker: str, length: int) -> bool:
+    """Return whether run and info form a valid closing fence for the current marker."""
+    return not info and run[0] == marker and len(run) >= length
+
+
+def _update_fence_state(run: str, info: str, marker: str | None, length: int) -> tuple[str | None, int]:
+    """Update fence marker and length on encountering a fence-like line."""
+    if marker is None:
+        return run[0], len(run)
+    if _is_closing_fence(run, info, marker, length):
+        return None, 0
+    return marker, length
+
+
 def fenced_line_flags(lines: Sequence[str]) -> list[bool]:
     """Return, per line, whether it lies inside (or is) a fenced code block.
 
@@ -195,11 +207,7 @@ def fenced_line_flags(lines: Sequence[str]) -> list[bool]:
         if match is None:
             flags.append(marker is not None)
             continue
-        run, info = match.group(1), match.group(2).strip()
-        if marker is None:
-            marker, length = run[0], len(run)
-        elif run[0] == marker and len(run) >= length and not info:
-            marker, length = None, 0
+        marker, length = _update_fence_state(match.group(1), match.group(2).strip(), marker, length)
         flags.append(True)
     return flags
 
@@ -314,6 +322,21 @@ def _token_lines(token: Any) -> range:
     return range(token.map[0] + 1, token.map[1] + 1)
 
 
+def _extract_link_from_child(child: Any, line: int) -> MarkdownLink:
+    """Extract a MarkdownLink instance from a link_open AST child token."""
+    attrs = dict(child.attrs or {})
+    return MarkdownLink(str(attrs.get("href", "")), str(attrs.get("title", "")), line)
+
+
+def _step_inline_line_offset(child: Any) -> int:
+    """Return line count delta contributed by an inline child token."""
+    if child.type in ("softbreak", "hardbreak"):
+        return 1
+    if child.type == "link_open":
+        return 0
+    return int(child.content.count("\n"))
+
+
 def _inline_links(token: Any) -> list[MarkdownLink]:
     """Return every link in one inline token, with the line it actually sits on.
 
@@ -325,12 +348,9 @@ def _inline_links(token: Any) -> list[MarkdownLink]:
     """
     line = (token.map[0] + 1) if token.map else 0
     found: list[MarkdownLink] = []
-    for child in token.children or []:
-        if child.type in ("softbreak", "hardbreak"):
-            line += 1
-        elif child.type == "link_open":
-            attrs = dict(child.attrs or {})
-            found.append(MarkdownLink(str(attrs.get("href", "")), str(attrs.get("title", "")), line))
-        else:
-            line += child.content.count("\n")
+    children: Sequence[Any] = token.children or ()
+    for child in children:
+        if child.type == "link_open":
+            found.append(_extract_link_from_child(child, line))
+        line += _step_inline_line_offset(child)
     return found

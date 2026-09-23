@@ -528,6 +528,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 10. **Interactive Dialogue & Resolution Decomposition**:
     - Multi-attempt prompting loops that nest exception handlers and user input conditionals within retry iterations compound nesting depth ($depth \ge 4$).
     - Factor each prompt attempt into an isolated single-attempt helper (`_prompt_one_attempt`), and isolate per-variable lookup and coercion into `_resolve_one`. This limits function nesting depth to $\le 2$ and preserves compact McCabe complexity ($M \le 3$).
+11. **Document Fence State Machines & Inline AST Offsets**:
+    - Parsing markdown fences and nested inline token streams with compound conditionals and branch ladders inflates decision complexity ($M \ge 7$) and nesting depth ($depth \ge 4$).
+    - Decompose fence boundary validation into pure closing predicate helpers (`_is_closing_fence`) and state transition reducers (`_update_fence_state`), and factor inline AST token processing into child link extractors (`_extract_link_from_child`) and line offset steppers (`_step_inline_line_offset`). This preserves $M \le 5$ and depth $\le 2$ across documentation validation engines.
 
 ---
 
