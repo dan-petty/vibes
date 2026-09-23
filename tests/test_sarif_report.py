@@ -376,3 +376,28 @@ def test_a_finding_absent_from_the_baseline_still_fails_the_build(
     )
     capsys.readouterr()
     assert code == 1
+
+
+def test_a_fingerprint_does_not_depend_on_where_the_checkout_lives() -> None:
+    """The identity is normalised to the same repository-relative URI the result carries.
+
+    Hashing the raw filesystem path made the same finding in the same file produce two
+    different fingerprints when scanned as `.` and as an absolute path — so a baseline
+    recorded on a developer's machine suppressed nothing in CI, which is the one job a
+    baseline has.
+    """
+    repo = Path("/srv/checkout")
+    absolute = Result(rule_id="vibes/invariant/Nesting", level="error", message="deep",
+                      file_path="/srv/checkout/tools/x.py", line=3, subject="f")
+    relative = Result(rule_id="vibes/invariant/Nesting", level="error", message="deep",
+                      file_path="tools/x.py", line=3, subject="f")
+    assert absolute.fingerprint(repo) == relative.fingerprint(Path("."))
+
+
+def test_an_unnormalised_fingerprint_is_what_diverged() -> None:
+    """Pins the defect itself, so the normalisation cannot be quietly dropped."""
+    absolute = Result(rule_id="r", level="error", message="m",
+                      file_path="/srv/checkout/tools/x.py", line=1, subject="s")
+    relative = Result(rule_id="r", level="error", message="m",
+                      file_path="tools/x.py", line=1, subject="s")
+    assert absolute.fingerprint() != relative.fingerprint()

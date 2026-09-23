@@ -82,3 +82,22 @@ async def test_gateway_raises_on_unregistered_tool():
     gateway = FastMCPGateway()
     with pytest.raises(KeyError, match="Tool 'missing' is not registered"):
         await gateway.execute_tool("missing")
+
+
+def test_a_server_supplied_retry_after_is_a_floor_not_a_ceiling() -> None:
+    """RFC 9110 §10.2.3 defines Retry-After as the time after which a client *may* retry.
+
+    Taking `min(max_backoff_seconds, retry_after)` retried *earlier* than permitted: a 429
+    carrying `Retry-After: 60` slept 5 seconds under the default config and re-issued the
+    request 55 seconds early, which is how a primary rate limit becomes a secondary one.
+    `max_backoff_seconds` bounds this client's own exponential growth, not the server's
+    instruction.
+    """
+    gateway = FastMCPGateway(RateLimitConfig(max_backoff_seconds=5.0))
+    assert gateway._calculate_jittered_backoff(attempt=0, retry_after=60.0) == 60.0
+
+
+def test_the_local_cap_still_bounds_exponential_growth() -> None:
+    """Honouring the server must not remove the ceiling on backoff we chose ourselves."""
+    gateway = FastMCPGateway(RateLimitConfig(max_backoff_seconds=5.0))
+    assert gateway._calculate_jittered_backoff(attempt=10, retry_after=None) <= 5.0
