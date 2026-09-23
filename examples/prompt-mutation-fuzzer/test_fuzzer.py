@@ -2,6 +2,7 @@
 
 # sentinel: allow[ZeroTrustSanitization] — adversarial prompt fixtures embedding private IPs to measure invariant drift
 
+import ast
 import json
 import sys
 from pathlib import Path
@@ -17,6 +18,9 @@ from fuzzer import (
     PerturbationKind,
     PromptMutationFuzzer,
     PromptPerturbationEngine,
+    _node_complexity_weight,
+    _parse_address,
+    _parse_dotted_quad,
     main,
 )
 
@@ -50,7 +54,11 @@ def test_perturbation_engine_injection() -> None:
     result = engine.mutate_prompt(base_prompt, PerturbationKind.INJECTION_ESCAPE)
 
     assert result.kind == PerturbationKind.INJECTION_ESCAPE
-    assert "SYSTEM OVERRIDE" in result.mutated_prompt or "ADMIN DIRECTIVE" in result.mutated_prompt or "MAINTENANCE NOTICE" in result.mutated_prompt
+    assert (
+        "SYSTEM OVERRIDE" in result.mutated_prompt
+        or "ADMIN DIRECTIVE" in result.mutated_prompt
+        or "MAINTENANCE NOTICE" in result.mutated_prompt
+    )
 
 
 def test_perturbation_engine_truncation() -> None:
@@ -128,7 +136,10 @@ def test_prompt_mutation_fuzzer_matrix_scoring() -> None:
     cases = [
         (PerturbationKind.DILUTION, "def f(): return 1\n"),
         (PerturbationKind.DISTRACTION, "def g(): return 2\n"),
-        (PerturbationKind.INJECTION_ESCAPE, "def h(a, b, c, d, e, f):\n if a:\n  if b:\n   if c:\n    if d:\n     if e:\n      if f: return 1\n return 0\n"),
+        (
+            PerturbationKind.INJECTION_ESCAPE,
+            "def h(a, b, c, d, e, f):\n if a:\n  if b:\n   if c:\n    if d:\n     if e:\n      if f: return 1\n return 0\n",
+        ),
     ]
     report = fuzzer.run_fuzz_matrix("Base system prompt", cases)
 
@@ -152,3 +163,50 @@ def test_fuzzer_cli_main_entrypoint(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert "resilience_score" in data
     assert "vulnerability_breakdown" in data
     assert data["total_runs"] == 4
+
+
+def test_node_complexity_weight_and_address_helpers() -> None:
+    """Verify AST decision weighting and address resolution helpers."""
+    # Test comprehension with multiple if clauses
+    comp_ast = ast.parse("[x for x in items if x > 0 if x < 10]").body[0].value.generators[0]  # type: ignore[attr-defined]
+    comp_weight = _node_complexity_weight(comp_ast)
+
+    # Test match cases (concrete vs wildcard)
+    match_ast = ast.parse("match val:\n    case 1:\n        pass\n    case _:\n        pass")
+    cases = match_ast.body[0].cases  # type: ignore[attr-defined]
+    case_weights = (
+        _node_complexity_weight(cases[0]),
+        _node_complexity_weight(cases[1]),
+    )
+
+    # Test BoolOp and non-decision node
+    bool_ast = ast.parse("a and b and c").body[0].value  # type: ignore[attr-defined]
+    pass_ast = ast.parse("pass").body[0]
+    weights = (_node_complexity_weight(bool_ast), _node_complexity_weight(pass_ast))
+
+    # Test address resolution
+    quad_invalid = _parse_dotted_quad("1.2.3")
+    quad_octal = _parse_dotted_quad("012.0.0.1")
+    addr_invalid = _parse_address("not-an-ip")
+    is_private_quad = InvariantAuditor._is_private_leak("192.168.1.1")
+    is_private_doc = InvariantAuditor._is_private_leak("192.0.2.1")
+
+    assert (
+        comp_weight,
+        case_weights,
+        weights,
+        quad_invalid,
+        str(quad_octal),
+        addr_invalid,
+        is_private_quad,
+        is_private_doc,
+    ) == (
+        3,
+        (1, 0),
+        (2, 0),
+        None,
+        "10.0.0.1",
+        None,
+        True,
+        False,
+    )
