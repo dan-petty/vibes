@@ -329,3 +329,53 @@ def test_a_redirect_loop_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(httpx, "Client", _redirect_client(handler))
     with pytest.raises(ValueError, match="Redirect limit"):
         crawler.AdaptiveWebCrawler().crawl_page("http://example.com/start")
+
+
+class _FakeResponse:
+    """The three attributes `_follow_redirects` reads, and nothing else."""
+
+    def __init__(self, status: int, location: str | None = None, text: str = "") -> None:
+        self.status_code = status
+        self.text = text
+        self.headers = {"location": location} if location else {}
+        self.has_redirect_location = location is not None
+
+
+class _FakeClient:
+    """A client answering from a scripted table, so this test needs no HTTP library."""
+
+    def __init__(self, script: dict[str, object]) -> None:
+        self.script = script
+        self.requested: list[str] = []
+
+    def get(self, url: str, headers: dict[str, str] | None = None) -> object:
+        """Record the request and answer from the script."""
+        self.requested.append(url)
+        return self.script[url]
+
+
+def test_the_redirect_walk_validates_each_hop_without_an_http_library() -> None:
+    """The same invariant as the end-to-end tests, with no dependency at all.
+
+    Those need a real transport to answer a 302 and are only as available as `httpx`. This
+    one uses the seam `_follow_redirects` already exposes, so the rule stays covered on any
+    interpreter — a security regression that can skip is a security regression that will.
+    """
+    meta = "http://169.254.169.254/latest/meta-data/"
+    client = _FakeClient({
+        "http://example.com/a": _FakeResponse(302, location=meta),
+        meta: _FakeResponse(200, text="SECRET"),
+    })
+    with pytest.raises(ValueError, match="SSRF violation"):
+        crawler.AdaptiveWebCrawler()._follow_redirects(client, "http://example.com/a", {})
+    assert client.requested == ["http://example.com/a"]
+
+
+def test_a_relative_location_is_resolved_before_it_is_validated() -> None:
+    """RFC 9110 §10.2.2 permits a relative Location, and a bare path validates against nothing."""
+    client = _FakeClient({
+        "http://example.com/a": _FakeResponse(302, location="/b"),
+        "http://example.com/b": _FakeResponse(200, text="ok"),
+    })
+    status, text = crawler.AdaptiveWebCrawler()._follow_redirects(client, "http://example.com/a", {})
+    assert (status, text, client.requested[-1]) == (200, "ok", "http://example.com/b")
