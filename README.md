@@ -390,6 +390,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── finding_baseline.py            # Accepts existing findings so a gate can be adopted
 │   ├── fuzz_core.py                   # Shared: corpus generation, mutation and delta shrinking
 │   ├── fuzz_harness.py                # Fuzzes the instruments themselves; replays what broke them
+│   ├── metric_reference.py            # One row per metric: who computes it, and why not us
 │   ├── sarif_report.py                # Every oracle's findings as one schema-valid SARIF log
 │   ├── semconv_snapshot.py            # Derives the GenAI semantic conventions from upstream
 │   ├── supply_chain_audit.py          # Dependency, action, package and egress audit with fixes
@@ -403,6 +404,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_contract_variables.py     # Contract questions, answer coercion and safe rendering
     ├── test_semconv_snapshot.py       # Deriving the GenAI convention table from upstream
     ├── test_address_policy_agreement.py # Five copies of one address policy, compared
+    ├── test_metric_reference.py       # Who computes each metric, and the witnesses why
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources

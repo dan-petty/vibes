@@ -103,6 +103,14 @@ ignore = [
 # (`cd tools && mypy .`). Pointing mypy at `tools/` from the repository root instead
 # resolves every file under two names at once — `docs_validator` and
 # `tools.docs_validator` — and the run aborts before checking anything.
+# radon ships no `py.typed` marker, so its public API is untyped to mypy. Declared here
+# rather than suppressed at each import, because the fact is about the dependency and not
+# about any one call site — and a per-line ignore would go stale the moment radon ships
+# stubs, which `warn_unused_ignores` would then report.
+[[tool.mypy.overrides]]
+module = ["radon.*"]
+ignore_missing_imports = true
+
 [tool.mypy]
 python_version = "3.12"
 warn_unused_ignores = true
