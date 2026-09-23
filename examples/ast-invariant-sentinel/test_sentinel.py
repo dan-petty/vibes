@@ -3,12 +3,11 @@
 # sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting this sentinel detects private IPs and subdomains
 
 import ast
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+import radon.complexity as cc
 from sentinel import ComplexityVisitor, audit_file, audit_targets, main
 
 
@@ -327,11 +326,8 @@ RADON_CORPUS: dict[str, str] = {
 
 def _radon_complexity(path: Path) -> int:
     """Return the complexity radon reports for the single function in a file."""
-    proc = subprocess.run(
-        [sys.executable, "-m", "radon", "cc", "-s", str(path)],
-        capture_output=True, text=True, check=False, timeout=60,
-    )
-    return int(proc.stdout.strip().splitlines()[-1].split("(")[-1].rstrip(")"))
+    blocks = cc.cc_visit(path.read_text(encoding="utf-8"))
+    return blocks[0].complexity
 
 
 @pytest.mark.parametrize("name", sorted(RADON_CORPUS))
