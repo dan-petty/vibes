@@ -17,6 +17,19 @@ from crawler import (
 from markdown_extract import extract
 
 
+@pytest.fixture(autouse=True)
+def _fast_mock_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve mock host example.com deterministically without live network DNS queries."""
+    orig_getaddrinfo = crawler.socket.getaddrinfo
+
+    def _mock_getaddrinfo(host: str, *args: object, **kwargs: object) -> list[object]:
+        if host == "example.com":
+            return [(crawler.socket.AF_INET, None, None, "", ("93.184.216.34", 0))]
+        return orig_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(crawler.socket, "getaddrinfo", _mock_getaddrinfo)
+
+
 def test_clean_content_extractor_markdown() -> None:
     """The same expectations, now met by `markdown_extract` rather than a local cleaner.
 

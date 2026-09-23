@@ -323,20 +323,21 @@ class ModelReadyExtractor(HTMLParser):
         self.list_depth = 0
         self.href: str | None = None
 
+    def _handle_base_tag(self, attributes: dict[str, str]) -> None:
+        """Handle <base> tag and freeze base_url from first occurrence with href (WHATWG §4.2.3)."""
+        href = attributes.get("href")
+        if href and not self.context.base_seen:
+            self.context.base_url = self.context.resolve(href)
+            self.context.base_seen = True
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """Dispatch one opening tag, after chrome and `<base>` have had their say."""
         name = tag.lower()
         attributes = {key.lower(): (value or "") for key, value in attrs}
         if self.chrome.enter(name, attributes, name in self.VOID):
             return
-        if name == "base" and attributes.get("href"):
-            # WHATWG HTML §4.2.3: the document base URL is frozen from the *first* base
-            # element with an href, in tree order. Letting every one overwrite meant a second
-            # `<base>` injected mid-body silently retargeted every link after it, while a
-            # browser reading the identical page followed the one in the head.
-            if not self.context.base_seen:
-                self.context.base_url = self.context.resolve(attributes["href"])
-                self.context.base_seen = True
+        if name == "base":
+            self._handle_base_tag(attributes)
             return
         if name in MAIN_REGIONS:
             self.context.regions_seen.add(name)
