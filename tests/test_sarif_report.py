@@ -192,9 +192,7 @@ def test_advisory_smells_are_excluded_unless_asked_for() -> None:
     assert len(default.results) < len(with_advisory.results)
 
 
-def test_every_adapter_produces_a_schema_valid_run(
-    defective_runs: list[Run], defective_root: Path
-) -> None:
+def test_every_adapter_produces_a_schema_valid_run(defective_runs: list[Run], defective_root: Path) -> None:
     """Each oracle's mapping must hold on real oracle output, not a hand-built Result."""
     assert validate_log(build_log(defective_runs, defective_root), SCHEMA) == []
 
@@ -306,9 +304,7 @@ def test_cli_can_fail_the_build_on_an_error_level_finding(
     """A report is not a gate unless it can go red on request."""
     import sarif_report
 
-    monkeypatch.setitem(
-        sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(level="error")])
-    )
+    monkeypatch.setitem(sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(level="error")]))
     args = ["--root", str(tmp_path), "--out", str(tmp_path / "f.sarif"), "--sources", "supply"]
     lenient = sarif_main([*args, "--schema", str(SCHEMA)])
     strict = sarif_main([*args, "--schema", str(SCHEMA), "--fail-on-error"])
@@ -322,9 +318,7 @@ def test_cli_refuses_to_write_a_log_that_fails_the_schema(
     """An invalid upload is rejected by GitHub with a message naming neither field nor run."""
     import sarif_report
 
-    monkeypatch.setitem(
-        sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(level="bogus")])
-    )
+    monkeypatch.setitem(sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(level="bogus")]))
     out = tmp_path / "f.sarif"
     exit_code = sarif_main(
         ["--root", str(tmp_path), "--out", str(out), "--sources", "supply", "--schema", str(SCHEMA)]
@@ -349,8 +343,19 @@ def test_a_baselined_finding_is_suppressed_but_its_run_still_reports(
     save_baseline(baseline, [result])
     out = tmp_path / "f.sarif"
     code = sarif_main(
-        ["--root", str(tmp_path), "--out", str(out), "--sources", "supply",
-         "--schema", str(SCHEMA), "--baseline", str(baseline), "--fail-on-error"]
+        [
+            "--root",
+            str(tmp_path),
+            "--out",
+            str(out),
+            "--sources",
+            "supply",
+            "--schema",
+            str(SCHEMA),
+            "--baseline",
+            str(baseline),
+            "--fail-on-error",
+        ]
     )
     printed = capsys.readouterr().out
     log = json.loads(out.read_text(encoding="utf-8"))
@@ -365,14 +370,23 @@ def test_a_finding_absent_from_the_baseline_still_fails_the_build(
     import sarif_report
     from finding_baseline import save_baseline
 
-    monkeypatch.setitem(
-        sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(subject="fresh")])
-    )
+    monkeypatch.setitem(sarif_report.ADAPTERS, "supply", lambda paths, root: _run([_result(subject="fresh")]))
     baseline = tmp_path / "baseline.json"
     save_baseline(baseline, [_result(subject="old")])
     code = sarif_main(
-        ["--root", str(tmp_path), "--out", str(tmp_path / "f.sarif"), "--sources", "supply",
-         "--schema", str(SCHEMA), "--baseline", str(baseline), "--fail-on-error"]
+        [
+            "--root",
+            str(tmp_path),
+            "--out",
+            str(tmp_path / "f.sarif"),
+            "--sources",
+            "supply",
+            "--schema",
+            str(SCHEMA),
+            "--baseline",
+            str(baseline),
+            "--fail-on-error",
+        ]
     )
     capsys.readouterr()
     assert code == 1
@@ -387,17 +401,86 @@ def test_a_fingerprint_does_not_depend_on_where_the_checkout_lives() -> None:
     baseline has.
     """
     repo = Path("/srv/checkout")
-    absolute = Result(rule_id="vibes/invariant/Nesting", level="error", message="deep",
-                      file_path="/srv/checkout/tools/x.py", line=3, subject="f")
-    relative = Result(rule_id="vibes/invariant/Nesting", level="error", message="deep",
-                      file_path="tools/x.py", line=3, subject="f")
+    absolute = Result(
+        rule_id="vibes/invariant/Nesting",
+        level="error",
+        message="deep",
+        file_path="/srv/checkout/tools/x.py",
+        line=3,
+        subject="f",
+    )
+    relative = Result(
+        rule_id="vibes/invariant/Nesting",
+        level="error",
+        message="deep",
+        file_path="tools/x.py",
+        line=3,
+        subject="f",
+    )
     assert absolute.fingerprint(repo) == relative.fingerprint(Path("."))
 
 
 def test_an_unnormalised_fingerprint_is_what_diverged() -> None:
     """Pins the defect itself, so the normalisation cannot be quietly dropped."""
-    absolute = Result(rule_id="r", level="error", message="m",
-                      file_path="/srv/checkout/tools/x.py", line=1, subject="s")
-    relative = Result(rule_id="r", level="error", message="m",
-                      file_path="tools/x.py", line=1, subject="s")
+    absolute = Result(
+        rule_id="r", level="error", message="m", file_path="/srv/checkout/tools/x.py", line=1, subject="s"
+    )
+    relative = Result(rule_id="r", level="error", message="m", file_path="tools/x.py", line=1, subject="s")
     assert absolute.fingerprint() != relative.fingerprint()
+
+
+def test_sarif_report_decomposed_helpers(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify baseline recording and log emission helpers with structural assertions."""
+    import argparse
+
+    from sarif_report import (
+        Result,
+        Rule,
+        Run,
+        _record_baseline_if_requested,
+        _write_log_and_summarize,
+    )
+
+    baseline_path = tmp_path / "new_baseline.json"
+    args_write = argparse.Namespace(
+        write_baseline=baseline_path,
+        root=tmp_path,
+    )
+    args_skip = argparse.Namespace(
+        write_baseline=None,
+        root=tmp_path,
+    )
+
+    sample_run = Run(
+        tool_name="sample-tool",
+        rules=[Rule("R01", "Rule1", "Desc", "error")],
+        results=[Result("R01", "error", "Msg", "foo.py", 1, "test")],
+    )
+
+    # 1. When write_baseline is None, no file is created
+    _record_baseline_if_requested(args_skip, [sample_run])
+    skip_exists = baseline_path.exists()
+
+    # 2. When write_baseline is set, baseline file is created
+    _record_baseline_if_requested(args_write, [sample_run])
+    write_exists = baseline_path.exists()
+
+    # 3. Log writing and summary
+    out_file = tmp_path / "out.sarif"
+    sample_log = {"version": "2.1.0", "runs": []}
+    _write_log_and_summarize(sample_log, [sample_run], out_file, suppressed=2)
+    captured = capsys.readouterr()
+
+    assert (
+        skip_exists,
+        write_exists,
+        out_file.exists(),
+        "accepted by baseline" in captured.out,
+        "sample-tool" in captured.out,
+    ) == (
+        False,
+        True,
+        True,
+        True,
+        True,
+    )

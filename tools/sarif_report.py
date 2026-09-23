@@ -420,9 +420,7 @@ def collect_runs(
             yield run
 
 
-def _run_adapter(
-    name: str, paths: Sequence[Path], root: Path, include_advisory: bool
-) -> Run | None:
+def _run_adapter(name: str, paths: Sequence[Path], root: Path, include_advisory: bool) -> Run | None:
     """Run one adapter, reporting rather than raising when an oracle is unavailable."""
     adapter = ADAPTERS[name]
     try:
@@ -475,29 +473,41 @@ def _report_schema_errors(errors: Sequence[str]) -> bool:
     return True
 
 
+def _record_baseline_if_requested(args: argparse.Namespace, runs: Sequence[Run]) -> None:
+    """Save baseline findings if requested by CLI arguments."""
+    if args.write_baseline is None:
+        return
+    from finding_baseline import save_baseline
+
+    all_results = [r for run in runs for r in run.results]
+    recorded = save_baseline(args.write_baseline, all_results, root=args.root)
+    print(f"Recorded {recorded} finding(s) into {args.write_baseline}.")
+
+
+def _write_log_and_summarize(
+    log: dict[str, Any], runs: Sequence[Run], out_path: Path, suppressed: int
+) -> None:
+    """Write SARIF log to disk and render console breakdown."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(log, indent=2) + "\n", encoding="utf-8")
+    total = sum(len(run.results) for run in runs)
+    accepted = f", {suppressed} accepted by baseline" if suppressed else ""
+    print(f"Wrote {out_path}: {len(log['runs'])} run(s), {total} result(s){accepted}, schema valid.")
+    for run in runs:
+        levels = _level_counts(run)
+        print(f"  {run.tool_name:<34} {len(run.results):>4} " + levels)
+
+
 def _handle_report(args: argparse.Namespace) -> int:
     """Build, validate and write the SARIF log."""
     paths = _source_paths(args.root)
     runs = list(collect_runs(args.sources, paths, args.root, args.include_advisory))
-    if args.write_baseline is not None:
-        from finding_baseline import save_baseline
-
-        recorded = save_baseline(
-            args.write_baseline, [r for run in runs for r in run.results], root=args.root
-        )
-        print(f"Recorded {recorded} finding(s) into {args.write_baseline}.")
+    _record_baseline_if_requested(args, runs)
     runs, suppressed = _apply_baseline(runs, args.baseline, args.root)
     log = build_log(runs, args.root)
     if _report_schema_errors(validate_log(log, args.schema)):
         return 1
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(log, indent=2) + "\n", encoding="utf-8")
-    total = sum(len(run.results) for run in runs)
-    accepted = f", {suppressed} accepted by baseline" if suppressed else ""
-    print(f"Wrote {args.out}: {len(log['runs'])} run(s), {total} result(s){accepted}, schema valid.")
-    for run in runs:
-        levels = _level_counts(run)
-        print(f"  {run.tool_name:<34} {len(run.results):>4} " + levels)
+    _write_log_and_summarize(log, runs, args.out, suppressed)
     return 1 if args.fail_on_error and _has_error(runs) else 0
 
 
