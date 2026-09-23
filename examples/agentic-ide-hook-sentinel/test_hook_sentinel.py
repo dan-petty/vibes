@@ -132,7 +132,7 @@ def test_run_isolated_command_timeout(tmp_path: Path) -> None:
     sentinel = IdeHookSentinel(tmp_path)
     result = sentinel.run_isolated_command(
         ["python3", "-c", "import time; time.sleep(10)"],
-        timeout_seconds=0.3,
+        timeout_seconds=0.1,
     )
     assert (result.exit_code, result.timed_out) == (-signal.SIGTERM, True)
 
@@ -208,10 +208,11 @@ def test_a_child_that_ignores_sigterm_still_returns_within_the_grace_period() ->
     started = time.monotonic()
     result = sentinel.run_isolated_command(
         ["python3", "-c", "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(120)"],
-        timeout_seconds=0.5,
+        timeout_seconds=0.1,
+        grace_seconds=0.15,
     )
     elapsed = time.monotonic() - started
-    assert (result.timed_out, elapsed < 30.0) == (True, True)
+    assert (result.timed_out, elapsed < 2.0) == (True, True)
 
 
 # --- LSP conformance ---------------------------------------------------------------------
@@ -259,6 +260,8 @@ def test_a_timed_out_command_reports_the_signal_that_reaped_it() -> None:
     sends — so a reader could not tell "timed out and was terminated" from "was hung up on".
     """
     sentinel = hook_sentinel.IdeHookSentinel(workspace_root=Path("."))
-    result = sentinel.run_isolated_command(["python3", "-c", "import time; time.sleep(30)"],
-                                           timeout_seconds=0.4)
+    result = sentinel.run_isolated_command(
+        ["python3", "-c", "import time; time.sleep(30)"],
+        timeout_seconds=0.1,
+    )
     assert (result.timed_out, result.exit_code) == (True, -signal.SIGTERM)
