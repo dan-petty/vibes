@@ -130,3 +130,32 @@ def test_error_status_is_exported_with_its_message():
         "code": STATUS_ERROR,
         "message": "tool call rejected by contract gate",
     }
+
+
+def test_main_cli_json_output(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify --json CLI flag emits parsed trace session dictionary."""
+    exit_code = main(["--json", "--goal", "JSON CLI Goal"])
+    captured = capsys.readouterr().out
+    data = json.loads(captured)
+    assert (exit_code, data["session_goal"], "spans" in data) == (0, "JSON CLI Goal", True)
+
+
+def test_main_cli_validate_output(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify --validate CLI flag runs conformance check and reports status."""
+    exit_code = main(["--validate"])
+    captured = capsys.readouterr().out
+    assert (exit_code, "Convention snapshot fetched" in captured) == (0, True)
+
+
+def test_main_cli_default_waterfall(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify default CLI execution without formatting flags prints ASCII waterfall."""
+    exit_code = main(["--goal", "Default Waterfall Goal"])
+    captured = capsys.readouterr().out
+    assert (exit_code, "AGENT WATERFALL TRACE" in captured) == (0, True)
+
+
+def test_main_cli_export_otlp_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify --export-otlp returns exit code 1 when transport fails."""
+    monkeypatch.setattr("generator.export_otlp_http", lambda s, endpoint: False)
+    exit_code = main(["--export-otlp", "http://localhost:4318/v1/traces"])
+    assert exit_code == 1
