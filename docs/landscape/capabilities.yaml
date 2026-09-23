@@ -245,6 +245,7 @@ capabilities:
       - javascript_rendering
       - politeness_controls
       - strategy_memory
+      - llm_ready_output
     alternatives:
       - repo: unclecode/crawl4ai
         has:

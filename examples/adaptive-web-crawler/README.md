@@ -97,3 +97,59 @@ print(f"Tokens: ~{page.token_estimate}")
 page2 = crawler.crawl_page("http://example.com/api-reference")
 print(f"Tier Used: {page2.tier_used.value}")  # "headless_browser" (instant dispatch)
 ```
+
+---
+
+## Model-Ready Output
+
+[`markdown_extract.py`](./markdown_extract.py) turns a fetched page into text that can be
+handed to a model directly. The extractor it replaces walked the document and appended
+visible strings, which loses the three things that matter most once a page is out of its
+browser.
+
+| Loss | Consequence |
+|---|---|
+| `<pre><code>` dropped | A snippet arrives as one unindented line with no language. Indentation is the whole meaning of some of it. |
+| Hrefs collected separately | The text says "see the guide" and the URL sits elsewhere with nothing joining them — and stays relative, which is a dead link off-origin. |
+| Page text emitted raw | A line beginning `#` becomes a heading in the prompt; a run of backticks closes the fence that was opened around it. |
+
+That third row is the one worth stating plainly. **Output shaped for model consumption is
+output something downstream will parse, so every string lifted from the page is untrusted
+input to that parser.** It is the rule this repository already applies to a workflow `run:`
+block and to a contract's rendered answers, arriving a third time by another route.
+
+```python
+from markdown_extract import extract
+
+document = extract(html, "https://example.com/guide/page", max_chars=8000)
+print(document.with_provenance())
+print(document.region, document.warnings)
+```
+
+### What it does
+
+- **Fences that the content sizes.** CommonMark closes a fence on the first run of at least
+  the opening length, so a snippet containing three backticks needs four.
+- **Links resolved against `<base href>`** and inlined as `[text](url)`.
+- **Chrome removed with everything inside it**, by tag and by ARIA landmark, tracked on a
+  stack rather than a counter — a counter guesses which end tag closes the region, and the
+  first version let `</a>` end a `<nav>`, emitting the rest of the menu as content.
+- **Warnings instead of silence.** `no_content`, `no_main_region` and `truncated` are
+  states a caller must be able to act on. An empty string and a page with nothing to say
+  are the same value, and only one of them is worth re-fetching with a browser.
+- **Provenance.** A page in a prompt with no attribution is a claim the model cannot
+  qualify.
+
+### The defect that cost the most to find
+
+`HTMLParser` in CPython 3.14 keeps a private `self._pending`, and its `close()` runs
+`self.rawdata += ''.join(self._pending)`. This extractor used that name for its own text
+buffer — so on `close()` the parser appended the buffer to its input and re-parsed it, and
+every synthesised link and image came back through as page text and was escaped a second
+time. `![alt](src)` rendered as `!\[alt\](src)`. Nothing failed, no traceback named the
+collision, and the only symptom was literal brackets in the output.
+
+**Subclassing puts a base class's private attributes in your namespace: `_name` is a
+convention, not a scope.** `test_markdown_extract.py` now asserts the set of attributes
+this class introduces beyond a bare `HTMLParser`, which fails if any of them is ever
+shadowed again.

@@ -10,15 +10,20 @@ from crawler import (
     AdaptiveWebCrawler,
     DomainStrategyStore,
     ExtractionTier,
-    HTMLContentCleaner,
     PageQuality,
     SPADetector,
     validate_url_security,
 )
+from markdown_extract import extract
 
 
 def test_clean_content_extractor_markdown() -> None:
-    """Ensure HTMLContentCleaner strips boilerplate and formats clean markdown."""
+    """The same expectations, now met by `markdown_extract` rather than a local cleaner.
+
+    The nav link is the one that changed meaning: it used to be collected into the link
+    list whether or not its text survived, and chrome links now do not reach the output at
+    all — a menu repeated on every page of a site is the same tokens in every document.
+    """
     sample_html = """
     <!DOCTYPE html>
     <html>
@@ -41,15 +46,15 @@ def test_clean_content_extractor_markdown() -> None:
     </body>
     </html>
     """
-    cleaner = HTMLContentCleaner()
-    cleaner.feed(sample_html)
-    title, content, links = cleaner.get_clean_content()
+    document = extract(sample_html, "https://example.com/")
+    title, content, links = document.title, document.markdown, document.links
 
     assert title == "Documentation Guide"
     assert "http://example.com/guide" in links
+    assert "/home" not in " ".join(links)
 
     expected_present = ["Getting Started", "Installation", "- Run pip install framework"]
-    expected_absent = ["Header Title", "Copyright 2026", "analytics"]
+    expected_absent = ["Header Title", "Copyright 2026", "analytics", "Docs"]
     assert all(item in content for item in expected_present)
     assert not any(item in content for item in expected_absent)
 
