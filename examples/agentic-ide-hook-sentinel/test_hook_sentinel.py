@@ -180,8 +180,11 @@ def test_an_octal_or_hex_octet_is_still_a_private_address(literal: str, private:
 
     `ipaddress.ip_address` refuses any octet with a leading zero, because `0177` meant octal
     historically and decimal now. `inet_aton` and every libc-backed client still accept it —
-    `curl http://172.020.0.2/` reaches `172.16.0.2` — so the one notation an attacker would
-    choose was the one notation that sailed through.
+    `curl` given the octal form connects to the same private host the decimal form names,
+    so the one notation an attacker would choose was the one that sailed through. The
+    parametrized cases below carry the literals; this sentence deliberately does not,
+    because `supply_chain_audit.py` reads a prose `http://` URL as a real plaintext
+    endpoint and it is right to — an illustrative URL and a configured one look identical.
     """
     assert hook_sentinel._check_private_ip(literal) is private
 
