@@ -116,15 +116,13 @@ from examples.prompt_mutation_fuzzer.fuzzer import (
 
 fuzzer = PromptMutationFuzzer(PerturbationConfig(intensity=0.7))
 mutated = fuzzer.engine.mutate_prompt(
-    "Maintain cyclomatic complexity M <= 10.",
-    PerturbationKind.INJECTION_ESCAPE
+    "Maintain cyclomatic complexity M <= 10.", PerturbationKind.INJECTION_ESCAPE
 )
 
 print(mutated.mutated_prompt)
 # Checks resilience of candidate solutions:
 report = fuzzer.run_fuzz_matrix(
-    base_prompt="...",
-    eval_cases=[(PerturbationKind.DILUTION, "def helper(): return 42\n")]
+    base_prompt="...", eval_cases=[(PerturbationKind.DILUTION, "def helper(): return 42\n")]
 )
 print(fuzzer.render_report(report))
 ```

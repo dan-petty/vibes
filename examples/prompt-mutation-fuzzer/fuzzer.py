@@ -18,7 +18,7 @@ import json
 import random
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -63,6 +63,7 @@ IPV6_PATTERN = re.compile(r"\[([0-9A-Fa-f:]+)\]|((?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-
 
 class PerturbationKind(StrEnum):
     """Taxonomy of prompt mutation and fuzzing perturbations."""
+
     DILUTION = "DILUTION"
     DISTRACTION = "DISTRACTION"
     INJECTION_ESCAPE = "INJECTION_ESCAPE"
@@ -73,6 +74,7 @@ class PerturbationKind(StrEnum):
 @dataclass
 class PerturbationConfig:
     """Configuration governing the prompt perturbation engine."""
+
     intensity: float = 0.5  # Range 0.0 (pristine) to 1.0 (extreme fuzzing)
     active_kinds: list[PerturbationKind] = field(
         default_factory=lambda: [
@@ -89,6 +91,7 @@ class PerturbationConfig:
 @dataclass
 class MutationResult:
     """Result of applying a specific perturbation to a baseline prompt."""
+
     original_prompt: str
     mutated_prompt: str
     kind: PerturbationKind
@@ -98,6 +101,7 @@ class MutationResult:
 @dataclass
 class InvariantEvaluation:
     """AST invariant compliance assessment of code generated under fuzzed prompt."""
+
     target_name: str
     max_complexity: int
     max_depth: int
@@ -110,6 +114,7 @@ class InvariantEvaluation:
 @dataclass
 class FuzzSuiteReport:
     """Consolidated scorecard measuring agent prompt resilience against drift."""
+
     total_runs: int
     clean_runs: int
     drift_violations: int
@@ -161,7 +166,7 @@ class PromptPerturbationEngine:
 
     def mutate_prompt(self, prompt: str, kind: PerturbationKind) -> MutationResult:
         """Mutate a base prompt according to the specified perturbation kind."""
-        dispatch = {
+        dispatch: dict[PerturbationKind, Callable[[str], tuple[str, list[str]]]] = {
             PerturbationKind.DILUTION: self._apply_dilution,
             PerturbationKind.DISTRACTION: self._apply_distraction,
             PerturbationKind.INJECTION_ESCAPE: self._apply_injection,
@@ -215,6 +220,41 @@ BRANCH_NODE_TYPES = (
 )
 
 
+def _is_wildcard_match(pattern: ast.AST | None) -> bool:
+    """Return True if match_case pattern is a wildcard catch-all."""
+    return isinstance(pattern, ast.MatchAs) and pattern.pattern is None
+
+
+def _match_case_weight(node: ast.AST) -> int:
+    """Every arm is a decision except the wildcard, which is the fall-through."""
+    pattern = getattr(node, "pattern", None)
+    return 0 if _is_wildcard_match(pattern) else 1
+
+
+def _comprehension_weight(node: ast.AST) -> int:
+    """The comprehension loop plus one decision per attached if predicate."""
+    return 1 + len(getattr(node, "ifs", ()))
+
+
+def _boolop_weight(node: ast.AST) -> int:
+    """Count boolean operator decisions (n - 1)."""
+    return max(0, len(getattr(node, "values", ())) - 1)
+
+
+_DECISION_WEIGHTS: dict[type[ast.AST], Callable[[ast.AST], int]] = {
+    ast.If: lambda _node: 1,
+    ast.While: lambda _node: 1,
+    ast.For: lambda _node: 1,
+    ast.AsyncFor: lambda _node: 1,
+    ast.ExceptHandler: lambda _node: 1,
+    ast.Assert: lambda _node: 1,
+    ast.IfExp: lambda _node: 1,
+    ast.comprehension: _comprehension_weight,
+    ast.match_case: _match_case_weight,
+    ast.BoolOp: _boolop_weight,
+}
+
+
 def _node_complexity_weight(node: ast.AST) -> int:
     """Return the decisions one node contributes, as radon and ruff's C901 count them.
 
@@ -222,16 +262,8 @@ def _node_complexity_weight(node: ast.AST) -> int:
     grade a model's output scored a thirteen-arm dispatcher at 1 while ruff reports 13 —
     the metric this component calls M did not measure what the name says.
     """
-    if isinstance(node, ast.comprehension):
-        return 1 + len(node.ifs)
-    if isinstance(node, ast.match_case):
-        wildcard = isinstance(node.pattern, ast.MatchAs) and node.pattern.pattern is None
-        return 0 if wildcard else 1
-    if isinstance(node, BRANCH_NODE_TYPES):
-        return 1
-    if isinstance(node, ast.BoolOp):
-        return max(0, len(node.values) - 1)
-    return 0
+    handler = _DECISION_WEIGHTS.get(type(node))
+    return handler(node) if handler is not None else 0
 
 
 def _evaluate_fn_bounds(
@@ -260,7 +292,31 @@ def _octet(part: str) -> int:
     return int(lowered, 10)
 
 
-def _parse_address(token: str):
+def _valid_octets(octets: Sequence[int]) -> bool:
+    """Return True if octets list is 4 elements between 0 and 255."""
+    return len(octets) == 4 and all(0 <= val <= 255 for val in octets)
+
+
+def _try_parse_octets(parts: list[str]) -> list[int] | None:
+    """Parse list of string octets using resolver base rules, or None if invalid."""
+    try:
+        return [_octet(part) for part in parts]
+    except ValueError:
+        return None
+
+
+def _parse_dotted_quad(token: str) -> ipaddress.IPv4Address | None:
+    """Parse dotted-quad with resolver octets (hex, octal, decimal)."""
+    parts = token.split(".")
+    if len(parts) != 4:
+        return None
+    octets = _try_parse_octets(parts)
+    if octets is None or not _valid_octets(octets):
+        return None
+    return ipaddress.IPv4Address(".".join(str(val) for val in octets))
+
+
+def _parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse an address the way a resolver does, or return None if it is not one.
 
     `ipaddress.ip_address` refuses any octet with a leading zero; `inet_aton` and every
@@ -268,18 +324,21 @@ def _parse_address(token: str):
     therefore fails **open** on the one notation an attacker would choose. Kept in step with
     `tools/sanitization_policy.py`; `tests/test_address_policy_agreement.py` asserts it.
     """
-    parts = token.split(".")
-    if len(parts) == 4:
-        try:
-            octets = [_octet(part) for part in parts]
-        except ValueError:
-            octets = []
-        if octets and all(0 <= value <= 255 for value in octets):
-            return ipaddress.ip_address(".".join(str(value) for value in octets))
+    quad = _parse_dotted_quad(token)
+    if quad is not None:
+        return quad
     try:
         return ipaddress.ip_address(token)
     except ValueError:
         return None
+
+
+def _in_network_list(
+    ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    networks: Sequence[ipaddress.IPv4Network | ipaddress.IPv6Network],
+) -> bool:
+    """Return True if ip_obj belongs to any network in networks of matching version."""
+    return any(net.version == ip_obj.version and ip_obj in net for net in networks)
 
 
 class InvariantAuditor:
@@ -331,7 +390,16 @@ class InvariantAuditor:
 
     @classmethod
     def _calculate_depth(cls, root: ast.AST) -> int:
-        nesting_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith, ast.Try, ast.ExceptHandler)
+        nesting_types = (
+            ast.If,
+            ast.While,
+            ast.For,
+            ast.AsyncFor,
+            ast.With,
+            ast.AsyncWith,
+            ast.Try,
+            ast.ExceptHandler,
+        )
 
         def _walk(node: ast.AST, depth: int) -> int:
             cur = depth + 1 if isinstance(node, nesting_types) else depth
@@ -357,13 +425,11 @@ class InvariantAuditor:
     def _is_private_leak(ip_str: str) -> bool:
         """Report whether an address names a real machine on a private network."""
         ip_obj = _parse_address(ip_str)
-        if ip_obj is None:
+        if ip_obj is None or ip_obj.is_loopback or ip_obj.is_unspecified:
             return False
-        if any(ip_obj in net for net in ALLOWED_TEST_NETWORKS if net.version == ip_obj.version):
+        if _in_network_list(ip_obj, ALLOWED_TEST_NETWORKS):
             return False
-        if ip_obj.is_loopback or ip_obj.is_unspecified:
-            return False
-        return any(ip_obj in net for net in PRIVATE_HOST_NETWORKS if net.version == ip_obj.version)
+        return _in_network_list(ip_obj, PRIVATE_HOST_NETWORKS)
 
     @classmethod
     def _check_ip_leak(cls, val: str, lineno: int, leaks: list[str]) -> None:
@@ -394,6 +460,25 @@ class InvariantAuditor:
         cls._check_subdomain_leak(val, lineno, leaks)
 
 
+def _is_vulnerable_eval(evaluation: InvariantEvaluation) -> bool:
+    """Return True if evaluation failed any invariant check."""
+    return evaluation.complexity_violation or evaluation.nesting_violation or evaluation.sanitization_leak
+
+
+def _evaluate_cases(
+    eval_cases: list[tuple[PerturbationKind, str]],
+) -> tuple[list[InvariantEvaluation], dict[str, int]]:
+    """Evaluate cases and tally vulnerabilities per perturbation kind."""
+    evaluations: list[InvariantEvaluation] = []
+    vulnerabilities: dict[str, int] = {k.value: 0 for k in PerturbationKind}
+    for kind, candidate_code in eval_cases:
+        evaluation = InvariantAuditor.evaluate_code(f"fuzz-{kind.value}", candidate_code)
+        evaluations.append(evaluation)
+        if _is_vulnerable_eval(evaluation):
+            vulnerabilities[kind.value] += 1
+    return evaluations, vulnerabilities
+
+
 class PromptMutationFuzzer:
     """End-to-end fuzzer orchestrating prompt perturbations and resilience scoring."""
 
@@ -407,15 +492,7 @@ class PromptMutationFuzzer:
         eval_cases: list[tuple[PerturbationKind, str]],
     ) -> FuzzSuiteReport:
         """Evaluate prompt drift matrix and compile vulnerability breakdown scorecard."""
-        evaluations: list[InvariantEvaluation] = []
-        vulnerabilities: dict[str, int] = {k.value: 0 for k in PerturbationKind}
-
-        for kind, candidate_code in eval_cases:
-            evaluation = InvariantAuditor.evaluate_code(f"fuzz-{kind.value}", candidate_code)
-            evaluations.append(evaluation)
-            if evaluation.complexity_violation or evaluation.nesting_violation or evaluation.sanitization_leak:
-                vulnerabilities[kind.value] += 1
-
+        evaluations, vulnerabilities = _evaluate_cases(eval_cases)
         total = len(evaluations)
         drift_count = sum(1 for e in evaluations if e.violations)
         clean_count = total - drift_count
@@ -446,14 +523,18 @@ class PromptMutationFuzzer:
             status = "RESILIENT" if fails == 0 else "VULNERABLE"
             lines.append(f"{kind:<25} | {fails:<10} | {status}")
 
-        lines.append("==========================================================================================")
+        lines.append(
+            "=========================================================================================="
+        )
         return "\n".join(lines)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser for the prompt mutation fuzzer."""
     parser = argparse.ArgumentParser(description="Interactive Prompt Mutation Suite & Invariant Fuzzer.")
-    parser.add_argument("--prompt-file", "-f", type=Path, default=None, help="Path to base system prompt file.")
+    parser.add_argument(
+        "--prompt-file", "-f", type=Path, default=None, help="Path to base system prompt file."
+    )
     parser.add_argument("--intensity", "-i", type=float, default=0.5, help="Mutation intensity (0.0 to 1.0).")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON scorecard.")
     return parser
@@ -464,8 +545,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
-    base_prompt = args.prompt_file.read_text(encoding="utf-8") if args.prompt_file else (
-        "You are an AI assistant. Maintain cyclomatic complexity M <= 10 and nesting <= 5. Sanitize IPs."
+    base_prompt = (
+        args.prompt_file.read_text(encoding="utf-8")
+        if args.prompt_file
+        else (
+            "You are an AI assistant. Maintain cyclomatic complexity M <= 10 and nesting <= 5. Sanitize IPs."
+        )
     )
 
     fuzzer = PromptMutationFuzzer(PerturbationConfig(intensity=args.intensity))
@@ -473,28 +558,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Built-in evaluation testbed demonstrating resilience vs. drift
     demo_cases = [
         (PerturbationKind.DILUTION, "def clean_helper(x: int) -> int:\n    return x * 2\n"),
-        (PerturbationKind.DISTRACTION, "def compliant_proc(val: str) -> str:\n    return val.strip().lower()\n"),
-        (PerturbationKind.INJECTION_ESCAPE, (
-            "def injected_bypass(a, b, c, d, e, f):\n"
-            "    if a:\n        if b:\n            if c:\n                if d:\n"
-            "                    if e:\n                        if f: return 1\n"
-            "    return 0\n"
-        )),
-        (PerturbationKind.COMPLEXITY_TRAP, (
-            "def monolithic_trap(x):\n"
-            "    if x == 1: return 1\n"
-            "    elif x == 2: return 2\n"
-            "    elif x == 3: return 3\n"
-            "    elif x == 4: return 4\n"
-            "    elif x == 5: return 5\n"
-            "    elif x == 6: return 6\n"
-            "    elif x == 7: return 7\n"
-            "    elif x == 8: return 8\n"
-            "    elif x == 9: return 9\n"
-            "    elif x == 10: return 10\n"
-            "    elif x == 11: return 11\n"
-            "    return 0\n"
-        )),
+        (
+            PerturbationKind.DISTRACTION,
+            "def compliant_proc(val: str) -> str:\n    return val.strip().lower()\n",
+        ),
+        (
+            PerturbationKind.INJECTION_ESCAPE,
+            (
+                "def injected_bypass(a, b, c, d, e, f):\n"
+                "    if a:\n        if b:\n            if c:\n                if d:\n"
+                "                    if e:\n                        if f: return 1\n"
+                "    return 0\n"
+            ),
+        ),
+        (
+            PerturbationKind.COMPLEXITY_TRAP,
+            (
+                "def monolithic_trap(x):\n"
+                "    if x == 1: return 1\n"
+                "    elif x == 2: return 2\n"
+                "    elif x == 3: return 3\n"
+                "    elif x == 4: return 4\n"
+                "    elif x == 5: return 5\n"
+                "    elif x == 6: return 6\n"
+                "    elif x == 7: return 7\n"
+                "    elif x == 8: return 8\n"
+                "    elif x == 9: return 9\n"
+                "    elif x == 10: return 10\n"
+                "    elif x == 11: return 11\n"
+                "    return 0\n"
+            ),
+        ),
     ]
 
     report = fuzzer.run_fuzz_matrix(base_prompt, demo_cases)
