@@ -157,6 +157,16 @@ def _file_under_diff(line: str) -> str | None:
     return match.group("path") if match else None
 
 
+def _process_diff_line(line: str, in_agents: bool) -> tuple[bool, str | None]:
+    """Return updated in_agents state and any line added to AGENTS.md."""
+    current = _file_under_diff(line)
+    if current is not None:
+        return current == AGENTS_FILENAME, None
+    if in_agents and line.startswith("+"):
+        return in_agents, line[1:]
+    return in_agents, None
+
+
 def _agents_md_additions(diff_text: str) -> list[str]:
     """Return the lines a unified diff adds to AGENTS.md, and only those.
 
@@ -167,11 +177,9 @@ def _agents_md_additions(diff_text: str) -> list[str]:
     added: list[str] = []
     in_agents = False
     for line in diff_text.splitlines():
-        current = _file_under_diff(line)
-        if current is not None:
-            in_agents = current == AGENTS_FILENAME
-        elif in_agents and line.startswith("+"):
-            added.append(line[1:])
+        in_agents, added_line = _process_diff_line(line, in_agents)
+        if added_line is not None:
+            added.append(added_line)
     return added
 
 
