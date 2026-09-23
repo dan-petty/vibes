@@ -543,6 +543,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 15. **Diff Line State Machine & Additions Collector Decomposition**:
     - Parsing multi-file unified diff streams by nesting header checks, file state toggles, and added line prefixes inside line iteration loops compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 5$).
     - Factor per-line transition and payload extraction into an isolated state-machine helper (`_process_diff_line(line, in_agents) -> tuple[bool, str | None]`). This limits loop nesting depth to $\le 2$ and preserves compact function complexity ($M \le 3$) while cleanly isolating line-level diff parsing rules.
+16. **Case-Level Fuzzing Evaluation & Campaign Isolation**:
+    - Evaluating test cases and crosscheck seed determinism inside nested target and case generator loops compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 5$).
+    - Factor single-case evaluation into dedicated helpers: `_explore_case` for novel failure discovery and minimization, `_replay_case` for regression replay, and `_crosscheck_case` for cross-seed determinism checks. This preserves compact function complexity ($M \le 3$, depth $\le 2$) across all harness execution loops.
 
 ---
 

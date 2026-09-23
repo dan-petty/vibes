@@ -375,3 +375,43 @@ def test_crosscheck_exits_non_zero_when_the_seeds_disagree(
     monkeypatch.setattr(fuzz_harness, "_seed_fingerprint", lambda target, path, seed: seed)
     code = main(["crosscheck", "--targets", "probe", "--cases", "1", "--corpus-dir", str(tmp_path)])
     assert (code, "probe/nondeterministic" in capsys.readouterr().out) == (1, True)
+
+
+def test_fuzz_harness_decomposed_case_helpers(tmp_path: Path) -> None:
+    """Verify single-case evaluation helpers for explore, replay, and crosscheck."""
+    from fuzz_harness import _crosscheck_case, _explore_case, _replay_case
+
+    clean_target = _probe(_clean)
+    boom_target = _probe(_boom)
+    case = CASE
+    plan = Plan(save=False)
+
+    camp_explore_clean = Campaign()
+    seen: set[tuple[str, str, str]] = set()
+    _explore_case(clean_target, case, tmp_path, plan, seen, camp_explore_clean)
+
+    camp_explore_boom = Campaign()
+    _explore_case(boom_target, case, tmp_path, plan, seen, camp_explore_boom)
+
+    camp_replay_clean = Campaign()
+    camp_replay_boom = Campaign()
+    _replay_case(clean_target, case, tmp_path, plan, camp_replay_clean)
+    _replay_case(boom_target, case, tmp_path, plan, camp_replay_boom)
+
+    camp_crosscheck = Campaign()
+    _crosscheck_case(clean_target, 0, case, tmp_path, camp_crosscheck)
+
+    assert (
+        (camp_explore_clean.executed, len(camp_explore_clean.failures)),
+        (camp_explore_boom.executed, len(camp_explore_boom.failures)),
+        (camp_replay_clean.executed, len(camp_replay_clean.failures)),
+        (camp_replay_boom.executed, len(camp_replay_boom.failures)),
+        camp_crosscheck.executed,
+    ) == (
+        (1, 0),
+        (1, 1),
+        (1, 0),
+        (1, 1),
+        1,
+    )
+
