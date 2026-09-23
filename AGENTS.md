@@ -531,6 +531,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 11. **Document Fence State Machines & Inline AST Offsets**:
     - Parsing markdown fences and nested inline token streams with compound conditionals and branch ladders inflates decision complexity ($M \ge 7$) and nesting depth ($depth \ge 4$).
     - Decompose fence boundary validation into pure closing predicate helpers (`_is_closing_fence`) and state transition reducers (`_update_fence_state`), and factor inline AST token processing into child link extractors (`_extract_link_from_child`) and line offset steppers (`_step_inline_line_offset`). This preserves $M \le 5$ and depth $\le 2$ across documentation validation engines.
+12. **Link Inspection Pipelines & Dead Scanner Pruning**:
+    - Validating both parsed AST document links and raw whitespace bracket malformations in a monolithic loop inflates function decision complexity ($M \ge 8$).
+    - Decompose link validation into dedicated single-responsibility collectors: `_collect_parsed_link_findings` for parsed markdown AST targets and `_collect_whitespace_link_findings` for raw syntax malformations. Ruthlessly eliminate obsolete regex patterns (`_MARKDOWN_LINK_RE`) and vestigial line-by-line scanners (`_check_line_links`) after migrating to token-based document representations.
 
 ---
 
