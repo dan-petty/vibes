@@ -33,6 +33,7 @@ from doc_core import (
     DocFinding,
     DocValidationReport,
     PathOracle,
+    fenced_line_flags,
 )
 from doc_rules_mermaid import (
     _MERMAID_EDGE_RE,
@@ -80,7 +81,14 @@ VOID_HTML_TAGS: Final[frozenset[str]] = frozenset({"br", "hr", "img", "input"})
 
 _FENCE_RE: Final[re.Pattern[str]] = re.compile(r"^(`{3,}|~{3,})(.*)$")
 _SPACE_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]+)\]\s+\(([^)]+)\)")
-_MARKDOWN_LINK_RE: Final[re.Pattern[str]] = re.compile(r"!?\[([^\]]*)\]\(([^)]+)\)")
+# CommonMark §6.3: an inline link is `[text](destination "title")`, where the optional
+# title is separated by whitespace and quoted. Capturing everything up to `)` made
+# `[Readme](README.md "The project readme")` resolve the path
+# `README.md "The project readme"`, which exists nowhere — a false broken link on every
+# correctly-titled link in the repository. The destination may also be angle-bracketed.
+_MARKDOWN_LINK_RE: Final[re.Pattern[str]] = re.compile(
+    r"!?\[([^\]]*)\]\(\s*(?:<([^>]*)>|([^\s)]*))(?:\s+[\"\'(][^)]*)?\s*\)"
+)
 _HTML_TAG_RE: Final[re.Pattern[str]] = re.compile(r"<(/)?([a-zA-Z0-9]+)(?:\s+[^>]*)?>")
 _FILE_URI_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]*)\]\(file://(/[^)#\s]+)(#[^)\s]*)?\)")
 
@@ -91,12 +99,21 @@ _FILE_URI_LINK_RE: Final[re.Pattern[str]] = re.compile(r"\[([^\]]*)\]\(file://(/
 
 
 def slugify_heading(heading_text: str) -> str:
-    """Generate GitHub-compatible anchor slug for a heading."""
+    """Generate the anchor GitHub actually emits for a heading.
+
+    `github-slugger` lowercases, strips the characters its pattern rejects, then replaces
+    **each** remaining space with a single hyphen. Two divergences mattered here:
+
+    * underscores survive — `re.sub(r"[\\s_]+", "-")` folded them to hyphens, so every
+      anchor for a heading containing `snake_case` was reported broken;
+    * runs collapse — `Setup & Install` loses the `&` and keeps both spaces, giving
+      `setup--install`, the anchor GitHub emits and this validator rejected.
+    """
     clean = re.sub(r"`([^`]+)`", r"\1", heading_text)
     clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean)
     clean = clean.lower()
     clean = re.sub(r"[^\w\s-]", "", clean)
-    return re.sub(r"[\s_]+", "-", clean).strip("-")
+    return clean.replace(" ", "-").strip("-")
 
 
 def _extract_heading_slug(line: str) -> str | None:
@@ -116,13 +133,10 @@ def _extract_html_anchors(line: str) -> list[str]:
 def extract_heading_anchors(content: str) -> set[str]:
     """Extract all heading anchor slugs and explicit HTML anchors from markdown."""
     anchors: set[str] = set()
-    in_fence = False
-    for line in content.splitlines():
+    lines = content.splitlines()
+    for line, fenced in zip(lines, fenced_line_flags(lines), strict=True):
         stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fenced:
             continue
         slug = _extract_heading_slug(stripped)
         if slug:
@@ -307,14 +321,11 @@ def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFind
     """Verify table row column counts match the table header definition."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    in_fence, in_table, header_cols = False, False, 0
+    in_table, header_cols = False, 0
 
-    for idx, line in enumerate(lines, 1):
+    for idx, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
         stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence, in_table = not in_fence, False
-            continue
-        if in_fence:
+        if fenced:
             in_table = False
             continue
         in_table, header_cols, finding = _evaluate_table_line(
@@ -451,7 +462,9 @@ def _check_line_links(
             )
         )
     for match in _MARKDOWN_LINK_RE.finditer(line):
-        finding = _validate_link_target(match.group(2).strip(), file_path, line_no, context)
+        # Angle-bracketed destination in group 2, bare destination in group 3.
+        target = (match.group(2) or match.group(3) or "").strip()
+        finding = _validate_link_target(target, file_path, line_no, context)
         if finding:
             line_findings.append(finding)
     return line_findings
@@ -478,18 +491,13 @@ def check_markdown_links(
     """Inspect all markdown links for broken paths, missing anchors, and host-specific URIs."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    in_fence = False
     context = LinkContext(
         anchors=_resolve_effective_anchors(file_path, lines, known_anchors),
         paths=oracle if oracle is not None else PathOracle(),
     )
 
-    for idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if not in_fence:
+    for idx, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
+        if not fenced:
             findings.extend(_check_line_links(line, idx, file_path, file_str, context))
     return findings
 
@@ -672,15 +680,10 @@ def check_html_tags(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Check pairing and nesting of structural HTML tags outside code blocks."""
     file_str = str(file_path)
     findings: list[DocFinding] = []
-    in_fence = False
     stack: list[tuple[str, int]] = []
 
-    for idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if not in_fence:
+    for idx, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
+        if not fenced:
             findings.extend(_extract_line_html_findings(line, idx, file_str, stack))
 
     for tag, tag_line in stack:

@@ -9,6 +9,7 @@ validator would be a cycle; this module is the only thing they share.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
@@ -169,3 +170,35 @@ def first_directive_line(m_lines: Sequence[str]) -> str:
         ),
         "",
     )
+
+
+_FENCE_LINE: Final[re.Pattern[str]] = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+
+
+def fenced_line_flags(lines: Sequence[str]) -> list[bool]:
+    """Return, per line, whether it lies inside (or is) a fenced code block.
+
+    CommonMark §4.5: a fence is three or more backticks **or** three or more tildes, the
+    two cannot be mixed, and a closing fence must use the same character and be at least as
+    long as the opener. Five call sites across this package instead toggled a boolean on
+    any line starting with ``` or ~~~, so a `~~~markdown` block containing a ``` line
+    closed the block early and inverted the state for the rest of the document — every
+    link, tag and heading after it judged in the wrong context, silently.
+
+    An info string after a closing fence is not a close (§4.5), so it is ignored here too.
+    """
+    flags: list[bool] = []
+    marker: str | None = None
+    length = 0
+    for line in lines:
+        match = _FENCE_LINE.match(line)
+        if match is None:
+            flags.append(marker is not None)
+            continue
+        run, info = match.group(1), match.group(2).strip()
+        if marker is None:
+            marker, length = run[0], len(run)
+        elif run[0] == marker and len(run) >= length and not info:
+            marker, length = None, 0
+        flags.append(True)
+    return flags

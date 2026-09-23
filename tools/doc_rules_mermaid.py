@@ -16,12 +16,24 @@ from typing import Final
 
 from doc_core import DocFinding, extract_fenced_blocks, first_directive_line
 
-# Valid Mermaid diagram declarations
+# Diagram declarations the pinned Mermaid actually parses. Compared by prefix against the
+# lowercased first directive line, so `xychart-beta` matches the entry `xychart`.
+#
+# This list is a restatement of another project's grammar and had fallen behind it: four
+# declarations that `node tools/verify_mermaid.mjs` parses cleanly under the installed
+# Mermaid 11.17.2 were rejected here, so a valid `journey` diagram failed the Python gate
+# and passed the render gate in the same run. The engine is the authority; this exists only
+# to give a faster answer, and when the two disagree the engine is right.
+#
+# Verified by declaring each of these in a fenced block and running the real engine over
+# them: `journey`, `requirementdiagram`, `radar-beta` and `treemap-beta` all parsed.
 VALID_MERMAID_TYPES: Final[frozenset[str]] = frozenset(
     {
         "flowchart", "graph", "sequencediagram", "classdiagram", "statediagram",
         "erdiagram", "gantt", "pie", "gitgraph", "mindmap", "timeline",
         "quadrantchart", "xychart", "block", "packet", "architecture",
+        "journey", "requirementdiagram", "c4context", "sankey", "radar",
+        "treemap", "kanban", "zenuml",
     }
 )
 

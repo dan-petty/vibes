@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from doc_core import DocFinding, PathOracle, extract_fenced_blocks
+from doc_core import DocFinding, PathOracle, extract_fenced_blocks, fenced_line_flags
 from sanitization_policy import is_documentable
 
 _TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(
@@ -233,13 +233,9 @@ def _is_observation_file(file_path: Path) -> bool:
 def _extract_numbered_sections(lines: Sequence[str]) -> set[int]:
     """Extract numbered section indices (## N. ...) from markdown outside fences."""
     found: set[int] = set()
-    in_fence = False
-    for line in lines:
+    for line, fenced in zip(lines, fenced_line_flags(lines), strict=True):
         stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fenced:
             continue
         m = _OBSERVATION_NUMBERED_SECTION_RE.match(stripped)
         if m:
