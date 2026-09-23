@@ -393,6 +393,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── metric_reference.py            # One row per metric: who computes it, and why not us
 │   ├── sarif_report.py                # Every oracle's findings as one schema-valid SARIF log
 │   ├── semconv_snapshot.py            # Derives the GenAI semantic conventions from upstream
+│   ├── seccomp_synthesizer.py         # Automated Seccomp BPF profile synthesizer for agent tools
 │   ├── supply_chain_audit.py          # Dependency, action, package and egress audit with fixes
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   ├── upstream_facts.py              # Shared: GitHub repository facts and maturity scoring
@@ -403,6 +404,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_app_factory.py            # Runs the real gates over the factory's own output
     ├── test_contract_variables.py     # Contract questions, answer coercion and safe rendering
     ├── test_semconv_snapshot.py       # Deriving the GenAI convention table from upstream
+    ├── test_seccomp_synthesizer.py    # Unit tests for Seccomp BPF profile synthesis and OCI output
     ├── test_address_policy_agreement.py # Five copies of one address policy, compared
     ├── test_metric_reference.py       # Who computes each metric, and the witnesses why
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios

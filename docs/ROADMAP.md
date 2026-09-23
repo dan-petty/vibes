@@ -91,7 +91,7 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
 - [x] **Agentic IDE Lifecycle Hook Sentinel & Zero-Trust Execution Guard (`examples/agentic-ide-hook-sentinel/`)**:
   - Intercepts agent tool execution calls and file writes in IDE control planes (VS Code, Antigravity, Cursor).
   - Enforces zero-trust egress (blocks private RFC 1918 IPs, blocks credential file paths), POSIX process group containment, pre-flight file size bounds (5MB), and LSP diagnostic ingestion.
-- [ ] **Automated Seccomp BPF Profile Synthesizer**:
+- [x] **Automated Seccomp BPF Profile Synthesizer (`tools/seccomp_synthesizer.py`)**:
   - Generates minimal, tool-specific Linux seccomp-bpf JSON filter profiles based on static symbol analysis and syscall trace profiling, restricting agent tool execution strictly to required system calls.
 
 ---

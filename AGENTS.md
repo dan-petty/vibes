@@ -598,6 +598,12 @@ Every defect in this section was found by a measurement and survived a first, wr
    - **Baseline the finding, not the rule.** Identity is the `partialFingerprints` value the producing tool assigned — rule, file and subject, deliberately excluding the line number. Suppressing a whole rule or a whole file hides the next defect of that kind as well as the current one.
    - **Never baseline this repository's own findings.** §10's architectural invariants are non-negotiable; `artifacts/finding-baseline.json` is empty and [`tests/test_finding_baseline.py`](./tests/test_finding_baseline.py) asserts it stays empty. A feature whose own repository starts using it to defer violations has changed from adoption machinery into an amnesty.
 
+8. **Minimal Privilege Synthesis for Tool Execution (Seccomp-BPF Confinement)**:
+   - When synthesizing Linux seccomp-bpf filter profiles ([`tools/seccomp_synthesizer.py`](./tools/seccomp_synthesizer.py)) for untrusted agent tool execution, always follow a **default-deny / default-errno** policy (`defaultAction: SCMP_ACT_ERRNO`) rather than default-allow.
+   - **Baseline Runtime Viability**: Always include essential userland runtime system calls (`read`, `write`, `close`, `fstat`, `mmap`, `brk`, `futex`, `rt_sigaction`, `exit_group`, etc.) to guarantee CPython runtime initialization without premature termination.
+   - **Static Analysis & Trace Merging**: Combine static AST symbol inspection (mapping imports and POSIX calls to system calls) with dynamic trace profiling (strace / JSON events) to establish minimal required privilege without granting dangerous breakout primitives (`ptrace`, `bpf`, `mount`, `unshare`, `init_module`).
+   - **Directory Tree Map Synchronization**: Whenever adding a new tool or test suite to `tools/` or `tests/`, immediately update the directory tree in `README.md` to prevent documentation validator `[directory_map]` drift.
+
 ---
 
 ## 11. The Closed-Loop Feedback Inversion Dynamic
