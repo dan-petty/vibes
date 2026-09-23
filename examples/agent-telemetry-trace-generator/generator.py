@@ -411,8 +411,8 @@ def export_otlp_http(
         return False
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """CLI runner for telemetry generator."""
+def _build_cli_parser() -> argparse.ArgumentParser:
+    """Construct command-line argument parser for telemetry generator."""
     parser = argparse.ArgumentParser(description="OpenTelemetry Agent Waterfall Trace Generator")
     parser.add_argument(
         "--goal",
@@ -421,43 +421,63 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Session goal description",
     )
     parser.add_argument("--json", action="store_true", help="Emit trace spans as OpenTelemetry JSON")
-    parser.add_argument("--validate", action="store_true",
-                        help="Check every span against the GenAI semantic conventions")
-    parser.add_argument("--otlp", action="store_true", help="Emit trace spans as standard OTLP Protobuf-JSON")
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Check every span against the GenAI semantic conventions",
+    )
+    parser.add_argument(
+        "--otlp", action="store_true", help="Emit trace spans as standard OTLP Protobuf-JSON"
+    )
     parser.add_argument(
         "--export-otlp",
         type=str,
         metavar="ENDPOINT",
         help="Stream spans over OTLP/HTTP to collector endpoint (e.g. http://localhost:4318/v1/traces)",
     )
-    args = parser.parse_args(argv)
+    return parser
 
-    session = build_synthetic_agent_session(args.goal)
 
+def _export_otlp_stream(session: AgentTraceSession, endpoint: str) -> int:
+    """Stream telemetry spans over OTLP/HTTP and report transmission result."""
+    success = export_otlp_http(session, endpoint=endpoint)
+    status_label = "succeeded" if success else "failed"
+    print(f"OTLP Export {status_label} -> {endpoint}")
+    return 0 if success else 1
+
+
+def _emit_session_json(session: AgentTraceSession) -> int:
+    """Format and print session trace spans as OpenTelemetry JSON."""
+    data = {
+        "trace_id": session.trace_id,
+        "session_goal": session.session_goal,
+        "tokens": session.total_tokens(),
+        "spans": [asdict(s) for s in session.spans],
+    }
+    print(json.dumps(data, indent=2))
+    return 0
+
+
+def _dispatch_cli(args: argparse.Namespace, session: AgentTraceSession) -> int:
+    """Dispatch CLI output format according to selected flag."""
     if args.validate:
         return _print_validation(session)
-
     if args.export_otlp:
-        success = export_otlp_http(session, endpoint=args.export_otlp)
-        print(f"OTLP Export {'succeeded' if success else 'failed'} -> {args.export_otlp}")
-        return 0 if success else 1
-
+        return _export_otlp_stream(session, args.export_otlp)
     if args.otlp:
         print(json.dumps(to_otlp_json(session), indent=2))
         return 0
-
     if args.json:
-        data = {
-            "trace_id": session.trace_id,
-            "session_goal": session.session_goal,
-            "tokens": session.total_tokens(),
-            "spans": [asdict(s) for s in session.spans],
-        }
-        print(json.dumps(data, indent=2))
-        return 0
-
+        return _emit_session_json(session)
     print(render_ascii_waterfall(session))
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI runner for telemetry generator."""
+    args = _build_cli_parser().parse_args(argv)
+    session = build_synthetic_agent_session(args.goal)
+    return _dispatch_cli(args, session)
 
 
 def _print_validation(session: AgentTraceSession) -> int:
