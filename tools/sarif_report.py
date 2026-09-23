@@ -455,6 +455,16 @@ def _apply_baseline(runs: Sequence[Run], baseline_path: Path | None) -> tuple[li
     return filtered, suppressed
 
 
+def _report_schema_errors(errors: Sequence[str]) -> bool:
+    """Print the first few schema errors and report whether any existed."""
+    if not errors:
+        return False
+    print(f"SARIF log failed schema validation ({len(errors)} error(s)):", file=sys.stderr)
+    for message in errors[:10]:
+        print(f"  {message}", file=sys.stderr)
+    return True
+
+
 def _handle_report(args: argparse.Namespace) -> int:
     """Build, validate and write the SARIF log."""
     paths = _source_paths(args.root)
@@ -468,11 +478,7 @@ def _handle_report(args: argparse.Namespace) -> int:
         print(f"Recorded {recorded} finding(s) into {args.write_baseline}.")
     runs, suppressed = _apply_baseline(runs, args.baseline)
     log = build_log(runs, args.root)
-    errors = validate_log(log, args.schema)
-    if errors:
-        print(f"SARIF log failed schema validation ({len(errors)} error(s)):", file=sys.stderr)
-        for message in errors[:10]:
-            print(f"  {message}", file=sys.stderr)
+    if _report_schema_errors(validate_log(log, args.schema)):
         return 1
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(log, indent=2) + "\n", encoding="utf-8")

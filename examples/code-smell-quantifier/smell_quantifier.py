@@ -114,8 +114,12 @@ def _parameter_count(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     declared = args.posonlyargs + args.args + args.kwonlyargs
     names = [a.arg for a in declared]
     bound = 1 if names and names[0] in ("self", "cls") else 0
-    extras = bool(args.vararg) + bool(args.kwarg)
-    return len(names) - bound + extras
+    # `*args` and `**kwargs` are deliberately excluded, as pylint's R0913 excludes them:
+    # they are one parameter each at the definition and any number at the call, so counting
+    # them against a ceiling meant every forwarding wrapper and decorator was flagged for
+    # the arguments it does not name. `def wide(a, b, c, d, e, *args, **kwargs)` scored 7
+    # here and 5 under real pylint, which reports nothing.
+    return len(names) - bound
 
 
 def detect_long_parameter_lists(tree: ast.AST, path: Path) -> list[SmellFinding]:
@@ -132,6 +136,21 @@ def detect_long_parameter_lists(tree: ast.AST, path: Path) -> list[SmellFinding]
     return findings
 
 
+def _statement_count(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
+    """Count the statements pylint's R0915 counts, and no others.
+
+    `ast.walk` over the function included the `def` itself and the docstring expression, so
+    a 49-statement function measured 51 against a ceiling of 50 — pylint reported nothing
+    on the same file. pylint increments only on `node.is_statement` within the body, and a
+    docstring is an implicit `Expr` the checker does not reach.
+    """
+    total = 0
+    for child in node.body:
+        total += sum(1 for sub in ast.walk(child) if isinstance(sub, ast.stmt))
+    docstring = ast.get_docstring(node, clean=False)
+    return total - (1 if docstring is not None else 0)
+
+
 def detect_long_functions(tree: ast.AST, path: Path) -> list[SmellFinding]:
     """Flag functions by statement count, which complexity alone does not capture.
 
@@ -140,7 +159,7 @@ def detect_long_functions(tree: ast.AST, path: Path) -> list[SmellFinding]:
     """
     findings = []
     for node in _function_nodes(tree):
-        statements = sum(1 for child in ast.walk(node) if isinstance(child, ast.stmt))
+        statements = _statement_count(node)
         if statements > MAX_FUNCTION_STATEMENTS:
             findings.append(SmellFinding(
                 smell=Smell.LONG_FUNCTION, file_path=str(path), line_number=node.lineno,
@@ -187,9 +206,19 @@ def _class_attribute_references(node: ast.AST) -> set[str]:
 
 
 def _class_methods(node: ast.ClassDef) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    """Return methods declared directly on a class."""
+    """Return the *public* methods declared directly on a class.
+
+    pylint's R0904 counts `sum(1 for method in node.mymethods() if not
+    method.name.startswith("_"))`, and this threshold is pylint's `max-public-methods`
+    default. Counting private helpers and dunders against a public-method ceiling punishes
+    the decomposition the ceiling exists to encourage: a facade with 10 public methods and
+    11 private helpers scored 21 here and nothing at all under real pylint.
+    """
     kinds = (ast.FunctionDef, ast.AsyncFunctionDef)
-    return [child for child in node.body if isinstance(child, kinds)]
+    return [
+        child for child in node.body
+        if isinstance(child, kinds) and not child.name.startswith("_")
+    ]
 
 
 def _is_data_carrier(node: ast.ClassDef) -> bool:
@@ -414,9 +443,24 @@ def _local_imports(tree: ast.AST, known: set[str]) -> set[str]:
 
 
 def _import_stems(node: ast.AST) -> set[str]:
-    """Return the module stems one import node names."""
+    """Return every module stem one import node could name.
+
+    For `from pkg import b`, the Python Language Reference §7.11 says the interpreter looks
+    for an attribute `b` on `pkg` and, failing that, imports the submodule `pkg.b`. Reading
+    only `node.module` therefore recorded an edge to the *package* and none to `b`, so the
+    commonest circular import in a package — `pkg/a.py` doing `from pkg import b` while
+    `pkg/b.py` does `from pkg import a` — drew no edge at all and the cycle was invisible.
+    CPython refuses that program at runtime; this detector called it clean.
+
+    The imported names are included as candidate stems and intersected with the corpus by
+    the caller, so a name that is not a scanned module contributes nothing. A function
+    imported from a module that shares a name with another scanned module would draw an
+    edge that is not an import — the ambiguity is the language's, and erring towards the
+    edge is the same choice pylint's `cyclic-import` makes.
+    """
     if isinstance(node, ast.ImportFrom):
-        return {node.module.split(".")[-1]} if node.module else set()
+        module = {node.module.split(".")[-1]} if node.module else set()
+        return module | {alias.name.split(".")[-1] for alias in node.names}
     if isinstance(node, ast.Import):
         return {alias.name.split(".")[-1] for alias in node.names}
     return set()
@@ -582,16 +626,15 @@ def _parse_module(file_path: Path) -> tuple[str, ast.AST] | None:
         return None
 
 
-def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport:
-    """Quantify every Python module under the supplied targets.
+def _scan_modules(
+    paths: Sequence[Path], report: SmellReport, include_advisory: bool
+) -> dict[Path, ast.AST]:
+    """Run every per-file detector, returning the parsed trees the cross-file ones need.
 
-    `include_advisory=False` computes only what gates. Measured on this corpus the
-    advisory detectors are 94% of the runtime — vulture alone is roughly eight seconds
-    against one for everything that gates — so a caller that consumes `report.gating` and
-    discards the rest should not pay for the rest. The self-improvement loop is exactly
-    such a caller.
+    Split out of `analyze` because the per-file sweep and the cross-file passes are two
+    jobs, and holding both in one function put it over the complexity ceiling once the
+    ceiling was measured correctly.
     """
-    report = SmellReport()
     trees: dict[Path, ast.AST] = {}
     detectors = [
         d for d in PER_FILE_DETECTORS if include_advisory or d not in ADVISORY_DETECTORS
@@ -605,7 +648,20 @@ def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport
         if include_advisory:
             report.modules.extend(_module_scores(file_path, source))
         report.findings.extend(f for d in detectors for f in d(tree, file_path))
+    return trees
 
+
+def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport:
+    """Quantify every Python module under the supplied targets.
+
+    `include_advisory=False` computes only what gates. Measured on this corpus the
+    advisory detectors are 94% of the runtime — vulture alone is roughly eight seconds
+    against one for everything that gates — so a caller that consumes `report.gating` and
+    discards the rest should not pay for the rest. The self-improvement loop is exactly
+    such a caller.
+    """
+    report = SmellReport()
+    trees = _scan_modules(paths, report, include_advisory)
     report.findings.extend(detect_import_cycles(trees))
     if not include_advisory:
         return report
