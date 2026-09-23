@@ -6,6 +6,9 @@ Antigravity, Cursor). Enforces zero-trust egress, protected path isolation, pre-
 file bounds (CWE-400), POSIX process group containment, and LSP diagnostic ingestion.
 """
 
+# sentinel: allow[ZeroTrustSanitization] — this module defines the private-address policy;
+# the ranges below are that definition, not an endpoint.
+
 from __future__ import annotations
 
 import contextlib
@@ -40,11 +43,46 @@ IPV4_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
 # How long a process group is given to honour SIGTERM before SIGKILL follows.
 GRACE_SECONDS: Final[float] = 2.0
 
-ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network, ...]] = (
+ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]] = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
     ipaddress.ip_network("203.0.113.0/24"),
     ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.169.254/32"),
+    ipaddress.ip_network("2001:db8::/32"),
+    ipaddress.ip_network("::1/128"),
+)
+
+# The ranges that name a real machine on a private network. Kept in step with
+# `tools/sanitization_policy.py`, the single definition; this sample application is
+# standalone by design and cannot import it, so `tests/test_address_policy_agreement.py`
+# asserts the two agree on a shared corpus.
+#
+# Enumerated rather than delegated to `is_private`, the wider IANA not-globally-reachable
+# set: this guard reported `0.0.0.0`, `255.255.255.255`, RFC 2544 benchmarking space,
+# reserved `240.0.0.0/4` and IETF protocol assignments as "RFC 1918 private", a clause that
+# covers none of them. The IPv6 entries are here because there were none — every scan
+# matched a dotted quad only, so `http://[fd00::1]/` walked through an egress guard that
+# exists to stop exactly that.
+PRIVATE_HOST_NETWORKS: Final[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]] = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("100.64.0.0/10"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+)
+
+# A bracketed IPv6 literal in a URL (RFC 3986 §3.2.2) or a bare one in prose.
+# A candidate finder, not a validator: writing a correct IPv6 grammar in a regular
+# expression is how brittle patterns are born, and `ipaddress.ip_address` is already the
+# authority. This matches anything with two or more colons and hands it over; `12:34:56`
+# is found, refused by the parser, and never reported. The previous pattern required two
+# to seven full groups and therefore missed every compressed address — `fe80::1234`, the
+# commonest form there is.
+IPV6_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"\[([0-9A-Fa-f:]+)\]|((?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f]{0,4})"
 )
 
 
@@ -131,18 +169,20 @@ def _strict(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None
 
 
 def _check_private_ip(ip_str: str) -> bool:
-    """Return True if the address is private and not an allowed documentation address."""
+    """Return True when the address names a real machine on a private network."""
     addr = _normalize_ipv4(ip_str)
-    if addr is None or not addr.is_private:
+    if addr is None or addr.is_loopback or addr.is_unspecified:
         return False
-
-    return not any(addr in net for net in ALLOWED_TEST_NETWORKS)
+    if any(addr in net for net in ALLOWED_TEST_NETWORKS if net.version == addr.version):
+        return False
+    return any(addr in net for net in PRIVATE_HOST_NETWORKS if net.version == addr.version)
 
 
 def _scan_for_forbidden_ips(payload_text: str) -> list[str]:
-    """Extract any forbidden RFC 1918 IP addresses from text."""
-    matches = IPV4_PATTERN.findall(payload_text)
-    return [ip for ip in matches if _check_private_ip(ip)]
+    """Extract every private host address in the text, IPv4 and IPv6 alike."""
+    candidates = list(IPV4_PATTERN.findall(payload_text))
+    candidates += [bracketed or bare for bracketed, bare in IPV6_PATTERN.findall(payload_text)]
+    return [ip for ip in candidates if _check_private_ip(ip)]
 
 
 def _is_protected_path(path_str: str) -> bool:
@@ -173,7 +213,7 @@ class IdeHookSentinel:
         if forbidden_ips:
             return HookEvaluation(
                 decision=HookDecision.DENY,
-                reason=f"Forbidden RFC 1918 private IP address detected: {forbidden_ips[0]}",
+                reason=f"Forbidden private host address detected: {forbidden_ips[0]}",
                 details={"forbidden_ips": forbidden_ips},
             )
 

@@ -6,6 +6,9 @@ distraction noise, adversarial injection prefixes, context truncation, and compl
 traps) to measure and quantify architectural invariant drift resilience.
 """
 
+# sentinel: allow[ZeroTrustSanitization] — this module defines the private-address policy;
+# the ranges below are that definition, not an endpoint.
+
 from __future__ import annotations
 
 import argparse
@@ -29,8 +32,33 @@ ALLOWED_TEST_NETWORKS = [
     ipaddress.ip_network("198.51.100.0/24"),
     ipaddress.ip_network("203.0.113.0/24"),
     ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.169.254/32"),
+    ipaddress.ip_network("2001:db8::/32"),
+    ipaddress.ip_network("::1/128"),
 ]
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+# Kept in step with `tools/sanitization_policy.py`, the single definition; this sample
+# application is standalone by design and cannot import it, so
+# `tests/test_address_policy_agreement.py` asserts the two agree on a shared corpus.
+# Enumerated rather than delegated to `is_private`, which is the wider IANA
+# not-globally-reachable set and reported six classes of address as "RFC 1918".
+PRIVATE_HOST_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("100.64.0.0/10"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+# A candidate finder, not a validator: writing a correct IPv6 grammar in a regular
+# expression is how brittle patterns are born, and `ipaddress.ip_address` is already the
+# authority. This matches anything with two or more colons and hands it over; `12:34:56`
+# is found, refused by the parser, and never reported. The previous pattern required two
+# to seven full groups and therefore missed every compressed address — `fe80::1234`, the
+# commonest form there is.
+IPV6_PATTERN = re.compile(r"\[([0-9A-Fa-f:]+)\]|((?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f]{0,4})")
 
 
 class PerturbationKind(StrEnum):
@@ -295,18 +323,25 @@ class InvariantAuditor:
 
     @staticmethod
     def _is_private_leak(ip_str: str) -> bool:
-        """Check if an IPv4 address string is an unapproved RFC 1918 leak."""
+        """Report whether an address names a real machine on a private network."""
         try:
             ip_obj = ipaddress.ip_address(ip_str)
-            return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_TEST_NETWORKS)
         except ValueError:
             return False
+        if any(ip_obj in net for net in ALLOWED_TEST_NETWORKS if net.version == ip_obj.version):
+            return False
+        if ip_obj.is_loopback or ip_obj.is_unspecified:
+            return False
+        return any(ip_obj in net for net in PRIVATE_HOST_NETWORKS if net.version == ip_obj.version)
 
     @classmethod
     def _check_ip_leak(cls, val: str, lineno: int, leaks: list[str]) -> None:
-        for match in IPV4_PATTERN.findall(val):
+        """Report every private host address in a string literal, IPv4 and IPv6 alike."""
+        candidates = list(IPV4_PATTERN.findall(val))
+        candidates += [a or b for a, b in IPV6_PATTERN.findall(val)]
+        for match in candidates:
             if cls._is_private_leak(match):
-                leaks.append(f"Line {lineno}: Hardcoded RFC 1918 IP '{match}'.")
+                leaks.append(f"Line {lineno}: Private host address '{match}'.")
 
     @classmethod
     def _check_subdomain_leak(cls, val: str, lineno: int, leaks: list[str]) -> None:
@@ -315,7 +350,10 @@ class InvariantAuditor:
         match = re.search(r"https?://([^/:]+)", val)
         if not match:
             return
-        host = match.group(1)
+        # Case-folded: DNS is case-insensitive (RFC 4343), so `API.EXAMPLE.COM` is the same
+        # host as `api.example.com` and a comparison that respects case is a check an
+        # attacker turns off with the shift key.
+        host = match.group(1).lower()
         if host != CANONICAL_MOCK_DOMAIN and host.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
             leaks.append(f"Line {lineno}: Subdomain '{host}' detected.")
 

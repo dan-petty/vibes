@@ -5,8 +5,11 @@ Enforces four non-negotiable architectural invariants:
 1. Cyclomatic Complexity <= 10
 2. Indentation / Block Nesting Depth <= 5
 3. Prohibition of arbitrary partial regex/substring pattern matching
-4. Zero-trust sanitization (no private RFC 1918 IPs, standardized mock domains)
+4. Zero-trust sanitization (no private host addresses, standardized mock domains)
 """
+
+# sentinel: allow[ZeroTrustSanitization] — this module defines the private-address policy;
+# the ranges below are that definition, not an endpoint.
 
 from __future__ import annotations
 
@@ -34,6 +37,28 @@ ALLOWED_DOCUMENTATION_NETWORKS = (
     # naming it forbids defending against it. Scoped to the single address, not the
     # surrounding link-local /16, which is still somebody's autoconfigured network.
     ipaddress.ip_network("169.254.169.254/32"),
+    ipaddress.ip_network("2001:db8::/32"),
+    ipaddress.ip_network("::1/128"),
+)
+
+# The ranges that name a real machine on a private network. Kept in step with
+# `tools/sanitization_policy.py`, which is the single definition; this sample application is
+# standalone by design and cannot import it, so `tests/test_address_policy_agreement.py`
+# asserts the two agree on a shared corpus.
+#
+# Enumerated rather than delegated to `ipaddress.is_private`, which CPython documents as
+# "not globally reachable by iana-ipv4-special-registry" — a wider set covering `0.0.0.0`,
+# `255.255.255.255`, RFC 2544 benchmarking space, reserved `240.0.0.0/4` and IETF protocol
+# assignments. Every one of those was blocked here under a message reading "RFC 1918", a
+# clause that covers none of them.
+PRIVATE_HOST_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("100.64.0.0/10"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
 )
 
 # Standard dummy mock domain; subdomains are strictly prohibited
@@ -257,7 +282,11 @@ def _is_prohibited_ip(match: str) -> bool:
     """Return True if match is a private IP not in allowed documentation networks."""
     try:
         ip_obj = ipaddress.ip_address(match)
-        return ip_obj.is_private and not any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS)
+        if any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS if net.version == ip_obj.version):
+            return False
+        if ip_obj.is_loopback or ip_obj.is_unspecified:
+            return False
+        return any(ip_obj in net for net in PRIVATE_HOST_NETWORKS if net.version == ip_obj.version)
     except ValueError:
         return False
 
@@ -305,7 +334,7 @@ class SanitizationVisitor(ast.NodeVisitor):
                         file_path=self.file_path,
                         line_number=lineno,
                         invariant="ZeroTrustSanitization",
-                        message=f"Hardcoded private RFC 1918 IP '{match}' detected. Use RFC 5737 or loopback.",
+                        message=f"Private host address '{match}' detected. Use RFC 5737 or loopback.",
                     )
                 )
 
@@ -377,7 +406,27 @@ def _scan_waivers(file_path: Path, source: str) -> WaiverScan:
             )
             continue
         waived.add(match.group(1))
+    violations.extend(_late_waiver_violations(file_path, source, waived))
     return WaiverScan(frozenset(waived), tuple(violations))
+
+
+def _late_waiver_violations(file_path: Path, source: str, waived: set[str]) -> list[Violation]:
+    """Report a waiver written below the header window, where it has no effect.
+
+    A pragma on line 16 of a 15-line header is ignored in silence: the file's violations are
+    reported exactly as if nobody had written one, and the author reads a message about the
+    code rather than about the waiver. Costing an hour once is enough; say it plainly.
+    """
+    late: list[Violation] = []
+    for index, line in enumerate(source.splitlines()[WAIVER_HEADER_LINE_LIMIT:], WAIVER_HEADER_LINE_LIMIT + 1):
+        match = WAIVER_PRAGMA_RE.match(line.strip())
+        if match and match.group(1) not in waived:
+            late.append(Violation(
+                str(file_path), index, "WaiverIntegrity",
+                f"Waiver for '{match.group(1)}' is below line {WAIVER_HEADER_LINE_LIMIT} and has no "
+                "effect. Move it into the module header.",
+            ))
+    return late
 
 
 def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) -> list[Violation]:

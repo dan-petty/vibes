@@ -402,6 +402,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_app_factory.py            # Runs the real gates over the factory's own output
     ├── test_contract_variables.py     # Contract questions, answer coercion and safe rendering
     ├── test_semconv_snapshot.py       # Deriving the GenAI convention table from upstream
+    ├── test_address_policy_agreement.py # Five copies of one address policy, compared
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources

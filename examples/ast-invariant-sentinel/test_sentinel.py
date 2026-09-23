@@ -234,7 +234,13 @@ def test_waiver_inside_string_literal_is_not_honored(tmp_path):
 
 
 def test_waiver_below_module_header_is_not_honored(tmp_path):
-    """Waivers must be declared in the module header where reviewers will see them."""
+    """Waivers must be declared in the module header where reviewers will see them.
+
+    The waiver is still not honoured — that is the rule. What changed is that the file now
+    also reports *why*: a pragma one line too low used to be ignored in silence, so the
+    author read a message about the code and none about the waiver. That cost an hour once,
+    during the change that consolidated the address policy.
+    """
     padding = "\n".join(f"CONST_{n} = {n}" for n in range(20))
     module = _write_module(
         tmp_path,
@@ -242,7 +248,8 @@ def test_waiver_below_module_header_is_not_honored(tmp_path):
         f'"""Doc."""\n{padding}\n# sentinel: allow[ZeroTrustSanitization] — buried far below the header\n'
         'HOST = "http://192.168.1.10"\n',
     )
-    assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]
+    invariants = [v.invariant for v in audit_file(module)]
+    assert sorted(invariants) == ["WaiverIntegrity", "ZeroTrustSanitization"]
 
 
 def test_directory_sweep_audits_test_files(tmp_path):

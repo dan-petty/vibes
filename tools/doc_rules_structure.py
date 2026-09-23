@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Final
 
 from doc_core import DocFinding, PathOracle, extract_fenced_blocks, fenced_line_flags
-from sanitization_policy import is_documentable
+from sanitization_policy import is_private_host
 
 _TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(
     r"^(?P<indent>(?:[\u2502]   |    )*)(?:\u251c\u2500\u2500|\u2514\u2500\u2500) (?P<name>\S+)"
@@ -261,36 +261,11 @@ def _private_host_addresses(text: str) -> list[str]:
 def _leaks(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Report whether one address is a real private host that must not appear in prose.
 
-    `is_private` is not RFC 1918. CPython documents it as "not globally reachable by
-    iana-ipv4-special-registry", which also covers the unspecified address `0.0.0.0`, the
-    broadcast address `255.255.255.255`, link-local, and the benchmarking and documentation
-    ranges. That made this rule reject `endpoint: 0.0.0.0:4317` — a bind-to-all directive
-    copied from this repository's own collector config, naming nobody's machine — as a
-    homelab leak, which is a false positive in the one rule whose false positives are the
-    most expensive to argue with.
+    Delegated to `sanitization_policy`, which is the single definition. This module used to
+    carry its own copy of the range list, which is how five copies of one policy came to
+    disagree with each other about what "private" means.
     """
-    if address.is_loopback or address.is_unspecified or is_documentable(address):
-        return False
-    if isinstance(address, ipaddress.IPv4Address) and address == _BROADCAST:
-        return False
-    return any(address in network for network in _PRIVATE_HOST_NETWORKS)
-
-
-# The ranges that name a real machine on a real private network: RFC 1918 for IPv4, RFC
-# 4193 unique local addresses and RFC 3927 / RFC 4291 link-local for the addresses a host
-# actually answers on. Enumerated rather than delegated to `is_private`, which is a wider
-# IANA set and swept in addresses that are nobody's host.
-_PRIVATE_HOST_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("100.64.0.0/10"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
-)
-
-_BROADCAST = ipaddress.IPv4Address("255.255.255.255")
+    return is_private_host(address)
 
 
 def _parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
