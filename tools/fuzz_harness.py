@@ -478,18 +478,33 @@ def _minimize(target: Target, case: Case, failure: Failure, workspace: Path, pla
     return Case(case.corpus, shrink(case.text, still_fails), case.seed, case.origin)
 
 
+def _explore_target(
+    target: Target,
+    workspace: Path,
+    plan: Plan,
+    seen: set[tuple[str, str, str]],
+    campaign: Campaign,
+) -> None:
+    """Evaluate generated cases for one target and record novel failures."""
+    for case in _case_stream(target, plan.cases, plan.seed):
+        campaign.executed += 1
+        failure = evaluate(target, case, workspace, plan.budget)
+        if failure is None:
+            continue
+        f_class = _failure_class(failure)
+        if f_class in seen:
+            continue
+        seen.add(f_class)
+        minimized = _minimize(target, case, failure, workspace, plan)
+        _record(campaign, target, failure, minimized, plan)
+
+
 def explore(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
     """Search for inputs that violate a property, and keep the ones that do."""
     campaign = Campaign()
     seen: set[tuple[str, str, str]] = set()
     for target in targets:
-        for case in _case_stream(target, plan.cases, plan.seed):
-            campaign.executed += 1
-            failure = evaluate(target, case, workspace, plan.budget)
-            if failure is None or _failure_class(failure) in seen:
-                continue
-            seen.add(_failure_class(failure))
-            _record(campaign, target, failure, _minimize(target, case, failure, workspace, plan), plan)
+        _explore_target(target, workspace, plan, seen, campaign)
     return campaign
 
 
@@ -502,15 +517,22 @@ def _record(
         campaign.saved.append(str(save_case(plan.corpus_dir, target.name, minimized)))
 
 
+def _replay_case(
+    target: Target, case: Case, workspace: Path, plan: Plan, campaign: Campaign
+) -> None:
+    """Evaluate one replayed case and record failures."""
+    campaign.executed += 1
+    failure = evaluate(target, case, workspace, plan.budget)
+    if failure is not None:
+        campaign.failures.append(replace(failure, digest=case.digest()))
+
+
 def replay(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
     """Re-run every input the corpus has ever kept. This is the gate."""
     campaign = Campaign()
     for target in targets:
         for case in iter_corpus(plan.corpus_dir, target):
-            campaign.executed += 1
-            failure = evaluate(target, case, workspace, plan.budget)
-            if failure is not None:
-                campaign.failures.append(replace(failure, digest=case.digest()))
+            _replay_case(target, case, workspace, plan, campaign)
     return campaign
 
 
@@ -578,16 +600,27 @@ def _crosscheck_cases(target: Target, plan: Plan) -> Iterator[Case]:
     yield from _case_stream(target, plan.cases, plan.seed)
 
 
+def _crosscheck_case(
+    target: Target,
+    index: int,
+    case: Case,
+    workspace: Path,
+    campaign: Campaign,
+) -> None:
+    """Evaluate determinism of one case across hash seeds."""
+    path = _write(workspace, f"cross-{target.name}-{index}", case.text, SUFFIXES[case.corpus])
+    campaign.executed += 1
+    answers = _confirmed_answers(target.name, path)
+    if answers is not None:
+        campaign.failures.append(_divergence(target, case, answers))
+
+
 def crosscheck(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
     """Report any instrument whose answer depends on the interpreter's hash seed."""
     campaign = Campaign()
     for target in targets:
         for index, case in enumerate(_crosscheck_cases(target, plan)):
-            path = _write(workspace, f"cross-{target.name}-{index}", case.text, SUFFIXES[case.corpus])
-            campaign.executed += 1
-            answers = _confirmed_answers(target.name, path)
-            if answers is not None:
-                campaign.failures.append(_divergence(target, case, answers))
+            _crosscheck_case(target, index, case, workspace, campaign)
     return campaign
 
 
