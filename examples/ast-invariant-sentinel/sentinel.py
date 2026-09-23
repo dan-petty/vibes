@@ -288,7 +288,21 @@ def _octet(part: str) -> int:
     return int(lowered, 10)
 
 
-def _parse_address(token: str):
+def _parse_dotted_quad(token: str) -> ipaddress.IPv4Address | None:
+    """Parse dotted-quad with resolver octets (hex, octal, decimal)."""
+    parts = token.split(".")
+    if len(parts) != 4:
+        return None
+    try:
+        octets = [_octet(part) for part in parts]
+    except ValueError:
+        return None
+    if not all(0 <= val <= 255 for val in octets):
+        return None
+    return ipaddress.IPv4Address(".".join(str(val) for val in octets))
+
+
+def _parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse an address the way a resolver does, or return None if it is not one.
 
     `ipaddress.ip_address` refuses any octet with a leading zero; `inet_aton` and every
@@ -296,30 +310,31 @@ def _parse_address(token: str):
     therefore fails **open** on the one notation an attacker would choose. Kept in step with
     `tools/sanitization_policy.py`; `tests/test_address_policy_agreement.py` asserts it.
     """
-    parts = token.split(".")
-    if len(parts) == 4:
-        try:
-            octets = [_octet(part) for part in parts]
-        except ValueError:
-            octets = []
-        if octets and all(0 <= value <= 255 for value in octets):
-            return ipaddress.ip_address(".".join(str(value) for value in octets))
+    quad = _parse_dotted_quad(token)
+    if quad is not None:
+        return quad
     try:
         return ipaddress.ip_address(token)
     except ValueError:
         return None
 
 
+def _in_network_list(
+    ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    networks: Sequence[ipaddress.IPv4Network | ipaddress.IPv6Network],
+) -> bool:
+    """Check if IP address falls within any network of matching version."""
+    return any(net.version == ip_obj.version and ip_obj in net for net in networks)
+
+
 def _is_prohibited_ip(match: str) -> bool:
     """Return True if match is a private IP not in allowed documentation networks."""
     ip_obj = _parse_address(match)
-    if ip_obj is None:
+    if ip_obj is None or ip_obj.is_loopback or ip_obj.is_unspecified:
         return False
-    if any(ip_obj in net for net in ALLOWED_DOCUMENTATION_NETWORKS if net.version == ip_obj.version):
+    if _in_network_list(ip_obj, ALLOWED_DOCUMENTATION_NETWORKS):
         return False
-    if ip_obj.is_loopback or ip_obj.is_unspecified:
-        return False
-    return any(ip_obj in net for net in PRIVATE_HOST_NETWORKS if net.version == ip_obj.version)
+    return _in_network_list(ip_obj, PRIVATE_HOST_NETWORKS)
 
 
 def _is_url_with_example(text: str) -> bool:
