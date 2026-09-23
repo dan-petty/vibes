@@ -24,6 +24,7 @@ from docs_validator import (
     DocsValidator,
     auto_fix_content,
     contrast_ratio,
+    mask_code_spans,
 )
 from docs_validator import (
     main as docs_validator_main,
@@ -687,3 +688,38 @@ def test_directory_map_rule_skips_documents_that_draw_no_tree(tmp_path: Path) ->
     lines = doc.read_text(encoding="utf-8").splitlines()
     with mock.patch.object(doc_core.os, "scandir", side_effect=AssertionError("scanned")):
         assert check_directory_maps(lines, doc) == []
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("see `[text](url)` here", "see               here"),
+        ("real [a](./README.md) link", "real [a](./README.md) link"),
+        ("``a ` b`` and [x](y)", "          and [x](y)"),
+        ("`![alt](src)` rendered", "              rendered"),
+        ("unclosed `backtick [a](b)", "unclosed `backtick [a](b)"),
+    ],
+)
+def test_a_link_inside_backticks_is_not_a_link(line: str, expected: str) -> None:
+    """Any document *about* Markdown reported its own examples as broken links.
+
+    `[text](url)` in prose resolved `url` as a path and said it did not exist. Masking
+    rather than deleting keeps every other column where it was, so a finding elsewhere on
+    the line still points at the right place. An unclosed span is left alone, because
+    guessing where it ends would blank the rest of a line that is ordinary prose.
+    """
+    assert mask_code_spans(line) == expected
+
+
+def test_a_document_full_of_markdown_examples_validates_clean(tmp_path: Path) -> None:
+    """The regression, end to end rather than on the helper.
+
+    The crawler's README describes the Markdown its extractor emits, and every example in
+    it was reported as a broken link before code spans were masked.
+    """
+    document = tmp_path / "README.md"
+    document.write_text(
+        "# Title\n\nLinks are inlined as `[text](url)` and images as `![alt](src)`.\n",
+        encoding="utf-8",
+    )
+    assert [f for f in DocsValidator().validate_file(document) if f.category == "link"] == []

@@ -182,15 +182,19 @@ def _is_url_with_example(text: str) -> bool:
 
 
 def _extract_disallowed_subdomain(text: str) -> str | None:
-    """Extract and return any non-canonical subdomain of example.com found in URLs."""
+    """Return the first non-canonical subdomain of example.com in any URL in the text.
+
+    Every URL in the string, never only the first. `re.search` stopped at the first match,
+    so a literal holding a compliant URL followed by a subdomain was read as clean — and a
+    docstring or a fixture naming two endpoints is the ordinary case, not a contrived one.
+    """
     if not _is_url_with_example(text):
         return None
-    match = re.search(r"https?://([^/:]+)", text)
-    if not match:
-        return None
-    hostname = match.group(1)
-    is_subdomain = hostname != CANONICAL_MOCK_DOMAIN and hostname.endswith(f".{CANONICAL_MOCK_DOMAIN}")
-    return hostname if is_subdomain else None
+    for match in re.finditer(r"https?://([^/:\s\)\]\"']+)", text):
+        hostname = match.group(1)
+        if hostname != CANONICAL_MOCK_DOMAIN and hostname.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
+            return hostname
+    return None
 
 
 class SanitizationVisitor(ast.NodeVisitor):

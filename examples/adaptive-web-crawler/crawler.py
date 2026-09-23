@@ -11,16 +11,21 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
-import re
 import socket
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from html.parser import HTMLParser
 from pathlib import Path
-from typing import ClassVar
 from urllib.parse import urldefrag, urljoin, urlparse
+
+# Importable whether this file is run from its own directory, imported by a test runner
+# rooted elsewhere, or copied out of the repository, which is what an exhibit is for.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from markdown_extract import ExtractedDocument, extract
 
 logger = logging.getLogger(__name__)
 
@@ -88,92 +93,12 @@ class CrawledPage:
     quality: PageQuality
     token_estimate: int
     duration_seconds: float
-
-
-class HTMLContentCleaner(HTMLParser):
-    """Strips noisy boilerplate and extracts clean markdown from HTML."""
-
-    IGNORE_TAGS: ClassVar[set[str]] = {
-        "script", "style", "nav", "footer", "header", "noscript", "svg",
-    }
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.ignore_depth = 0
-        self.in_title = False
-        self.page_title = ""
-        self.lines: list[str] = []
-        self.links: list[str] = []
-
-    def _should_ignore_tag(self, tag_lower: str) -> bool:
-        if tag_lower in self.IGNORE_TAGS:
-            self.ignore_depth += 1
-            return True
-        return self.ignore_depth > 0
-
-    def _handle_a_tag(self, attrs: list[tuple[str, str | None]]) -> None:
-        hrefs = [val for name, val in attrs if name.lower() == "href" and val]
-        self.links.extend(hrefs)
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        """Process opening HTML tag and extract relevant metadata or links."""
-        tag_lower = tag.lower()
-        if self._should_ignore_tag(tag_lower):
-            return
-        if tag_lower == "title":
-            self.in_title = True
-            return
-        if tag_lower == "a":
-            self._handle_a_tag(attrs)
-            return
-
-        prefix = self._tag_prefix(tag_lower)
-        if prefix:
-            self.lines.append(prefix)
-
-    def _handle_ignore_endtag(self, tag_lower: str) -> bool:
-        if tag_lower in self.IGNORE_TAGS:
-            if self.ignore_depth > 0:
-                self.ignore_depth -= 1
-            return True
-        return self.ignore_depth > 0
-
-    def handle_endtag(self, tag: str) -> None:
-        """Process closing HTML tag and append structure breaks."""
-        tag_lower = tag.lower()
-        if self._handle_ignore_endtag(tag_lower):
-            return
-        if tag_lower == "title":
-            self.in_title = False
-            return
-        if tag_lower in ("h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "li"):
-            self.lines.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        """Process text node content outside ignored boilerplates."""
-        if self.ignore_depth > 0:
-            return
-        if self.in_title:
-            self.page_title += data.strip()
-            return
-        text = data.strip()
-        if text:
-            self.lines.append(text + " ")
-
-    def _tag_prefix(self, tag: str) -> str | None:
-        if tag in ("p", "div", "section", "article"):
-            return "\n"
-        if tag == "li":
-            return "\n- "
-        if len(tag) == 2 and tag[0] == "h" and tag[1].isdigit():
-            return f"\n{'#' * int(tag[1])} "
-        return None
-
-    def get_clean_content(self) -> tuple[str, str, list[str]]:
-        """Return sanitized page title, cleaned text, and extracted links."""
-        raw_text = "".join(self.lines).strip()
-        clean_text = re.sub(r"\n{3,}", "\n\n", raw_text)
-        return self.page_title, clean_text, self.links
+    # Which region the text came from, and anything the caller must know before using it.
+    # An empty `markdown_content` is ambiguous on its own: a page with nothing to say and
+    # a page whose content was all inside chrome are the same value, and only one of them
+    # is worth re-fetching with a browser.
+    region: str = "body"
+    extraction_warnings: list[str] = field(default_factory=list)
 
 
 class SPADetector:
@@ -341,6 +266,19 @@ class ExtractionOutcome:
     title: str = ""
     content: str = ""
     links: list[str] = field(default_factory=list)
+    region: str = "body"
+    warnings: list[str] = field(default_factory=list)
+
+
+def _outcome(document: ExtractedDocument) -> ExtractionOutcome:
+    """Carry an extraction's result and its caveats into the crawler's own shape."""
+    return ExtractionOutcome(
+        title=document.title,
+        content=document.markdown,
+        links=document.links,
+        region=document.region,
+        warnings=document.warnings,
+    )
 
 
 class AdaptiveWebCrawler:
@@ -392,12 +330,10 @@ class AdaptiveWebCrawler:
             self.strategy_store.record_rate_limit(domain)
             return self._build_page(url, ExtractionOutcome(), ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED, start_time)
 
-        cleaner = HTMLContentCleaner()
-        cleaner.feed(html)
-        title, text, links = cleaner.get_clean_content()
-        quality = SPADetector.analyze(html, text)
+        document = extract(html, url)
+        quality = SPADetector.analyze(html, document.markdown)
 
-        return self._build_page(url, ExtractionOutcome(title, text, links), ExtractionTier.STATIC_HTTP, quality, start_time)
+        return self._build_page(url, _outcome(document), ExtractionTier.STATIC_HTTP, quality, start_time)
 
     def _attempt_headless_extract(
         self, url: str, domain: str, wait_selector: str, start_time: float
@@ -407,12 +343,11 @@ class AdaptiveWebCrawler:
             self.strategy_store.record_rate_limit(domain)
             return self._build_page(url, ExtractionOutcome(), ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED, start_time)
 
-        cleaner = HTMLContentCleaner()
-        cleaner.feed(html)
-        title, text, links = cleaner.get_clean_content()
+        document = extract(html, url)
+        text = document.markdown
         quality = PageQuality.HIGH if len(text) >= 100 else PageQuality.PARTIAL
 
-        return self._build_page(url, ExtractionOutcome(title, text, links), ExtractionTier.HEADLESS_BROWSER, quality, start_time)
+        return self._build_page(url, _outcome(document), ExtractionTier.HEADLESS_BROWSER, quality, start_time)
 
     def _build_page(
         self,
@@ -435,6 +370,8 @@ class AdaptiveWebCrawler:
             links=resolved_links[:50],
             tier_used=tier,
             quality=quality,
+            region=extraction.region,
+            extraction_warnings=extraction.warnings,
             token_estimate=token_estimate,
             duration_seconds=duration,
         )

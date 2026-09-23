@@ -150,7 +150,7 @@ def test_an_external_attribute_is_accepted_without_a_registry_entry() -> None:
     findings = semconv.validate(
         CONVENTION, INFERENCE, "chat m", "client",
         {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai",
-         "server.address": "api.example.com"},
+         "server.address": "example.com"},
     )
     assert findings == []
 

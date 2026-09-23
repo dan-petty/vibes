@@ -413,6 +413,24 @@ def _validate_link_target(
     return None
 
 
+# CommonMark opens a code span with a run of backticks and closes it with a run of exactly
+# the same length. Masking rather than deleting keeps every other column where it was, so a
+# finding still points at the right place in the line.
+_CODE_SPAN_RE: Final[re.Pattern[str]] = re.compile(r"(?P<ticks>`+)(?P<body>.+?)(?P=ticks)")
+
+
+def mask_code_spans(line: str) -> str:
+    """Blank out inline code spans so their contents are not read as markup.
+
+    A link inside backticks is not a link. Without this, any document *about* Markdown
+    reports its own examples as broken links — `[text](url)` in prose resolved `url` as a
+    path and said it did not exist. The rule is the one this repository keeps arriving at
+    from other directions: text inside a quoting construct is data, and a scanner that
+    ignores the quoting turns it back into syntax.
+    """
+    return _CODE_SPAN_RE.sub(lambda match: " " * len(match.group(0)), line)
+
+
 def _check_line_links(
     line: str,
     line_no: int,
@@ -422,6 +440,7 @@ def _check_line_links(
 ) -> list[DocFinding]:
     """Inspect a single markdown line for whitespace malformations and target link targets."""
     line_findings: list[DocFinding] = []
+    line = mask_code_spans(line)
     if _SPACE_LINK_RE.search(line):
         line_findings.append(
             DocFinding(

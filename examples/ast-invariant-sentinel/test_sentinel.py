@@ -266,3 +266,20 @@ def test_surrounding_link_local_range_is_still_flagged(tmp_path):
     """Only the well-known constant is exempt, not the autoconfigured network around it."""
     module = _write_module(tmp_path, "leak.py", 'HOST = "169.254.12.34"\n')
     assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]
+
+
+def test_a_subdomain_after_a_compliant_url_is_still_caught(tmp_path: Path) -> None:
+    """The detector read only the first URL in a literal.
+
+    A string holding a compliant endpoint followed by a subdomain was reported clean, and a
+    docstring or fixture naming two endpoints is the ordinary case. The scan that certified
+    this repository therefore certified strings it had only partly read.
+    """
+    source = tmp_path / "mod.py"
+    source.write_text(
+        'DOCS = "primary https://example.com/a, mirror https://mirror.example.com/b"\n',
+        encoding="utf-8",
+    )
+    report = audit_targets([source])
+    assert [v.invariant for v in report.violations] == ["ZeroTrustSanitization"]
+    assert "mirror.example.com" in report.violations[0].message
