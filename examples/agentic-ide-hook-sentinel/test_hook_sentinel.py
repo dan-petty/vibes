@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import signal
 import time
 from pathlib import Path
 
@@ -121,13 +122,19 @@ def test_run_isolated_command_success(tmp_path: Path) -> None:
 
 
 def test_run_isolated_command_timeout(tmp_path: Path) -> None:
-    """Ensure runaway subprocesses are terminated via process group kill on timeout."""
+    """Ensure runaway subprocesses are terminated via process group kill on timeout.
+
+    The expected exit code changed from `-1` to `-SIGTERM`. It was a placeholder: the
+    success branch reports `proc.returncode`, where POSIX spells a signal death as `-N`, so
+    `-1` claimed the child died of SIGHUP — a signal nothing here sends. This assertion had
+    been pinning that.
+    """
     sentinel = IdeHookSentinel(tmp_path)
     result = sentinel.run_isolated_command(
         ["python3", "-c", "import time; time.sleep(10)"],
         timeout_seconds=0.3,
     )
-    assert (result.exit_code, result.timed_out) == (-1, True)
+    assert (result.exit_code, result.timed_out) == (-signal.SIGTERM, True)
 
 
 def test_evaluate_lsp_diagnostics() -> None:
@@ -154,7 +161,9 @@ def test_evaluate_lsp_diagnostics() -> None:
         err_eval.is_clean,
         err_eval.error_count,
         err_eval.warning_count,
-        "line 42" in err_eval.prescriptive_guidance,
+        # 43, not 42: LSP `Position.line` is zero-based and editors display one-based
+        # numbers, so the raw value pointed the self-healing loop one line above the defect.
+        "line 43" in err_eval.prescriptive_guidance,
         "Type 'str' is not assignable" in err_eval.prescriptive_guidance,
     ) == (False, 1, 1, True, True)
 
@@ -203,3 +212,53 @@ def test_a_child_that_ignores_sigterm_still_returns_within_the_grace_period() ->
     )
     elapsed = time.monotonic() - started
     assert (result.timed_out, elapsed < 30.0) == (True, True)
+
+
+# --- LSP conformance ---------------------------------------------------------------------
+
+
+def test_a_diagnostic_with_no_severity_is_treated_as_an_error() -> None:
+    """LSP 3.17: an omitted severity is the client's to interpret, and Error is recommended.
+
+    The membership test matched neither the error list nor the warning list, so such a
+    diagnostic was dropped from both counts and a file carrying a hard compile error came
+    back `is_clean=True`. The gate inverted: a server declining to grade its own finding
+    read as a passing file, and the documented consumer therefore never called
+    `send_feedback`.
+    """
+    evaluation = hook_sentinel.IdeHookSentinel.evaluate_lsp_diagnostics(
+        "m.py", [{"message": "undefined name", "range": {"start": {"line": 0}}}]
+    )
+    assert (evaluation.is_clean, evaluation.error_count) == (False, 1)
+
+
+def test_a_graded_warning_still_only_counts_as_a_warning() -> None:
+    """Defaulting to Error must not promote everything a server did grade."""
+    evaluation = hook_sentinel.IdeHookSentinel.evaluate_lsp_diagnostics(
+        "m.py", [{"severity": 2, "message": "w", "range": {"start": {"line": 0}}}]
+    )
+    assert (evaluation.is_clean, evaluation.warning_count) == (True, 1)
+
+
+def test_a_zero_based_lsp_line_is_reported_the_way_an_editor_shows_it() -> None:
+    """`Position.line` is zero-based; every editor displays one-based line numbers.
+
+    Passing the raw value through pointed the self-healing loop one line above the defect.
+    Verified against a real `ruff server`, which reports line 42 for a defect on file line 43.
+    """
+    evaluation = hook_sentinel.IdeHookSentinel.evaluate_lsp_diagnostics(
+        "m.py", [{"severity": 1, "message": "boom", "range": {"start": {"line": 42}}}]
+    )
+    assert "line 43" in evaluation.prescriptive_guidance
+
+
+def test_a_timed_out_command_reports_the_signal_that_reaped_it() -> None:
+    """The success branch reports `proc.returncode`, where `-N` spells a signal death.
+
+    A hardcoded `-1` therefore claimed the child died of SIGHUP — a signal nothing here
+    sends — so a reader could not tell "timed out and was terminated" from "was hung up on".
+    """
+    sentinel = hook_sentinel.IdeHookSentinel(workspace_root=Path("."))
+    result = sentinel.run_isolated_command(["python3", "-c", "import time; time.sleep(30)"],
+                                           timeout_seconds=0.4)
+    assert (result.timed_out, result.exit_code) == (True, -signal.SIGTERM)

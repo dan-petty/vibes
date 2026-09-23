@@ -43,6 +43,25 @@ IPV4_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
 # How long a process group is given to honour SIGTERM before SIGKILL follows.
 GRACE_SECONDS: Final[float] = 2.0
 
+# LSP DiagnosticSeverity. An omitted severity is the client's to interpret, and the
+# specification recommends Error — the safe reading, since a server that declines to grade a
+# finding has not said the finding is unimportant.
+LSP_SEVERITY_ERROR: Final[int] = 1
+LSP_SEVERITY_WARNING: Final[int] = 2
+_LSP_SEVERITY_NAMES: Final[dict[str, int]] = {
+    "error": LSP_SEVERITY_ERROR, "warning": LSP_SEVERITY_WARNING, "information": 3, "hint": 4,
+}
+
+
+def _lsp_severity(diagnostic: dict[str, Any]) -> int:
+    """Return a diagnostic's severity, defaulting to Error when the server omitted one."""
+    raw = diagnostic.get("severity")
+    if isinstance(raw, bool) or raw is None:
+        return LSP_SEVERITY_ERROR
+    if isinstance(raw, int):
+        return raw
+    return _LSP_SEVERITY_NAMES.get(str(raw).strip().lower(), LSP_SEVERITY_ERROR)
+
 ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]] = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
@@ -303,7 +322,13 @@ class IdeHookSentinel:
                 stdout, stderr = proc.communicate()
             return CommandResult(
                 command=cmd_tuple,
-                exit_code=-1,
+                # The signal that actually reaped it, not a placeholder. The success branch
+                # reports `proc.returncode`, where POSIX convention spells a signal death as
+                # `-N`, so a hardcoded `-1` claimed the child died of SIGHUP — a signal
+                # nothing here sends. A reader distinguishing "timed out and was terminated"
+                # from "was hung up on" could not, and the real value is -15, or -9 once the
+                # escalation above fires.
+                exit_code=proc.returncode,
                 stdout=stdout,
                 stderr=stderr,
                 timed_out=True,
@@ -326,8 +351,14 @@ class IdeHookSentinel:
         diagnostics: Sequence[dict[str, Any]],
     ) -> DiagnosticEvaluation:
         """Evaluate Language Server diagnostics and synthesize prescriptive agent guidance."""
-        errors = [d for d in diagnostics if d.get("severity") in (1, "error", "Error")]
-        warnings = [d for d in diagnostics if d.get("severity") in (2, "warning", "Warning")]
+        # LSP 3.17 `types/diagnostic.md`: "If omitted it is up to the client to interpret
+        # diagnostics as error, warning, info or hint" — and it recommends treating an
+        # omitted severity as an Error. The previous membership test matched neither list, so
+        # a diagnostic with no severity was dropped from *both* counts and a file carrying a
+        # hard compile error came back `is_clean=True`. The gate inverted: silence from a
+        # server that declines to grade its own findings read as a passing file.
+        errors = [d for d in diagnostics if _lsp_severity(d) == LSP_SEVERITY_ERROR]
+        warnings = [d for d in diagnostics if _lsp_severity(d) == LSP_SEVERITY_WARNING]
 
         if not errors:
             return DiagnosticEvaluation(
@@ -339,7 +370,11 @@ class IdeHookSentinel:
             )
 
         top_err = errors[0]
-        line = top_err.get("range", {}).get("start", {}).get("line", 1)
+        # LSP `Position.line` is zero-based (§Position: "Line position in a document
+        # (zero-based)"), and every editor displays one-based line numbers. Passing the raw
+        # value through pointed the self-healing loop one line above the defect — verified
+        # against a real `ruff server`, which reported line 42 for a defect on file line 43.
+        line = top_err.get("range", {}).get("start", {}).get("line", 0) + 1
         msg = top_err.get("message", "Unknown compiler error")
 
         guidance = (
