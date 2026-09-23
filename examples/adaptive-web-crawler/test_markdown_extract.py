@@ -181,11 +181,7 @@ def test_provenance_names_the_source() -> None:
 # --- The collision that cost the most -----------------------------------------------------
 
 
-OUR_ATTRIBUTES = {
-    "base_url", "blocks", "links", "title", "regions_seen", "dropped",
-    "_skip_stack", "_in_title", "_fragments", "_prefix", "_code", "_code_language",
-    "_list_depth", "_href",
-}
+OUR_ATTRIBUTES = {"context", "chrome", "builder", "in_title", "list_depth", "href"}
 
 
 def test_no_attribute_shadows_one_the_parser_owns() -> None:
