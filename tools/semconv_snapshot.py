@@ -35,6 +35,7 @@ import json
 import re
 import sys
 import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Final
 
@@ -150,25 +151,41 @@ def _group_attributes(spans: dict[str, Any]) -> dict[str, list[tuple[str, str]]]
     return groups
 
 
+def _expand_ref_group(
+    item: dict[str, Any], span_type: str, groups: dict[str, list[tuple[str, str]]]
+) -> dict[str, str]:
+    """Expand a referenced attribute group into a dictionary mapping."""
+    referenced = str(item["ref_group"])
+    if referenced not in groups:
+        raise SnapshotError(f"{span_type}: unknown ref_group {referenced!r}")
+    return dict(groups[referenced])
+
+
+def _resolve_direct_attribute(
+    item: dict[str, Any], resolved: dict[str, str]
+) -> tuple[str, str] | None:
+    """Resolve requirement level for a directly referenced attribute item."""
+    if "ref" not in item:
+        return None
+    name = str(item["ref"])
+    stated = _requirement(item.get("requirement_level"))
+    if stated is not None or name not in resolved:
+        return name, stated or DEFAULT_REQUIREMENT
+    return None
+
+
 def _span_attributes(span: dict[str, Any], groups: dict[str, list[tuple[str, str]]]) -> dict[str, str]:
     """Resolve one span's attributes, expanding every `ref_group` it names."""
     resolved: dict[str, str] = {}
+    span_type = str(span.get("type", ""))
     for item in span.get("attributes", []):
         if "ref_group" in item:
-            referenced = str(item["ref_group"])
-            if referenced not in groups:
-                raise SnapshotError(f"{span['type']}: unknown ref_group {referenced!r}")
-            resolved.update(dict(groups[referenced]))
+            resolved.update(_expand_ref_group(item, span_type, groups))
             continue
-        if "ref" not in item:
-            continue
-        name = str(item["ref"])
-        stated = _requirement(item.get("requirement_level"))
-        # Only an explicit level overrides one already resolved from a group. A silent
-        # re-reference states nothing, and treating nothing as `recommended` is what
-        # downgraded a required attribute here.
-        if stated is not None or name not in resolved:
-            resolved[name] = stated or DEFAULT_REQUIREMENT
+        direct = _resolve_direct_attribute(item, resolved)
+        if direct is not None:
+            name, level = direct
+            resolved[name] = level
     return dict(sorted(resolved.items()))
 
 
@@ -187,6 +204,28 @@ def span_table(spans: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return dict(sorted(table.items()))
 
 
+def _all_attributes(deprecated: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """Yield each attribute dictionary across all groups."""
+    for group in deprecated.get("groups", []):
+        yield from group.get("attributes", [])
+
+
+def _extract_deprecated_note(attribute: dict[str, Any]) -> tuple[str, str] | None:
+    """Return (id, note) if attribute carries a deprecation note, else None."""
+    key = attribute.get("id")
+    if not key or "deprecated" not in attribute:
+        return None
+    return str(key), f"{attribute['deprecated'].get('note', '')}".strip()
+
+
+def _iter_deprecated_attributes(deprecated: dict[str, Any]) -> Iterator[tuple[str, str]]:
+    """Yield (key, note) for each attribute carrying a deprecation note."""
+    for attribute in _all_attributes(deprecated):
+        extracted = _extract_deprecated_note(attribute)
+        if extracted is not None:
+            yield extracted
+
+
 def deprecation_table(deprecated: dict[str, Any]) -> dict[str, dict[str, str | None]]:
     """Record what became of every deprecated attribute, and refuse to guess.
 
@@ -197,16 +236,12 @@ def deprecation_table(deprecated: dict[str, Any]) -> dict[str, dict[str, str | N
     """
     table: dict[str, dict[str, str | None]] = {}
     unresolved: list[str] = []
-    for group in deprecated.get("groups", []):
-        for attribute in group.get("attributes", []):
-            key = attribute.get("id")
-            if not key or "deprecated" not in attribute:
-                continue
-            outcome = _outcome(f"{attribute['deprecated'].get('note', '')}".strip())
-            if outcome is None:
-                unresolved.append(str(key))
-            else:
-                table[str(key)] = outcome
+    for key, note in _iter_deprecated_attributes(deprecated):
+        outcome = _outcome(note)
+        if outcome is None:
+            unresolved.append(key)
+        else:
+            table[key] = outcome
     if unresolved:
         raise SnapshotError(f"unreadable deprecation note for {sorted(unresolved)}")
     return dict(sorted(table.items()))
