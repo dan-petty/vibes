@@ -160,6 +160,24 @@ def _classify_path(path: str, declared: dict[str, str] | None = None) -> str:
     return classify(path, declared)[0]
 
 
+def _match_declared_kind(path: str, declared: dict[str, str] | None) -> str | None:
+    """Return kind declared in manifest if path matches declared prefix."""
+    items = declared.items() if declared else ()
+    for prefix, kind in items:
+        if path == prefix or path.startswith(prefix + "/"):
+            return kind
+    return None
+
+
+def _classify_by_location(path: str) -> str:
+    """Classify kind by directory prefix heuristics."""
+    if path.startswith(CAPABILITY_PREFIXES):
+        return "capability"
+    if path.startswith(QUALITY_PREFIXES):
+        return "quality"
+    return "other"
+
+
 def classify(path: str, declared: dict[str, str] | None = None) -> tuple[str, str]:
     """Return the kind and how it was decided: by `declaration` or by `location`.
 
@@ -168,14 +186,10 @@ def classify(path: str, declared: dict[str, str] | None = None) -> tuple[str, st
     about the directory layout, and saying which of the two answered is the difference
     between a measurement and a guess with a percent sign on it.
     """
-    for prefix, kind in (declared or {}).items():
-        if path == prefix or path.startswith(prefix + "/"):
-            return kind, "declaration"
-    if path.startswith(CAPABILITY_PREFIXES):
-        return "capability", "location"
-    if path.startswith(QUALITY_PREFIXES):
-        return "quality", "location"
-    return "other", "location"
+    declared_kind = _match_declared_kind(path, declared)
+    if declared_kind is not None:
+        return declared_kind, "declaration"
+    return _classify_by_location(path), "location"
 
 
 def investment(window: int, root: Path, manifest_path: Path | None = None) -> Balance:

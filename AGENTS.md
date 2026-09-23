@@ -537,6 +537,9 @@ Stochastic language generation must always be bounded by deterministic mechanica
 13. **Reporting Pipeline Decomposition & Baseline Emission Isolation**:
     - Coupling baseline file persistence, log schema serialization, and console breakdown rendering within monolithic command handlers inflates decision complexity ($M \ge 7$).
     - Factor baseline capture into conditional helpers (`_record_baseline_if_requested`) and log emission/summary printing into dedicated output handlers (`_write_log_and_summarize`). This ensures CLI report handlers remain compact ($M \le 4$, depth $\le 1$) while isolating side effects.
+14. **Manifest Declaration Matching & Location Fallback Decomposition**:
+    - Coupling dictionary key iteration over manifest paths with fallback directory prefix classification within a single path classifier inflates McCabe complexity ($M \ge 7$) and nesting depth ($depth \ge 3$).
+    - Decompose path classification into dedicated single-responsibility helpers: `_match_declared_kind` for manifest prefix lookups and `_classify_by_location` for directory heuristics (`CAPABILITY_PREFIXES`, `QUALITY_PREFIXES`). This reduces classifier complexity to $M = 2$, depth $\le 1$ while keeping path matching logic strictly modular.
 
 ---
 
