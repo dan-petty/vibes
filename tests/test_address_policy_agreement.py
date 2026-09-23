@@ -13,7 +13,6 @@ scanned IPv6, so `http://[fd00::1]/` walked through every egress guard untouched
 
 from __future__ import annotations
 
-import ipaddress
 import sys
 from pathlib import Path
 
@@ -27,8 +26,9 @@ sys.path.insert(0, str(REPO_ROOT / "examples" / "agentic-ide-hook-sentinel"))
 
 import fuzzer
 import hook_sentinel
+import resource_iteration_workbench as workbench
 import sentinel
-from sanitization_policy import is_private_host, private_hosts_in
+from sanitization_policy import is_private_host, parse_address, private_hosts_in
 
 # Every address whose classification the five implementations must agree on. The first
 # group is what "private host" means; the second is everything `is_private` also covers and
@@ -56,13 +56,30 @@ CORPUS: dict[str, bool] = {
     "169.254.169.254": False,
     "8.8.8.8": False,
     "172.32.0.1": False,
+    # Notations a resolver accepts and the strict parser refuses. These are the reason this
+    # test exists and the reason its first version did not work: the corpus held canonical
+    # spellings only, so four of five implementations agreed perfectly while failing open on
+    # exactly the notation the rule is about. A corpus of the easy cases is an agreement
+    # test that agrees about nothing.
+    "172.020.0.2": True,
+    "0xac.0x10.0.2": True,
+    "012.0.0.1": True,   # 012 octal is 10, so this is 10.0.0.1
+
+    "0x08.0x08.0x08.0x08": False,
 }
 
+def _policy(address: str) -> bool:
+    """Classify through the policy's own parser, which is part of the policy."""
+    parsed = parse_address(address)
+    return parsed is not None and is_private_host(parsed)
+
+
 IMPLEMENTATIONS = {
-    "sanitization_policy": lambda a: is_private_host(ipaddress.ip_address(a)),
+    "sanitization_policy": _policy,
     "ast-invariant-sentinel": lambda a: sentinel._is_prohibited_ip(a),
     "prompt-mutation-fuzzer": lambda a: fuzzer.InvariantAuditor._is_private_leak(a),
     "agentic-ide-hook-sentinel": lambda a: hook_sentinel._check_private_ip(a),
+    "resource-iteration-workbench": lambda a: workbench.ASTMetricCalculator._is_private_leak(a),
 }
 
 

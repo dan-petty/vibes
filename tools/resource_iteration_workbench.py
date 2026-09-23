@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import ipaddress
 import json
 import re
 import subprocess
@@ -29,7 +28,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from sanitization_policy import is_documentable
+from sanitization_policy import is_private_host, parse_address, private_hosts_in
 from source_tree_policy import iter_source_files
 
 # Canonical quality thresholds
@@ -281,18 +280,24 @@ class ASTMetricCalculator:
 
     @staticmethod
     def _is_private_leak(ip_str: str) -> bool:
-        """Check if an IPv4 address string is an unapproved RFC 1918 leak."""
-        try:
-            ip_obj = ipaddress.ip_address(ip_str)
-            return ip_obj.is_private and not is_documentable(ip_obj)
-        except ValueError:
-            return False
+        """Report whether an address names a real machine on a private network.
+
+        Delegated to `sanitization_policy`, which this module can simply import. It used to
+        carry a copy built on `ipaddress.is_private` — the wider IANA set — so it reported
+        a bind-to-all address as a leak, missed RFC 6598 shared address space entirely —
+        CPython reports `is_private` as False for that whole block — and failed open on an
+        octal dotted quad.
+        """
+        address = parse_address(ip_str)
+        return address is not None and is_private_host(address)
 
     @classmethod
     def _check_ip_string(cls, text: str, lineno: int, violations: list[str]) -> None:
-        for match in IPV4_PATTERN.findall(text):
-            if cls._is_private_leak(match):
-                violations.append(f"Line {lineno}: Hardcoded RFC 1918 IP '{match}'. Use RFC 5737 or loopback.")
+        """Report every private host address in a string, IPv4 and IPv6 alike."""
+        for match in private_hosts_in(text):
+            violations.append(
+                f"Line {lineno}: Private host address '{match}'. Use RFC 5737 or loopback."
+            )
 
     @classmethod
     def _check_subdomain_string(cls, text: str, lineno: int, violations: list[str]) -> None:

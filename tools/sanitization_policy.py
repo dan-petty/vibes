@@ -104,8 +104,47 @@ def private_hosts_in(text: str) -> list[str]:
 
 def _kept(token: str) -> list[str]:
     """Return the address if it parses and names a private host, else nothing."""
+    address = parse_address(token)
+    return [token] if address is not None and is_private_host(address) else []
+
+
+def parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Parse an address the way a resolver does, or return None if it is not one.
+
+    `ipaddress.ip_address` is deliberately strict and refuses any octet with a leading
+    zero, because `0177` meant octal historically and decimal now. `inet_aton` and every
+    libc-backed client still accept it, so a guard that treats the `ValueError` as "not an
+    address" fails **open** on exactly the notation an attacker would choose.
+
+    That rule was written into `AGENTS.md` when one copy of this policy learned it, and the
+    other four kept failing open — which is what an agreement test is for, and what the
+    first version of that test missed by testing only canonical spellings.
+    """
+    parts = token.split(".")
+    if len(parts) != 4:
+        return _strict(token)
     try:
-        address = ipaddress.ip_address(token)
+        octets = [_octet(part) for part in parts]
     except ValueError:
-        return []
-    return [str(address)] if is_private_host(address) else []
+        return _strict(token)
+    if any(value < 0 or value > 255 for value in octets):
+        return _strict(token)
+    return ipaddress.ip_address(".".join(str(value) for value in octets))
+
+
+def _octet(part: str) -> int:
+    """Read one octet as a resolver would: 0x hex, leading-zero octal, else decimal."""
+    lowered = part.lower()
+    if lowered.startswith("0x"):
+        return int(lowered, 16)
+    if lowered.startswith("0") and len(lowered) > 1:
+        return int(lowered, 8)
+    return int(lowered, 10)
+
+
+def _strict(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Fall back to the strict parser for anything that is not a dotted quad."""
+    try:
+        return ipaddress.ip_address(token)
+    except ValueError:
+        return None
