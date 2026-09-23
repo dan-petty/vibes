@@ -100,7 +100,9 @@ def test_investment_counts_lines_so_a_sweep_cannot_look_like_a_build(tmp_path: P
         target.mkdir(parents=True)
         (target / "app.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / "tools").mkdir()
-    (tmp_path / "tools" / "gate.py").write_text("\n".join(f"line_{i} = {i}" for i in range(80)) + "\n", encoding="utf-8")
+    (tmp_path / "tools" / "gate.py").write_text(
+        "\n".join(f"line_{i} = {i}" for i in range(80)) + "\n", encoding="utf-8"
+    )
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "seed")
 
@@ -187,11 +189,18 @@ def test_a_capability_may_declare_more_than_one_path(tmp_path: Path) -> None:
     """One file per capability was the assumption, and it expired on the next change."""
     manifest = tmp_path / "capabilities.yaml"
     manifest.write_text(
-        yaml.safe_dump({"capabilities": [
-            {"key": "factory", "kind": "capability",
-             "path": "tools/app_factory.py",
-             "paths": ["tools/app_factory.py", "tools/contract_variables.py"]},
-        ]}),
+        yaml.safe_dump(
+            {
+                "capabilities": [
+                    {
+                        "key": "factory",
+                        "kind": "capability",
+                        "path": "tools/app_factory.py",
+                        "paths": ["tools/app_factory.py", "tools/contract_variables.py"],
+                    },
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     declared = declared_kinds(manifest)
@@ -263,10 +272,42 @@ def test_the_investment_measure_records_how_each_line_was_classified(tmp_path: P
     _git(tmp_path, "commit", "-qm", "one")
     manifest = tmp_path / "capabilities.yaml"
     manifest.write_text(
-        yaml.safe_dump({"capabilities": [
-            {"key": "factory", "kind": "capability", "paths": ["tools/app_factory.py"]},
-        ]}),
+        yaml.safe_dump(
+            {
+                "capabilities": [
+                    {"key": "factory", "kind": "capability", "paths": ["tools/app_factory.py"]},
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     measure = investment(5, tmp_path, manifest)
     assert measure.by_source == {"declaration": 1, "location": 1}
+
+
+def test_classification_helpers() -> None:
+    """Verify declared prefix matching and fallback location classification."""
+    from portfolio_balance import _classify_by_location, _match_declared_kind
+
+    declared = {
+        "tools/app_factory.py": "capability",
+        "custom/pkg": "quality",
+    }
+
+    declared_matches = (
+        _match_declared_kind("tools/app_factory.py", declared),
+        _match_declared_kind("custom/pkg/sub.py", declared),
+        _match_declared_kind("tools/other.py", declared),
+        _match_declared_kind("tools/other.py", None),
+    )
+
+    location_matches = (
+        _classify_by_location("examples/some/file.py"),
+        _classify_by_location("tools/some/tool.py"),
+        _classify_by_location("unknown/file.txt"),
+    )
+
+    assert (declared_matches, location_matches) == (
+        ("capability", "quality", None, None),
+        ("capability", "quality", "other"),
+    )
