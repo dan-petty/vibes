@@ -11,6 +11,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
+import re
 import socket
 import sys
 import time
@@ -18,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from urllib.parse import urldefrag, urljoin, urlparse
 
 # Importable whether this file is run from its own directory, imported by a test runner
@@ -286,6 +287,75 @@ def _outcome(document: ExtractedDocument) -> ExtractionOutcome:
     )
 
 
+# WHATWG HTML §13.2.3.2 gives the encoding sniffing order. `res.text` alone implements only
+# part of it: httpx honours a charset in the Content-Type and otherwise assumes UTF-8, so a
+# page declaring `<meta charset="windows-1252">` and nothing else came back as mojibake —
+# `Résumé café` as `R?sum? caf?` — and a UTF-8 BOM survived into the markdown as a leading
+# `\ufeff`. Both silently, and both irreversibly, because the fetcher returns `str` and the
+# bytes are gone by the time a caller could notice.
+_META_CHARSET_RE: Final[re.Pattern[bytes]] = re.compile(
+    rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_\-]+)""", re.IGNORECASE
+)
+
+# Byte order marks, which take precedence over every declaration (step 1).
+_BOMS: Final[tuple[tuple[bytes, str], ...]] = (
+    (b"\xef\xbb\xbf", "utf-8-sig"),
+    (b"\xff\xfe", "utf-16-le"),
+    (b"\xfe\xff", "utf-16-be"),
+)
+
+
+def _charset_from(content_type: str) -> str | None:
+    """Return the charset a Content-Type header declares, if any."""
+    match = re.search(r"charset=([\w-]+)", content_type or "", re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def decode_body(raw: bytes, content_type: str = "") -> str:
+    """Decode a response body the way a browser would, in the order the standard gives.
+
+    BOM first, then the transport's declared charset, then a prescan of the first 1024 bytes
+    for `<meta charset>`, then UTF-8. `utf-8-sig` is used for the UTF-8 BOM so the mark is
+    consumed rather than carried into the text as a zero-width character nobody can see.
+    """
+    for bom, encoding in _BOMS:
+        if raw.startswith(bom):
+            return raw.decode(encoding, errors="replace")
+    for candidate in (_charset_from(content_type), _meta_charset(raw)):
+        if candidate:
+            try:
+                return raw.decode(candidate, errors="replace")
+            except LookupError:
+                continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _meta_charset(raw: bytes) -> str | None:
+    """Prescan the first 1024 bytes for a `<meta charset>` declaration, as the standard does."""
+    match = _META_CHARSET_RE.search(raw[:1024])
+    return match.group(1).decode("ascii", errors="replace") if match else None
+
+
+def _status_failure(status_code: int) -> str | None:
+    """Return why a status code means "no page", or None when the body is the page.
+
+    Only 429 was ever compared. Every other error status — 403, 404, 500, 503 — had its
+    error page extracted as ordinary content, returned with no warning, and recorded as a
+    *successful* crawl, so the strategy store learned that a domain serving nothing but 404s
+    was working. The crawler's own `except` arm made it worse by synthesising a 500 whose
+    body reads `Fetch error: [Errno 111] Connection refused`: a refused connection was
+    laundered into a page and counted as a success.
+
+    A body that arrives with an error status is a server's explanation, not the document
+    that was asked for, and a model cannot tell the two apart from the text alone.
+    """
+    if status_code == 429:
+        return "rate_limited: the server asked us to slow down"
+    if 400 <= status_code < 600:
+        return f"http_error: the server answered {status_code}, so this body is not the page"
+    return None
+
+
 class AdaptiveWebCrawler:
     """Agentic web crawler with dynamic tier escalation and domain strategy memory."""
 
@@ -331,9 +401,13 @@ class AdaptiveWebCrawler:
 
     def _attempt_static_extract(self, url: str, domain: str, start_time: float) -> CrawledPage:
         status_code, html = self.http_fetcher(url, DEFAULT_BROWSER_HEADERS)
-        if status_code == 429:
-            self.strategy_store.record_rate_limit(domain)
-            return self._build_page(url, ExtractionOutcome(), ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED, start_time)
+        failure = _status_failure(status_code)
+        if failure is not None:
+            if status_code == 429:
+                self.strategy_store.record_rate_limit(domain)
+            return self._build_page(
+                url, ExtractionOutcome(warnings=[failure]), ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED, start_time
+            )
 
         document = extract(html, url)
         quality = SPADetector.analyze(html, document.markdown)
@@ -344,9 +418,13 @@ class AdaptiveWebCrawler:
         self, url: str, domain: str, wait_selector: str, start_time: float
     ) -> CrawledPage:
         status_code, html = self.headless_fetcher(url, wait_selector)
-        if status_code == 429:
-            self.strategy_store.record_rate_limit(domain)
-            return self._build_page(url, ExtractionOutcome(), ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED, start_time)
+        failure = _status_failure(status_code)
+        if failure is not None:
+            if status_code == 429:
+                self.strategy_store.record_rate_limit(domain)
+            return self._build_page(
+                url, ExtractionOutcome(warnings=[failure]), ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED, start_time
+            )
 
         document = extract(html, url)
         text = document.markdown
@@ -413,7 +491,9 @@ class AdaptiveWebCrawler:
             response = client.get(current, headers=headers)
             location = response.headers.get("location")
             if not response.has_redirect_location or not location:
-                return int(response.status_code), str(response.text)
+                return int(response.status_code), decode_body(
+                    response.content, response.headers.get("content-type", "")
+                )
             # Resolved against the current URL, because `Location` may be relative
             # (RFC 9110 §10.2.2), and validated before the next request is made.
             current = urljoin(current, location)

@@ -157,6 +157,7 @@ class PageContext:
     # on a document served from somewhere else entirely. Link resolution follows the page;
     # attribution does not.
     fetched_from: str = ""
+    base_seen: bool = False
     title: str = ""
     links: list[str] = field(default_factory=list)
     regions_seen: set[str] = field(default_factory=set)
@@ -245,7 +246,12 @@ class BlockBuilder:
         self._fragments = []
         prefix, self._prefix = self._prefix, ""
         if joined:
-            self.blocks.append(prefix + escape_block(joined) if not prefix else prefix + joined)
+            # The prefix is markup this extractor wrote; `joined` is the page's text, and it
+            # needs escaping either way. Skipping it whenever a prefix was present meant a
+            # list item or block quote whose text began `#` rendered a heading *inside* the
+            # container — and with a `<br>`, the following line broke out of the container
+            # entirely and became a sibling `<h1>`.
+            self.blocks.append(prefix + escape_block(joined))
 
     # --- Code ----------------------------------------------------------------------------
 
@@ -324,7 +330,13 @@ class ModelReadyExtractor(HTMLParser):
         if self.chrome.enter(name, attributes, name in self.VOID):
             return
         if name == "base" and attributes.get("href"):
-            self.context.base_url = self.context.resolve(attributes["href"])
+            # WHATWG HTML §4.2.3: the document base URL is frozen from the *first* base
+            # element with an href, in tree order. Letting every one overwrite meant a second
+            # `<base>` injected mid-body silently retargeted every link after it, while a
+            # browser reading the identical page followed the one in the head.
+            if not self.context.base_seen:
+                self.context.base_url = self.context.resolve(attributes["href"])
+                self.context.base_seen = True
             return
         if name in MAIN_REGIONS:
             self.context.regions_seen.add(name)

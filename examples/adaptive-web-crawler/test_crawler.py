@@ -337,6 +337,9 @@ class _FakeResponse:
     def __init__(self, status: int, location: str | None = None, text: str = "") -> None:
         self.status_code = status
         self.text = text
+        # The fetcher decodes from bytes now, per WHATWG §13.2.3.2, so a stand-in response
+        # has to carry them.
+        self.content = text.encode("utf-8")
         self.headers = {"location": location} if location else {}
         self.has_redirect_location = location is not None
 
@@ -379,3 +382,75 @@ def test_a_relative_location_is_resolved_before_it_is_validated() -> None:
     })
     status, text = crawler.AdaptiveWebCrawler()._follow_redirects(client, "http://example.com/a", {})
     assert (status, text, client.requested[-1]) == (200, "ok", "http://example.com/b")
+
+
+# --- A body is not a page --------------------------------------------------------------------
+
+
+def _mock_crawl(monkeypatch: pytest.MonkeyPatch, status: int, body: bytes,
+                headers: dict[str, str] | None = None) -> tuple[object, object]:
+    """Crawl one page from a mock transport, returning the page and the domain strategy."""
+    import httpx
+
+    def handler(_request: object) -> object:
+        return httpx.Response(status, content=body, headers=headers or {})
+
+    monkeypatch.setattr(httpx, "Client", _redirect_client(handler))
+    instance = crawler.AdaptiveWebCrawler()
+    page = instance.crawl_page("http://example.com/p")
+    return page, instance.strategy_store.get_strategy("example.com")
+
+
+@pytest.mark.parametrize("status", [403, 404, 500, 503])
+def test_an_error_status_is_not_a_successful_crawl(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    """429 was the only status ever compared.
+
+    Every other error had its error page extracted as ordinary content, returned with no
+    warning, and recorded as a *successful* crawl — so the strategy store learned a domain
+    serving nothing but 404s was working. A body arriving with an error status is the
+    server's explanation, not the document that was asked for, and a model cannot tell the
+    two apart from the text alone.
+    """
+    body = b"<html><body><main><p>Not found here</p></main></body></html>"
+    page, strategy = _mock_crawl(monkeypatch, status, body)
+    assert page.quality == crawler.PageQuality.BLOCKED
+    assert strategy.consecutive_successes == 0
+    assert page.extraction_warnings and str(status) in page.extraction_warnings[0]
+
+
+def test_a_successful_status_is_still_a_successful_crawl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refusing error pages must not refuse pages."""
+    body = b"<html><body><main><p>Real content here.</p></main></body></html>"
+    page, strategy = _mock_crawl(monkeypatch, 200, body)
+    assert (page.extraction_warnings, strategy.consecutive_successes) == ([], 1)
+
+
+# --- Decoding ---------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("body", "headers", "expected"),
+    [
+        ("<html><head><meta charset='windows-1252'></head><body><main><p>Résumé café</p>"
+         "</main></body></html>".encode("windows-1252"), None, "Résumé café"),
+        (b"\xef\xbb\xbf<html><body><main><p>Hello</p></main></body></html>", None, "Hello"),
+        ("<html><body><main><p>Résumé</p></main></body></html>".encode("windows-1252"),
+         {"content-type": "text/html; charset=windows-1252"}, "Résumé"),
+        ("<html><body><main><p>Café</p></main></body></html>".encode(), None, "Café"),
+    ],
+    ids=["meta-charset", "utf8-bom", "transport-charset", "plain-utf8"],
+)
+def test_a_body_is_decoded_the_way_a_browser_would(
+    monkeypatch: pytest.MonkeyPatch, body: bytes, headers: dict[str, str] | None, expected: str
+) -> None:
+    """WHATWG §13.2.3.2: BOM, then Content-Type, then a `<meta charset>` prescan, then UTF-8.
+
+    `res.text` implements only part of that, so a page declaring `windows-1252` in a meta tag
+    and nothing else arrived as mojibake, and a UTF-8 BOM survived into the markdown as a
+    zero-width character nobody can see. Both silent, and both irreversible once the fetcher
+    has returned a `str`.
+    """
+    page, _ = _mock_crawl(monkeypatch, 200, body, headers)
+    assert expected in page.markdown_content
