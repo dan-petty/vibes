@@ -66,6 +66,8 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Multi-Agent Concurrency & Workspace Hazards**](./observations/systems/06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md) | Concurrency & Swarm Dynamics | Eliminating working tree clobbering, SQLite coverage DB unlinking corruption, and cascading rebase live-locks with git worktrees, scoped data tiers, and FIFO PR shepherding. |
 | [**Agentic Project Self-Documentation**](./observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md) | Systems & Governance | Resolving the dual-audience paradox and the phantom architecture trap with a 4-tier living documentation architecture. |
 | [**Post-Harness Recursive Self-Improvement**](./observations/systems/28-recursive-self-improvement-and-the-post-harness-mandate.md) | Systems & Governance | Establishing the operational mandate for recursive self-improvement and scaling laws via asymmetric invariant verification ($P$ vs $NP$) and outward landscape telemetry. |
+| [**Epistemic Drift & The Unreliable Teacher**](./observations/systems/29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md) | Multi-Agent Verification | Resolving mitigation-refutation conflation and catalog self-contamination with tripartite verification and immutable epistemic seams. |
+
 
 ---
 
@@ -97,6 +99,8 @@ flowchart TD
 - [**Multi-Agent Codebase Concurrency**](./patterns/multi-agent-codebase-concurrency.md): Architectural spatial isolation, partitioned data tiers, and centralized resource arbitration enabling collision-free multi-agent swarm collaboration on a single codebase.
 - [**Multi-Tier Living Documentation**](./patterns/multi-tier-living-documentation.md): Decoupling deterministic AST extraction from constrained generative narrative synthesis, backed by fail-closed oracles and active compaction.
 - [**Invariant-Grounded Recursive Self-Improvement**](./patterns/invariant-grounded-recursive-self-improvement.md): Transforming autonomous evolution from unconstrained generative drift into a convergent, closed-loop engine bounded by deterministic AST sentinels, CEGIS constraint sets, and outward telemetry.
+- [**Epistemic Seam & Mitigated Defect Auditing**](./patterns/epistemic-seam-and-mitigated-defect-auditing.md): Eliminating silent defect drops and catalog drift by separating refutation from mitigation and restricting negative catalog learning to ground truth.
+
 
 ---
 
@@ -329,7 +333,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md
 │       ├── 26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md
 │       ├── 27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md
-│       └── 28-recursive-self-improvement-and-the-post-harness-mandate.md
+│       ├── 28-recursive-self-improvement-and-the-post-harness-mandate.md
+│       └── 29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -339,6 +344,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
 │   ├── epistemic-hygiene-and-context-pruning.md
+│   ├── epistemic-seam-and-mitigated-defect-auditing.md
 │   ├── error-budget-driven-feedback-inversion.md
 │   ├── fifo-pull-request-shepherding.md
 │   ├── findings-must-carry-their-own-falsification.md

@@ -574,6 +574,11 @@ Stochastic language generation must always be bounded by deterministic mechanica
     - In LaTeX and KaTeX math blocks (`$...$`, `$$...$$`), unescaped ampersands (`&`) are strictly reserved as column/alignment delimiters.
     - Never use an unescaped `&` in plain math expressions or inside `\text{...}` (which switches to text mode and triggers KaTeX parse error `Expected EOF, got &`). Use `\&` or the prose word `and` instead.
     - Alignment ampersands are permitted solely within standard LaTeX alignment environments (`\begin{matrix}`, `\begin{aligned}`, `\begin{cases}`, `\begin{split}`). This invariant is mechanically enforced across all documentation by `DOC013` in [`tools/docs_validator.py`](./tools/docs_validator.py).
+20. **Tripartite Verification Protocol & The Epistemic Seam**:
+    - **Never Conflate Mitigation with Refutation**: In verification harnesses, *Refuted* strictly means the cited code directly contradicts the claim, requiring an explicit line citation. If the defect exists but is constrained by contextual factors, it is *Mitigated*. Mitigated findings MUST remain visible in the final report naming the limiting mechanism, rather than being silently invalidated.
+    - **The Epistemic Seam (Model-Proof Negative Catalogs)**: Negative filtering catalogs (such as anti-hallucination lists or false-positive caches) MUST NEVER learn from stochastic model verdicts, LLM agreement, or synthetic test replays. Catalogs may only learn from deterministic ground truth (e.g. AST invariants, physical execution oracles) or explicit human verification (`devops review verify`). Builtin rules must remain immutable.
+    - **Nearest-Root Convention Scoping**: Universal evaluators and verifiers must remain generic and decoupled from host-specific house rules. Project conventions must be loaded hierarchically from the target repository's nearest `.devops/review.md`.
+
 
 
 ---
