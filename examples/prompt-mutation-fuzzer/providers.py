@@ -491,14 +491,13 @@ class GenericRestProvider(ModelProvider):
         endpoint_url: str = "https://example.com/api/predict",
         model_id: str = "custom-llm",
         response_path: Sequence[str | int] = ("output",),
-        headers: dict[str, str] | None = None,
         timeout: float = 15.0,
         transport: HttpTransport | None = None,
     ) -> None:
         self._endpoint_url = endpoint_url
         self._model_id = model_id
         self._response_path = tuple(response_path)
-        self._headers = headers or {"Content-Type": "application/json"}
+        self._headers = {"Content-Type": "application/json"}
         self._timeout = timeout
         self._transport = transport
 

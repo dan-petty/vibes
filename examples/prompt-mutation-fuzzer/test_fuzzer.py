@@ -368,8 +368,8 @@ def test_zero_trust_endpoint_validation() -> None:
     valid_ip_local, _ = validate_provider_endpoint("http://127.0.0.1:8000")
     valid_test_net, _ = validate_provider_endpoint("http://192.0.2.1:8000")
     bad_scheme, _ = validate_provider_endpoint("ftp://example.com")
-    bad_internal, _ = validate_provider_endpoint("http://host.internal:8000")
-    bad_private, _ = validate_provider_endpoint("http://10.0.0.1:8000")
+    bad_internal, _ = validate_provider_endpoint("https://untrusted.internal/api")
+    bad_private, _ = validate_provider_endpoint("https://10.0.0.1:8000")
 
     assert (
         valid_https,
