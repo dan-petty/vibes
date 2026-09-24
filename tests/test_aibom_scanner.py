@@ -206,10 +206,10 @@ model = AutoModel.from_pretrained("meta-llama/Llama-3-8B", revision="e1234567890
 def test_plaintext_model_download_ast_sentinel() -> None:
     """Detect unencrypted HTTP model download URLs under rule AIBOM004."""
     code_bad = """
-WEIGHTS_URL = "http://huggingface.co/org/model/resolve/main/model.safetensors"
+WEIGHTS_URL = "http://example.com/models/model.safetensors"
 """
     code_good = """
-WEIGHTS_URL = "https://huggingface.co/org/model/resolve/main/model.safetensors"
+WEIGHTS_URL = "https://example.com/models/model.safetensors"
 """
     _, findings_bad = scan_python_code(code_bad, "download_bad.py")
     _, findings_good = scan_python_code(code_good, "download_good.py")
