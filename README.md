@@ -377,6 +377,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
+│   ├── aibom_scanner.py               # AI Bill of Materials (AIBOM) & supply-chain security scanner
 │   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
 │   ├── pr_triage_bot.py               # Closed-Loop PR Triage & Invariant Review Bot
 │   ├── conversation_synthesizer.py    # Autonomous conversation-to-case-study synthesizer
@@ -411,6 +412,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_aibom_scanner.py          # Unit tests for AIBOM and model supply-chain security scanner
     ├── test_app_factory.py            # Runs the real gates over the factory's own output
     ├── test_contract_variables.py     # Contract questions, answer coercion and safe rendering
     ├── test_semconv_snapshot.py       # Deriving the GenAI convention table from upstream
