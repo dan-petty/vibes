@@ -29,7 +29,9 @@ _TREE_ENTRY_RE: Final[re.Pattern[str]] = re.compile(
 # Filesystem entries a directory map is never expected to enumerate: caches and build
 # artifacts that exist only because someone ran a tool. Dot-prefixed entries are skipped
 # separately. A map should describe what a reader navigates, not what a build produced.
-TREE_IGNORED_NAMES: Final[frozenset[str]] = frozenset({"__pycache__", "node_modules", "build", "dist"})
+TREE_IGNORED_NAMES: Final[frozenset[str]] = frozenset(
+    {"__pycache__", "node_modules", "build", "dist", "uv.lock"}
+)
 TREE_IGNORED_SUFFIXES: Final[tuple[str, ...]] = (".egg-info",)
 # A tree line consisting of an ellipsis marks the listing as deliberately partial.
 TREE_ELLIPSIS: Final[frozenset[str]] = frozenset({"...", "\u2026"})

@@ -12,6 +12,7 @@ htmlcov/
 .venv/
 venv/
 env/
+uv.lock
 
 # OS and IDE files
 .DS_Store
