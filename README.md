@@ -138,6 +138,7 @@ Runnable reference implementations demonstrating core agentic engineering mechan
 | [**Ephemeral Container Sandbox**](./examples/ephemeral-container-sandbox/) | Hardened rootless container sandbox with CIS benchmark auditing, egress deny-all isolation, and a container-less fallback confined by an unprivileged seccomp-BPF filter. Reports what the engine *enforces* beside what the policy *declares*. | `pytest examples/ephemeral-container-sandbox/` |
 | [**Polyglot CST Ingestion Engine**](./examples/polyglot-cst-parser/) | Multi-language CST parser (Python, Rust, Go, TS, Bash) with language-agnostic complexity ($M$) and pre-flight boundary guards. | `pytest examples/polyglot-cst-parser/test_cst_parser.py` |
 | [**Go Goroutine Leak Sentinel**](./examples/go-leak-sentinel/) | Go concurrency leak harness and runtime trace analyzer detecting unbuffered channel hangs, abandoned contexts, and orphan goroutines. | `pytest examples/go-leak-sentinel/test_go_leak_sentinel.py` |
+| [**Agent Experience Evaluator**](./examples/agent-experience-evaluator/) | Static analysis measuring agent usability, cognitive impedance ($M \le 6$, depth $\le 3$), and strict negative tool schemas with SARIF export. | `pytest examples/agent-experience-evaluator/test_ax_evaluator.py` |
 
 ---
 
@@ -392,6 +393,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── docker-compose/                # Turnkey 6-service local evaluation environment
 │
 ├── examples/                          # Executable reference sample applications
+│   ├── agent-experience-evaluator/    # Agent Experience (AX) evaluator & cognitive impedance auditor
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
 │   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
 │   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
