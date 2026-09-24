@@ -211,8 +211,12 @@ capabilities:
     title: Adversarial prompt mutation against agent instructions
     short: Prompt fuzzer
     path: examples/prompt-mutation-fuzzer/fuzzer.py
+    paths:
+      - examples/prompt-mutation-fuzzer/fuzzer.py
+      - examples/prompt-mutation-fuzzer/providers.py
     ours:
       - adversarial_prompts
+      - model_providers
     alternatives:
       - repo: NVIDIA/garak
         has:

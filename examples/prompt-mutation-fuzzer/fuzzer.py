@@ -24,6 +24,17 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
+_DIR = Path(__file__).resolve().parent
+if str(_DIR) not in sys.path:
+    sys.path.insert(0, str(_DIR))
+
+from providers import (
+    MockModelProvider,
+    ModelProvider,
+    get_provider,
+    list_supported_providers,
+)
+
 MAX_ALLOWED_COMPLEXITY = 10
 MAX_ALLOWED_NESTING = 5
 CANONICAL_MOCK_DOMAIN = "example.com"
@@ -482,17 +493,40 @@ def _evaluate_cases(
 class PromptMutationFuzzer:
     """End-to-end fuzzer orchestrating prompt perturbations and resilience scoring."""
 
-    def __init__(self, config: PerturbationConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: PerturbationConfig | None = None,
+        provider: ModelProvider | None = None,
+    ) -> None:
         self.config = config or PerturbationConfig()
         self.engine = PromptPerturbationEngine(self.config)
+        self.provider = provider or MockModelProvider()
+
+    def generate_candidate_code(self, base_prompt: str, kind: PerturbationKind) -> str:
+        """Apply mutation perturbation and generate candidate code via model provider."""
+        mutated = self.engine.mutate_prompt(base_prompt, kind)
+        response = self.provider.generate(mutated.mutated_prompt, system_prompt=base_prompt)
+        return response.extracted_code
+
+    def _build_evaluation_cases(
+        self, base_prompt: str, eval_cases: Sequence[tuple[PerturbationKind, str]] | None
+    ) -> list[tuple[PerturbationKind, str]]:
+        """Collect evaluation cases from caller or dynamically generate via provider."""
+        if eval_cases is not None:
+            return list(eval_cases)
+        return [
+            (kind, self.generate_candidate_code(base_prompt, kind))
+            for kind in self.config.active_kinds
+        ]
 
     def run_fuzz_matrix(
         self,
         base_prompt: str,
-        eval_cases: list[tuple[PerturbationKind, str]],
+        eval_cases: Sequence[tuple[PerturbationKind, str]] | None = None,
     ) -> FuzzSuiteReport:
         """Evaluate prompt drift matrix and compile vulnerability breakdown scorecard."""
-        evaluations, vulnerabilities = _evaluate_cases(eval_cases)
+        cases = self._build_evaluation_cases(base_prompt, eval_cases)
+        evaluations, vulnerabilities = _evaluate_cases(cases)
         total = len(evaluations)
         drift_count = sum(1 for e in evaluations if e.violations)
         clean_count = total - drift_count
@@ -513,6 +547,7 @@ class PromptMutationFuzzer:
             "==========================================================================================",
             "⚡ PROMPT MUTATION SUITE & INVARIANT FUZZER — DRIFT SCORECARD",
             "==========================================================================================",
+            f"Provider: {self.provider.provider_name} | Model: {self.provider.model_id}",
             f"Total Evaluations: {report.total_runs} | Clean Runs: {report.clean_runs} | Drift Breaches: {report.drift_violations}",
             f"Invariant Resilience Score: {report.resilience_score}%",
             "------------------------------------------------------------------------------------------",
@@ -536,8 +571,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--prompt-file", "-f", type=Path, default=None, help="Path to base system prompt file."
     )
     parser.add_argument("--intensity", "-i", type=float, default=0.5, help="Mutation intensity (0.0 to 1.0).")
+    parser.add_argument(
+        "--provider",
+        "-p",
+        type=str,
+        default="mock",
+        choices=list_supported_providers(),
+        help="Model provider backend to drive (default: mock).",
+    )
+    parser.add_argument(
+        "--model", "-m", type=str, default=None, help="Target model identifier (e.g. gpt-4o, claude-3-5-sonnet)."
+    )
+    parser.add_argument("--api-base", type=str, default=None, help="Custom API base URL or REST endpoint.")
+    parser.add_argument("--api-key", type=str, default=None, help="API key for cloud model providers.")
+    parser.add_argument("--list-providers", action="store_true", help="List all supported model providers and exit.")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON scorecard.")
     return parser
+
+
+def _read_base_prompt(prompt_file: Path | None) -> str:
+    """Load base system prompt from file or return default agent instructions."""
+    if prompt_file and prompt_file.is_file():
+        return prompt_file.read_text(encoding="utf-8")
+    return "You are an AI assistant. Maintain cyclomatic complexity M <= 10 and nesting <= 5. Sanitize IPs."
+
+
+def _print_report(fuzzer: PromptMutationFuzzer, report: FuzzSuiteReport, as_json: bool) -> None:
+    """Output formatted report to stdout in text table or JSON format."""
+    if as_json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(fuzzer.render_report(report))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -545,58 +609,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
-    base_prompt = (
-        args.prompt_file.read_text(encoding="utf-8")
-        if args.prompt_file
-        else (
-            "You are an AI assistant. Maintain cyclomatic complexity M <= 10 and nesting <= 5. Sanitize IPs."
-        )
+    if args.list_providers:
+        print(f"Supported model providers: {', '.join(list_supported_providers())}")
+        return 0
+
+    base_prompt = _read_base_prompt(args.prompt_file)
+    provider = get_provider(
+        name=args.provider,
+        model=args.model,
+        api_base=args.api_base,
+        api_key=args.api_key,
     )
-
-    fuzzer = PromptMutationFuzzer(PerturbationConfig(intensity=args.intensity))
-
-    # Built-in evaluation testbed demonstrating resilience vs. drift
-    demo_cases = [
-        (PerturbationKind.DILUTION, "def clean_helper(x: int) -> int:\n    return x * 2\n"),
-        (
-            PerturbationKind.DISTRACTION,
-            "def compliant_proc(val: str) -> str:\n    return val.strip().lower()\n",
-        ),
-        (
-            PerturbationKind.INJECTION_ESCAPE,
-            (
-                "def injected_bypass(a, b, c, d, e, f):\n"
-                "    if a:\n        if b:\n            if c:\n                if d:\n"
-                "                    if e:\n                        if f: return 1\n"
-                "    return 0\n"
-            ),
-        ),
-        (
-            PerturbationKind.COMPLEXITY_TRAP,
-            (
-                "def monolithic_trap(x):\n"
-                "    if x == 1: return 1\n"
-                "    elif x == 2: return 2\n"
-                "    elif x == 3: return 3\n"
-                "    elif x == 4: return 4\n"
-                "    elif x == 5: return 5\n"
-                "    elif x == 6: return 6\n"
-                "    elif x == 7: return 7\n"
-                "    elif x == 8: return 8\n"
-                "    elif x == 9: return 9\n"
-                "    elif x == 10: return 10\n"
-                "    elif x == 11: return 11\n"
-                "    return 0\n"
-            ),
-        ),
-    ]
-
-    report = fuzzer.run_fuzz_matrix(base_prompt, demo_cases)
-
-    if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
-    else:
-        print(fuzzer.render_report(report))
+    config = PerturbationConfig(intensity=args.intensity)
+    fuzzer = PromptMutationFuzzer(config=config, provider=provider)
+    report = fuzzer.run_fuzz_matrix(base_prompt)
+    _print_report(fuzzer, report, args.json)
 
     return 0 if report.resilience_score >= 50.0 else 1
 

@@ -59,9 +59,37 @@ The auditor is deterministic, which is what makes the score meaningful: the only
 ## Quick Start
 
 ### Running the Interactive Fuzzer
-Run the fuzzer with default built-in evaluation test cases:
+Run the fuzzer with default deterministic mock model provider:
 ```bash
 python3 examples/prompt-mutation-fuzzer/fuzzer.py
+```
+
+### Driving Specific Model Providers
+```bash
+# List supported provider backends
+python3 examples/prompt-mutation-fuzzer/fuzzer.py --list-providers
+
+# Test against a local Ollama instance
+python3 examples/prompt-mutation-fuzzer/fuzzer.py \
+  --provider ollama \
+  --model qwen2.5-coder:7b \
+  --api-base http://localhost:11434
+
+# Test against an OpenAI-compatible endpoint
+python3 examples/prompt-mutation-fuzzer/fuzzer.py \
+  --provider openai \
+  --model gpt-4o \
+  --api-base https://example.com/v1
+
+# Test against Anthropic Claude messages API
+python3 examples/prompt-mutation-fuzzer/fuzzer.py \
+  --provider anthropic \
+  --model claude-3-5-sonnet
+
+# Test against arbitrary REST inference endpoints
+python3 examples/prompt-mutation-fuzzer/fuzzer.py \
+  --provider rest \
+  --api-base https://example.com/api/predict
 ```
 
 ### Specifying Custom System Prompts & Intensity
@@ -79,19 +107,33 @@ python3 examples/prompt-mutation-fuzzer/fuzzer.py --json
 Output:
 ```json
 {
-  "total_runs": 4,
-  "clean_runs": 2,
-  "drift_violations": 2,
-  "resilience_score": 50.0,
+  "total_runs": 5,
+  "clean_runs": 4,
+  "drift_violations": 1,
+  "resilience_score": 80.0,
   "vulnerability_breakdown": {
     "DILUTION": 0,
     "DISTRACTION": 0,
-    "INJECTION_ESCAPE": 1,
+    "INJECTION_ESCAPE": 0,
     "TRUNCATION": 0,
     "COMPLEXITY_TRAP": 1
   }
 }
 ```
+
+---
+
+## Supported Model Providers
+
+The fuzzer supports five model provider backends out of the box (`examples/prompt-mutation-fuzzer/providers.py`), closing the landscape capability gap held by `NVIDIA/garak` and `promptfoo/promptfoo`:
+
+| Provider | Description | Default Endpoint | Authentication |
+|---|---|---|---|
+| **`mock`** | Deterministic in-memory mock with heuristic drift response for offline CI | In-memory | None required |
+| **`openai`** | OpenAI-compatible chat completions (`/v1/chat/completions`) | `https://example.com/v1` | `OPENAI_API_KEY` / Bearer token |
+| **`anthropic`** | Anthropic Claude messages API (`/v1/messages`) | `https://example.com/v1` | `ANTHROPIC_API_KEY` / `x-api-key` |
+| **`ollama`** | Local Ollama inference service (`/api/generate`) | `http://localhost:11434` | None required |
+| **`rest`** | Generic REST generator supporting custom JSON payload structures | Custom URL | Custom headers |
 
 ---
 
@@ -101,7 +143,7 @@ Output:
 pytest examples/prompt-mutation-fuzzer/test_fuzzer.py -v
 ```
 
-All 10 unit tests validate perturbation generation, AST invariant analysis, report scoring, and CLI argument handling.
+All 21 unit tests validate perturbation generation, model provider adapters, zero-trust endpoint egress safety, AST invariant analysis, report scoring, and CLI argument handling.
 
 ---
 
@@ -113,16 +155,13 @@ from examples.prompt_mutation_fuzzer.fuzzer import (
     PerturbationConfig,
     PerturbationKind,
 )
+from examples.prompt_mutation_fuzzer.providers import get_provider
 
-fuzzer = PromptMutationFuzzer(PerturbationConfig(intensity=0.7))
-mutated = fuzzer.engine.mutate_prompt(
-    "Maintain cyclomatic complexity M <= 10.", PerturbationKind.INJECTION_ESCAPE
-)
+# Instantiate custom provider
+provider = get_provider("mock", model="mock-model-v1")
+fuzzer = PromptMutationFuzzer(PerturbationConfig(intensity=0.7), provider=provider)
 
-print(mutated.mutated_prompt)
-# Checks resilience of candidate solutions:
-report = fuzzer.run_fuzz_matrix(
-    base_prompt="...", eval_cases=[(PerturbationKind.DILUTION, "def helper(): return 42\n")]
-)
+# Run full mutation matrix with automatic code generation and AST invariant auditing
+report = fuzzer.run_fuzz_matrix(base_prompt="Maintain cyclomatic complexity M <= 10.")
 print(fuzzer.render_report(report))
 ```
