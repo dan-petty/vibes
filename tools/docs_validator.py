@@ -26,7 +26,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import unquote
 
 import yaml
@@ -53,8 +53,10 @@ from doc_rules_structure import (
     check_observation_structure,
     check_pattern_header,
 )
-from markdown_it import MarkdownIt
 from source_tree_policy import iter_source_files
+
+if TYPE_CHECKING:
+    from markdown_it import MarkdownIt
 
 # This module is the documentation validator's public face: the rule modules behind it
 # are an implementation detail, so callers import the validator, its entry point and the
@@ -122,13 +124,19 @@ def _extract_html_anchors(line: str) -> list[str]:
     return [m.group(1) for m in re.finditer(r'<a\s+[^>]*(?:name|id)=["\']([^"\']+)["\']', line, re.I)]
 
 
-class _LintingParser(MarkdownIt):
-    """A CommonMark parser that keeps every link, including the ones a renderer would drop."""
+def _linting_parser_cls() -> type:
+    """Return parser class that accepts every link scheme for linting."""
+    from markdown_it import MarkdownIt
 
-    # Spelled as upstream spells it; this overrides a method markdown-it defines.
-    def validateLink(self, url: str) -> bool:
-        """Accept every scheme, because nothing here is rendered."""
-        return True
+    class _LintingParser(MarkdownIt):
+        """A CommonMark parser that keeps every link, including the ones a renderer would drop."""
+
+        # Spelled as upstream spells it; this overrides a method markdown-it defines.
+        def validateLink(self, url: str) -> bool:
+            """Accept every scheme, because nothing here is rendered."""
+            return True
+
+    return _LintingParser
 
 
 _PARSERS: Final[threading.local] = threading.local()
@@ -148,7 +156,8 @@ def commonmark_parser() -> MarkdownIt:
     job we are not doing.
     """
     if not hasattr(_PARSERS, "parser"):
-        _PARSERS.parser = _LintingParser("commonmark")
+        parser_cls = _linting_parser_cls()
+        _PARSERS.parser = parser_cls("commonmark")
     return _PARSERS.parser
 
 
@@ -885,6 +894,8 @@ class DocsValidator:
     def parser(self) -> MarkdownIt:
         """Thread-isolated parser instance avoiding concurrent state corruption."""
         if not hasattr(self._local, "parser"):
+            from markdown_it import MarkdownIt
+
             self._local.parser = MarkdownIt("commonmark")
         return self._local.parser
 
