@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 48 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 49 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -201,6 +201,7 @@ flowchart LR
 - [**Context Rot Auditor & Compactor (`tools/context_rot_auditor.py`)**](./tools/context_rot_auditor.py): Attention dilution and context rot inspector calculating the Attention Dilution Index (ADI), detecting lost-in-the-middle invariant decay, and executing active multi-scale compaction via observation masking and suffix anchor re-pinning.
 - [**C++ RAII & Lifetime Invariant Sentinel (`tools/cpp_lifetime_sentinel.py`)**](./tools/cpp_lifetime_sentinel.py): Static analysis sentinel scanning C++ source code for memory deallocation violations (CPP001), dangling view lifetimes over temporaries (CPP002), Rule of Five incompleteness (CPP003), unmanaged raw pointers (CPP004), and use-after-move hazards (CPP005) with OASIS SARIF 2.1.0 telemetry export.
 - [**eBPF Process Tracing & Sandbox Introspection Oracle (`tools/ebpf_tracer.py`)**](./tools/ebpf_tracer.py): Kernel-level runtime execution auditor capturing immutable syscall event streams (Tetragon, Falco, bpftrace) to detect unauthorized binary execution (EBPF001), private network egress (EBPF002), workspace file escapes (EBPF003), privilege escalation (EBPF004), and anti-debugging evasion (EBPF005) with automated Tetragon TracingPolicy synthesis and OASIS SARIF 2.1.0 exports.
+- [**Dynamic Multi-Model Router & Speculative Cascade Oracle (`tools/model_router.py`)**](./tools/model_router.py): Multi-model execution coordinator evaluating task complexity vectors and semantic entropy uncertainty to dynamically route tasks across Local (7B), Fast (32B/Haiku), and Frontier (Sonnet/GPT-4o) tiers. Features speculative cascading executing lightweight drafts against mechanical AST invariant oracles ($M \le 10, d \le 5$, zero RFC 1918) with negative constraint escalation upon failure, achieving 85.6% cost reduction and 100.8% APGR.
 - [**Application Factory (`tools/app_factory.py`)**](./tools/app_factory.py): A contract declaring an application's operations and their argument types becomes a runnable application — dispatch table, JSON Schema with `additionalProperties: false`, prescriptive rejections listing every breach at once, timed invocations, CLI, contract tests and a structured README. What makes it a factory for *this* repository is the acceptance test: the emitted application passes the AST invariant sentinel, ruff, mypy, the documentation validator and its own generated suite with no edit, and [`tests/test_app_factory.py`](./tests/test_app_factory.py) runs those real gates over the real output. `handlers.py` is written once and never regenerated, because a factory that owns the domain logic becomes a framework nobody can leave. A contract may declare variables and collect their values interactively, from `--set`, or from a recorded answers file — always with a default, so it still resolves when nobody is watching, and never prompting when stdin is not a terminal.
 - [**Portfolio Balance (`tools/portfolio_balance.py`)**](./tools/portfolio_balance.py): Reports what the repository *has* against where its recent lines *went*. The drift it exists to surface is invisible from inside any single change — every tooling commit is defensible and the aggregate is not. Counts added lines rather than touched files, because a repository-wide lint sweep touches many locations and builds nothing: on the window that prompted this, touches read 52/48 and lines read 7/93. Steers, never gates.
 - [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
@@ -317,7 +318,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md
 │       ├── 22-self-correction-loops-vs-cegis-constraint-accumulation.md
 │       ├── 23-attention-dilution-context-rot-and-active-compaction.md
-│       └── 24-ebpf-process-tracing-for-agent-sandbox-introspection.md
+│       ├── 24-ebpf-process-tracing-for-agent-sandbox-introspection.md
+│       └── 25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -385,6 +387,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
+│   ├── model_router.py                # Dynamic multi-model router & speculative cascade oracle with SARIF export
 │   ├── ebpf_tracer.py                 # eBPF process tracing & sandbox introspection oracle with SARIF export
 │   ├── cpp_lifetime_sentinel.py       # C++ RAII & lifetime invariant sentinel with SARIF export
 │   ├── context_rot_auditor.py         # Attention dilution & context rot auditor with active compactor
@@ -427,6 +430,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_model_router.py           # Unit tests for multi-model router, speculative cascade & SARIF
     ├── test_ebpf_tracer.py            # Unit tests for eBPF tracer, Tetragon/Falco policy & SARIF
     ├── test_cpp_lifetime_sentinel.py  # Unit tests for C++ lifetime sentinel, Rule of Five & SARIF
     ├── test_context_rot_auditor.py    # Unit tests for context rot auditor, ADI scoring & compactor

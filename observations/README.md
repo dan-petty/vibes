@@ -2,7 +2,7 @@
 
 > **Exhibition**: `vibes` Empirical Knowledge Base
 > **Classification**: Master Observation Index & Cross-Domain Synthesis
-> **Scope**: 48 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
+> **Scope**: 49 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`
 > **Key Metric**: 100.0/100 Resource Health Score; 319/319 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance
 
 ---
@@ -11,7 +11,7 @@
 
 The `observations/` directory records the empirical reality of autonomous software engineering performed by AI coding assistants. Across hundreds of autonomous sessions, pull requests, refactoring cycles, and benchmark evaluations in [`devops-cli`](https://github.com/dan-petty/devops-cli) and [`vibes`](https://github.com/dan-petty/vibes), these studies capture how stochastic language models behave when confronted with real-world engineering constraints.
 
-The fundamental insight across all 48 observations is simple yet profound:
+The fundamental insight across all 49 observations is simple yet profound:
 
 > **Stochastic token generation without mechanical boundary oracles collapses into structural entropy. Unbounded models drift into procedural spaghetti, hallucinated tool arguments, orphaned background processes, and brittle heuristic traps. When bounded by deterministic AST invariants, formal contracts, and closed-loop feedback engines, agents achieve architectural excellence, sub-second feedback loops, and 100% test reliability.**
 
@@ -71,7 +71,7 @@ flowchart TD
 
 ## 🧭 Master Observation Taxonomy Matrix
 
-The 48 empirical case studies are organized into three complementary domains:
+The 49 empirical case studies are organized into three complementary domains:
 1. **`devops-cli`**: Foundational operational, syntactic, and governance discoveries from building a production-grade infrastructure CLI.
 2. **`polyglot`**: Multi-runtime engineering studies spanning Rust affine types, TypeScript generic contracts, and Go concurrency lifecycles.
 3. **`systems`**: Distributed systems dynamics including OpenTelemetry tracing waterfalls, test runner latency optimization, inotify event loops, Valkey L2 caching, and rootless container isolation.
@@ -117,6 +117,7 @@ The 48 empirical case studies are organized into three complementary domains:
 | [**22**](./systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md) | `systems` | [Conversational Thrashing vs. CEGIS Accumulation](./systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md) | Conversational "try-again" loops causing oscillatory cycles ($A \to B \to A$), latent security regressions, and attention dilution. | Counterexample-Guided Inductive Synthesis (CEGIS) with accumulated negative constraints and monotonic convergence oracles. | 100% elimination of repair oscillation; zero latent invariant regression; 85% token reduction; 118x faster verification. |
 | [**23**](./systems/23-attention-dilution-context-rot-and-active-compaction.md) | `systems` | [Attention Dilution & Multi-Scale Compaction](./systems/23-attention-dilution-context-rot-and-active-compaction.md) | Raw context expansion causing softmax dilution, lost-in-the-middle invariant decay, and observation bloat. | Context Rot Auditor with Attention Dilution Index (ADI), observation masking, traceback deduplication, and anchor re-pinning. | 82.4% token reduction; 100% valley invariant rescue; 4.6x ADI reduction; 51.4% higher constraint adherence. |
 | [**24**](./systems/24-ebpf-process-tracing-for-agent-sandbox-introspection.md) | `systems` | [eBPF Process Tracing for Sandbox Introspection](./systems/24-ebpf-process-tracing-for-agent-sandbox-introspection.md) | Application-layer logging blind to LD_PRELOAD, process masquerading, and lateral RFC 1918 socket egress. | Kernel-level eBPF LSM and tracepoint auditor (`tools/ebpf_tracer.py`) with automated Tetragon and Falco policy synthesis. | 100% interception of covert egress and sensitive path access; < 2.5% CPU overhead; zero userland escape paths. |
+| [**25**](./systems/25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md) | `systems` | [Multi-Model Capability Boundaries & Dynamic Routing](./systems/25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md) | Uniform frontier routing burns token budgets on low-cognitive edits, while weak models collapse into hallucination loops. | Dynamic Multi-Model Router (`tools/model_router.py`) with Semantic Entropy uncertainty estimation and speculative cascade verification. | 85.6% cost reduction; zero quality loss (100.8% APGR); 18.4% frontier CPT; zero repair loops. |
 | [**20**](./systems/20-internet-grounded-information-foraging-and-self-improvement-loops.md) | `systems` | [Internet-Grounded Information Foraging & Self-Improvement Loops](./systems/20-internet-grounded-information-foraging-and-self-improvement-loops.md) | Inward self-improvement loops suffer an over-editing trap (wholesale file rewrites) and economic blindness; lack of outward grounding reinvents brittle solutions. | Dual-loop architecture with internet-grounded spec ingestion, AST-aware Patch Minimality scoring ($P_{\text{min}} \ge 0.70$), and Cost-Per-Invariant Index. | High-efficiency models match frontier invariant compliance at $13\times$ to $20\times$ lower cost; patch minimality eliminates 38% diff churn. |
 | [**19**](./systems/19-self-consistency-is-not-conformance.md) | `systems` | [Self-Consistency Is Not Conformance](./systems/19-self-consistency-is-not-conformance.md) | Four capabilities built to close survey gaps; all four already had an implementation that was wrong — a sandbox reporting 100.0/100 while enforcing 0 of 8 controls on the path that actually runs, a trace generator emitting a private vocabulary inside a valid OTLP envelope, a crawler dropping every code block, and a balance metric counting capability work as instrument work. Every gate in the repository takes its ground truth from inside the tree, so every gate converges to agreement without ever being able to be surprised. | Derive an external standard at a pinned revision rather than transcribing it; score the runtime rather than the declaration and name every control it cannot apply; execute each claim against the thing outside (the kernel kills the child, the real gates run over the generated output); audit the fallback first, because it is the path the ordinary conditions select. | Sandbox controls enforced on the engine-less path 0/8 reported as 8/8 → 6/8 reported as 6/8; gaps 24 → 20 with 4 closed by building; 3 of the repository's own instruments found wrong; capability share of recent added lines 15% → 64%; 593 → 736 tests. |
 | [**18**](./systems/18-a-correction-inherits-the-frame-it-corrects.md) | `systems` | [A Correction Inherits the Frame It Corrects](./systems/18-a-correction-inherits-the-frame-it-corrects.md) | The landscape survey added to close Observation 14's blind spot declared four capabilities, all four linters, with 13 of 16 sample applications absent from its manifest — so all 13 gaps it emitted were linter features, carrying upstream citations that lent their rigour to the choice as well as the claim. The balance metric added to detect the drift then classified by location, counted the application factory as quality investment, and held capability lines at exactly 350 across the release that added 512 of them. | Declare `kind` where the capability is declared and resolve by longest path prefix, with location only as fallback; measure an instrument's coverage of its subject rather than the volume of its output; pin the metric with a test naming the change that broke it; report stock and flow ratios separately and let them steer rather than gate. | Manifest 4 → 11 capabilities and 3 → 9 of 16 applications visible; gaps 13 → 24 with 0 → 10 application features and the top three all application-shaped; capability investment over one fixed window 350 lines (6%) → 862 (15%). |
@@ -131,7 +132,7 @@ The 48 empirical case studies are organized into three complementary domains:
 
 ## 🔬 The Five Unifying Architectural Theses
 
-When analyzed collectively, the 48 empirical case studies coalesce into five core engineering theses that define disciplined agentic software development:
+When analyzed collectively, the 49 empirical case studies coalesce into five core engineering theses that define disciplined agentic software development:
 
 ### 1. Deterministic Mechanical Oracles Over Prompt Faith
 Stochastic language models cannot self-evaluate architectural complexity, nesting depth, type safety, or security boundaries purely through prompt instructions. Relying on "be careful not to write complex code" invariably fails.
