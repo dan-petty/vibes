@@ -570,6 +570,10 @@ Stochastic language generation must always be bounded by deterministic mechanica
     - **The Asymmetry Invariant ($P$ vs $NP$)**: Code generation is probabilistic search; invariant verification (AST caps $M \le 10$, depth $\le 5$, zero leaks, coverage $\ge 90\%$) is deterministic polynomial-time verification. Models may propose modifications, but deterministic oracles must hold absolute veto authority.
     - **Monotonic Constraint Accumulation (CEGIS)**: Every defect, crash, or flaky race condition must be permanently converted into a regression fixture. The regression corpus strictly accumulates; self-improving agents may never relax, suppress, or delete existing constraints to make a build pass.
     - **The Inward-Outward Equilibrium**: Inward-facing defect fixers must be balanced by outward landscape telemetry (`tools/landscape_survey.py` and `docs/ROADMAP.md`). A self-improving loop that only runs linters converges into defect-shaped myopia.
+19. **LaTeX / KaTeX Syntax & Math Hygiene (`DOC013`)**:
+    - In LaTeX and KaTeX math blocks (`$...$`, `$$...$$`), unescaped ampersands (`&`) are strictly reserved as column/alignment delimiters.
+    - Never use an unescaped `&` in plain math expressions or inside `\text{...}` (which switches to text mode and triggers KaTeX parse error `Expected EOF, got &`). Use `\&` or the prose word `and` instead.
+    - Alignment ampersands are permitted solely within standard LaTeX alignment environments (`\begin{matrix}`, `\begin{aligned}`, `\begin{cases}`, `\begin{split}`). This invariant is mechanically enforced across all documentation by `DOC013` in [`tools/docs_validator.py`](./tools/docs_validator.py).
 
 
 ---

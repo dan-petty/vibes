@@ -387,3 +387,132 @@ def check_linebreak_hygiene(
             )
     return findings
 
+
+_MATH_ALIGN_ENVS: Final[tuple[str, ...]] = (
+    "matrix",
+    "pmatrix",
+    "bmatrix",
+    "Bmatrix",
+    "vmatrix",
+    "Vmatrix",
+    "cases",
+    "aligned",
+    "alignedat",
+    "gathered",
+    "split",
+    "array",
+    "align",
+)
+
+
+def _has_unescaped_ampersand(text: str) -> bool:
+    """Check if math text contains an unescaped ampersand."""
+    return bool(re.search(r"(?<!\\)&", text))
+
+
+def _is_math_ampersand_invalid(math_text: str, in_align_env: bool = False) -> bool:
+    """Return True if an unescaped ampersand is used illegally in KaTeX math."""
+    if not _has_unescaped_ampersand(math_text):
+        return False
+    if re.search(r"\\text(?:it|bf|rm)?\{[^}]*(?<!\\)&", math_text):
+        return True
+    if in_align_env:
+        return False
+    return not any(f"\\begin{{{env}}}" in math_text for env in _MATH_ALIGN_ENVS)
+
+
+def _update_align_env(line: str, current_env: str | None) -> str | None:
+    """Track transitions into and out of LaTeX alignment environments."""
+    begin_match = re.search(r"\\begin\{([a-zA-Z*]+)\}", line)
+    if begin_match and begin_match.group(1) in _MATH_ALIGN_ENVS:
+        return begin_match.group(1)
+    if current_env and f"\\end{{{current_env}}}" in line:
+        return None
+    return current_env
+
+
+def _check_display_math_findings(line: str, line_no: int, file_path: str) -> list[DocFinding]:
+    """Find invalid ampersands within single-line display math blocks."""
+    findings: list[DocFinding] = []
+    for match in re.finditer(r"\$\$([^$]+)\$\$", line):
+        if _is_math_ampersand_invalid(match.group(1)):
+            findings.append(
+                DocFinding(
+                    file_path=file_path,
+                    line_number=line_no,
+                    category="math",
+                    message=(
+                        "Unescaped '&' detected in LaTeX display math. In KaTeX / LaTeX, '&' is an alignment "
+                        "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
+                        "the word 'and' instead."
+                    ),
+                )
+            )
+    return findings
+
+
+def _check_inline_math_findings(line: str, line_no: int, file_path: str) -> list[DocFinding]:
+    """Find invalid ampersands within inline math expressions."""
+    findings: list[DocFinding] = []
+    clean = re.sub(r"`[^`]+`", "", line)
+    clean = re.sub(r"\$\$[^$]+\$\$", "", clean)
+    for match in re.finditer(r"(?<!\\)\$([^$\n]+?)(?<!\\)\$", clean):
+        if _is_math_ampersand_invalid(match.group(1)):
+            findings.append(
+                DocFinding(
+                    file_path=file_path,
+                    line_number=line_no,
+                    category="math",
+                    message=(
+                        "Unescaped '&' detected in LaTeX inline math. In KaTeX / LaTeX, '&' is an alignment "
+                        "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
+                        "the word 'and' instead."
+                    ),
+                )
+            )
+    return findings
+
+
+def check_latex_math_hygiene(
+    lines: Sequence[str], file_path: Path
+) -> list[DocFinding]:
+    """Verify that LaTeX and KaTeX math blocks do not contain unescaped ampersands or malformed syntax.
+
+    In KaTeX / MathJax, '&' is an alignment delimiter and cannot be used in plain math expressions
+    or inside \\text{...}. Use '\\&' or the word 'and' instead.
+    """
+    findings: list[DocFinding] = []
+    in_display_math = False
+    current_align_env: str | None = None
+    file_path_str = str(file_path)
+
+    for line_no, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
+        if fenced:
+            continue
+        stripped = line.strip()
+        if stripped == "$$":
+            in_display_math = not in_display_math
+            current_align_env = None
+            continue
+        if in_display_math:
+            current_align_env = _update_align_env(line, current_align_env)
+            if _is_math_ampersand_invalid(line, in_align_env=(current_align_env is not None)):
+                findings.append(
+                    DocFinding(
+                        file_path=file_path_str,
+                        line_number=line_no,
+                        category="math",
+                        message=(
+                            "Unescaped '&' detected in LaTeX display math block. In KaTeX / LaTeX, '&' is an alignment "
+                            "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
+                            "the word 'and' instead."
+                        ),
+                    )
+                )
+            continue
+        findings.extend(_check_display_math_findings(line, line_no, file_path_str))
+        findings.extend(_check_inline_math_findings(line, line_no, file_path_str))
+    return findings
+
+
+

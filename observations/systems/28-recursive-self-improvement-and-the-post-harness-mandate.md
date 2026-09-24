@@ -15,7 +15,7 @@ In the initial harness era, agents functioned as external, transient workers env
 
 The post-harness era emerges when the codebase itself dissolves the boundary between runtime and harness, becoming an active, self-steering cognitive environment. In this regime, the marginal cost of code synthesis drops to zero, and code creation velocity outpaces human auditing capacity by orders of magnitude:
 
-$$\text{Velocity of Code Synthesis} \gg \text{Human Auditing & Refactoring Bandwidth}$$
+$$\text{Velocity of Code Synthesis} \gg \text{Human Auditing and Refactoring Bandwidth}$$
 
 Under this velocity asymmetry, static software repositories suffer catastrophic relative decay. A codebase incapable of observing its own execution telemetry, detecting architectural rot, discovering external upstream ecosystem shifts, and elevating its quality headroom becomes legacy debt within weeks.
 
