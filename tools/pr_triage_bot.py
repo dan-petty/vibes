@@ -454,6 +454,29 @@ class QAReviewer:
             self._check_markdown_integrity(path_str, text, findings)
         return findings
 
+    @staticmethod
+    def _is_undocumented_public_node(node: ast.AST) -> bool:
+        """Predicate checking whether an AST node is an undocumented public function or class."""
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return False
+        return not node.name.startswith("_") and not ast.get_docstring(node)
+
+    @staticmethod
+    def _build_docstring_finding(path: str, node: ast.AST) -> ReviewFinding:
+        """Build QA finding for an undocumented public function or class node."""
+        kind = "Class" if isinstance(node, ast.ClassDef) else "Function"
+        name = getattr(node, "name", "unknown")
+        line = getattr(node, "lineno", 1)
+        return ReviewFinding(
+            persona=PersonaKind.QA,
+            severity=Severity.INFO,
+            rule_id="QA-MISSING-DOCSTRING",
+            message=f"Public {kind} {name!r} lacks a docstring.",
+            path=path,
+            line=line,
+            suggestion="Add a concise, descriptive docstring documenting purpose and arguments.",
+        )
+
     def _check_public_docstrings(self, path: str, text: str, out: list[ReviewFinding]) -> None:
         """Verify public functions and classes carry complete docstrings."""
         try:
@@ -461,23 +484,8 @@ class QAReviewer:
         except SyntaxError:
             return
         for node in ast.walk(tree):
-            if (
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-                and not node.name.startswith("_")
-                and not ast.get_docstring(node)
-            ):
-                kind = "Class" if isinstance(node, ast.ClassDef) else "Function"
-                out.append(
-                    ReviewFinding(
-                        persona=PersonaKind.QA,
-                        severity=Severity.INFO,
-                        rule_id="QA-MISSING-DOCSTRING",
-                        message=f"Public {kind} {node.name!r} lacks a docstring.",
-                        path=path,
-                        line=node.lineno,
-                        suggestion="Add a concise, descriptive docstring documenting purpose and arguments.",
-                    )
-                )
+            if self._is_undocumented_public_node(node):
+                out.append(self._build_docstring_finding(path, node))
 
     def _check_markdown_integrity(self, path: str, text: str, out: list[ReviewFinding]) -> None:
         """Check for unclosed code fences in Markdown files."""
