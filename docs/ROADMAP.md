@@ -238,7 +238,7 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Implements the Dual-Surface Interface Contract pairing human teleological observability (UX) with machine-verifiable negative schemas, AST symbol graphs, and structured CEGIS error vectors (AX).
   - Establishes a synchronized bi-directional scoring engine that pairs deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$: Diagnostic Actionability Index $DAI$, Interface Friction Index $IFI$, and Cognitive Impedance Metric $CIM$).
   - Closes the cybernetic feedback loop by automatically converting high software friction into automated refactoring and schema-hardening deliverables, ratcheting codebase maintainability and agent convergence velocity.
-  - Accompanied by Observation 32 (`observations/systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md`), Pattern (`patterns/bi-directional-metric-feedback-and-ax-scoring.md`), and update to the Seven Architectural Theses in `observations/README.md`.
+  - Accompanied by Observation 32 (`observations/systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md`), Pattern (`patterns/bi-directional-metric-feedback-and-ax-scoring.md`), an update to the Seven Architectural Theses in `observations/README.md`, and the zero-dependency executable reference sample application in `examples/agent-experience-evaluator/` (`ax_evaluator.py`, `test_ax_evaluator.py`, `README.md`) featuring OASIS SARIF 2.1.0 telemetry export, Markdown reporting, and 97% unit test coverage certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 4$, depth $\le 2$).
 
 ---
 

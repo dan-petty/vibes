@@ -1,8 +1,8 @@
 # Observation 32: Dual First-Class Consumers and Bi-Directional Agentic Feedback Loops
 
-> **Project**: Multi-Agent Review & Synthesis Platforms (`devops-cli` & `vibes`)  
-> **Environment**: Dual-consumer software interfaces (Human UX + Agent AX), automated AST invariant sentinels, closed-loop cybernetic feedback  
-> **Classification**: Agent Experience (AX), Bi-Directional Scoring, Cybernetic Improvement Loops, CEGIS Convergence, Cognitive Impedance  
+> **Project**: Multi-Agent Review & Synthesis Platforms (`devops-cli` & `vibes`)
+> **Environment**: Dual-consumer software interfaces (Human UX + Agent AX), automated AST invariant sentinels, closed-loop cybernetic feedback
+> **Classification**: Agent Experience (AX), Bi-Directional Scoring, Cybernetic Improvement Loops, CEGIS Convergence, Cognitive Impedance
 > **Related**: [Observation 08](./08-convention-to-mechanical-enforcement-inversion.md), [Observation 10](../devops-cli/10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md), [Observation 22](./22-self-correction-loops-vs-cegis-constraint-accumulation.md), [Observation 30](./30-kinetic-falsification-and-the-ephemeral-exploit-harness.md), [Observation 31](./31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md)
 
 ---
@@ -227,3 +227,4 @@ timeline
 
 ### Summary Maxim:
 > *If software only judges the agent, the agent will silently hack around the software. True autonomous acceleration occurs when the agent measures the software's impedance and refactors the medium through which it thinks.*
+

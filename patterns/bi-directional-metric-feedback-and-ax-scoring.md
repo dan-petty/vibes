@@ -1,9 +1,9 @@
 # Pattern: Bi-Directional Metric Feedback and AX Scoring
 
-> **Pattern Class**: Multi-Agent Systems & Continuous Self-Hardening  
-> **Problem**: Unidirectional quality assessment forces agents to silently absorb software interface friction, resulting in retry spirals, token waste, and recurring architectural degradation  
-> **Solution**: A bi-directional scoring architecture that pairs deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$), automatically inverting software friction into automated refactoring and schema-hardening deliverables  
-> **Reference Implementation**: [`tools/cegis_engine.py`](../tools/cegis_engine.py), [`tools/ast_refactorer.py`](../tools/ast_refactorer.py), [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py)  
+> **Pattern Class**: Multi-Agent Systems & Continuous Self-Hardening
+> **Problem**: Unidirectional quality assessment forces agents to silently absorb software interface friction, resulting in retry spirals, token waste, and recurring architectural degradation
+> **Solution**: A bi-directional scoring architecture that pairs deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$), automatically inverting software friction into automated refactoring and schema-hardening deliverables
+> **Reference Implementation**: [`examples/agent-experience-evaluator/ax_evaluator.py`](../examples/agent-experience-evaluator/ax_evaluator.py), [`tools/cegis_engine.py`](../tools/cegis_engine.py), [`tools/ast_refactorer.py`](../tools/ast_refactorer.py), [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py)
 
 ---
 
@@ -181,3 +181,4 @@ def compute_ax_score(telemetry: InteractionTelemetry) -> AXScoreReport:
 - **Negative Schema Oracles**: [Observation 10: Negative Tool Contract Assertions & Prescriptive Prompt Synthesis](../observations/devops-cli/10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md)
 - **CEGIS Convergence**: [Observation 22: Self-Correction Loops vs CEGIS Constraint Accumulation](../observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md)
 - **Automated AST Refactoring**: [Pattern: Deterministic Oracles and Feedback Inversion](./deterministic-oracles-and-feedback-inversion.md)
+
