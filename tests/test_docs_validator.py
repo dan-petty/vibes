@@ -23,11 +23,15 @@ from docs_validator import (
     ALL_DOC_RULES,
     DOC_PRESETS,
     OBSERVATION_REQUIRED_SECTION_COUNT,
+    POLYGLOT_EXTENSIONS,
     DocConfigOverrides,
     DocsValidator,
     DocsValidatorConfig,
+    DocumentFormat,
     auto_fix_content,
     contrast_ratio,
+    detect_document_format,
+    extract_document_anchors,
     load_doc_config,
     mask_code_spans,
     normalize_doc_rule_name,
@@ -1240,3 +1244,242 @@ def test_toml_and_markdownlint_config_loading(tmp_path: Path) -> None:
         frozenset({"link", "sanitization"}),
         ["code_fence", "table"],
     )
+
+
+def test_polyglot_format_detection() -> None:
+    """Document format detection correctly classifies paths across all supported extensions."""
+    samples = (
+        (Path("guide.md"), DocumentFormat.MARKDOWN),
+        (Path("spec.markdown"), DocumentFormat.MARKDOWN),
+        (Path("index.html"), DocumentFormat.HTML),
+        (Path("page.htm"), DocumentFormat.HTML),
+        (Path("manual.rst"), DocumentFormat.RST),
+        (Path("architecture.adoc"), DocumentFormat.ASCIIDOC),
+        (Path("runbook.asciidoc"), DocumentFormat.ASCIIDOC),
+        (Path("notes.txt"), DocumentFormat.PLAINTEXT),
+        (Path("unrecognized.xyz"), DocumentFormat.MARKDOWN),
+    )
+    results = tuple(detect_document_format(path) for path, _ in samples)
+    expected = tuple(fmt for _, fmt in samples)
+    assert (results, len(POLYGLOT_EXTENSIONS)) == (expected, 8)
+
+
+def test_html_link_and_anchor_validation(tmp_path: Path) -> None:
+    """HTML documentation link and anchor extraction identifies valid targets and broken paths."""
+    target_file = tmp_path / "target.html"
+    target_file.write_text("<html><body><h1 id='overview'>Overview</h1></body></html>", encoding="utf-8")
+
+    doc_file = tmp_path / "page.html"
+    doc_file.write_text(
+        '<!DOCTYPE html>\n'
+        '<html>\n'
+        '<body>\n'
+        '  <h2 id="intro">Introduction</h2>\n'
+        '  <a href="target.html">Valid File</a>\n'
+        '  <a href="target.html#overview">Valid Anchor</a>\n'
+        '  <a href="#intro">Valid Local Anchor</a>\n'
+        '  <a href="missing.html">Broken Target</a>\n'
+        '  <a href="#missing-anchor">Broken Local Anchor</a>\n'
+        '  <a href="https://example.com/docs">External Target</a>\n'
+        '</body>\n'
+        '</html>\n',
+        encoding="utf-8",
+    )
+    validator = DocsValidator()
+    findings = validator.validate_file(doc_file)
+    messages = tuple(f.message for f in findings)
+    assert (len(findings), messages) == (
+        2,
+        (
+            "Target path does not exist: 'missing.html'",
+            "Local anchor '#missing-anchor' not found in page.html",
+        ),
+    )
+
+
+def test_rst_link_and_anchor_validation(tmp_path: Path) -> None:
+    """reStructuredText link and section header extraction detects broken targets."""
+    target_file = tmp_path / "guide.rst"
+    target_file.write_text("Guide\n=====\n\nSection content.", encoding="utf-8")
+
+    doc_file = tmp_path / "index.rst"
+    doc_file.write_text(
+        "Project Documentation\n"
+        "=====================\n\n"
+        ".. _my-anchor:\n\n"
+        "Overview\n"
+        "--------\n\n"
+        "Link to `Guide <guide.rst>`_ is valid.\n"
+        "Link to `Broken <missing.rst>`_ is broken.\n"
+        "Link to `Local <#my-anchor>`_ is valid local anchor.\n"
+        "Link to `Ghost <#nonexistent>`_ is broken local anchor.\n"
+        "Link to `External <https://example.com/api>`_ is valid.\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator()
+    findings = validator.validate_file(doc_file)
+    messages = tuple(f.message for f in findings)
+    assert (len(findings), messages) == (
+        2,
+        (
+            "Target path does not exist: 'missing.rst'",
+            "Local anchor '#nonexistent' not found in index.rst",
+        ),
+    )
+
+
+def test_asciidoc_link_and_anchor_validation(tmp_path: Path) -> None:
+    """AsciiDoc inline links and explicit anchor definitions validate correctly."""
+    target = tmp_path / "subpage.adoc"
+    target.write_text("= Subpage\n\nDetails.", encoding="utf-8")
+
+    doc_file = tmp_path / "manual.adoc"
+    doc_file.write_text(
+        "= Architecture Manual\n"
+        "[#main-section]\n"
+        "== Component Specs\n\n"
+        "See link:subpage.adoc[Subpage] for details.\n"
+        "See link:absent.adoc[Absent] for missing.\n"
+        "See https://example.com[External Guide] here.\n"
+        "Jump to link:#main-section[Main Section].\n"
+        "Jump to link:#ghost-section[Ghost Section].\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator()
+    findings = validator.validate_file(doc_file)
+    messages = tuple(f.message for f in findings)
+    assert (len(findings), messages) == (
+        2,
+        (
+            "Target path does not exist: 'absent.adoc'",
+            "Local anchor '#ghost-section' not found in manual.adoc",
+        ),
+    )
+
+
+def test_polyglot_snippet_toml_and_xml_validation(tmp_path: Path) -> None:
+    """Embedded TOML and XML snippet syntax validators identify valid and invalid blocks."""
+    doc_file = tmp_path / "snippets.md"
+    doc_file.write_text(
+        "# Configuration Examples\n\n"
+        "```toml\n"
+        "[server]\n"
+        "port = 8080\n"
+        "enabled = true\n"
+        "```\n\n"
+        "```toml\n"
+        "[invalid\n"
+        "broken = = =\n"
+        "```\n\n"
+        "```xml\n"
+        "<service name=\"gateway\"><port>443</port></service>\n"
+        "```\n\n"
+        "```xml\n"
+        "<service><unclosed>\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator(config=DocsValidatorConfig(active_rules=frozenset({"code_snippet"})))
+    findings = validator.validate_file(doc_file)
+    categories = tuple(f.category for f in findings)
+    assert (len(findings), categories) == (2, ("code_snippet", "code_snippet"))
+
+
+def test_polyglot_snippet_ini_and_shell_validation(tmp_path: Path) -> None:
+    """Embedded INI and Shell snippet syntax validators handle continuations and syntax errors."""
+    doc_file = tmp_path / "commands.md"
+    doc_file.write_text(
+        "# Shell Commands\n\n"
+        "```bash\n"
+        "$ pytest tests/ examples/ \\\n"
+        "    --cov=tools --cov-fail-under=90\n"
+        "echo \"All tests passed successfully\"\n"
+        "```\n\n"
+        "```bash\n"
+        "echo 'Unclosed single quote\n"
+        "```\n\n"
+        "```ini\n"
+        "[database]\n"
+        "host = 127.0.0.1\n"
+        "port = 5432\n"
+        "```\n\n"
+        "```ini\n"
+        "broken line without section or delimiter\n"
+        "[bad_section\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator(config=DocsValidatorConfig(active_rules=frozenset({"code_snippet"})))
+    findings = validator.validate_file(doc_file)
+    categories = tuple(f.category for f in findings)
+    assert (len(findings), categories) == (2, ("code_snippet", "code_snippet"))
+
+
+def test_polyglot_snippet_source_languages_validation(tmp_path: Path) -> None:
+    """Polyglot source snippets (Rust, Go, TypeScript) enforce bracket balancing."""
+    doc_file = tmp_path / "languages.md"
+    doc_file.write_text(
+        "# Code Samples\n\n"
+        "```rust\n"
+        "pub struct AgentConfig {\n"
+        "    pub timeout_seconds: u64,\n"
+        "}\n"
+        "```\n\n"
+        "```rust\n"
+        "pub struct Unclosed {\n"
+        "```\n\n"
+        "```go\n"
+        "func ProcessTask(ctx context.Context) error {\n"
+        "    return nil\n"
+        "}\n"
+        "```\n\n"
+        "```typescript\n"
+        "export interface TaskResult {\n"
+        "    readonly taskId: string;\n"
+        "}\n"
+        "```\n\n"
+        "```typescript\n"
+        "export function BadFunc() {\n"
+        "    const x = [1, 2, 3;\n"
+        "}\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator(config=DocsValidatorConfig(active_rules=frozenset({"code_snippet"})))
+    findings = validator.validate_file(doc_file)
+    categories = tuple(f.category for f in findings)
+    assert (len(findings), categories) == (2, ("code_snippet", "code_snippet"))
+
+
+def test_multi_format_directory_validation(tmp_path: Path) -> None:
+    """Directory scan with all supported documentation formats validates polyglot corpus."""
+    (tmp_path / "README.md").write_text("# Project\n\nWelcome to docs.", encoding="utf-8")
+    (tmp_path / "spec.rst").write_text("Spec\n====\n\nSpecification document.", encoding="utf-8")
+    (tmp_path / "index.html").write_text("<html><body><h1>Index</h1></body></html>", encoding="utf-8")
+    (tmp_path / "guide.adoc").write_text("= Guide\n\nUser guide document.", encoding="utf-8")
+
+    validator = DocsValidator(config=DocsValidatorConfig(extensions=POLYGLOT_EXTENSIONS))
+    report = validator.validate_directory(tmp_path)
+    assert (report.total_files, report.files_with_findings, report.is_valid) == (4, 0, True)
+
+
+def test_extract_document_anchors(tmp_path: Path) -> None:
+    """Document anchor extraction works across Markdown, HTML, and RST formats."""
+    md_file = tmp_path / "doc.md"
+    md_file.write_text("# Main Title\n\n## Sub Section\n", encoding="utf-8")
+    html_file = tmp_path / "doc.html"
+    html_file.write_text('<h1 id="intro">Intro</h1><a name="sec1"></a>', encoding="utf-8")
+    rst_file = tmp_path / "doc.rst"
+    rst_file.write_text(".. _target-label:\n\nSection\n=======\n", encoding="utf-8")
+
+    md_anchors = extract_document_anchors(md_file)
+    html_anchors = extract_document_anchors(html_file)
+    rst_anchors = extract_document_anchors(rst_file)
+
+    assert (
+        "main-title" in md_anchors,
+        "sub-section" in md_anchors,
+        "intro" in html_anchors,
+        "sec1" in html_anchors,
+        "target-label" in rst_anchors,
+    ) == (True, True, True, True, True)

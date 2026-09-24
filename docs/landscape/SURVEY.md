@@ -92,7 +92,7 @@ Ours: [`tools/docs_validator.py`](../../tools/docs_validator.py)
 | **diagram_rendering** — Verifies embedded diagrams actually render | ✅ | ? | ? | ? |
 | **link_checking** — Verifies that document links resolve | ✅ | ? | ✅ | ? |
 | **markdown_structure** — Enforces document structure or heading conventions | ✅ | ✅ | ? | ? |
-| **multi_language** — Analyses languages beyond Python | — | ? | ✅ | ✅ |
+| **multi_language** — Analyses languages beyond Python | ✅ | ? | ✅ | ✅ |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ? | ? |
 | **prose_style** — Enforces prose style or terminology rules | — | ? | ? | ✅ |
 | **secret_scanning** — Detects credentials or private network addresses in source | ✅ | ? | ? | ? |
@@ -204,7 +204,7 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-18 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **11 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
+17 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **10 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
 
 - **Complexity gate: use astral-sh/ruff, already a dependency, for auto_fix**
   - Disposition: `integrate` — ruff is already a declared dependency
@@ -240,11 +240,6 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
   - Held by: `cookiecutter/cookiecutter`, `yeoman/generator`
   - Evidence: cookiecutter/cookiecutter: A large published index of community templates
   - Evidence: yeoman/generator: A published registry of installable generators
-- **Docs validator: analyses languages beyond python**
-  - Disposition: `build`
-  - Held by: `lycheeverse/lychee`, `vale-cli/vale`
-  - Evidence: lycheeverse/lychee: Checks links in any text format, not one markup language
-  - Evidence: vale-cli/vale: Supports markdown, reStructuredText, AsciiDoc and code comments
 - **Go leak sentinel: fails an ordinary test run when the defect is present**
   - Disposition: `build`
   - Held by: `uber-go/goleak`, `fortytw2/leaktest`

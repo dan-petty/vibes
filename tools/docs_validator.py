@@ -48,6 +48,22 @@ from doc_rules_mermaid import (
     check_mermaid_diagrams,
     contrast_ratio,
 )
+from doc_rules_polyglot import (
+    POLYGLOT_EXTENSIONS,
+    DocumentFormat,
+    PolyglotSnippet,
+    detect_document_format,
+    extract_asciidoc_snippets,
+    extract_html_snippets,
+    extract_polyglot_anchors,
+    extract_polyglot_links,
+    extract_rst_snippets,
+    validate_ini_snippet,
+    validate_polyglot_source_snippet,
+    validate_shell_snippet,
+    validate_toml_snippet,
+    validate_xml_snippet,
+)
 from doc_rules_structure import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     check_directory_maps,
@@ -69,6 +85,7 @@ __all__ = [
     "ALL_DOC_RULES",
     "DOC_PRESETS",
     "OBSERVATION_REQUIRED_SECTION_COUNT",
+    "POLYGLOT_EXTENSIONS",
     "RULE_ALIASES",
     "RULE_CODE_MAP",
     "VALIDATOR_RULES",
@@ -77,9 +94,13 @@ __all__ = [
     "DocValidationReport",
     "DocsValidator",
     "DocsValidatorConfig",
+    "DocumentFormat",
     "RulePreset",
     "auto_fix_content",
+    "check_polyglot_documentation",
     "contrast_ratio",
+    "detect_document_format",
+    "extract_document_anchors",
     "load_doc_config",
     "main",
     "normalize_doc_rule_name",
@@ -119,6 +140,7 @@ VALIDATOR_RULES: Final[dict[str, str]] = {
     "directory_map": "Directory map tree synchronization against filesystem",
     "pattern_header": "Architecture pattern header metadata and references",
     "sanitization": "Zero-trust egress and RFC 1918 private address sanitization",
+    "multi_language": "Multi-format document parsing and polyglot snippet validation (RST, AsciiDoc, HTML, text)",
 }
 
 ALL_DOC_RULES: Final[frozenset[str]] = frozenset(VALIDATOR_RULES.keys())
@@ -134,6 +156,7 @@ RULE_CODE_MAP: Final[dict[str, str]] = {
     "DOC008": "directory_map",
     "DOC009": "pattern_header",
     "DOC010": "sanitization",
+    "DOC011": "multi_language",
 }
 
 RULE_ALIASES: Final[dict[str, str]] = {
@@ -169,12 +192,17 @@ RULE_ALIASES: Final[dict[str, str]] = {
     "security": "sanitization",
     "egress": "sanitization",
     "zero_trust": "sanitization",
+    "multi_language": "multi_language",
+    "multilang": "multi_language",
+    "polyglot": "multi_language",
+    "formats": "multi_language",
+    "format": "multi_language",
 }
 
 DOC_PRESETS: Final[dict[str, RulePreset]] = {
     "standard": RulePreset(
         name="standard",
-        description="Standard full-suite documentation validation across all 10 rules",
+        description="Standard full-suite documentation validation across all rules",
         active_rules=ALL_DOC_RULES,
         strict=False,
     ),
@@ -183,6 +211,12 @@ DOC_PRESETS: Final[dict[str, RulePreset]] = {
         description="Full-suite validation treating warnings and suggestions as errors",
         active_rules=ALL_DOC_RULES,
         strict=True,
+    ),
+    "polyglot": RulePreset(
+        name="polyglot",
+        description="Comprehensive polyglot and multi-format validation across all rules",
+        active_rules=ALL_DOC_RULES,
+        strict=False,
     ),
     "structure_only": RulePreset(
         name="structure_only",
@@ -238,6 +272,7 @@ class DocsValidatorConfig:
     selected_rules: frozenset[str] = field(default_factory=frozenset)
     ignored_rules: frozenset[str] = field(default_factory=frozenset)
     extended_rules: frozenset[str] = field(default_factory=frozenset)
+    extensions: tuple[str, ...] = (".md", ".markdown")
 
     def is_rule_active(self, rule_name: str) -> bool:
         """Report whether a documentation rule is enabled under this configuration."""
@@ -255,6 +290,7 @@ class DocConfigOverrides:
     ignore: Sequence[str] | None = None
     extend_select: Sequence[str] | None = None
     config_file: Path | None = None
+    extensions: tuple[str, ...] | None = None
 
 
 def _find_default_doc_config() -> Path | None:
@@ -353,6 +389,19 @@ def _resolve_strict_flag(
     return bool(file_cfg.get("strict", default))
 
 
+def _resolve_extensions(
+    opts: DocConfigOverrides,
+    file_cfg: dict[str, Any],
+) -> tuple[str, ...]:
+    """Resolve file extensions to validate from overrides, file configuration, or default."""
+    if opts.extensions is not None:
+        return opts.extensions
+    cfg_exts = file_cfg.get("extensions")
+    if isinstance(cfg_exts, (list, tuple)):
+        return tuple(str(e) for e in cfg_exts)
+    return (".md", ".markdown")
+
+
 def resolve_doc_config(overrides: DocConfigOverrides | None = None) -> DocsValidatorConfig:
     """Resolve documentation configuration by merging preset defaults, TOML config, and overrides."""
     opts = overrides or DocConfigOverrides()
@@ -376,6 +425,7 @@ def resolve_doc_config(overrides: DocConfigOverrides | None = None) -> DocsValid
         selected_rules=selected,
         ignored_rules=ignored,
         extended_rules=extended,
+        extensions=_resolve_extensions(opts, file_cfg),
     )
 
 
@@ -389,7 +439,7 @@ def render_presets_table() -> str:
     ]
     for name, preset in sorted(DOC_PRESETS.items()):
         rules_desc = (
-            "All 10 rules"
+            f"All {len(ALL_DOC_RULES)} rules"
             if len(preset.active_rules) == len(ALL_DOC_RULES)
             else ", ".join(sorted(preset.active_rules))
         )
@@ -493,6 +543,14 @@ def extract_heading_anchors(content: str) -> set[str]:
     return anchors
 
 
+def extract_document_anchors(file_path: Path, content: str | None = None) -> set[str]:
+    """Extract heading anchors and explicit targets from any documentation format."""
+    text = content if content is not None else file_path.read_text(encoding="utf-8", errors="replace")
+    if detect_document_format(file_path) == DocumentFormat.MARKDOWN:
+        return extract_heading_anchors(text)
+    return extract_polyglot_anchors(file_path, text)
+
+
 def _evaluate_fence_token(token: Any, file_str: str) -> DocFinding | None:
     """Evaluate individual token for suspicious empty or unclosed fence."""
     if token.type != "fence" or not token.map:
@@ -586,6 +644,8 @@ def _check_line_fences(lines: Sequence[str], file_str: str) -> list[DocFinding]:
 
 def check_code_fences(lines: Sequence[str], file_path: Path, parser: MarkdownIt) -> list[DocFinding]:
     """Verify code fences for unclosed blocks and premature termination via inner fences."""
+    if detect_document_format(file_path) != DocumentFormat.MARKDOWN:
+        return []
     file_str = str(file_path)
     try:
         tokens = parser.parse("\n".join(lines))
@@ -669,6 +729,8 @@ def _evaluate_table_line(
 
 def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Verify table row column counts match the table header definition."""
+    if detect_document_format(file_path) != DocumentFormat.MARKDOWN:
+        return []
     file_str = str(file_path)
     findings: list[DocFinding] = []
     in_table, header_cols = False, 0
@@ -810,7 +872,7 @@ def _resolve_effective_anchors(
     """Resolve known anchors map, populating local document anchors if missing."""
     anchors = dict(known_anchors) if known_anchors is not None else {}
     if file_path not in anchors:
-        anchors[file_path] = extract_heading_anchors("\n".join(lines))
+        anchors[file_path] = extract_document_anchors(file_path, "\n".join(lines))
     return anchors
 
 
@@ -857,28 +919,77 @@ def check_markdown_links(
     known_anchors: dict[Path, set[str]] | None = None,
     oracle: PathOracle | None = None,
 ) -> list[DocFinding]:
-    """Inspect all markdown links for broken paths, missing anchors, and host-specific URIs.
-
-    Links come from the CommonMark parser, which settles four things a line scan could not:
-    a link title is an attribute and can never be read as part of the destination; a
-    `[text](url)` inside a code span is a `code_inline` child and never a link, without
-    masking anything; an indented code block is a `code_block` and its example links are not
-    resolved as paths; and a multi-line `<!-- ... -->` is one `html_block`, so links inside a
-    commented-out section are not chased.
-
-    The whitespace-malformation check stays a line scan, because `[a] (b)` is not a link at
-    all — the parser has nothing to report and the reader still wants telling.
-    """
-    content = "\n".join(lines)
-    document = parse_document(commonmark_parser(), content)
-    skip = document.code_lines | document.html_lines
+    """Inspect all documentation links for broken paths, missing anchors, and host-specific URIs."""
+    fmt = detect_document_format(file_path)
     context = LinkContext(
         anchors=_resolve_effective_anchors(file_path, lines, known_anchors),
         paths=oracle if oracle is not None else PathOracle(),
     )
+    if fmt != DocumentFormat.MARKDOWN:
+        poly_links = extract_polyglot_links(lines, file_path)
+        findings = _collect_parsed_link_findings(poly_links, file_path, frozenset(), context)
+        return sorted(findings, key=lambda f: (f.line_number, f.message))
+
+    content = "\n".join(lines)
+    document = parse_document(commonmark_parser(), content)
+    skip = document.code_lines | document.html_lines
     findings = _collect_parsed_link_findings(document.links, file_path, skip, context)
     findings.extend(_collect_whitespace_link_findings(lines, str(file_path), skip))
     return sorted(findings, key=lambda f: (f.line_number, f.message))
+
+
+def _check_asciidoc_delimiters(lines: Sequence[str], file_str: str) -> list[DocFinding]:
+    """Audit AsciiDoc listing delimiter pairing to prevent unclosed source blocks."""
+    in_block = False
+    block_start = 0
+    for idx, line in enumerate(lines, 1):
+        if line.strip() == "----":
+            in_block = not in_block
+            block_start = idx if in_block else 0
+    if in_block:
+        return [
+            DocFinding(
+                file_path=file_str,
+                line_number=block_start,
+                category="multi_language",
+                message=f"Unclosed AsciiDoc source block starting at line {block_start}",
+            )
+        ]
+    return []
+
+
+def _check_rst_directives(lines: Sequence[str], file_str: str) -> list[DocFinding]:
+    """Audit reStructuredText directive syntax for single-colon mistakes."""
+    findings: list[DocFinding] = []
+    for idx, line in enumerate(lines, 1):
+        if re.match(r"^\s*\.\.\s+[a-zA-Z0-9_-]+:[^:]", line):
+            findings.append(
+                DocFinding(
+                    file_path=file_str,
+                    line_number=idx,
+                    category="multi_language",
+                    message="Malformed reStructuredText directive: missing double colon '::'",
+                )
+            )
+    return findings
+
+
+def check_polyglot_documentation(
+    lines: Sequence[str],
+    file_path: Path,
+    known_anchors: dict[Path, set[str]] | None = None,
+    oracle: PathOracle | None = None,
+) -> list[DocFinding]:
+    """Validate multi-format document syntax, directives, and format-specific structures."""
+    fmt = detect_document_format(file_path)
+    if fmt == DocumentFormat.MARKDOWN:
+        return []
+    file_str = str(file_path)
+    if fmt == DocumentFormat.ASCIIDOC:
+        return _check_asciidoc_delimiters(lines, file_str)
+    if fmt == DocumentFormat.RST:
+        return _check_rst_directives(lines, file_str)
+    return []
 
 
 def _validate_python_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
@@ -945,12 +1056,48 @@ def _validate_yaml_snippet(code: str, start_line: int, file_str: str) -> DocFind
         )
 
 
+def _validate_rust_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
+    return validate_polyglot_source_snippet("Rust", code, start_line, file_str)
+
+
+def _validate_go_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
+    return validate_polyglot_source_snippet("Go", code, start_line, file_str)
+
+
+def _validate_ts_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
+    return validate_polyglot_source_snippet("TypeScript", code, start_line, file_str)
+
+
+def _validate_js_snippet(code: str, start_line: int, file_str: str) -> DocFinding | None:
+    return validate_polyglot_source_snippet("JavaScript", code, start_line, file_str)
+
+
 _SNIPPET_VALIDATORS: Final[dict[str, Callable[[str, int, str], DocFinding | None]]] = {
     "python": _validate_python_snippet,
     "py": _validate_python_snippet,
     "json": _validate_json_snippet,
     "yaml": _validate_yaml_snippet,
     "yml": _validate_yaml_snippet,
+    "toml": validate_toml_snippet,
+    "xml": validate_xml_snippet,
+    "svg": validate_xml_snippet,
+    "xhtml": validate_xml_snippet,
+    "html": validate_xml_snippet,
+    "ini": validate_ini_snippet,
+    "cfg": validate_ini_snippet,
+    "conf": validate_ini_snippet,
+    "properties": validate_ini_snippet,
+    "sh": validate_shell_snippet,
+    "bash": validate_shell_snippet,
+    "shell": validate_shell_snippet,
+    "zsh": validate_shell_snippet,
+    "rust": _validate_rust_snippet,
+    "rs": _validate_rust_snippet,
+    "go": _validate_go_snippet,
+    "ts": _validate_ts_snippet,
+    "typescript": _validate_ts_snippet,
+    "js": _validate_js_snippet,
+    "javascript": _validate_js_snippet,
 }
 
 
@@ -991,12 +1138,31 @@ def _process_snippet_line(
         scan.block_lines.append(line)
 
 
+def _collect_polyglot_snippets(lines: Sequence[str], fmt: DocumentFormat) -> list[PolyglotSnippet]:
+    """Extract snippets for non-markdown documentation formats."""
+    if fmt == DocumentFormat.RST:
+        return extract_rst_snippets(lines)
+    if fmt == DocumentFormat.ASCIIDOC:
+        return extract_asciidoc_snippets(lines)
+    if fmt == DocumentFormat.HTML:
+        return extract_html_snippets(lines)
+    return []
+
+
 def check_embedded_snippets(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Syntactically parse embedded code blocks in supported languages."""
     file_str = str(file_path)
+    fmt = detect_document_format(file_path)
+    if fmt != DocumentFormat.MARKDOWN:
+        snippets = _collect_polyglot_snippets(lines, fmt)
+        return [
+            finding
+            for snip in snippets
+            if (finding := _validate_single_snippet(snip.language, snip.code.splitlines(), snip.start_line, file_str))
+        ]
+
     findings: list[DocFinding] = []
     scan = _FenceScan()
-
     for idx, line in enumerate(lines, 1):
         _process_snippet_line(line, idx, file_str, scan, findings)
     return findings
@@ -1281,6 +1447,7 @@ class DocsValidator:
             ("directory_map", lambda: check_directory_maps(lines, file_path, paths)),
             ("pattern_header", lambda: check_pattern_header(lines, file_path)),
             ("sanitization", lambda: check_documentation_sanitization(lines, file_path)),
+            ("multi_language", lambda: check_polyglot_documentation(lines, file_path, known_anchors, paths)),
         )
         findings = [
             finding
@@ -1335,23 +1502,34 @@ class DocsValidator:
         """Verify mandatory 5-section structure of observation documents."""
         return check_observation_structure(self._to_lines(content), file_path)
 
+    def check_polyglot(
+        self,
+        content: str | Sequence[str],
+        file_path: Path = Path("document.rst"),
+        known_anchors: dict[Path, set[str]] | None = None,
+        oracle: PathOracle | None = None,
+    ) -> list[DocFinding]:
+        """Validate multi-format document syntax, links, and code snippets."""
+        return check_polyglot_documentation(self._to_lines(content), file_path, known_anchors, oracle)
+
     def validate_directory(
         self,
         dir_path: Path,
-        extensions: Sequence[str] = (".md", ".markdown"),
+        extensions: Sequence[str] | None = None,
     ) -> DocValidationReport:
-        """Scan and validate all markdown files in directory recursively."""
+        """Scan and validate all documentation files in directory recursively."""
         start_time = time.monotonic()
-        md_files = _discover_markdown_files(dir_path, extensions)
+        target_exts = extensions if extensions is not None else self.config.extensions
+        doc_files = _discover_markdown_files(dir_path, target_exts)
 
         known_anchors = (
-            {f: extract_heading_anchors(f.read_text(encoding="utf-8")) for f in md_files}
+            {f: extract_document_anchors(f, f.read_text(encoding="utf-8")) for f in doc_files}
             if self.config.is_rule_active("link")
             else {}
         )
-        all_findings = _scan_files_parallel(self, md_files, known_anchors)
+        all_findings = _scan_files_parallel(self, doc_files, known_anchors)
         elapsed = time.monotonic() - start_time
-        return _build_directory_report(md_files, all_findings, elapsed)
+        return _build_directory_report(doc_files, all_findings, elapsed)
 
 
 def _scan_files_parallel(
@@ -1492,6 +1670,15 @@ def _cli_select_arg(args: argparse.Namespace) -> list[str] | None:
     return None
 
 
+def _cli_extensions_arg(args: argparse.Namespace) -> tuple[str, ...] | None:
+    """Extract extensions override from CLI flags."""
+    if args.all_formats:
+        return POLYGLOT_EXTENSIONS
+    if args.extensions:
+        return tuple(ext.strip() for ext in args.extensions.split(",") if ext.strip())
+    return None
+
+
 def parse_cli_args(
     argv: Sequence[str] | None = None,
 ) -> tuple[argparse.Namespace, DocsValidatorConfig, bool]:
@@ -1506,13 +1693,19 @@ def parse_cli_args(
     parser.add_argument("--rule", help="Filter findings by category rule (legacy option)")
     parser.add_argument(
         "--preset",
-        help="Select calibrated rule preset (standard, strict, structure_only, links_only, code_only, sanitization_only)",
+        help="Select calibrated rule preset (standard, strict, polyglot, structure_only, links_only, code_only, sanitization_only)",
     )
     parser.add_argument("--select", help="Comma-separated rules or codes to activate (e.g. DOC001,DOC004)")
     parser.add_argument("--ignore", help="Comma-separated rules or codes to exclude (e.g. DOC008)")
     parser.add_argument("--extend-select", help="Comma-separated additional rules to activate")
     parser.add_argument("--config", type=Path, help="Path to configuration file (pyproject.toml or .markdownlint.json)")
     parser.add_argument("--list-presets", action="store_true", help="Display all available presets in markdown table format")
+    parser.add_argument("--extensions", help="Comma-separated file extensions to validate (e.g. .md,.rst,.html)")
+    parser.add_argument(
+        "--all-formats",
+        action="store_true",
+        help="Validate all supported documentation formats (.md, .rst, .adoc, .html, .txt)",
+    )
     args = parser.parse_args(argv)
 
     if args.list_presets:
@@ -1525,6 +1718,7 @@ def parse_cli_args(
         ignore=[args.ignore] if args.ignore else None,
         extend_select=[args.extend_select] if args.extend_select else None,
         config_file=args.config,
+        extensions=_cli_extensions_arg(args),
     )
     return args, resolve_doc_config(overrides), False
 
