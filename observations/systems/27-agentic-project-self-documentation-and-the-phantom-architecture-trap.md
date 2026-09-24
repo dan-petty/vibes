@@ -21,24 +21,27 @@ Technical documentation must simultaneously serve two fundamentally divergent co
 When unconstrained language models author both layers in unstructured prose, the documentation ceases to be a reliable source of truth and collapses into high-risk pathological states.
 
 ```mermaid
-flowchart TD
-    subgraph HumanSDLC ["Traditional Human SDLC"]
-        HCode["Code Implementation"] -->|Velocity Mismatch| HDocs["Human Documentation"]
-        HDocs -.->|Lags Months Behind| HRot["Documentation Rot & Technical Debt"]
+flowchart LR
+    subgraph HumanSDLC ["1. Traditional Human SDLC"]
+        direction TB
+        HCode["Code Implementation"] -->|"Velocity Mismatch"| HDocs["Human Documentation"]
+        HDocs -.->|"Lags Months Behind"| HRot["Documentation Rot & Technical Debt"]
     end
 
-    subgraph AgenticLoop ["Unconstrained Agentic Documentation (Anti-Pattern)"]
-        ACode["Agent Synthesizes Code"] -->|Generative Prose| ADocs["Agent Writes Narrative Docs"]
-        ADocs -->|Primes Context Window| ANext["Next Agent Generation"]
-        ANext -->|Treats Phantom Docs as Truth| AReg["Cascading Runtime Hallucination"]
+    subgraph AgenticLoop ["2. Unconstrained Agentic Loop (Anti-Pattern)"]
+        direction TB
+        ACode["Agent Synthesizes Code"] -->|"Generative Prose"| ADocs["Agent Narrative Docs"]
+        ADocs -->|"Primes Context Window"| ANext["Next Agent Generation"]
+        ANext -->|"Treats Phantom Docs as Truth"| AReg["Cascading Runtime Hallucination"]
     end
 
-    subgraph LivingArchitecture ["4-Tier Living Documentation Architecture"]
-        T1["Tier 1: AST Mechanical Reflection"] -->|Deterministic Extraction| VerifiedDocs["Verified CLI & Schema Docs"]
-        T2["Tier 2: Constrained LLM Synthesis"] -->|Bounded ADRs| VerifiedDocs
-        VerifiedDocs -->|Fail-Closed Pre-Commit / CI| T3["Tier 3: docs_validator.py Oracle"]
-        T3 -->|Context Compactor| T4["Tier 4: Active Compaction (ADI <= 1.5)"]
-        T4 --> NextAgent["Next Agent Generation (High-Entropy Grounding)"]
+    subgraph LivingArchitecture ["3. Living Documentation System"]
+        direction TB
+        T1["Tier 1: AST Mechanical Reflection"] --> VerifiedDocs["Verified Ground Truth"]
+        T2["Tier 2: Bounded ADR Synthesis"] --> VerifiedDocs
+        VerifiedDocs -->|"Fail-Closed Pre-Commit / CI"| T3["Tier 3: docs_validator.py Oracle"]
+        T3 -->|"Context Compactor"| T4["Tier 4: Active Compaction (ADI <= 1.5)"]
+        T4 --> NextAgent["Next Agent Generation (High Grounding)"]
     end
 ```
 
@@ -96,27 +99,30 @@ The root causes of self-documentation breakdown stem from the intersection of ge
 To eliminate phantom architectures, circular belief traps, and context rot, engineering systems must implement the **Four-Tier Living Documentation Architecture**:
 
 ```mermaid
-flowchart TD
-    subgraph Tier1 ["Tier 1: Deterministic Mechanical Introspection"]
-        T1_AST["Python AST / Typer / FastMCP Reflection"] --> T1_Out["CLI_REFERENCE.md & Tool Manifests"]
+flowchart LR
+    subgraph S1 ["Authoring Tiers (Inputs)"]
+        direction TB
+        T1["Tier 1: AST Mechanical Reflection<br/>• Deterministic CLI & Manifest Extraction"]
+        T2["Tier 2: Constrained Synthesis<br/>• Bounded ADRs & Verification Rationale"]
     end
 
-    subgraph Tier2 ["Tier 2: Constrained Generative Synthesis"]
-        T2_LLM["LLM Synthesis (Bounded ADRs, Living Standards)"] --> T2_Out["Structured Rationale & Empirical Logs"]
+    subgraph S2 ["Tier 3: Invariant Gating (Fail-Closed)"]
+        direction TB
+        T3_Val["tools/docs_validator.py & Pre-Commit"]
+        T3_Rules["• Link & Anchor Integrity<br/>• Bounded Mermaid Ratios (1:3 to 3:1)<br/>• CommonMark Linebreaks (DOC012)<br/>• Zero-Trust Egress Sanitization"]
+        T3_Val --> T3_Rules
     end
 
-    subgraph Tier3 ["Tier 3: Mechanical Invariant Gates (Fail-Closed)"]
-        T3_Validator["tools/docs_validator.py & Pre-Commit"]
-        T3_Validator -->|Enforces| T3_Rules["• Link & Anchor Integrity\n• Mermaid AST Syntax\n• CommonMark Linebreaks (DOC012)\n• 5-Section Structure & Directory Maps\n• Zero-Trust Egress Sanitization"]
+    subgraph S3 ["Tier 4: Context Optimization (Delivery)"]
+        direction TB
+        T4_Comp["Active Compaction & Liveness Pruner"]
+        T4_Ctx["High-Entropy Context Grounding<br/>(ADI &le; 1.5 Target Budget)"]
+        T4_Comp --> T4_Ctx
     end
 
-    subgraph Tier4 ["Tier 4: Active Compaction & Liveness Pruning"]
-        T4_Compactor["Context Rot Auditor & Compactor"] --> T4_Context["High-Entropy System Prompts (ADI <= 1.5)"]
-    end
-
-    Tier1 --> T3
-    Tier2 --> T3
-    T3 --> T4
+    S1 -->|"Static Extraction & ADRs"| S2
+    S2 -->|"Verified Documentation"| S3
+    S3 --> NextAgent["Next Agent Generation<br/>(Zero Phantom Drift)"]
 ```
 
 ### The Core Architectural Principles:

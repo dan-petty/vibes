@@ -25,28 +25,30 @@ Natural language instructions cannot prevent these pathologies. The system requi
 The Multi-Tier Living Documentation Architecture partitions documentation lifecycle management into four distinct operational layers:
 
 ```mermaid
-flowchart TD
-    subgraph Tier1 ["Tier 1: Deterministic Mechanical Introspection"]
-        T1_AST["Python AST / Typer / FastMCP Reflection"] --> T1_Out["CLI_REFERENCE.md & Tool Manifests"]
+flowchart LR
+    subgraph S1 ["Authoring Tiers (Inputs)"]
+        direction TB
+        T1["Tier 1: AST Mechanical Reflection<br/>• Deterministic CLI & Manifest Extraction"]
+        T2["Tier 2: Constrained Synthesis<br/>• Bounded ADRs & Verification Rationale"]
     end
 
-    subgraph Tier2 ["Tier 2: Constrained Generative Synthesis"]
-        T2_LLM["LLM Synthesis (Bounded ADRs, Living Standards)"] --> T2_Out["Structured Rationale & Empirical Logs"]
+    subgraph S2 ["Tier 3: Invariant Gating (Fail-Closed)"]
+        direction TB
+        T3_Val["tools/docs_validator.py & Pre-Commit"]
+        T3_Rules["• Link & Anchor Integrity<br/>• Bounded Mermaid Ratios (1:3 to 3:1)<br/>• CommonMark Linebreaks (DOC012)<br/>• Zero-Trust Egress Sanitization"]
+        T3_Val --> T3_Rules
     end
 
-    subgraph Tier3 ["Tier 3: Mechanical Invariant Gates (Fail-Closed)"]
-        T3_Validator["tools/docs_validator.py & Pre-Commit"]
-        T3_Validator -->|Validates| T3_Rules["• Link & Anchor Integrity\n• Mermaid AST Syntax\n• CommonMark Linebreaks (DOC012)\n• 5-Section Skeleton & Directory Maps\n• Zero-Trust Egress Sanitization"]
+    subgraph S3 ["Tier 4: Context Optimization (Delivery)"]
+        direction TB
+        T4_Comp["Active Compaction & Liveness Pruner"]
+        T4_Ctx["High-Entropy Context Grounding<br/>(ADI &le; 1.5 Target Budget)"]
+        T4_Comp --> T4_Ctx
     end
 
-    subgraph Tier4 ["Tier 4: Active Compaction & Liveness Pruning"]
-        T4_Compactor["Context Rot Auditor & Compactor"] --> T4_Context["High-Entropy System Prompts (ADI <= 1.5)"]
-    end
-
-    Tier1 --> T3_Validator
-    Tier2 --> T3_Validator
-    T3_Validator --> T4_Compactor
-    T4_Compactor --> AgentRuntime["Next Agent Generation (Zero Drift)"]
+    S1 -->|"Static Extraction & ADRs"| S2
+    S2 -->|"Verified Documentation"| S3
+    S3 --> AgentRuntime["Next Agent Generation<br/>(Zero Phantom Drift)"]
 ```
 
 ### The Four Operational Tiers:

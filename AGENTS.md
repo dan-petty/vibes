@@ -206,6 +206,12 @@ Every pattern must then provide an actionable operational playbook:
 
     This gate runs in `ci.yml` and is authoritative — a diagram that fails it reaches GitHub as a broken block, which is worse than no diagram at all.
   - **A Diagram Must Show a Mechanism, Not a Table of Contents**: Three boxes repeating adjacent prose earn nothing. A diagram belongs where structure is hard to say in a sentence: a cycle, a race, a fan-out, an irreversible transition, a place where two paths diverge. If the caption above it already conveys the whole thing, delete the diagram.
+  - **Bounded Aspect Ratio Invariant (1:3 to 3:1 Usability Ceiling)**:
+    Mermaid diagrams must maintain a balanced 2D aspect ratio and **must not exceed a 3:1 (overly tall and narrow) or 1:3 (overly wide and flat) height-to-width ratio**:
+    $$\frac{1}{3} \le \frac{\text{Height}}{\text{Width}} \le 3$$
+    - In browser rendering and GitHub markdown viewports, diagrams exceeding 3:1 become tall, unreadable vertical ladders that require endless scrolling and shrink text when scaled to fit page width. Conversely, diagrams exceeding 1:3 shrink into microscopic horizontal ribbons.
+    - Decompose unbranched linear vertical ladders (`flowchart TD`) into side-by-side comparative subgraphs (`flowchart LR` with `direction TB` per subgraph) or 2D matrix grids.
+    - Avoid single-row horizontal chains (`flowchart LR` with 5+ unbranched sequential nodes); fold multi-stage pipelines into multi-tier rows or parallel lanes.
 - **Syntax Highlighting & Nested Code Fences**: Always specify the language identifier for code fences (`python`, `bash`, `json`, `yaml`, `markdown`, `mermaid`). For markdown documents embedding markdown examples, use 4-backtick or 5-backtick outer fences (````markdown ... ````) to prevent premature fence closure.
 - **Directory Maps Belong at the Bottom**: A `text` directory tree is reference material, not an introduction. It is the least useful thing a reader meets first and the least useful thing an agent reads at all — an agent that needs the layout runs `ls` or `rglob`, and gets an answer that cannot be stale.
   - Place any directory map as the **final section** of its document, below the content that explains why the files exist.
