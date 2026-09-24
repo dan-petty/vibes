@@ -68,6 +68,7 @@ from doc_rules_structure import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     check_directory_maps,
     check_documentation_sanitization,
+    check_linebreak_hygiene,
     check_observation_structure,
     check_pattern_header,
 )
@@ -97,6 +98,7 @@ __all__ = [
     "DocumentFormat",
     "RulePreset",
     "auto_fix_content",
+    "check_linebreak_hygiene",
     "check_polyglot_documentation",
     "contrast_ratio",
     "detect_document_format",
@@ -141,6 +143,7 @@ VALIDATOR_RULES: Final[dict[str, str]] = {
     "pattern_header": "Architecture pattern header metadata and references",
     "sanitization": "Zero-trust egress and RFC 1918 private address sanitization",
     "multi_language": "Multi-format document parsing and polyglot snippet validation (RST, AsciiDoc, HTML, text)",
+    "linebreak": "CommonMark hard linebreaks and trailing whitespace hygiene",
 }
 
 ALL_DOC_RULES: Final[frozenset[str]] = frozenset(VALIDATOR_RULES.keys())
@@ -157,6 +160,7 @@ RULE_CODE_MAP: Final[dict[str, str]] = {
     "DOC009": "pattern_header",
     "DOC010": "sanitization",
     "DOC011": "multi_language",
+    "DOC012": "linebreak",
 }
 
 RULE_ALIASES: Final[dict[str, str]] = {
@@ -197,6 +201,10 @@ RULE_ALIASES: Final[dict[str, str]] = {
     "polyglot": "multi_language",
     "formats": "multi_language",
     "format": "multi_language",
+    "linebreak": "linebreak",
+    "linebreaks": "linebreak",
+    "whitespace": "linebreak",
+    "trailing_whitespace": "linebreak",
 }
 
 DOC_PRESETS: Final[dict[str, RulePreset]] = {
@@ -228,6 +236,7 @@ DOC_PRESETS: Final[dict[str, RulePreset]] = {
             "pattern_header",
             "directory_map",
             "html_tag",
+            "linebreak",
         }),
         strict=False,
     ),
@@ -1335,11 +1344,26 @@ def _fix_absolute_links(content: str, doc_path: Path) -> tuple[str, int]:
     return fixed_content, fixes
 
 
+def _fix_linebreak_hygiene(lines: list[str]) -> tuple[list[str], int]:
+    """Trim accidental single trailing spaces while preserving intentional 2-space linebreaks."""
+    flags = fenced_line_flags(lines)
+    fixes = 0
+    result: list[str] = []
+    for line, fenced in zip(lines, flags, strict=True):
+        if not fenced and line.endswith(" ") and not line.endswith("  "):
+            result.append(line[:-1])
+            fixes += 1
+        else:
+            result.append(line)
+    return result, fixes
+
+
 def auto_fix_content(content: str, doc_path: Path = Path("document.md")) -> tuple[str, int]:
     """Remediate fixable documentation issues in markdown string."""
     lines = content.splitlines()
     lines, fence_fixes = _fix_unclosed_fences(lines)
     lines, mermaid_fixes = _fix_mermaid_blocks(lines)
+    lines, linebreak_fixes = _fix_linebreak_hygiene(lines)
     # `splitlines()` discards the final terminator, so rejoining must always restore it
     # when the original had one. The guard that used to stand here — append only if the
     # join did not already end in a newline — looked equivalent and was not: a document
@@ -1351,7 +1375,7 @@ def auto_fix_content(content: str, doc_path: Path = Path("document.md")) -> tupl
     if content.endswith("\n"):
         reconstituted += "\n"
     final_content, link_fixes = _fix_absolute_links(reconstituted, doc_path)
-    return final_content, fence_fixes + mermaid_fixes + link_fixes
+    return final_content, fence_fixes + mermaid_fixes + linebreak_fixes + link_fixes
 
 
 def auto_fix_file(file_path: Path) -> int:
@@ -1448,6 +1472,7 @@ class DocsValidator:
             ("pattern_header", lambda: check_pattern_header(lines, file_path)),
             ("sanitization", lambda: check_documentation_sanitization(lines, file_path)),
             ("multi_language", lambda: check_polyglot_documentation(lines, file_path, known_anchors, paths)),
+            ("linebreak", lambda: check_linebreak_hygiene(lines, file_path)),
         )
         findings = [
             finding
@@ -1511,6 +1536,12 @@ class DocsValidator:
     ) -> list[DocFinding]:
         """Validate multi-format document syntax, links, and code snippets."""
         return check_polyglot_documentation(self._to_lines(content), file_path, known_anchors, oracle)
+
+    def check_linebreak_hygiene(
+        self, content: str | Sequence[str], file_path: Path = Path("document.md")
+    ) -> list[DocFinding]:
+        """Validate CommonMark hard linebreaks and trailing whitespace hygiene."""
+        return check_linebreak_hygiene(self._to_lines(content), file_path)
 
     def validate_directory(
         self,

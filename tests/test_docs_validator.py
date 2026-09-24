@@ -24,6 +24,8 @@ from docs_validator import (
     DOC_PRESETS,
     OBSERVATION_REQUIRED_SECTION_COUNT,
     POLYGLOT_EXTENSIONS,
+    RULE_CODE_MAP,
+    VALIDATOR_RULES,
     DocConfigOverrides,
     DocsValidator,
     DocsValidatorConfig,
@@ -1483,3 +1485,42 @@ def test_extract_document_anchors(tmp_path: Path) -> None:
         "sec1" in html_anchors,
         "target-label" in rst_anchors,
     ) == (True, True, True, True, True)
+
+
+def test_linebreak_hygiene_flags_accidental_single_trailing_space(tmp_path: Path) -> None:
+    """Accidental single trailing space is flagged, while double space is preserved as line break."""
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Title\n\nLine with single space \nLine with double space  \n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "linebreak"]
+    assert (len(findings), findings[0].line_number) == (1, 3)
+
+
+def test_linebreak_hygiene_ignores_single_space_inside_code_fence(tmp_path: Path) -> None:
+    """Lines inside code fences are exempt from linebreak trailing whitespace checks."""
+    doc = tmp_path / "fence.md"
+    doc.write_text("# Title\n\n```python\nx = 1 \n```\n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "linebreak"]
+    assert (len(findings), findings) == (0, [])
+
+
+def test_linebreak_hygiene_auto_fix_trims_single_space_and_preserves_double_space() -> None:
+    """Auto-fix trims single trailing spaces while strictly preserving CommonMark 2-space linebreaks."""
+    content = "# Title\n\nSingle space \nDouble space  \n"
+    fixed, count = auto_fix_content(content)
+    assert (count, fixed) == (1, "# Title\n\nSingle space\nDouble space  \n")
+    second_pass, second_count = auto_fix_content(fixed)
+    assert (second_count, second_pass) == (0, fixed)
+
+
+def test_doc012_rule_registration() -> None:
+    """Verify DOC012 is registered in rules, aliases, and presets."""
+    assert (
+        VALIDATOR_RULES["linebreak"] == "CommonMark hard linebreaks and trailing whitespace hygiene",
+        RULE_CODE_MAP["DOC012"] == "linebreak",
+        normalize_doc_rule_name("DOC012") == "linebreak",
+        normalize_doc_rule_name("trailing_whitespace") == "linebreak",
+        "linebreak" in DOC_PRESETS["structure_only"].active_rules,
+    ) == (True, True, True, True, True)
+
