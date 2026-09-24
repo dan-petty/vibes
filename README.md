@@ -65,6 +65,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Rootless Container Sandboxing & Process Group Containment**](./observations/systems/05-rootless-container-sandboxing-and-process-group-containment.md) | Container Security & POSIX | Hardened rootless container execution with 100% CIS benchmark compliance, POSIX process group isolation (`os.setsid`/`os.killpg`), and bounded stream buffers. |
 | [**Multi-Agent Concurrency & Workspace Hazards**](./observations/systems/06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md) | Concurrency & Swarm Dynamics | Eliminating working tree clobbering, SQLite coverage DB unlinking corruption, and cascading rebase live-locks with git worktrees, scoped data tiers, and FIFO PR shepherding. |
 | [**Agentic Project Self-Documentation**](./observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md) | Systems & Governance | Resolving the dual-audience paradox and the phantom architecture trap with a 4-tier living documentation architecture. |
+| [**Post-Harness Recursive Self-Improvement**](./observations/systems/28-recursive-self-improvement-and-the-post-harness-mandate.md) | Systems & Governance | Establishing the operational mandate for recursive self-improvement and scaling laws via asymmetric invariant verification ($P$ vs $NP$) and outward landscape telemetry. |
 
 ---
 
@@ -95,6 +96,7 @@ flowchart TD
 - [**Deterministic Mechanical Oracles & Feedback Inversion**](./patterns/deterministic-oracles-and-feedback-inversion.md): Binding stochastic LLM tokens to mechanical invariant gates (table dispatch, structural tuple assertions, negative tool schemas, process groups, boundary caps) and inverting feedback from reactive bug-fixing to proactive headroom elevation.
 - [**Multi-Agent Codebase Concurrency**](./patterns/multi-agent-codebase-concurrency.md): Architectural spatial isolation, partitioned data tiers, and centralized resource arbitration enabling collision-free multi-agent swarm collaboration on a single codebase.
 - [**Multi-Tier Living Documentation**](./patterns/multi-tier-living-documentation.md): Decoupling deterministic AST extraction from constrained generative narrative synthesis, backed by fail-closed oracles and active compaction.
+- [**Invariant-Grounded Recursive Self-Improvement**](./patterns/invariant-grounded-recursive-self-improvement.md): Transforming autonomous evolution from unconstrained generative drift into a convergent, closed-loop engine bounded by deterministic AST sentinels, CEGIS constraint sets, and outward telemetry.
 
 ---
 
@@ -108,6 +110,8 @@ Read the full [**Manifesto**](./docs/MANIFESTO.md) and [**Retrospective Analysis
 3. **Zero Zombie Code & Clean Solutions Over Legacy Remnants.**
 4. **Grounded Project Tracking (Zero Invisible Agent Actions).**
 5. **Self-Healing Instructions (Fix Root Causes, Not Symptoms).**
+6. **Invariant-Grounded Recursive Self-Improvement & Continuous Co-Evolution.**
+
 ---
 
 ## 💻 Executable Sample Applications (`examples/`)
@@ -324,7 +328,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 24-ebpf-process-tracing-for-agent-sandbox-introspection.md
 │       ├── 25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md
 │       ├── 26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md
-│       └── 27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md
+│       ├── 27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md
+│       └── 28-recursive-self-improvement-and-the-post-harness-mandate.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -338,6 +343,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── fifo-pull-request-shepherding.md
 │   ├── findings-must-carry-their-own-falsification.md
 │   ├── gate-integrity-and-total-input-coverage.md
+│   ├── invariant-grounded-recursive-self-improvement.md
 │   ├── iterative-resource-refinement-loop.md
 │   ├── multi-agent-codebase-concurrency.md
 │   ├── multi-tier-living-documentation.md

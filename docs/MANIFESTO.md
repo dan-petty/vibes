@@ -20,21 +20,21 @@ The agent transitions from an erratic code generator into a relentless, tire-les
 
 ---
 
-## The 5 Pillars of Disciplined Agentic Development
+## The 6 Pillars of Disciplined Agentic Development
 
 ```mermaid
-flowchart TD
-    P1["1. Tests as Living Contracts (TDD)"]
-    P2["2. AST-Enforced Invariants (Complexity <= 10)"]
-    P3["3. Zero Zombie Code & Clean Breaking Changes"]
-    P4["4. Grounded Project Governance (Zero Drift)"]
-    P5["5. Self-Hardening Instruction Loops"]
+flowchart LR
+    subgraph Pillars ["The 6 Pillars of Disciplined Engineering"]
+        direction TB
+        P1["1. Tests as Living Contracts (TDD)"]
+        P2["2. AST-Enforced Invariants (Complexity &le; 10)"]
+        P3["3. Zero Zombie Code & Clean Breaking Changes"]
+        P4["4. Grounded Project Governance (Zero Drift)"]
+        P5["5. Self-Hardening Instruction Loops"]
+        P6["6. Invariant-Grounded Recursive Self-Improvement"]
+    end
 
-    P1 --> Scaffold[High-Reliability Autonomous System]
-    P2 --> Scaffold
-    P3 --> Scaffold
-    P4 --> Scaffold
-    P5 --> Scaffold
+    Pillars --> Scaffold["High-Reliability Autonomous System<br/>(Post-Agentic-Harness Era)"]
 ```
 
 ### Pillar 1: Tests Are Executable Contracts, Not Afterthoughts
@@ -66,21 +66,28 @@ Software bugs are not isolated incidents; they are symptoms of missing constrain
 - The agent must immediately update the agent operating instructions (`AGENTS.md`) with defensive rules, pre-flight checks, and avoidance patterns.
 - Every failure permanently hardens the harness against recurrence.
 
+### Pillar 6: Invariant-Grounded Recursive Self-Improvement
+In the post-agentic-harness era, code synthesis velocity exceeds human auditing capacity. Static codebases face exponential relative decay.
+- Recursive self-improvement is an operational mandate: codebases must autonomously observe their own telemetry, repair defects, and ingest roadmap deliverables.
+- Unconstrained stochastic self-improvement collapses into the Phantom Architecture Trap and circular self-consistency.
+- Self-evolution must be grounded in asymmetric mechanical invariants ($P$ vs $NP$), monotonic CEGIS constraint accumulation, and outward ecosystem telemetry.
+
 ---
 
 ## The Shift in Developer Experience
 
-| Traditional "Vibe Coding" | Disciplined Agentic Engineering |
-|---|---|
-| Prompting in chat and copy-pasting diffs | Direct tool invocation via structured MCP protocols |
-| Testing manually in terminal | Automated TDD with $\ge 90.0\%$ coverage gates |
-| Allowing functions to grow unchecked | AST-enforced cyclomatic complexity $\le 10$, nesting $\le 5$ |
-| Secrets leaked into logs or prompts | Zero-plaintext OS Keyring and RFC 5737 dummy sanitization |
-| Hallucinating external APIs | Polyglot Tree-Sitter & CST contract parsing |
-| Blaming the LLM for errors | Hardening the `AGENTS.md` instructions on failure |
+| Traditional "Vibe Coding" | Harness-Era Scaffolding | Post-Harness Invariant Architecture |
+|---|---|---|
+| Prompting in chat and copy-pasting diffs | Direct tool invocation via MCP | Self-operating, closed-loop living repository |
+| Manual testing in terminal | Automated TDD ($\ge 90\%$ coverage) | Monotonic CEGIS regression accumulation |
+| Unchecked procedural sprawl | AST cyclomatic caps ($M \le 10, d \le 5$) | Proactive headroom elevation ($M \le 5, d \le 2$) |
+| Leaking secrets into logs | OS Keyring & RFC 5737 sanitization | Kernel sandboxing & zero-trust egress |
+| Blaming the LLM for bugs | Hardening `AGENTS.md` rules | Tripartite RSI: AST gates + CEGIS + outward survey |
+| Inward-facing defect churn | Linear backlog issue execution | Outward horizon expansion & roadmap ingestion |
 
 ---
 
 ## Conclusion
 
-The power of AI coding is not determined by the model's raw parameters alone; it is determined by the **architecture of the harness** that guides it. `vibes` exists to document the science of that harness.
+The power of AI coding is not determined by raw model parameters alone, nor solely by the external scaffolding that wraps it. In the post-agentic-harness era, software development is governed by **the mathematical rigor of its invariant architecture**. `vibes` exists to document the science of that autonomous evolution.
+
