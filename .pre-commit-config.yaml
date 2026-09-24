@@ -73,7 +73,6 @@ repos:
       - id: json-schema-lint
         name: JSON Schema Lint (FastMCP Manifests)
         language: python
-        entry: python -m json.tool
+        entry: python -c "import json, sys; [json.load(open(f, encoding='utf-8')) for f in sys.argv[1:]]"
         files: artifacts/schemas/.*\.json$
         pass_filenames: true
-        args: ["--no-ensure-ascii"]
