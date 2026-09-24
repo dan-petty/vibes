@@ -350,6 +350,7 @@ class _AstSymbolVisitor(ast.NodeVisitor):
         self.result = result
 
     def visit_Import(self, node: ast.Import) -> None:
+        """Record imported modules and map them to runtime system calls."""
         for alias in node.names:
             base_module = alias.name.split(".")[0]
             self.result.modules.add(base_module)
@@ -357,6 +358,7 @@ class _AstSymbolVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Record from-imported modules and imported symbol names."""
         if node.module:
             base_module = node.module.split(".")[0]
             self.result.modules.add(base_module)
@@ -367,6 +369,7 @@ class _AstSymbolVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
+        """Extract call targets and map resolved function names to system calls."""
         call_name = _resolve_call_name(node.func)
         if call_name:
             self.result.symbols.add(call_name)
@@ -374,15 +377,18 @@ class _AstSymbolVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Record attribute accesses and map method names to system calls."""
         self.result.symbols.add(node.attr)
         self._record_symbol_syscalls(node.attr)
         self.generic_visit(node)
 
     def _record_module_syscalls(self, module_name: str) -> None:
+        """Add mapped system calls for recognized standard and third-party modules."""
         if module_name in MODULE_SYSCALL_MAP:
             self.result.syscalls.update(MODULE_SYSCALL_MAP[module_name])
 
     def _record_symbol_syscalls(self, symbol_name: str) -> None:
+        """Add mapped system calls for recognized function and method symbols."""
         if symbol_name in SYMBOL_SYSCALL_MAP:
             self.result.syscalls.update(SYMBOL_SYSCALL_MAP[symbol_name])
 
@@ -458,16 +464,20 @@ def parse_trace_lines(lines: Iterable[str]) -> frozenset[str]:
     return frozenset(detected)
 
 
+def _parse_json_line(line: str) -> str | None:
+    """Attempt to parse a line as a JSON event dictionary."""
+    if not (line.startswith("{") and line.endswith("}")):
+        return None
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return _extract_json_syscall(payload) if isinstance(payload, dict) else None
+
+
 def _parse_line_candidate(line: str) -> str | None:
     """Attempt parsing single line as JSON event or fallback to strace."""
-    if line.startswith("{") and line.endswith("}"):
-        try:
-            payload = json.loads(line)
-            if isinstance(payload, dict):
-                return _extract_json_syscall(payload)
-        except json.JSONDecodeError:
-            pass
-    return parse_strace_line(line)
+    return _parse_json_line(line) or parse_strace_line(line)
 
 
 def _extract_json_syscall(payload: dict[str, Any]) -> str | None:
@@ -716,6 +726,19 @@ def _build_profile_from_args(args: argparse.Namespace) -> SeccompProfile:
     )
 
 
+def _evaluate_cli_reports(
+    args: argparse.Namespace,
+    profile: SeccompProfile,
+    findings: list[str],
+) -> bool:
+    """Handle audit and diff reporting, returning True if strict violations occurred."""
+    if args.audit and findings:
+        _report_audit(findings)
+    if args.diff:
+        _handle_profile_diff(profile, args.diff)
+    return bool(args.strict and _has_strict_violations(findings))
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for seccomp profile synthesizer."""
     parser = build_arg_parser()
@@ -728,13 +751,7 @@ def main(argv: list[str] | None = None) -> int:
     profile = _build_profile_from_args(args)
     findings = audit_profile(profile)
 
-    if args.audit and findings:
-        _report_audit(findings)
-
-    if args.diff:
-        _handle_profile_diff(profile, args.diff)
-
-    if args.strict and _has_strict_violations(findings):
+    if _evaluate_cli_reports(args, profile, findings):
         return 1
 
     _emit_profile_output(profile.to_json(), args.out)

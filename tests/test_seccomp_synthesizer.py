@@ -222,3 +222,44 @@ def test_cli_diff_option(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     ])
     captured = capsys.readouterr()
     assert (exit_code, "[DIFF] Added:" in captured.err) == (0, True)
+
+
+def test_parse_json_line_variations() -> None:
+    """_parse_json_line extracts syscall names and rejects non-JSON lines."""
+    valid = synth._parse_json_line('{"syscall": "epoll_wait"}')
+    valid_name = synth._parse_json_line('{"name": "clone"}')
+    invalid_syntax = synth._parse_json_line("{not json}")
+    not_dict = synth._parse_json_line("[1, 2, 3]")
+    not_bracketed = synth._parse_json_line("openat(0)")
+
+    assert (valid, valid_name, invalid_syntax, not_dict, not_bracketed) == (
+        "epoll_wait",
+        "clone",
+        None,
+        None,
+        None,
+    )
+
+
+def test_evaluate_cli_reports_branches(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """_evaluate_cli_reports exercises audit, diff, and strict return paths."""
+    profile = synth.synthesize_profile(())
+    diff_file = tmp_path / "ref.json"
+    diff_file.write_text(profile.to_json(), encoding="utf-8")
+
+    parser = synth.build_arg_parser()
+    args_normal = parser.parse_args(["--allow", "read", "--audit", "--diff", str(diff_file)])
+    has_violation_normal = synth._evaluate_cli_reports(args_normal, profile, ["HIGH_RISK: ptrace"])
+    captured_normal = capsys.readouterr()
+
+    args_strict = parser.parse_args(["--allow", "read", "--strict"])
+    has_violation_strict = synth._evaluate_cli_reports(args_strict, profile, ["HIGH_RISK: ptrace"])
+    captured_strict = capsys.readouterr()
+
+    assert (
+        has_violation_normal,
+        "[AUDIT]" in captured_normal.err,
+        "[DIFF]" in captured_normal.err,
+        has_violation_strict,
+        "Strict audit failed" in captured_strict.err,
+    ) == (False, True, True, True, True)
