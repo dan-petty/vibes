@@ -565,6 +565,12 @@ Stochastic language generation must always be bounded by deterministic mechanica
 17. **Semantic Attribute Group Resolution & Flattened Model Deprecations**:
     - Expanding attribute groups, checking requirement level overrides, and traversing nested model hierarchies within monolithic resolvers compounds nesting depth ($depth \ge 4$) and decision complexity ($M \ge 8$).
     - Decompose group expansion into `_expand_ref_group` and direct requirement override into `_resolve_direct_attribute`. Flatten multi-tier model traversal by separating group-level attribute generators (`_all_attributes`) from single-attribute deprecation extractors (`_extract_deprecated_note`). This guarantees $M \le 4$, depth $\le 2$ across all semantic convention derivations.
+18. **Invariant-Grounded Recursive Self-Improvement & Scaling Equilibrium**:
+    - In the post-agentic-harness era, code synthesis velocity outpaces human auditing capacity. Static codebases face catastrophic relative decay unless they autonomously observe, test, and elevate their own architecture.
+    - **The Asymmetry Invariant ($P$ vs $NP$)**: Code generation is probabilistic search; invariant verification (AST caps $M \le 10$, depth $\le 5$, zero leaks, coverage $\ge 90\%$) is deterministic polynomial-time verification. Models may propose modifications, but deterministic oracles must hold absolute veto authority.
+    - **Monotonic Constraint Accumulation (CEGIS)**: Every defect, crash, or flaky race condition must be permanently converted into a regression fixture. The regression corpus strictly accumulates; self-improving agents may never relax, suppress, or delete existing constraints to make a build pass.
+    - **The Inward-Outward Equilibrium**: Inward-facing defect fixers must be balanced by outward landscape telemetry (`tools/landscape_survey.py` and `docs/ROADMAP.md`). A self-improving loop that only runs linters converges into defect-shaped myopia.
+
 
 ---
 
