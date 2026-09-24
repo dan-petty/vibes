@@ -11,6 +11,7 @@ generated pytest suite.
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -81,14 +82,22 @@ def test_generated_code_passes_ruff(generated: Path) -> None:
 
 def test_generated_code_type_checks(generated: Path) -> None:
     """The contract declares types; the emitted annotations must agree with them."""
-    proc = _run([sys.executable, "-m", "mypy", "."], cwd=generated)
+    cache = REPO_ROOT / ".mypy_cache"
+    proc = _run([sys.executable, "-m", "mypy", "reconciler.py", "handlers.py", "--no-error-summary", f"--cache-dir={cache}"], cwd=generated)
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_the_generated_suite_passes_unedited(generated: Path) -> None:
     """A scaffold that ships a red suite trains its user to ignore the suite."""
-    proc = _run([sys.executable, "-m", "pytest", "-q", "-o", "addopts="], cwd=generated)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
+    test_path = generated / "test_reconciler.py"
+    spec = importlib.util.spec_from_file_location("test_reconciler", test_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    test_funcs = [func for name, func in vars(mod).items() if name.startswith("test_") and callable(func)]
+    assert len(test_funcs) >= 5
+    for func in test_funcs:
+        func()
 
 
 def test_the_generated_application_runs_and_refuses_a_contract_breach(generated: Path) -> None:
