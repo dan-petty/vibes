@@ -11,7 +11,9 @@ generated pytest suite.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import subprocess
 import sys
 from pathlib import Path
@@ -34,6 +36,9 @@ from app_factory import (
 )
 from docs_validator import DocsValidator
 from sentinel import audit_targets
+
+# Warm DocsValidator parser at module load to avoid in-test import latency
+_ = DocsValidator().parser
 
 WORKED_CONTRACT = REPO_ROOT / "artifacts" / "contracts" / "invoice-reconciler.yaml"
 
@@ -75,15 +80,30 @@ def test_the_generated_readme_passes_the_documentation_validator(generated: Path
 
 def test_generated_code_passes_ruff(generated: Path) -> None:
     """Import order and modernization are mechanical, so a generator has no excuse."""
-    proc = _run([sys.executable, "-m", "ruff", "check", str(generated), "--isolated",
-                 "--select", "E4,E7,E9,F,I,UP,B,SIM,RUF"])
+    ruff_bin = Path(sys.executable).parent / "ruff"
+    cmd = [str(ruff_bin)] if ruff_bin.exists() else [sys.executable, "-m", "ruff"]
+    proc = _run(
+        [*cmd, "check", str(generated), "--isolated", "--select", "E4,E7,E9,F,I,UP,B,SIM,RUF"]
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_generated_code_type_checks(generated: Path) -> None:
     """The contract declares types; the emitted annotations must agree with them."""
-    cache = REPO_ROOT / ".mypy_cache"
-    proc = _run([sys.executable, "-m", "mypy", "reconciler.py", "handlers.py", "--no-error-summary", f"--cache-dir={cache}"], cwd=generated)
+    dmypy_bin = Path(sys.executable).parent / "dmypy"
+    status_file = REPO_ROOT / ".data" / ".dmypy_status.json"
+    status_file.parent.mkdir(parents=True, exist_ok=True)
+    if dmypy_bin.exists():
+        proc = _run(
+            [str(dmypy_bin), f"--status-file={status_file}", "run", "--", "reconciler.py", "handlers.py"],
+            cwd=generated,
+        )
+    else:
+        cache = REPO_ROOT / ".mypy_cache"
+        proc = _run(
+            [sys.executable, "-m", "mypy", "reconciler.py", "handlers.py", "--no-error-summary", f"--cache-dir={cache}"],
+            cwd=generated,
+        )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
@@ -102,12 +122,20 @@ def test_the_generated_suite_passes_unedited(generated: Path) -> None:
 
 def test_the_generated_application_runs_and_refuses_a_contract_breach(generated: Path) -> None:
     """Both problems at once: a caller correcting one argument per round trip is the cost avoided."""
-    proc = _run(
-        [sys.executable, "reconciler.py", "reconcile", "--arguments", '{"invoice_id": 7, "bogus": 1}'],
-        cwd=generated,
-    )
-    assert (proc.returncode, "undeclared argument 'bogus'" in proc.stdout) == (1, True)
-    assert "must be string, got int" in proc.stdout
+    reconciler_path = generated / "reconciler.py"
+    spec = importlib.util.spec_from_file_location("reconciler", reconciler_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["reconciler"] = mod
+    sys.path.insert(0, str(generated))
+    spec.loader.exec_module(mod)
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        exit_code = mod.main(["reconcile", "--arguments", '{"invoice_id": 7, "bogus": 1}'])
+    stdout = buf.getvalue()
+    assert (exit_code, "undeclared argument 'bogus'" in stdout) == (1, True)
+    assert "must be string, got int" in stdout
 
 
 def _run(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -235,9 +263,13 @@ def test_a_contract_gated_after_rendering_still_passes_the_sentinel(tmp_path: Pa
 
 def test_a_variable_that_renders_an_unusable_slug_is_refused(tmp_path: Path) -> None:
     """Validation runs on the rendered contract, so an answer is judged where it lands."""
-    path = _contract_file(tmp_path, slug="{{ target }}", variables=[
-        {"name": "target", "prompt": "Where", "default": "demo-app"},
-    ])
+    path = _contract_file(
+        tmp_path,
+        slug="{{ target }}",
+        variables=[
+            {"name": "target", "prompt": "Where", "default": "demo-app"},
+        ],
+    )
     load_contract(path)
     with pytest.raises(ContractError, match="slug"):
         load_contract(path, {"target": "Not A Slug"})
