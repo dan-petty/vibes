@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 50 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 56 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -340,12 +340,14 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 28-recursive-self-improvement-and-the-post-harness-mandate.md
 │       ├── 29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md
 │       ├── 30-kinetic-falsification-and-the-ephemeral-exploit-harness.md
-│       └── 31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md
+│       ├── 31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md
+│       └── 32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
 │   ├── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
 │   ├── autonomous-sdlc-project-management.md
+│   ├── bi-directional-metric-feedback-and-ax-scoring.md
 │   ├── binary-search-context-packing.md
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
