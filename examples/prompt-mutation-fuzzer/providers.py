@@ -269,10 +269,12 @@ class MockModelProvider(ModelProvider):
 
     @property
     def provider_name(self) -> str:
+        """Return canonical provider name string."""
         return "mock"
 
     @property
     def model_id(self) -> str:
+        """Return configured model identifier string."""
         return self._model_id
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> ProviderResponse:
@@ -311,10 +313,12 @@ class OpenAIProvider(ModelProvider):
 
     @property
     def provider_name(self) -> str:
+        """Return canonical provider name string."""
         return "openai"
 
     @property
     def model_id(self) -> str:
+        """Return configured model identifier string."""
         return self._model_id
 
     def _build_payload(self, prompt: str, system_prompt: str | None) -> dict[str, Any]:
@@ -375,10 +379,12 @@ class AnthropicProvider(ModelProvider):
 
     @property
     def provider_name(self) -> str:
+        """Return canonical provider name string."""
         return "anthropic"
 
     @property
     def model_id(self) -> str:
+        """Return configured model identifier string."""
         return self._model_id
 
     def _build_payload(self, prompt: str, system_prompt: str | None) -> dict[str, Any]:
@@ -441,10 +447,12 @@ class OllamaProvider(ModelProvider):
 
     @property
     def provider_name(self) -> str:
+        """Return canonical provider name string."""
         return "ollama"
 
     @property
     def model_id(self) -> str:
+        """Return configured model identifier string."""
         return self._model_id
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> ProviderResponse:
@@ -503,10 +511,12 @@ class GenericRestProvider(ModelProvider):
 
     @property
     def provider_name(self) -> str:
+        """Return canonical provider name string."""
         return "rest"
 
     @property
     def model_id(self) -> str:
+        """Return configured model identifier string."""
         return self._model_id
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> ProviderResponse:

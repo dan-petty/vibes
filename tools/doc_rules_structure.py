@@ -473,6 +473,27 @@ def _check_inline_math_findings(line: str, line_no: int, file_path: str) -> list
     return findings
 
 
+def _inspect_display_math_line(
+    line: str, line_no: int, file_path_str: str, current_align_env: str | None, findings: list[DocFinding]
+) -> str | None:
+    """Inspect display math line for invalid ampersand usage and update align environment."""
+    align_env = _update_align_env(line, current_align_env)
+    if _is_math_ampersand_invalid(line, in_align_env=(align_env is not None)):
+        findings.append(
+            DocFinding(
+                file_path=file_path_str,
+                line_number=line_no,
+                category="math",
+                message=(
+                    "Unescaped '&' detected in LaTeX display math block. In KaTeX / LaTeX, '&' is an alignment "
+                    "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
+                    "the word 'and' instead."
+                ),
+            )
+        )
+    return align_env
+
+
 def check_latex_math_hygiene(
     lines: Sequence[str], file_path: Path
 ) -> list[DocFinding]:
@@ -489,26 +510,14 @@ def check_latex_math_hygiene(
     for line_no, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
         if fenced:
             continue
-        stripped = line.strip()
-        if stripped == "$$":
+        if line.strip() == "$$":
             in_display_math = not in_display_math
             current_align_env = None
             continue
         if in_display_math:
-            current_align_env = _update_align_env(line, current_align_env)
-            if _is_math_ampersand_invalid(line, in_align_env=(current_align_env is not None)):
-                findings.append(
-                    DocFinding(
-                        file_path=file_path_str,
-                        line_number=line_no,
-                        category="math",
-                        message=(
-                            "Unescaped '&' detected in LaTeX display math block. In KaTeX / LaTeX, '&' is an alignment "
-                            "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
-                            "the word 'and' instead."
-                        ),
-                    )
-                )
+            current_align_env = _inspect_display_math_line(
+                line, line_no, file_path_str, current_align_env, findings
+            )
             continue
         findings.extend(_check_display_math_findings(line, line_no, file_path_str))
         findings.extend(_check_inline_math_findings(line, line_no, file_path_str))

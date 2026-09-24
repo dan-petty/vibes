@@ -249,58 +249,77 @@ def _is_private_ip(candidate: str) -> bool:
         return False
 
 
+def _build_ip_counterexample(match: str, filename: str, line: int) -> Counterexample:
+    """Build counterexample for a private IP string constant."""
+    loc = f"{filename}:{line}"
+    msg = f"Zero-trust violation: private IP address '{match}' in string literal"
+    h = _compute_hash(f"CEGIS004:{loc}:{match}")
+    return Counterexample(
+        rule_id="CEGIS004",
+        location=loc,
+        message=msg,
+        violating_pattern=match,
+        counterexample_hash=h,
+        line_number=line,
+    )
+
+
+def _scan_constant_node_for_private_ips(node: ast.AST, filename: str) -> list[Counterexample]:
+    """Inspect AST constant node for private IP string matches."""
+    if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+        return []
+    line = getattr(node, "lineno", 1)
+    return [
+        _build_ip_counterexample(match, filename, line)
+        for match in IP_PATTERN.findall(node.value)
+        if _is_private_ip(match)
+    ]
+
+
 def _check_string_constants_for_private_ips(tree: ast.AST, filename: str) -> list[Counterexample]:
     """Scan string constants for private RFC 1918/RFC 4193 IP addresses."""
     violations: list[Counterexample] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            for match in IP_PATTERN.findall(node.value):
-                if _is_private_ip(match):
-                    line = getattr(node, "lineno", 1)
-                    loc = f"{filename}:{line}"
-                    msg = f"Zero-trust violation: private IP address '{match}' in string literal"
-                    h = _compute_hash(f"CEGIS004:{loc}:{match}")
-                    violations.append(
-                        Counterexample(
-                            rule_id="CEGIS004",
-                            location=loc,
-                            message=msg,
-                            violating_pattern=match,
-                            counterexample_hash=h,
-                            line_number=line,
-                        )
-                    )
+        violations.extend(_scan_constant_node_for_private_ips(node, filename))
     return violations
+
+
+def _find_sprawl_line(func: ast.FunctionDef | ast.AsyncFunctionDef) -> int | None:
+    """Find line number of 3+ consecutive asserts if sprawl exists, else None."""
+    consecutive = 0
+    first_line = func.lineno
+    for stmt in func.body:
+        if not isinstance(stmt, ast.Assert):
+            consecutive = 0
+            continue
+        consecutive += 1
+        if consecutive == 2:
+            first_line = stmt.lineno
+        if consecutive >= 3:
+            return first_line
+    return None
 
 
 def _check_assertion_sprawl(func: ast.FunctionDef | ast.AsyncFunctionDef, filename: str) -> list[Counterexample]:
     """Detect consecutive linear assert statements in test functions."""
     if not func.name.startswith("test_"):
         return []
-    consecutive = 0
-    first_line = func.lineno
-    for stmt in func.body:
-        if isinstance(stmt, ast.Assert):
-            consecutive += 1
-            if consecutive == 2:
-                first_line = stmt.lineno
-        else:
-            consecutive = 0
-        if consecutive >= 3:
-            loc = f"{filename}:{first_line}"
-            msg = f"Assertion sprawl in '{func.name}': 3+ consecutive asserts without tuple consolidation"
-            h = _compute_hash(f"CEGIS005:{loc}:{func.name}")
-            return [
-                Counterexample(
-                    rule_id="CEGIS005",
-                    location=loc,
-                    message=msg,
-                    violating_pattern="consecutive_asserts",
-                    counterexample_hash=h,
-                    line_number=first_line,
-                )
-            ]
-    return []
+    line = _find_sprawl_line(func)
+    if line is None:
+        return []
+    loc = f"{filename}:{line}"
+    msg = f"Assertion sprawl in '{func.name}': 3+ consecutive asserts without tuple consolidation"
+    h = _compute_hash(f"CEGIS005:{loc}:{func.name}")
+    return [
+        Counterexample(
+            rule_id="CEGIS005",
+            location=loc,
+            message=msg,
+            violating_pattern="consecutive_asserts",
+            counterexample_hash=h,
+            line_number=line,
+        )
+    ]
 
 
 def _check_function_invariants(
@@ -342,6 +361,37 @@ def _check_function_invariants(
     return violations
 
 
+def _syntax_error_counterexample(err: SyntaxError, filename: str) -> Counterexample:
+    """Build counterexample for a SyntaxError in candidate code."""
+    line = err.lineno or 1
+    h = _compute_hash(f"SYNTAX_ERR:{line}:{err.msg}")
+    return Counterexample(
+        rule_id="CEGIS001",
+        location=f"{filename}:{line}",
+        message=f"SyntaxError parsing candidate: {err.msg}",
+        violating_pattern="syntax_error",
+        counterexample_hash=h,
+        line_number=line,
+    )
+
+
+def _inspect_ast_functions(
+    tree: ast.AST, thresholds: InvariantThresholds, filename: str
+) -> tuple[list[Counterexample], int, int]:
+    """Inspect all function definitions in AST and accumulate invariant violations."""
+    violations: list[Counterexample] = []
+    max_cc = 0
+    max_d = 0
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            func_cc = _compute_cyclomatic_complexity(node)
+            func_d = _compute_nesting_depth(node)
+            max_cc = max(max_cc, func_cc)
+            max_d = max(max_d, func_d)
+            violations.extend(_check_function_invariants(node, thresholds, filename))
+    return violations, max_cc, max_d
+
+
 class ASTInvariantVerifier:
     """Verifies Python source code against architectural invariants and generates counterexamples."""
 
@@ -354,29 +404,9 @@ class ASTInvariantVerifier:
         try:
             tree = ast.parse(source_code, filename=filename)
         except SyntaxError as err:
-            h = _compute_hash(f"SYNTAX_ERR:{err.lineno or 1}:{err.msg}")
-            ce = Counterexample(
-                rule_id="CEGIS001",
-                location=f"{filename}:{err.lineno or 1}",
-                message=f"SyntaxError parsing candidate: {err.msg}",
-                violating_pattern="syntax_error",
-                counterexample_hash=h,
-                line_number=err.lineno or 1,
-            )
-            return [ce], 99, 99
+            return [_syntax_error_counterexample(err, filename)], 99, 99
 
-        violations: list[Counterexample] = []
-        max_cc = 0
-        max_d = 0
-
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                func_cc = _compute_cyclomatic_complexity(node)
-                func_d = _compute_nesting_depth(node)
-                max_cc = max(max_cc, func_cc)
-                max_d = max(max_d, func_d)
-                violations.extend(_check_function_invariants(node, self.thresholds, filename))
-
+        violations, max_cc, max_d = _inspect_ast_functions(tree, self.thresholds, filename)
         if self.thresholds.enforce_zero_trust_ips:
             violations.extend(_check_string_constants_for_private_ips(tree, filename))
 
@@ -458,35 +488,42 @@ class ConvergenceOracle:
                 regressions.extend(sorted(new_rules))
         return regressions
 
+    @staticmethod
+    def _is_diverging(steps: Sequence[TrajectoryStep]) -> bool:
+        """Predicate checking if violation counts have increased monotonically over 3 steps."""
+        if len(steps) < 3:
+            return False
+        v_counts = [len(s.violations) for s in steps[-3:]]
+        return v_counts[0] < v_counts[1] < v_counts[2]
+
+    @classmethod
+    def _classify_non_converged_status(
+        cls, steps: Sequence[TrajectoryStep], max_iterations: int, cycles: list[Any], regressions: list[Any]
+    ) -> ConvergenceStatus:
+        """Classify status for a non-converged trajectory step."""
+        if cycles:
+            return ConvergenceStatus.OSCILLATING
+        if regressions and len(steps[-1].violations) >= len(steps[0].violations):
+            return ConvergenceStatus.DEGRADED
+        if len(steps) >= max_iterations:
+            return ConvergenceStatus.BUDGET_EXHAUSTED
+        if cls._is_diverging(steps):
+            return ConvergenceStatus.DIVERGING
+        return ConvergenceStatus.CONVERGING
+
     @classmethod
     def evaluate(cls, steps: Sequence[TrajectoryStep], max_iterations: int) -> tuple[ConvergenceStatus, list[tuple[int, int]], list[str]]:
         """Evaluate overall trajectory convergence state."""
         if not steps:
             return ConvergenceStatus.BUDGET_EXHAUSTED, [], []
 
-        latest = steps[-1]
         cycles = cls.detect_cycles(steps)
         regressions = cls.detect_latent_regressions(steps)
-
-        if latest.passed:
+        if steps[-1].passed:
             return ConvergenceStatus.CONVERGED, cycles, regressions
 
-        if cycles:
-            return ConvergenceStatus.OSCILLATING, cycles, regressions
-
-        if regressions and len(latest.violations) >= len(steps[0].violations):
-            return ConvergenceStatus.DEGRADED, cycles, regressions
-
-        if len(steps) >= max_iterations:
-            return ConvergenceStatus.BUDGET_EXHAUSTED, cycles, regressions
-
-        # Check descent vs divergence
-        if len(steps) >= 3:
-            v_counts = [len(s.violations) for s in steps[-3:]]
-            if v_counts[0] < v_counts[1] < v_counts[2]:
-                return ConvergenceStatus.DIVERGING, cycles, regressions
-
-        return ConvergenceStatus.CONVERGING, cycles, regressions
+        status = cls._classify_non_converged_status(steps, max_iterations, cycles, regressions)
+        return status, cycles, regressions
 
 
 class CEGISEngine:
@@ -764,6 +801,21 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _handle_exports(args: argparse.Namespace, result: CEGISResult, target_path: Path) -> None:
+    """Export audit results to requested formats (SARIF, JSON, Markdown)."""
+    if args.export_sarif:
+        sarif_data = export_sarif(result, str(target_path))
+        Path(args.export_sarif).write_text(json.dumps(sarif_data, indent=2), encoding="utf-8")
+
+    if args.export_json:
+        json_data = export_json(result)
+        Path(args.export_json).write_text(json_data, encoding="utf-8")
+
+    if args.export_md:
+        md_data = format_markdown_report(result)
+        Path(args.export_md).write_text(md_data, encoding="utf-8")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Execute main command line routine."""
     parser = _build_argument_parser()
@@ -783,17 +835,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = CEGISEngine(preset=preset)
     result = engine.audit_single(source_code, str(target_path))
 
-    if args.export_sarif:
-        sarif_data = export_sarif(result, str(target_path))
-        Path(args.export_sarif).write_text(json.dumps(sarif_data, indent=2), encoding="utf-8")
-
-    if args.export_json:
-        json_data = export_json(result)
-        Path(args.export_json).write_text(json_data, encoding="utf-8")
-
-    if args.export_md:
-        md_data = format_markdown_report(result)
-        Path(args.export_md).write_text(md_data, encoding="utf-8")
+    _handle_exports(args, result, target_path)
 
     print(format_markdown_report(result))
     return 0 if result.status == ConvergenceStatus.CONVERGED else 1

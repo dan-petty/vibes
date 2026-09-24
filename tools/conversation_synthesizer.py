@@ -284,15 +284,21 @@ class ZeroTrustSanitizer:
                 text = text.replace(candidate, repl)
         return text
 
+    @staticmethod
+    def _is_private_ipv6_candidate(candidate: str | None) -> bool:
+        """Predicate checking whether candidate string is a private IPv6 host."""
+        if not candidate:
+            return False
+        addr = parse_address(candidate)
+        return addr is not None and is_private_host(addr)
+
     def _redact_ipv6(self, text: str) -> str:
         """Redact concrete private IPv6 addresses with RFC 3849 blocks."""
         for match in IPV6_PATTERN.finditer(text):
             candidate = match.group(1) or match.group(2)
-            if candidate:
-                addr = parse_address(candidate)
-                if addr is not None and is_private_host(addr):
-                    repl = self._get_or_create_ipv6_replacement(candidate)
-                    text = text.replace(candidate, repl)
+            if self._is_private_ipv6_candidate(candidate) and candidate is not None:
+                repl = self._get_or_create_ipv6_replacement(candidate)
+                text = text.replace(candidate, repl)
         return text
 
     def _get_or_create_ip_replacement(self, ip_str: str) -> str:
@@ -383,12 +389,10 @@ class TelemetryCalculator:
         out_chars = 0
         think_chars = 0
         for step in steps:
-            if step.source == "USER_EXPLICIT":
-                in_chars += len(step.content)
-            elif step.source == "MODEL":
+            if step.source == "MODEL":
                 out_chars += len(step.content)
                 think_chars += len(step.thinking)
-            elif step.source == "SYSTEM":
+            else:
                 in_chars += len(step.content)
         return (in_chars + 3) // 4, (out_chars + 3) // 4, (think_chars + 3) // 4
 
