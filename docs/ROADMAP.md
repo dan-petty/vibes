@@ -189,6 +189,12 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Multi-format reporting exporting to Shields.io badge JSON, in-toto attestation JSON, OASIS SARIF 2.1.0 (for GitHub Code Scanning), and formal Markdown certification certificates.
   - Accompanied by a comprehensive 9-test suite in `tests/test_living_standard_certifier.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
+- [x] **Counterexample-Guided Inductive Synthesis (CEGIS) Engine & Invariant Repair Oracle (`tools/cegis_engine.py`)**:
+  - Formal CEGIS engine replacing conversational "try-again" thrashing with mathematically grounded negative constraint accumulation ($\Phi_{k+1} = \Phi_k \land \neg c_k$), monotonic convergence verification, cycle oscillation detection (`CEGIS006`), and latent regression prevention (`CEGIS007`).
+  - AST invariant verifier auditing McCabe complexity ($M \le 6$), nesting depth ($\le 3$), parameter cardinality ($\le 4$), zero-trust egress (RFC 1918 / RFC 4193), and assertion sprawl mitigation (`CEGIS001` - `CEGIS005`).
+  - `NegativeConstraintAccumulator` recording immutable counterexample signatures, preventing repeat exploratory dead-ends (`CEGIS008`).
+  - Multi-format reporting exporting to OASIS SARIF 2.1.0 (for GitHub Code Scanning), JSON telemetry, and formatted Markdown reports.
+  - Accompanied by Observation 22 (`observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md`) and a comprehensive 13-test suite in `tests/test_cegis_engine.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
 ---
 
@@ -212,7 +218,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **C++ RAII & Lifetime Invariants Under LLM Synthesis** | `observations/polyglot/` | Can LLMs reliably avoid use-after-free and double-free bugs without Rust-like compile-time guarantees? | 🔬 In Queue |
 | **eBPF Process Tracing for Agent Sandbox Introspection** | `observations/systems/` | Using eBPF probes to capture syscall patterns, file access, and network socket operations of subagents in real-time. | 🔬 In Queue |
 | **Attention Dilution & Context Decay in Ultra-Long Sessions** | `observations/cognitive/` | Measuring degradation in constraint adherence as context lengths exceed 100k tokens and evaluating multi-scale pruning. | 🔬 In Queue |
-| **Self-Correction Loops vs. Constraint Accumulation** | `observations/methodology/` | Comparing conversational "fix this error" prompting vs. formal CEGIS negative-constraint accumulation. | 🔬 In Queue |
+| **Self-Correction Loops vs. Constraint Accumulation** | `observations/systems/` | Comparing conversational "fix this error" prompting vs. formal CEGIS negative-constraint accumulation. | ✅ Completed ([Obs 22](../observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md)) |
 
 ---
 
@@ -280,10 +286,12 @@ quadrantChart
 |  | Autonomous Conversation Synthesizer | Python / NLP / Metrics | High | High | v0.5.0 | ✅ Completed |
 |  | Live Multi-Model Leaderboard & Cost Index | Python / GitHub Pages | High | High | v0.5.0 | ✅ Completed |
 |  | Hierarchical Subagent Slot Offloading Orchestrator | Python / AST / Multi-Agent | High | High | v0.5.0 | ✅ Completed |
-|  | AIBOM & Supply-Chain Security Scanner | Python / AST / CycloneDX | High | High | v1.0.0 | 💡 Future Vision |
-|  | Certified Living Standard & Compliance Badge | Specification / Test Suite | High | High | v1.0.0 | 💡 Future Vision |
+|  | AIBOM & Supply-Chain Security Scanner | Python / AST / CycloneDX | High | High | v1.0.0 | ✅ Completed |
+|  | Adversarial Prompt Injection Security Scanner | Red-Teaming / Python | Medium | Medium | v1.0.0 | ✅ Completed |
+|  | Enterprise Change Management & Version Deprecation Protocol | Python / SemVer / AST | High | Medium | v1.0.0 | ✅ Completed |
+|  | Certified Living Standard & Compliance Badge | Specification / Test Suite | High | High | v1.0.0 | ✅ Completed |
+|  | CEGIS Invariant Repair Engine & Convergence Oracle | Python / AST / CEGIS | High | High | v1.0.0 | ✅ Completed |
 | **Fill-Ins** | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
-|  | Adversarial Prompt Injection Security Scanner | Red-Teaming / Python | Medium | Medium | v1.0.0 | 💡 Future Vision |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |
 |  | Disciplined Agentic Manifesto | `docs/MANIFESTO.md` | High | Medium | v0.1.0 | ✅ Completed |
 |  | Taxonomy of Agentic Engineering | `docs/TAXONOMY.md` | High | Medium | v0.1.0 | ✅ Completed |

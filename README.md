@@ -197,6 +197,7 @@ flowchart LR
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
 - [**Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**](./tools/ast_refactorer.py): Mechanical AST rewriting engine auto-decomposing branching ladders ($M \ge 7$) and nesting depth into table dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples with round-trip safety verification.
 - [**Documentation Syntax & Link Validator (`tools/docs_validator.py`)**](./tools/docs_validator.py): High-performance documentation validator checking nested code fences, Mermaid AST, markdown table column alignments, local anchor slugs, and embedded snippet syntax.
+- [**CEGIS Invariant Repair Engine (`tools/cegis_engine.py`)**](./tools/cegis_engine.py): Counterexample-guided inductive synthesis engine replacing conversational "try-again" loops with mathematically grounded negative constraint accumulation, monotonic convergence verification, cycle oscillation detection, and latent regression prevention.
 - [**Application Factory (`tools/app_factory.py`)**](./tools/app_factory.py): A contract declaring an application's operations and their argument types becomes a runnable application — dispatch table, JSON Schema with `additionalProperties: false`, prescriptive rejections listing every breach at once, timed invocations, CLI, contract tests and a structured README. What makes it a factory for *this* repository is the acceptance test: the emitted application passes the AST invariant sentinel, ruff, mypy, the documentation validator and its own generated suite with no edit, and [`tests/test_app_factory.py`](./tests/test_app_factory.py) runs those real gates over the real output. `handlers.py` is written once and never regenerated, because a factory that owns the domain logic becomes a framework nobody can leave. A contract may declare variables and collect their values interactively, from `--set`, or from a recorded answers file — always with a default, so it still resolves when nobody is watching, and never prompting when stdin is not a terminal.
 - [**Portfolio Balance (`tools/portfolio_balance.py`)**](./tools/portfolio_balance.py): Reports what the repository *has* against where its recent lines *went*. The drift it exists to surface is invisible from inside any single change — every tooling commit is defensible and the aggregate is not. Counts added lines rather than touched files, because a repository-wide lint sweep touches many locations and builds nothing: on the window that prompted this, touches read 52/48 and lines read 7/93. Steers, never gates.
 - [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
@@ -309,7 +310,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 18-a-correction-inherits-the-frame-it-corrects.md
 │       ├── 19-self-consistency-is-not-conformance.md
 │       ├── 20-internet-grounded-information-foraging-and-self-improvement-loops.md
-│       └── 21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md
+│       ├── 21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md
+│       └── 22-self-correction-loops-vs-cegis-constraint-accumulation.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -377,6 +379,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
+│   ├── cegis_engine.py                # Counterexample-guided inductive synthesis & invariant repair oracle
 │   ├── aibom_scanner.py               # AI Bill of Materials (AIBOM) & supply-chain security scanner
 │   ├── prompt_injection_scanner.py    # Adversarial prompt injection & CWE-200 egress security scanner
 │   ├── deprecation_protocol.py        # Enterprise change management & version deprecation protocol
@@ -415,6 +418,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_cegis_engine.py           # Unit tests for CEGIS engine, negative constraints & convergence
     ├── test_aibom_scanner.py          # Unit tests for AIBOM and model supply-chain security scanner
     ├── test_prompt_injection_scanner.py # Unit tests for prompt injection and CWE-200 egress scanner
     ├── test_deprecation_protocol.py   # Unit tests for deprecation protocol & tool schema migrator
