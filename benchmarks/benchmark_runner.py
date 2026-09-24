@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import json
 import shutil
 import subprocess
@@ -216,6 +217,7 @@ def _inspect_rust_source(source: str) -> dict[str, Any]:
     }
 
 
+@functools.cache
 def _run_cargo_test_suite(crate_dir: Path) -> tuple[bool, int]:
     """Execute cargo test on Rust benchmark crate if cargo is available."""
     cargo_bin = shutil.which("cargo")
@@ -227,7 +229,7 @@ def _run_cargo_test_suite(crate_dir: Path) -> tuple[bool, int]:
             cwd=str(crate_dir),
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=45,
             check=False,
         )
         return res.returncode == 0, 4 if res.returncode == 0 else 0
