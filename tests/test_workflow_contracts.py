@@ -15,11 +15,13 @@ anything. These tests are what reads it.
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 import shlex
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +40,7 @@ _DIFF_TO_FILE = re.compile(r"git\s+diff\b[^\n]*?>\s*(\S+)")
 _REDIRECT_TARGET = re.compile(r">\s*(/\S+)")
 
 
+@functools.cache
 def _load(path: Path) -> dict[str, Any]:
     """Parse one workflow document."""
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -187,7 +190,7 @@ def _workflow_param_id(val: Any) -> str:
 
 def _missing_cli_flags(script: str, argv: tuple[str, ...]) -> list[str]:
     """Return command flags missing from the script or subcommand help output."""
-    subcommand = [token for token in argv[:1] if not token.startswith("-")]
+    subcommand = tuple(token for token in argv[:1] if not token.startswith("-"))
     flags = [token for token in argv if token.startswith("--")]
     help_text = _help(script, subcommand)
     return [flag for flag in flags if flag not in help_text]
@@ -209,7 +212,8 @@ def test_every_cli_contract_a_workflow_depends_on_still_exists(
     assert missing == [], f"{workflow}: {script} {' '.join(subcommand)} rejects {missing}"
 
 
-def _help(script: str, subcommand: list[str]) -> str:
+@functools.cache
+def _help(script: str, subcommand: tuple[str, ...]) -> str:
     """Return the help text for a script, or for one of its subcommands."""
     # Fixed argv built from this repository's own files; no shell, no external input.
     proc = subprocess.run(
@@ -223,6 +227,22 @@ def _help(script: str, subcommand: list[str]) -> str:
     )
     assert proc.returncode == 0, f"{script} {' '.join(subcommand)} --help failed: {proc.stderr[:300]}"
     return proc.stdout
+
+
+def _prewarm_cli_help() -> None:
+    """Pre-fetch CLI help messages concurrently across workers to minimize test latency."""
+    invocations = {
+        (script, tuple(token for token in argv[:1] if not token.startswith("-")))
+        for _, script, argv in _cli_invocations()
+    }
+    with ThreadPoolExecutor(max_workers=min(len(invocations), 12)) as executor:
+        list(executor.map(lambda item: _help(item[0], item[1]), invocations))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _warm_cli_cache() -> None:
+    """Ensure all CLI help messages are pre-fetched concurrently before test execution."""
+    _prewarm_cli_help()
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
