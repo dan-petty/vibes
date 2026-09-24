@@ -108,7 +108,7 @@ Ours: [`examples/prompt-mutation-fuzzer/fuzzer.py`](../../examples/prompt-mutati
 | **adversarial_prompts** — Generates adversarial or mutated prompts against a target | ✅ | ✅ | ✅ |
 | **attack_taxonomy** — Classifies probes against a published attack taxonomy | — | ✅ | ? |
 | **baseline_diff** — Reports only findings introduced relative to a base revision | — | ? | ✅ |
-| **model_providers** — Drives more than one model provider out of the box | — | ✅ | ✅ |
+| **model_providers** — Drives more than one model provider out of the box | ✅ | ✅ | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -204,7 +204,7 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-17 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **10 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
+16 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **9 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
 
 - **Complexity gate: use astral-sh/ruff, already a dependency, for auto_fix**
   - Disposition: `integrate` — ruff is already a declared dependency
@@ -245,11 +245,6 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
   - Held by: `uber-go/goleak`, `fortytw2/leaktest`
   - Evidence: uber-go/goleak: Drops into an existing go test run with no separate tooling
   - Evidence: fortytw2/leaktest: Called from inside a standard Go test function
-- **Prompt fuzzer: drives more than one model provider out of the box**
-  - Disposition: `build`
-  - Held by: `NVIDIA/garak`, `promptfoo/promptfoo`
-  - Evidence: NVIDIA/garak: Generators for OpenAI, Hugging Face, Replicate, local models and more
-  - Evidence: promptfoo/promptfoo: Declarative provider list covering many hosted and local models
 - **Context packer: serializes a repository into a single model-ready artifact**
   - Disposition: `build`
   - Held by: `yamadashy/repomix`, `Aider-AI/aider`
