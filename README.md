@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 42 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 44 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -308,7 +308,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 17-a-fuzzers-first-report-is-about-the-fuzzer.md
 │       ├── 18-a-correction-inherits-the-frame-it-corrects.md
 │       ├── 19-self-consistency-is-not-conformance.md
-│       └── 20-internet-grounded-information-foraging-and-self-improvement-loops.md
+│       ├── 20-internet-grounded-information-foraging-and-self-improvement-loops.md
+│       └── 21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -380,6 +381,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── pr_triage_bot.py               # Closed-Loop PR Triage & Invariant Review Bot
 │   ├── conversation_synthesizer.py    # Autonomous conversation-to-case-study synthesizer
 │   ├── model_leaderboard.py           # Multi-model benchmark leaderboard & cost-per-invariant index
+│   ├── subagent_orchestrator.py       # Hierarchical subagent slot offloading orchestrator
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
@@ -419,6 +421,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_pr_triage_bot.py          # Unit tests for multi-persona PR triage and review bot
     ├── test_conversation_synthesizer.py # Unit tests for conversation synthesizer & telemetry
     ├── test_model_leaderboard.py      # Unit tests for multi-model leaderboard and cost-per-invariant index
+    ├── test_subagent_orchestrator.py  # Unit tests for hierarchical subagent slot offloading orchestrator
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
     ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
     ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
