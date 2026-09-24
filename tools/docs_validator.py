@@ -21,7 +21,9 @@ import sys
 import textwrap
 import threading
 import time
+import tomllib
 import urllib.parse
+from collections import Counter
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -64,13 +66,26 @@ if TYPE_CHECKING:
 # what makes the re-exports deliberate rather than incidental — an automated unused-import
 # pass had already deleted them once, because nothing in this file used them.
 __all__ = [
+    "ALL_DOC_RULES",
+    "DOC_PRESETS",
     "OBSERVATION_REQUIRED_SECTION_COUNT",
+    "RULE_ALIASES",
+    "RULE_CODE_MAP",
+    "VALIDATOR_RULES",
+    "DocConfigOverrides",
     "DocFinding",
     "DocValidationReport",
     "DocsValidator",
+    "DocsValidatorConfig",
+    "RulePreset",
     "auto_fix_content",
     "contrast_ratio",
+    "load_doc_config",
     "main",
+    "normalize_doc_rule_name",
+    "parse_cli_args",
+    "render_presets_table",
+    "resolve_doc_config",
 ]
 
 # Supported documentation extensions
@@ -81,6 +96,306 @@ PAIRED_HTML_TAGS: Final[frozenset[str]] = frozenset(
     {"details", "summary", "div", "span", "table", "thead", "tbody", "tr", "th", "td"}
 )
 VOID_HTML_TAGS: Final[frozenset[str]] = frozenset({"br", "hr", "img", "input"})
+
+
+@dataclass(frozen=True)
+class RulePreset:
+    """Preset configuration defining active documentation validation rules."""
+
+    name: str
+    description: str
+    active_rules: frozenset[str]
+    strict: bool = False
+
+
+VALIDATOR_RULES: Final[dict[str, str]] = {
+    "code_fence": "Code fence syntax, matching markers, and unclosed blocks",
+    "mermaid": "Mermaid diagram declaration and unquoted node/edge labels",
+    "table": "Markdown table column alignment and delimiter syntax",
+    "link": "Broken relative links, unresolvable anchors, and scheme safety",
+    "code_snippet": "Syntax correctness of embedded Python, JSON, and YAML blocks",
+    "html_tag": "Structural paired HTML tag balance (<details>, <summary>, etc.)",
+    "structure": "Required numbered 5-section observation structure",
+    "directory_map": "Directory map tree synchronization against filesystem",
+    "pattern_header": "Architecture pattern header metadata and references",
+    "sanitization": "Zero-trust egress and RFC 1918 private address sanitization",
+}
+
+ALL_DOC_RULES: Final[frozenset[str]] = frozenset(VALIDATOR_RULES.keys())
+
+RULE_CODE_MAP: Final[dict[str, str]] = {
+    "DOC001": "code_fence",
+    "DOC002": "mermaid",
+    "DOC003": "table",
+    "DOC004": "link",
+    "DOC005": "code_snippet",
+    "DOC006": "html_tag",
+    "DOC007": "structure",
+    "DOC008": "directory_map",
+    "DOC009": "pattern_header",
+    "DOC010": "sanitization",
+}
+
+RULE_ALIASES: Final[dict[str, str]] = {
+    "fence": "code_fence",
+    "fences": "code_fence",
+    "code_fence": "code_fence",
+    "mermaid": "mermaid",
+    "diagram": "mermaid",
+    "diagrams": "mermaid",
+    "table": "table",
+    "tables": "table",
+    "link": "link",
+    "links": "link",
+    "anchor": "link",
+    "anchors": "link",
+    "snippet": "code_snippet",
+    "snippets": "code_snippet",
+    "code": "code_snippet",
+    "code_snippet": "code_snippet",
+    "html": "html_tag",
+    "html_tag": "html_tag",
+    "tags": "html_tag",
+    "structure": "structure",
+    "sections": "structure",
+    "observation": "structure",
+    "directory_map": "directory_map",
+    "dirmap": "directory_map",
+    "maps": "directory_map",
+    "pattern": "pattern_header",
+    "patterns": "pattern_header",
+    "pattern_header": "pattern_header",
+    "sanitization": "sanitization",
+    "security": "sanitization",
+    "egress": "sanitization",
+    "zero_trust": "sanitization",
+}
+
+DOC_PRESETS: Final[dict[str, RulePreset]] = {
+    "standard": RulePreset(
+        name="standard",
+        description="Standard full-suite documentation validation across all 10 rules",
+        active_rules=ALL_DOC_RULES,
+        strict=False,
+    ),
+    "strict": RulePreset(
+        name="strict",
+        description="Full-suite validation treating warnings and suggestions as errors",
+        active_rules=ALL_DOC_RULES,
+        strict=True,
+    ),
+    "structure_only": RulePreset(
+        name="structure_only",
+        description="Structural layout, observation sections, tables, fences, and directory maps",
+        active_rules=frozenset({
+            "code_fence",
+            "table",
+            "structure",
+            "pattern_header",
+            "directory_map",
+            "html_tag",
+        }),
+        strict=False,
+    ),
+    "links_only": RulePreset(
+        name="links_only",
+        description="Fast link, URI, and anchor integrity validation only",
+        active_rules=frozenset({"link"}),
+        strict=False,
+    ),
+    "code_only": RulePreset(
+        name="code_only",
+        description="Embedded code snippets (Python, JSON, YAML), Mermaid diagrams, and code fences",
+        active_rules=frozenset({"code_fence", "code_snippet", "mermaid"}),
+        strict=False,
+    ),
+    "sanitization_only": RulePreset(
+        name="sanitization_only",
+        description="Zero-trust documentation sanitization and private IP egress check only",
+        active_rules=frozenset({"sanitization"}),
+        strict=False,
+    ),
+}
+
+
+def normalize_doc_rule_name(rule_input: str) -> str:
+    """Normalize a rule code or ergonomic alias to canonical rule name."""
+    stripped = rule_input.strip()
+    upper = stripped.upper()
+    if upper in RULE_CODE_MAP:
+        return RULE_CODE_MAP[upper]
+    lower = stripped.lower()
+    return RULE_ALIASES.get(lower, lower)
+
+
+@dataclass(frozen=True)
+class DocsValidatorConfig:
+    """Configuration for documentation validation rules and execution modes."""
+
+    preset_name: str = "standard"
+    active_rules: frozenset[str] = ALL_DOC_RULES
+    strict: bool = False
+    selected_rules: frozenset[str] = field(default_factory=frozenset)
+    ignored_rules: frozenset[str] = field(default_factory=frozenset)
+    extended_rules: frozenset[str] = field(default_factory=frozenset)
+
+    def is_rule_active(self, rule_name: str) -> bool:
+        """Report whether a documentation rule is enabled under this configuration."""
+        canonical = normalize_doc_rule_name(rule_name)
+        return canonical in self.active_rules
+
+
+@dataclass(frozen=True)
+class DocConfigOverrides:
+    """Explicit CLI or caller overrides for documentation configuration resolution."""
+
+    preset_name: str | None = None
+    strict: bool | None = None
+    select: Sequence[str] | None = None
+    ignore: Sequence[str] | None = None
+    extend_select: Sequence[str] | None = None
+    config_file: Path | None = None
+
+
+def _find_default_doc_config() -> Path | None:
+    """Locate pyproject.toml, docs_validator.toml, or .markdownlint.json in cwd or parents."""
+    candidates = (
+        "pyproject.toml",
+        "docs_validator.toml",
+        ".docs_validator.toml",
+        ".markdownlint.json",
+    )
+    cwd = Path.cwd()
+    search_dirs = (cwd, *cwd.parents)
+    all_targets = (d / name for d in search_dirs for name in candidates)
+    return next((p for p in all_targets if p.is_file()), None)
+
+
+def _parse_toml_settings(data: dict[str, Any]) -> dict[str, Any]:
+    """Extract tool.docs_validator or tool.doclint settings from parsed TOML table."""
+    tool_section = data.get("tool", {})
+    if not isinstance(tool_section, dict):
+        return {}
+    config = tool_section.get("docs_validator") or tool_section.get("doclint")
+    return dict(config) if isinstance(config, dict) else {}
+
+
+def _parse_markdownlint_json(path: Path) -> dict[str, Any]:
+    """Parse .markdownlint.json into documentation validator settings."""
+    try:
+        content = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(content, dict):
+        return {}
+    ignored = [normalize_doc_rule_name(k) for k, v in content.items() if v is False]
+    return {"ignore": ignored} if ignored else {}
+
+
+def _load_toml_file(path: Path) -> dict[str, Any]:
+    """Load and parse a TOML file."""
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError):
+        return {}
+    if path.name == "pyproject.toml":
+        return _parse_toml_settings(data)
+    section = data.get("docs_validator")
+    return dict(section) if isinstance(section, dict) else dict(data)
+
+
+def load_doc_config(path: Path) -> dict[str, Any]:
+    """Load documentation validator configuration from a TOML or JSON file."""
+    if not path.is_file():
+        return {}
+    if path.suffix == ".json":
+        return _parse_markdownlint_json(path)
+    return _load_toml_file(path)
+
+
+def _normalize_rule_sequence(raw: Sequence[str] | None) -> frozenset[str]:
+    """Normalize a sequence of rule codes or aliases to canonical set."""
+    if not raw:
+        return frozenset()
+    tokens = (token.strip() for item in raw for token in item.split(","))
+    return frozenset(normalize_doc_rule_name(t) for t in tokens if t)
+
+
+def _compute_active_rules(
+    preset_rules: frozenset[str],
+    selected: frozenset[str],
+    extended: frozenset[str],
+    ignored: frozenset[str],
+) -> frozenset[str]:
+    """Calculate active rules set from base preset, selections, and exclusions."""
+    base = selected if selected else preset_rules
+    return frozenset((base | extended) - ignored)
+
+
+def _pick_rule_list(
+    override: Sequence[str] | None,
+    file_cfg: dict[str, Any],
+    key: str,
+) -> frozenset[str]:
+    """Extract and normalize rule list from CLI override or file configuration."""
+    raw = override if override is not None else file_cfg.get(key, [])
+    return _normalize_rule_sequence(raw)
+
+
+def _resolve_strict_flag(
+    opts: DocConfigOverrides,
+    file_cfg: dict[str, Any],
+    default: bool,
+) -> bool:
+    """Resolve strict mode setting considering overrides and configuration."""
+    if opts.strict is not None:
+        return opts.strict
+    return bool(file_cfg.get("strict", default))
+
+
+def resolve_doc_config(overrides: DocConfigOverrides | None = None) -> DocsValidatorConfig:
+    """Resolve documentation configuration by merging preset defaults, TOML config, and overrides."""
+    opts = overrides or DocConfigOverrides()
+    config_path = opts.config_file or _find_default_doc_config()
+    file_cfg = load_doc_config(config_path) if config_path else {}
+
+    preset_key = opts.preset_name or file_cfg.get("preset", "standard")
+    preset = DOC_PRESETS.get(preset_key, DOC_PRESETS["standard"])
+
+    strict_flag = _resolve_strict_flag(opts, file_cfg, preset.strict)
+    selected = _pick_rule_list(opts.select, file_cfg, "select")
+    ignored = _pick_rule_list(opts.ignore, file_cfg, "ignore")
+    extended = _pick_rule_list(opts.extend_select, file_cfg, "extend_select")
+
+    active = _compute_active_rules(preset.active_rules, selected, extended, ignored)
+
+    return DocsValidatorConfig(
+        preset_name=preset.name,
+        active_rules=active,
+        strict=strict_flag,
+        selected_rules=selected,
+        ignored_rules=ignored,
+        extended_rules=extended,
+    )
+
+
+def render_presets_table() -> str:
+    """Render a GitHub-Flavored Markdown table of all documentation validator presets."""
+    lines = [
+        "Available Documentation Validator Presets:",
+        "",
+        "| Preset Name | Active Rules Count | Strict Mode | Active Rule Categories | Description |",
+        "|---|---|---|---|---|",
+    ]
+    for name, preset in sorted(DOC_PRESETS.items()):
+        rules_desc = (
+            "All 10 rules"
+            if len(preset.active_rules) == len(ALL_DOC_RULES)
+            else ", ".join(sorted(preset.active_rules))
+        )
+        strict_str = "Yes" if preset.strict else "No"
+        lines.append(f"| `{name}` | {len(preset.active_rules)} | {strict_str} | {rules_desc} | {preset.description} |")
+    return "\n".join(lines)
 
 # Observations must have numbered sections 1–5 (## 1. ... through ## 5. ...)
 
@@ -887,7 +1202,8 @@ def auto_fix_file(file_path: Path) -> int:
 class DocsValidator:
     """Markdown documentation syntax, link integrity, and snippet validator for Vibes."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: DocsValidatorConfig | None = None) -> None:
+        self.config = config or resolve_doc_config()
         self._local = threading.local()
 
     @property
@@ -954,19 +1270,24 @@ class DocsValidator:
         added to one silently did not run on the other — including the CLI path.
         """
         paths = oracle if oracle is not None else PathOracle()
-        checks: tuple[Callable[[], list[DocFinding]], ...] = (
-            lambda: check_code_fences(lines, file_path, self.parser),
-            lambda: check_mermaid_diagrams(lines, file_path),
-            lambda: check_markdown_tables(lines, file_path),
-            lambda: check_markdown_links(lines, file_path, known_anchors, paths),
-            lambda: check_embedded_snippets(lines, file_path),
-            lambda: check_html_tags(lines, file_path),
-            lambda: check_observation_structure(lines, file_path),
-            lambda: check_directory_maps(lines, file_path, paths),
-            lambda: check_pattern_header(lines, file_path),
-            lambda: check_documentation_sanitization(lines, file_path),
+        rule_map: tuple[tuple[str, Callable[[], list[DocFinding]]], ...] = (
+            ("code_fence", lambda: check_code_fences(lines, file_path, self.parser)),
+            ("mermaid", lambda: check_mermaid_diagrams(lines, file_path)),
+            ("table", lambda: check_markdown_tables(lines, file_path)),
+            ("link", lambda: check_markdown_links(lines, file_path, known_anchors, paths)),
+            ("code_snippet", lambda: check_embedded_snippets(lines, file_path)),
+            ("html_tag", lambda: check_html_tags(lines, file_path)),
+            ("structure", lambda: check_observation_structure(lines, file_path)),
+            ("directory_map", lambda: check_directory_maps(lines, file_path, paths)),
+            ("pattern_header", lambda: check_pattern_header(lines, file_path)),
+            ("sanitization", lambda: check_documentation_sanitization(lines, file_path)),
         )
-        findings = [finding for check in checks for finding in check()]
+        findings = [
+            finding
+            for rule_name, check_fn in rule_map
+            if self.config.is_rule_active(rule_name)
+            for finding in check_fn()
+        ]
         return sorted(findings, key=lambda f: (f.line_number, f.category))
 
     def check_code_fences(
@@ -1023,36 +1344,51 @@ class DocsValidator:
         start_time = time.monotonic()
         md_files = _discover_markdown_files(dir_path, extensions)
 
-        known_anchors = {f: extract_heading_anchors(f.read_text(encoding="utf-8")) for f in md_files}
-        all_findings: list[DocFinding] = []
-        # One oracle for the whole sweep: the corpus asks about the same directories over
-        # and over, and a per-document cache threw that answer away 95 times.
-        oracle = PathOracle()
+        known_anchors = (
+            {f: extract_heading_anchors(f.read_text(encoding="utf-8")) for f in md_files}
+            if self.config.is_rule_active("link")
+            else {}
+        )
+        all_findings = _scan_files_parallel(self, md_files, known_anchors)
+        elapsed = time.monotonic() - start_time
+        return _build_directory_report(md_files, all_findings, elapsed)
 
-        with ThreadPoolExecutor() as executor:
-            findings_lists = list(
-                executor.map(
-                    lambda f: self.validate_file(f, known_anchors=known_anchors, oracle=oracle),
-                    md_files,
-                )
-            )
+
+def _scan_files_parallel(
+    validator: DocsValidator,
+    md_files: Sequence[Path],
+    anchors: dict[Path, set[str]],
+) -> list[DocFinding]:
+    """Execute validation across files concurrently."""
+    oracle = PathOracle()
+    all_findings: list[DocFinding] = []
+    with ThreadPoolExecutor() as executor:
+        findings_lists = executor.map(
+            lambda f: validator.validate_file(f, known_anchors=anchors, oracle=oracle),
+            md_files,
+        )
         for f_list in findings_lists:
             all_findings.extend(f_list)
+    return all_findings
 
-        elapsed = time.monotonic() - start_time
-        errors = sum(1 for f in all_findings if f.severity == "error")
-        warnings = sum(1 for f in all_findings if f.severity == "warning")
-        files_with = len({f.file_path for f in all_findings})
 
-        return DocValidationReport(
-            total_files=len(md_files),
-            files_with_findings=files_with,
-            error_count=errors,
-            warning_count=warnings,
-            is_valid=len(all_findings) == 0,
-            findings=all_findings,
-            duration_seconds=elapsed,
-        )
+def _build_directory_report(
+    md_files: Sequence[Path],
+    findings: Sequence[DocFinding],
+    elapsed: float,
+) -> DocValidationReport:
+    """Assemble final validation report for directory scan."""
+    errors, warnings = _tally_severities(findings)
+    files_with = len({f.file_path for f in findings})
+    return DocValidationReport(
+        total_files=len(md_files),
+        files_with_findings=files_with,
+        error_count=errors,
+        warning_count=warnings,
+        is_valid=not findings,
+        findings=list(findings),
+        duration_seconds=elapsed,
+    )
 
 
 def _fix_target(target: Path, validator: DocsValidator) -> int:
@@ -1060,20 +1396,27 @@ def _fix_target(target: Path, validator: DocsValidator) -> int:
     return validator.fix_file(target) if target.is_file() else validator.fix_directory(target)
 
 
-def _resolve_report(target: Path, validator: DocsValidator) -> DocValidationReport:
-    """Generate validation report for single file or directory."""
-    if not target.is_file():
-        return validator.validate_directory(target)
-    findings = validator.validate_file(target)
+def _file_report(file_path: Path, validator: DocsValidator) -> DocValidationReport:
+    """Construct report for a single file validation."""
+    findings = validator.validate_file(file_path)
+    errors = sum(1 for f in findings if f.severity == "error")
+    warnings = sum(1 for f in findings if f.severity == "warning")
     return DocValidationReport(
         total_files=1,
-        files_with_findings=1 if findings else 0,
-        error_count=sum(1 for f in findings if f.severity == "error"),
-        warning_count=sum(1 for f in findings if f.severity == "warning"),
-        is_valid=len(findings) == 0,
+        files_with_findings=int(bool(findings)),
+        error_count=errors,
+        warning_count=warnings,
+        is_valid=not findings,
         findings=findings,
         duration_seconds=0.0,
     )
+
+
+def _resolve_report(target: Path, validator: DocsValidator) -> DocValidationReport:
+    """Generate validation report for single file or directory."""
+    if target.is_file():
+        return _file_report(target, validator)
+    return validator.validate_directory(target)
 
 
 def _merge_reports(reports: Sequence[DocValidationReport]) -> DocValidationReport:
@@ -1090,14 +1433,27 @@ def _merge_reports(reports: Sequence[DocValidationReport]) -> DocValidationRepor
     return merged
 
 
+def _matches_rule(finding: DocFinding, canonical: str, raw_rule: str) -> bool:
+    """Predicate determining if finding matches canonical or raw rule identifier."""
+    category = finding.category.lower()
+    return canonical in category or raw_rule in category
+
+
+def _tally_severities(findings: Sequence[DocFinding]) -> tuple[int, int]:
+    """Tally error and warning severities in a single pass."""
+    counts = Counter(f.severity for f in findings)
+    return counts["error"], counts["warning"]
+
+
 def _filter_report_by_rule(report: DocValidationReport, rule: str | None) -> None:
     """Filter validation findings by category rule in-place."""
     if not rule:
         return
-    filtered = [f for f in report.findings if rule.lower() in f.category.lower()]
+    canonical = normalize_doc_rule_name(rule)
+    lowered = rule.lower()
+    filtered = [f for f in report.findings if _matches_rule(f, canonical, lowered)]
     report.findings = filtered
-    report.error_count = sum(1 for f in filtered if f.severity == "error")
-    report.warning_count = sum(1 for f in filtered if f.severity == "warning")
+    report.error_count, report.warning_count = _tally_severities(filtered)
     report.is_valid = len(filtered) == 0
 
 
@@ -1127,8 +1483,19 @@ def _apply_fixes(targets: Sequence[Path], validator: DocsValidator) -> None:
         print(f"🔧 Applied {fixes} automatic remediation fix(es) to documentation.")
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entrypoint for standalone vibes doc validator."""
+def _cli_select_arg(args: argparse.Namespace) -> list[str] | None:
+    """Extract selected rules from select or rule CLI options."""
+    if args.select:
+        return [args.select]
+    if args.rule:
+        return [args.rule]
+    return None
+
+
+def parse_cli_args(
+    argv: Sequence[str] | None = None,
+) -> tuple[argparse.Namespace, DocsValidatorConfig, bool]:
+    """Parse command line arguments and resolve validator configuration."""
     parser = argparse.ArgumentParser(description="Vibes Documentation Syntax & Link Validator")
     parser.add_argument("paths", nargs="*", default=[], help="File or directory paths to validate")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as errors")
@@ -1136,24 +1503,74 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--fix", action="store_true", help="Automatically remediate fixable documentation issues"
     )
     parser.add_argument("--json", action="store_true", help="Emit report as JSON")
-    parser.add_argument("--rule", help="Filter findings by category rule")
+    parser.add_argument("--rule", help="Filter findings by category rule (legacy option)")
+    parser.add_argument(
+        "--preset",
+        help="Select calibrated rule preset (standard, strict, structure_only, links_only, code_only, sanitization_only)",
+    )
+    parser.add_argument("--select", help="Comma-separated rules or codes to activate (e.g. DOC001,DOC004)")
+    parser.add_argument("--ignore", help="Comma-separated rules or codes to exclude (e.g. DOC008)")
+    parser.add_argument("--extend-select", help="Comma-separated additional rules to activate")
+    parser.add_argument("--config", type=Path, help="Path to configuration file (pyproject.toml or .markdownlint.json)")
+    parser.add_argument("--list-presets", action="store_true", help="Display all available presets in markdown table format")
     args = parser.parse_args(argv)
 
-    targets = [Path(raw).resolve() for raw in (args.paths or ["."])]
-    validator = DocsValidator()
+    if args.list_presets:
+        return args, resolve_doc_config(), True
 
-    if args.fix:
+    overrides = DocConfigOverrides(
+        preset_name=args.preset,
+        strict=True if args.strict else None,
+        select=_cli_select_arg(args),
+        ignore=[args.ignore] if args.ignore else None,
+        extend_select=[args.extend_select] if args.extend_select else None,
+        config_file=args.config,
+    )
+    return args, resolve_doc_config(overrides), False
+
+
+def _handle_json_output(report: DocValidationReport) -> int:
+    """Print report as JSON and return corresponding exit code."""
+    print(json.dumps(report.to_dict(), indent=2))
+    return int(not report.is_valid)
+
+
+def _collect_targets(raw_paths: Sequence[str] | None) -> list[Path]:
+    """Resolve CLI target paths into absolute Path instances."""
+    paths = raw_paths or ["."]
+    return [Path(raw).resolve() for raw in paths]
+
+
+def _execute_validation(
+    targets: Sequence[Path],
+    validator: DocsValidator,
+    fix: bool,
+) -> DocValidationReport:
+    """Run autofix if requested and return consolidated validation report."""
+    if fix:
         _apply_fixes(targets, validator)
+    reports = [_resolve_report(target, validator) for target in targets]
+    return _merge_reports(reports)
 
-    report = _merge_reports([_resolve_report(target, validator) for target in targets])
-    _filter_report_by_rule(report, args.rule)
 
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entrypoint for standalone vibes doc validator."""
+    args, config, is_list = parse_cli_args(argv)
+    if is_list:
+        print(render_presets_table())
+        return 0
+
+    validator = DocsValidator(config=config)
+    targets = _collect_targets(args.paths)
+    report = _execute_validation(targets, validator, args.fix)
+
+    if args.rule:
+        _filter_report_by_rule(report, args.rule)
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
-        return 1 if not report.is_valid else 0
+        return _handle_json_output(report)
 
     _render_console_report(report)
-    return _determine_exit_code(report, args.strict)
+    return _determine_exit_code(report, config.strict or args.strict)
 
 
 if __name__ == "__main__":

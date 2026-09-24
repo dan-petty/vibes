@@ -88,7 +88,7 @@ Ours: [`tools/docs_validator.py`](../../tools/docs_validator.py)
 |---|---|---|---|---|
 | **auto_fix** — Rewrites source to remove the finding, not only report it | ✅ | ✅ | ? | ? |
 | **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ? |
-| **config_presets** — Ships selectable rule presets rather than one fixed rule set | — | ✅ | ? | ✅ |
+| **config_presets** — Ships selectable rule presets rather than one fixed rule set | ✅ | ✅ | ? | ✅ |
 | **diagram_rendering** — Verifies embedded diagrams actually render | ✅ | ? | ? | ? |
 | **link_checking** — Verifies that document links resolve | ✅ | ? | ✅ | ? |
 | **markdown_structure** — Enforces document structure or heading conventions | ✅ | ✅ | ? | ? |
@@ -204,7 +204,7 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-19 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **12 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
+18 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **11 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
 
 - **Complexity gate: use astral-sh/ruff, already a dependency, for auto_fix**
   - Disposition: `integrate` — ruff is already a declared dependency
@@ -240,11 +240,6 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
   - Held by: `cookiecutter/cookiecutter`, `yeoman/generator`
   - Evidence: cookiecutter/cookiecutter: A large published index of community templates
   - Evidence: yeoman/generator: A published registry of installable generators
-- **Docs validator: ships selectable rule presets rather than one fixed rule set**
-  - Disposition: `build`
-  - Held by: `DavidAnson/markdownlint`, `vale-cli/vale`
-  - Evidence: DavidAnson/markdownlint: .markdownlint.json enables or disables rules individually
-  - Evidence: vale-cli/vale: Styles are installable packages selected in .vale.ini
 - **Docs validator: analyses languages beyond python**
   - Disposition: `build`
   - Held by: `lycheeverse/lychee`, `vale-cli/vale`
