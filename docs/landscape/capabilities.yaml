@@ -179,6 +179,7 @@ capabilities:
       - tools/doc_core.py
       - tools/doc_rules_mermaid.py
       - tools/doc_rules_structure.py
+      - tools/doc_rules_polyglot.py
     ours:
       - link_checking
       - diagram_rendering
@@ -188,6 +189,7 @@ capabilities:
       - per_file_baseline
       - baseline_diff
       - config_presets
+      - multi_language
     alternatives:
       - repo: DavidAnson/markdownlint
         has:
