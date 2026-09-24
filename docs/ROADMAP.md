@@ -165,10 +165,14 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Zero-execution header inspection parsing SafeTensors (`__metadata__`) and GGUF binary headers (tensor count, metadata KV pairs) without loading tensor weights into memory, plus streaming SHA-256 weight hash digests.
   - AST security sentinel auditing codebases for critical supply-chain vulnerabilities: `AIBOM001` (dangerous `trust_remote_code=True` arbitrary code execution risk), `AIBOM002` (unsafe `torch.load` unpickling without `weights_only=True`), `AIBOM003` (unpinned model revision lacking 40-character commit SHA), `AIBOM004` (plaintext HTTP model downloads), and `AIBOM005` (legacy pickle weight format warnings).
   - Multi-format reporting exporting to CycloneDX 1.6 ML-BOM JSON, OASIS SARIF 2.1.0 (for GitHub Code Scanning integration), human-readable Markdown summary tables, and JSON.
-  - Accompanied by a comprehensive 14-test suite in `tests/test_aibom_scanner.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
-- [ ] **Adversarial Prompt Injection & CWE-200 Egress Security Scanner**:
+- [x] **Adversarial Prompt Injection & CWE-200 Egress Security Scanner (`tools/prompt_injection_scanner.py`)**:
   - Automated red-teaming scanner validating agent code and prompt templates against indirect prompt injection (via file content, tool outputs, or git commits).
-  - Zero-Trust Egress Validator verifying zero leakage of environmental variables, secret tokens, or private RFC 1918 hostnames.
+  - Indirect prompt injection detection: Unicode Tag ASCII smuggling (`U+E0000` - `U+E007F`, `INJ001`), zero-width character smuggling (`INJ002`), chat template delimiter mimicry (`<|im_start|>`, `[INST]`, `<<SYS>>`, `INJ003`), adversarial instruction overrides and jailbreaks (`INJ004`), and Markdown data exfiltration links/images (`INJ005`).
+  - Zero-Trust CWE-200 egress security validator: secret API tokens and private keys (`EGR001`), sensitive environment variable exposure (`EGR002`), private RFC 1918 / RFC 4193 network host egress (`EGR003`), internal infrastructure domain egress (`EGR004`), and cryptographic canary token leakage auditing (`EGR005`).
+  - `CanaryTokenManager` with high-entropy token generation (`secrets.token_hex`), zero-trust prompt wrapping, and output monitoring.
+  - Multi-target AST and text scanning, OASIS SARIF 2.1.0 output for GitHub Code Scanning, JSON, and Markdown summaries.
+  - Accompanied by a comprehensive 18-test suite in `tests/test_prompt_injection_scanner.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+
 - [ ] **Enterprise Change Management & Version Deprecation Protocol** (partially delivered):
   - Delivered: the deprecation contract and removal gate — `since`/`remove_in`/`replacement`, runtime `DeprecationWarning`, major-boundary scheduling, and internal call-site migration ([`examples/deprecation-lifecycle-sentinel/`](../examples/deprecation-lifecycle-sentinel/)).
   - Remaining: runtime feature flags carrying the same removal obligation, and automated migration tooling for agent tool schemas.
