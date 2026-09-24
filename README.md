@@ -100,6 +100,7 @@ flowchart TD
 - [**Multi-Tier Living Documentation**](./patterns/multi-tier-living-documentation.md): Decoupling deterministic AST extraction from constrained generative narrative synthesis, backed by fail-closed oracles and active compaction.
 - [**Invariant-Grounded Recursive Self-Improvement**](./patterns/invariant-grounded-recursive-self-improvement.md): Transforming autonomous evolution from unconstrained generative drift into a convergent, closed-loop engine bounded by deterministic AST sentinels, CEGIS constraint sets, and outward telemetry.
 - [**Epistemic Seam & Mitigated Defect Auditing**](./patterns/epistemic-seam-and-mitigated-defect-auditing.md): Eliminating silent defect drops and catalog drift by separating refutation from mitigation and restricting negative catalog learning to ground truth.
+- [**Kinetic Exploit Probes & Invariant Leashing**](./patterns/kinetic-exploit-probes-and-invariant-leashing.md): Replacing rhetorical verifier debate with executable counterexample probes in micro-sandboxes, paired with invariant leashes tracking perimeter dependencies.
 
 
 ---
@@ -334,7 +335,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md
 │       ├── 27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md
 │       ├── 28-recursive-self-improvement-and-the-post-harness-mandate.md
-│       └── 29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md
+│       ├── 29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md
+│       └── 30-kinetic-falsification-and-the-ephemeral-exploit-harness.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -351,6 +353,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── gate-integrity-and-total-input-coverage.md
 │   ├── invariant-grounded-recursive-self-improvement.md
 │   ├── iterative-resource-refinement-loop.md
+│   ├── kinetic-exploit-probes-and-invariant-leashing.md
 │   ├── multi-agent-codebase-concurrency.md
 │   ├── multi-tier-living-documentation.md
 │   ├── post-v1-deprecation-lifecycle.md
@@ -405,6 +408,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
+│   ├── kinetic_probe.py               # Kinetic counterexample probe engine & invariant leash registry
 │   ├── code_memory.py                 # Semantic graph AST code memory, symbol indexer & blast radius oracle
 │   ├── model_router.py                # Dynamic multi-model router & speculative cascade oracle with SARIF export
 │   ├── ebpf_tracer.py                 # eBPF process tracing & sandbox introspection oracle with SARIF export
@@ -449,6 +453,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_kinetic_probe.py          # Unit tests for kinetic probe execution & invariant leashes
     ├── test_code_memory.py            # Unit tests for code memory, call graph invariants & SARIF
     ├── test_model_router.py           # Unit tests for multi-model router, speculative cascade & SARIF
     ├── test_ebpf_tracer.py            # Unit tests for eBPF tracer, Tetragon/Falco policy & SARIF
