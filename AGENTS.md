@@ -582,6 +582,12 @@ Stochastic language generation must always be bounded by deterministic mechanica
     - **Executable Probes Over Prose Debates**: Never allow auditor and verifier personas to conduct open-ended natural language debates over runtime defect exploitability. Defect claims must be accompanied by a synthesized, minimal reproducing counterexample probe script executed against an isolated micro-sandbox.
     - **Deterministic Exit Code Ground Truth**: Program state verdicts must be derived strictly from operating system exit codes (`0` for verified exploit / invariant breach, non-zero for handled rejection / disproven claim, timeout / SIGKILL for CWE-400 resource exhaustion).
     - **Invariant Leashing for Perimeter Mitigations**: Any defect categorized as *Mitigated* by an external wrapper must be registered as an *Invariant Leash* linking the defect site to the perimeter files. When any perimeter file is modified in a subsequent commit, the leash must automatically trigger re-execution of the kinetic probe to prevent perimeter decay.
+22. **The Sovereign Human Boundary & Autonomous Invariant Stewardship**:
+    - **Autonomous Cybernetic Stewardship**: AI agents operating on this repository must behave as proactive cybernetic stewards rather than passive prompt-responders. Do not wait for humans to prompt for code quality or discover refactoring opportunities. Actively discover, elevate, and enforce invariants through AST introspection, kinetic exploit probes, and continuous feedback inversion.
+    - **The Sovereign Triad Boundary**: Involve human developers exclusively at the Sovereign Triad boundary:
+      1. *Telos & Strategic Purpose*: Aligning deliverables to human values, roadmap goals, and ethical boundaries.
+      2. *Capital & Physical Resource Constraints*: Enforcing token ceilings, execution timeouts, and hardware footprints.
+      3. *Sovereign Attestation & Keyholding*: Presenting cryptographic certification artifacts (`certified-by-sentinel`, in-toto statements) for sovereign human release authorization.
 
 
 

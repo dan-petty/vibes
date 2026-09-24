@@ -115,3 +115,15 @@ flowchart LR
 | **The Kolmogorov Verification Gap** | Spending thousands of tokens attempting symbolic safety proofs instead of searching for minimal counterexamples. | Verification stalls in multi-turn debate while program correctness remains unproven. | Exploits are minimal ($NP$-complete search); synthesize ephemeral test cases and evaluate exit codes. |
 | **Mitigation Perimeter Decay** | Dormant vulnerabilities mitigated by external perimeters detonate when refactors modify the wrapper. | Refactoring API routing removes request size limits, detonating an unindexed parser vulnerability. | Invariant leashing: link defect mitigations to perimeter files and re-trigger probes on mutation. |
 
+---
+
+## 5. The Cybernetic Governance Paradigm
+
+| Concept | Definition & Operational Scope | Machine Role vs. Human Role |
+|---|---|---|
+| **The Sovereign Human Triad** | The three non-synthetic anchors that cannot be automated: **Telos** (purpose & ethics), **Capital & Boundaries** (economic & physical constraints), and **Sovereign Attestation** (cryptographic release authority). | Machine optimizes within the boundary; Human defines the boundary and bears legal/moral liability. |
+| **Autonomous Invariant Discovery** | Mining execution telemetry, commit trajectories, and AST metrics to formulate new mathematical invariants ($M \le 10$, parameter cardinality, structural tuples) rather than relying on human prompt faith. | Machine discovers the mathematical ceilings that maximize zero-shot recovery; Human ratifies them as constitutional rules. |
+| **Cybernetic Risk Modulation** | SRE/PID control over error budgets (`reliability_slo.py`), dynamically modulating loop velocity, speculative refactoring, and reactive repair based on real-time invariant compliance. | Machine regulates velocity continuously without emotion; Human calibrates risk tolerance ceilings. |
+| **The Epistemic Seam** | The rigid barrier between non-deterministic token generation and deterministic physical truth, prohibiting stochastic models from mutating their own verification catalogs. | Machine operates within the seam; Human arbitrates ambiguous value cliffs. |
+
+
