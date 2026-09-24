@@ -234,6 +234,10 @@ flowchart LR
     - Pass dynamic context through `env:`, never via `${{ }}` expressions inside `run:` blocks. Assert workflow CLI flags and options in [`tests/test_workflow_contracts.py`](./tests/test_workflow_contracts.py).
 12. **Tri-Surface Work Tracking**:
     - Manage work across three distinct surfaces: [`docs/ROADMAP.md`](./docs/ROADMAP.md) for scheduled deliverables, `.data/sdlc_backlog.json` for mechanical findings, and GitHub Issues for non-derivable conversations or decisions.
+13. **Dual-Surface Interface & Agent Experience (AX) Integrity**:
+    - Software interfaces must expose synchronized dual surfaces: human teleology and observability (UX) alongside machine-verifiable negative schemas and structured diagnostics (AX).
+    - All tools and MCP servers must enforce negative schemas (`additionalProperties: false`) to eliminate parameter hallucination spirals. Errors must return machine-actionable CEGIS counterexample vectors rather than conversational prose.
+    - Autonomous agents must actively quantify interaction friction (DAI, IFI, CIM); when friction is detected, agents must open self-hardening refactoring PRs to elevate the software substrate's AX ([Observation 32](./observations/systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md), [Pattern](./patterns/bi-directional-metric-feedback-and-ax-scoring.md)).
 
 > For detailed case studies and root-cause post-mortems of operational lessons, see [`docs/RETROSPECTIVE.md#8-operational-lessons-from-the-autonomous-development-loop`](./docs/RETROSPECTIVE.md#8-operational-lessons-from-the-autonomous-development-loop).
 

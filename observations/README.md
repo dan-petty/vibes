@@ -2,7 +2,7 @@
 
 > **Exhibition**: `vibes` Empirical Knowledge Base  
 > **Classification**: Master Observation Index & Cross-Domain Synthesis  
-> **Scope**: 55 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
+> **Scope**: 56 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
 > **Key Metric**: 100.0/100 Resource Health Score; 319/319 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance  
 
 ---
@@ -11,7 +11,7 @@
 
 The `observations/` directory records the empirical reality of autonomous software engineering performed by AI coding assistants. Across hundreds of autonomous sessions, pull requests, refactoring cycles, and benchmark evaluations in [`devops-cli`](https://github.com/dan-petty/devops-cli) and [`vibes`](https://github.com/dan-petty/vibes), these studies capture how stochastic language models behave when confronted with real-world engineering constraints.
 
-The fundamental insight across all 55 observations is simple yet profound:
+The fundamental insight across all 56 observations is simple yet profound:
 
 > **Stochastic token generation without mechanical boundary oracles collapses into structural entropy. Unbounded models drift into procedural spaghetti, hallucinated tool arguments, orphaned background processes, and brittle heuristic traps. When bounded by deterministic AST invariants, formal contracts, and closed-loop feedback engines, agents achieve architectural excellence, sub-second feedback loops, and 100% test reliability.**
 
@@ -71,7 +71,7 @@ flowchart TD
 
 ## 🧭 Master Observation Taxonomy Matrix
 
-The 55 empirical case studies are organized into three complementary domains:
+The 56 empirical case studies are organized into three complementary domains:
 1. **`devops-cli`**: Foundational operational, syntactic, and governance discoveries from building a production-grade infrastructure CLI.
 2. **`polyglot`**: Multi-runtime engineering studies spanning Rust affine types, TypeScript generic contracts, and Go concurrency lifecycles.
 3. **`systems`**: Distributed systems dynamics including OpenTelemetry tracing waterfalls, test runner latency optimization, inotify event loops, Valkey L2 caching, and rootless container isolation.
@@ -124,6 +124,7 @@ The 55 empirical case studies are organized into three complementary domains:
 | [**29**](./systems/29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md) | `systems` | [Epistemic Drift & the Unreliable Teacher](./systems/29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md) | Verifiers conflating mitigation with refutation (silently dropping valid defects); negative catalogs self-contaminating via model opinions. | Tripartite verification protocol (Confirmed, Refuted, Mitigated) and the Epistemic Seam (immutable builtins, human-only learning). | 100% of mitigated findings surfaced with named mechanism; 0% catalog drift; eliminated silent dismissal of 16 critical defects. |
 | [**30**](./systems/30-kinetic-falsification-and-the-ephemeral-exploit-harness.md) | `systems` | [Kinetic Falsification & the Ephemeral Exploit Harness](./systems/30-kinetic-falsification-and-the-ephemeral-exploit-harness.md) | Conversational verifier debate produces 4,800-token hallucination stalls; mitigated findings decay invisibly across perimeter refactors. | Kinetic Exploit Engine (`tools/kinetic_probe.py`) mapping sandbox exit codes to ground-truth verdicts, paired with Invariant Leashes. | 0 tokens wasted on debate; 4ms deterministic resolution; 100% elimination of hallucinated mitigations; zero perimeter decay. |
 | [**31**](./systems/31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md) | `systems` | [Instruction Ratchet Bloat & Counterfactual Agent Ablation](./systems/31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md) | Monotonic accumulation of prompt rules past 30k tokens creates context window saturation, attention dilution (62% middle-valley decay), and redundant prose restating mechanical gates. | Two-tier JIT Instruction Governor (`tools/instruction_governor.py`) with universal invariant kernel ($\le 2$k tokens), dynamic domain overlays, and empirical counterfactual ablation. | 89.9% prompt token reduction (31.4k → 3.1k); 4.2x faster TTFT; +58.7% middle-valley rule compliance; 83.5% token savings per PR. |
+| [**32**](./systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md) | `systems` | [Dual First-Class Consumers & Bi-Directional Loops](./systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md) | Unidirectional scoring forces agents to silently absorb software interface friction, resulting in retry spirals, token waste, and recurring architectural degradation. | Bi-directional scoring architecture pairing deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$), automatically inverting software friction into automated refactoring and schema-hardening deliverables. | 72.1% faster turnaround; 76.4% token reduction; 0.0% schema hallucinations; 100% elimination of silent friction absorption. |
 | [**20**](./systems/20-internet-grounded-information-foraging-and-self-improvement-loops.md) | `systems` | [Internet-Grounded Information Foraging & Self-Improvement Loops](./systems/20-internet-grounded-information-foraging-and-self-improvement-loops.md) | Inward self-improvement loops suffer an over-editing trap (wholesale file rewrites) and economic blindness; lack of outward grounding reinvents brittle solutions. | Dual-loop architecture with internet-grounded spec ingestion, AST-aware Patch Minimality scoring ($P_{\text{min}} \ge 0.70$), and Cost-Per-Invariant Index. | High-efficiency models match frontier invariant compliance at $13\times$ to $20\times$ lower cost; patch minimality eliminates 38% diff churn. |
 | [**19**](./systems/19-self-consistency-is-not-conformance.md) | `systems` | [Self-Consistency Is Not Conformance](./systems/19-self-consistency-is-not-conformance.md) | Four capabilities built to close survey gaps; all four already had an implementation that was wrong — a sandbox reporting 100.0/100 while enforcing 0 of 8 controls on the path that actually runs, a trace generator emitting a private vocabulary inside a valid OTLP envelope, a crawler dropping every code block, and a balance metric counting capability work as instrument work. Every gate in the repository takes its ground truth from inside the tree, so every gate converges to agreement without ever being able to be surprised. | Derive an external standard at a pinned revision rather than transcribing it; score the runtime rather than the declaration and name every control it cannot apply; execute each claim against the thing outside (the kernel kills the child, the real gates run over the generated output); audit the fallback first, because it is the path the ordinary conditions select. | Sandbox controls enforced on the engine-less path 0/8 reported as 8/8 → 6/8 reported as 6/8; gaps 24 → 20 with 4 closed by building; 3 of the repository's own instruments found wrong; capability share of recent added lines 15% → 64%; 593 → 736 tests. |
 | [**18**](./systems/18-a-correction-inherits-the-frame-it-corrects.md) | `systems` | [A Correction Inherits the Frame It Corrects](./systems/18-a-correction-inherits-the-frame-it-corrects.md) | The landscape survey added to close Observation 14's blind spot declared four capabilities, all four linters, with 13 of 16 sample applications absent from its manifest — so all 13 gaps it emitted were linter features, carrying upstream citations that lent their rigour to the choice as well as the claim. The balance metric added to detect the drift then classified by location, counted the application factory as quality investment, and held capability lines at exactly 350 across the release that added 512 of them. | Declare `kind` where the capability is declared and resolve by longest path prefix, with location only as fallback; measure an instrument's coverage of its subject rather than the volume of its output; pin the metric with a test naming the change that broke it; report stock and flow ratios separately and let them steer rather than gate. | Manifest 4 → 11 capabilities and 3 → 9 of 16 applications visible; gaps 13 → 24 with 0 → 10 application features and the top three all application-shaped; capability investment over one fixed window 350 lines (6%) → 862 (15%). |
@@ -136,9 +137,9 @@ The 55 empirical case studies are organized into three complementary domains:
 
 ---
 
-## 🔬 The Six Unifying Architectural Theses
+## 🔬 The Seven Unifying Architectural Theses
 
-When analyzed collectively, the 54 empirical case studies coalesce into six core engineering theses that define disciplined agentic software development:
+When analyzed collectively, the 56 empirical case studies coalesce into seven core engineering theses that define disciplined agentic software development:
 
 ### 1. Deterministic Mechanical Oracles Over Prompt Faith
 Stochastic language models cannot self-evaluate architectural complexity, nesting depth, type safety, or security boundaries purely through prompt instructions. Relying on "be careful not to write complex code" invariably fails.
@@ -174,6 +175,12 @@ When code synthesis velocity approaches infinity, static codebases face exponent
 - **Asymmetric Verification**: Model code synthesis is probabilistic ($NP$-like); invariant verification ($M \le 10$, depth $\le 5$, zero leaks, coverage $\ge 90\%$) is deterministic and polynomial ($P$-like).
 - **Monotonic Constraint Accumulation**: Every discovered defect becomes a permanent CEGIS regression case, preventing oscillatory bug churn across generations.
 - **Outward Conformance Equilibrium**: Inward-facing linters are balanced with outward landscape telemetry, escaping the defect-shaped myopia trap and driving continuous feature innovation.
+
+### 7. Dual First-Class Consumers & Bi-Directional Cybernetic Co-Evolution
+Software must expose a synchronized dual-surface interface serving both human intuition (UX) and agent precision (AX). When agents measure and score software impedance (AX) alongside software scoring agents ($S_{\text{Agent}}$), the resulting bi-directional feedback drives an automated, self-ratcheting co-evolutionary improvement loop:
+- **Dual-Surface Interface**: High-level human teleology, observability, and cryptographic attestation paired with strict negative schemas (`additionalProperties: false`), constant-time AST symbol graphs, and structured CEGIS error vectors.
+- **Bi-Directional Scoring Matrix**: Evaluating repository usability via Diagnostic Actionability ($DAI$), Interface Friction ($IFI$), and Cognitive Impedance ($CIM$).
+- **Co-Evolutionary Ratchet**: Low AX scores automatically synthesize refactoring PRs that harden interfaces, eliminate retry spirals, and continuously elevate codebase maintainability.
 
 ---
 
