@@ -156,3 +156,4 @@ Implementing the JIT Instruction Governor and Counterfactual Pruning yielded dra
 
 ### Summary Maxim:
 > *An instruction file that only grows is an instruction file that eventually ceases to be read. True discipline lies not in hoarding every historical warning, but in inverting prose into mechanical gates and delivering instructions just in time.*
+

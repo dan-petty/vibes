@@ -138,3 +138,4 @@ Adopting the JIT Instruction Decomposition and Ablation pattern across autonomou
 - **$4.2\times$ reduction** in time-to-first-token latency.
 - **+58.7% improvement** in middle-valley invariant adherence.
 - Complete elimination of redundant prompt instructions for mechanically gated invariants.
+
