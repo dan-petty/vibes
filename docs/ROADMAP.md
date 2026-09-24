@@ -230,6 +230,10 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
 - [x] **Deliverable #2021: The Sovereign Human Core & Cybernetic SDLC Gateway (`docs/MANIFESTO.md`)**:
   - Elevates the project context to the 7 Pillars of Disciplined Agentic Development, codifying the Sovereign Human Triad: Telos (purpose & ethics), Capital/Resource Boundaries, and Cryptographic Release Attestation.
   - Recognizes that autonomous agents with AST oracles and telemetry are measurably superior at invariant discovery, cybernetic risk modulation (PID/SRE), and outward roadmap foraging.
+- [x] **Deliverable #2022: JIT Instruction Governor, Rule Attribution & Counterfactual Ablation (`tools/instruction_governor.py`)**:
+  - Resolves instruction ratchet bloat and lost-in-the-middle attention decay by parsing instructions into token-weighted sections, mapping mechanical gate codes to rule sections (Rule Attribution Matrix), and synthesizing lean two-tier JIT prompt envelopes ($\le 2$k kernel + targeted overlays).
+  - Evaluates counterfactual rule ablation candidates with empirical retention scoring to prune redundant prose when mechanical gates provide 100% enforcement.
+  - Accompanied by Observation 31 (`observations/systems/31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md`), Pattern (`patterns/just-in-time-instruction-decomposition-and-ablation.md`), and comprehensive unit test suite in `tests/test_instruction_governor.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
 ---
 
