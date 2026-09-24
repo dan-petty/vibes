@@ -187,6 +187,7 @@ capabilities:
       - auto_fix
       - per_file_baseline
       - baseline_diff
+      - config_presets
     alternatives:
       - repo: DavidAnson/markdownlint
         has:

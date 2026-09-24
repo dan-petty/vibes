@@ -20,11 +20,20 @@ import doc_core
 from doc_core import PathOracle
 from doc_rules_structure import check_directory_maps
 from docs_validator import (
+    ALL_DOC_RULES,
+    DOC_PRESETS,
     OBSERVATION_REQUIRED_SECTION_COUNT,
+    DocConfigOverrides,
     DocsValidator,
+    DocsValidatorConfig,
     auto_fix_content,
     contrast_ratio,
+    load_doc_config,
     mask_code_spans,
+    normalize_doc_rule_name,
+    parse_cli_args,
+    render_presets_table,
+    resolve_doc_config,
 )
 from docs_validator import (
     main as docs_validator_main,
@@ -1001,3 +1010,233 @@ def test_apply_fixes_helper(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
         "Applied" in captured.out,
         content.endswith("```\n") or content.endswith("```"),
     ) == (True, True)
+
+
+def test_render_presets_table_contains_all_presets() -> None:
+    """The markdown presets table must list every registered preset."""
+    table = render_presets_table()
+    assert (
+        "Available Documentation Validator Presets:" in table,
+        all(f"`{name}`" in table for name in DOC_PRESETS),
+    ) == (True, True)
+
+
+def test_main_list_presets(capsys: pytest.CaptureFixture[str]) -> None:
+    """The --list-presets CLI flag prints the markdown table and exits 0."""
+    exit_code = docs_validator_main(["--list-presets"])
+    out = capsys.readouterr().out
+    assert (
+        exit_code,
+        "Available Documentation Validator Presets:" in out,
+        "`standard`" in out,
+        "`links_only`" in out,
+    ) == (0, True, True, True)
+
+
+def test_normalize_doc_rule_names_and_aliases() -> None:
+    """Rule codes and aliases map to canonical rule names."""
+    results = [
+        normalize_doc_rule_name("DOC001"),
+        normalize_doc_rule_name("fence"),
+        normalize_doc_rule_name("DOC004"),
+        normalize_doc_rule_name("anchors"),
+        normalize_doc_rule_name("DOC010"),
+        normalize_doc_rule_name("zero_trust"),
+        normalize_doc_rule_name("unknown_rule"),
+    ]
+    assert results == [
+        "code_fence",
+        "code_fence",
+        "link",
+        "link",
+        "sanitization",
+        "sanitization",
+        "unknown_rule",
+    ]
+
+
+def test_docs_validator_config_defaults_and_overrides() -> None:
+    """DocsValidatorConfig provides default values and rule activation predicates."""
+    default_cfg = DocsValidatorConfig()
+    custom_cfg = resolve_doc_config(
+        DocConfigOverrides(
+            preset_name="links_only",
+            extend_select=["fence"],
+            ignore=["DOC004"],
+            strict=True,
+        )
+    )
+    assert (
+        default_cfg.preset_name,
+        default_cfg.active_rules == ALL_DOC_RULES,
+        default_cfg.is_rule_active("DOC001"),
+        default_cfg.is_rule_active("unknown"),
+        custom_cfg.preset_name,
+        custom_cfg.strict,
+        custom_cfg.is_rule_active("code_fence"),
+        custom_cfg.is_rule_active("link"),
+    ) == (
+        "standard",
+        True,
+        True,
+        False,
+        "links_only",
+        True,
+        True,
+        False,
+    )
+
+
+def test_structure_only_preset_skips_links_and_snippets(tmp_path: Path) -> None:
+    """The structure_only preset ignores broken links and invalid code snippets."""
+    doc = tmp_path / "mixed.md"
+    doc.write_text(
+        "# Heading\n\n"
+        "[Broken Link](missing_file.md)\n\n"
+        "```python\ndef broken syntax(\n```\n",
+        encoding="utf-8",
+    )
+    struct_cfg = resolve_doc_config(DocConfigOverrides(preset_name="structure_only"))
+    std_cfg = resolve_doc_config(DocConfigOverrides(preset_name="standard"))
+
+    struct_validator = DocsValidator(config=struct_cfg)
+    std_validator = DocsValidator(config=std_cfg)
+
+    struct_findings = struct_validator.validate_file(doc)
+    std_findings = std_validator.validate_file(doc)
+
+    assert (
+        len(struct_findings),
+        len(std_findings),
+        sorted(f.category for f in std_findings),
+    ) == (
+        0,
+        2,
+        ["code_snippet", "link"],
+    )
+
+
+def test_links_only_preset_skips_fences_and_tables(tmp_path: Path) -> None:
+    """The links_only preset ignores unclosed fences and malformed tables."""
+    doc = tmp_path / "links_test.md"
+    doc.write_text(
+        "# Heading\n\n"
+        "| Col1 | Col2 |\n"
+        "|---|---|\n"
+        "| OnlyOne |\n\n"
+        "```python\nprint(1)\n",
+        encoding="utf-8",
+    )
+    links_cfg = resolve_doc_config(DocConfigOverrides(preset_name="links_only"))
+    std_cfg = resolve_doc_config(DocConfigOverrides(preset_name="standard"))
+
+    links_findings = DocsValidator(config=links_cfg).validate_file(doc)
+    std_findings = DocsValidator(config=std_cfg).validate_file(doc)
+
+    assert (
+        len(links_findings),
+        len(std_findings),
+        sorted(f.category for f in std_findings),
+    ) == (
+        0,
+        2,
+        ["code_fence", "table"],
+    )
+
+
+def test_code_only_preset_flags_code_and_mermaid(tmp_path: Path) -> None:
+    """The code_only preset flags snippet syntax errors and unclosed fences."""
+    doc = tmp_path / "code_test.md"
+    doc.write_text(
+        "# Code Doc\n\n"
+        "[Broken](nowhere.md)\n\n"
+        "```mermaid\nunknown_diagram\nA --> B\n```\n",
+        encoding="utf-8",
+    )
+    code_cfg = resolve_doc_config(DocConfigOverrides(preset_name="code_only"))
+    findings = DocsValidator(config=code_cfg).validate_file(doc)
+
+    assert (
+        len(findings),
+        findings[0].category if findings else "",
+    ) == (
+        1,
+        "mermaid",
+    )
+
+
+def test_sanitization_only_preset(tmp_path: Path) -> None:
+    """The sanitization_only preset flags private RFC 1918 IPs and ignores fences."""
+    doc = tmp_path / "sec_doc.md"
+    doc.write_text(
+        "# Security Doc\n\n"
+        "Deploy to 192.168.1.10 for testing.\n\n"
+        "```python\nunclosed fence\n",
+        encoding="utf-8",
+    )
+    sec_cfg = resolve_doc_config(DocConfigOverrides(preset_name="sanitization_only"))
+    findings = DocsValidator(config=sec_cfg).validate_file(doc)
+
+    assert (
+        len(findings),
+        findings[0].category if findings else "",
+    ) == (
+        1,
+        "sanitization",
+    )
+
+
+def test_cli_parsing_presets_and_rule_selection(tmp_path: Path) -> None:
+    """CLI flag parsing maps preset names and rule selections to DocsValidatorConfig."""
+    _args, config, is_list = parse_cli_args([
+        str(tmp_path),
+        "--preset", "structure_only",
+        "--select", "DOC001,DOC004",
+        "--ignore", "DOC001",
+        "--strict",
+    ])
+    assert (
+        is_list,
+        config.preset_name,
+        config.strict,
+        config.active_rules,
+    ) == (
+        False,
+        "structure_only",
+        True,
+        frozenset({"link"}),
+    )
+
+
+def test_toml_and_markdownlint_config_loading(tmp_path: Path) -> None:
+    """Configuration loader parses pyproject.toml and .markdownlint.json correctly."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[tool.docs_validator]\n'
+        'preset = "links_only"\n'
+        'select = ["DOC004", "DOC010"]\n'
+        'strict = true\n',
+        encoding="utf-8",
+    )
+    loaded = load_doc_config(pyproject)
+    cfg = resolve_doc_config(DocConfigOverrides(config_file=pyproject))
+
+    mdlint = tmp_path / ".markdownlint.json"
+    mdlint.write_text('{"DOC001": false, "table": false}\n', encoding="utf-8")
+    loaded_md = load_doc_config(mdlint)
+
+    assert (
+        loaded.get("preset"),
+        loaded.get("strict"),
+        cfg.preset_name,
+        cfg.strict,
+        cfg.active_rules,
+        sorted(loaded_md.get("ignore", [])),
+    ) == (
+        "links_only",
+        True,
+        "links_only",
+        True,
+        frozenset({"link", "sanitization"}),
+        ["code_fence", "table"],
+    )
