@@ -1,15 +1,15 @@
 # Observation 04 (Polyglot): C++ RAII & Lifetime Invariants Under LLM Synthesis
 
-> **Exhibition**: Polyglot Systems & Memory Safety Invariants  
-> **Classification**: Memory Safety, Lifetime Profile & Static Contract Auditing  
-> **Target Subsystem**: C++ Lifetime Sentinel (`tools/cpp_lifetime_sentinel.py`)  
-> **Key Metric**: 100% elimination of manual memory management (`delete`/`free`); zero use-after-move hazards; 0 dangling view handles (`std::string_view` / `std::span`) across synthesized C++20 components.  
+> **Exhibition**: Polyglot Systems & Memory Safety Invariants
+> **Classification**: Memory Safety, Lifetime Profile & Static Contract Auditing
+> **Target Subsystem**: C++ Lifetime Sentinel (`tools/cpp_lifetime_sentinel.py`)
+> **Key Metric**: 100% elimination of manual memory management (`delete`/`free`); zero use-after-move hazards; 0 dangling view handles (`std::string_view` / `std::span`) across synthesized C++20 components.
 
 ---
 
 ## 1. Executive Context & Baseline
 
-While modern memory-safe languages like Rust enforce spatial and temporal memory safety at compile time through affine ownership types and a borrow checker, C++ remains the foundational standard for ultra-low-latency financial trading engines, game runtimes, OS kernels, and deep learning inference backends (e.g. `vLLM`, `llama.cpp`, TensorRT). 
+While modern memory-safe languages like Rust enforce spatial and temporal memory safety at compile time through affine ownership types and a borrow checker, C++ remains the foundational standard for ultra-low-latency financial trading engines, game runtimes, OS kernels, and deep learning inference backends (e.g. `vLLM`, `llama.cpp`, TensorRT).
 
 Unlike Rust, standard ISO C++ leaves memory safety, object lifecycles, and pointer aliasing to developer discipline and undefined behavior (UB) traps. Modern C++ (ISO C++20 and C++23) introduced formal architectural paradigms to mitigate these risks:
 - **Resource Acquisition Is Initialization (RAII)**: Object destruction deterministically cleans up resources without manual intervention.
@@ -165,7 +165,7 @@ class ConnectionSession {
 public:
     explicit ConnectionSession(int fd) : fd_(fd) {}
     ~ConnectionSession() { if (fd_ >= 0) close(fd_); }
-    
+
     // Explicit Rule of Five specification
     ConnectionSession(const ConnectionSession&) = delete;
     ConnectionSession& operator=(const ConnectionSession&) = delete;
@@ -184,3 +184,4 @@ private:
 
 ### Invariant 4: Linear Lifetime Invalidation (`CPP005`)
 Any identifier passed as an rvalue to `std::move(...)` is marked as consumed. Subsequent reads, method calls, or pointer dereferences on the moved-from variable are flagged as critical vulnerabilities.
+

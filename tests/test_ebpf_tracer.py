@@ -346,23 +346,21 @@ def test_cli_end_to_end_with_temp_files(tmp_path: Path) -> None:
     tetragon_file = tmp_path / "policy.json"
     falco_file = tmp_path / "rules.yaml"
 
-    exit_code = main(
-        [
-            str(trace_file),
-            "--preset",
-            "strict",
-            "--export-sarif",
-            str(sarif_file),
-            "--export-json",
-            str(json_file),
-            "--export-md",
-            str(md_file),
-            "--export-tetragon",
-            str(tetragon_file),
-            "--export-falco",
-            str(falco_file),
-        ]
-    )
+    exit_code = main([
+        str(trace_file),
+        "--preset",
+        "strict",
+        "--export-sarif",
+        str(sarif_file),
+        "--export-json",
+        str(json_file),
+        "--export-md",
+        str(md_file),
+        "--export-tetragon",
+        str(tetragon_file),
+        "--export-falco",
+        str(falco_file),
+    ])
 
     assert (
         exit_code,
@@ -372,3 +370,4 @@ def test_cli_end_to_end_with_temp_files(tmp_path: Path) -> None:
         tetragon_file.is_file(),
         falco_file.is_file(),
     ) == (1, True, True, True, True, True)
+

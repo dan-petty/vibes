@@ -219,6 +219,11 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Implements speculative cascading executing lightweight drafts against mechanical AST invariant oracles ($M \le 10, d \le 5$, zero RFC 1918 egress), accepting clean solutions for an 85.6% cost reduction (100.8% APGR, 18.4% frontier CPT) or escalating to the frontier tier with negative CEGIS constraint envelopes.
   - Multi-format reporting exporting to OASIS SARIF 2.1.0, JSON telemetry, and formatted Markdown reports.
   - Accompanied by Observation 25 (`observations/systems/25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md`) and a comprehensive 12-test suite in `tests/test_model_router.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+- [x] **Deliverable #2019: Semantic Graph AST Code Memory & Persistent Symbol Indexing (`tools/code_memory.py`)**:
+  - Persistent AST symbol index and directed call graph memory maintaining def-use chains, signature stability, circular dependency avoidance, and transitive blast radius analysis across multi-file refactoring sessions.
+  - Enforces diagnostic rules `SGM001` (Dangling Symbol Reference), `SGM002` (Signature Mismatch Regression), `SGM003` (Cyclic Dependency Induction), `SGM004` (Orphaned Definition), and `SGM005` (High Blast Radius Unverified Refactor for hub symbols with $\ge 5$ upstream callers).
+  - Features transitive blast radius reachability calculation via graph BFS, OASIS SARIF 2.1.0 telemetry export for GitHub Code Scanning, and WCAG AA compliant Mermaid flowchart rendering.
+  - Accompanied by Observation 26 (`observations/systems/26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md`) and a comprehensive 12-test suite in `tests/test_code_memory.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
 ---
 
@@ -244,8 +249,9 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Attention Dilution & Context Decay in Ultra-Long Sessions** | `observations/systems/` | Measuring degradation in constraint adherence as context lengths exceed 100k tokens and evaluating multi-scale pruning. | ✅ Completed ([Obs 23](../observations/systems/23-attention-dilution-context-rot-and-active-compaction.md)) |
 | **Self-Correction Loops vs. Constraint Accumulation** | `observations/systems/` | Comparing conversational "fix this error" prompting vs. formal CEGIS negative-constraint accumulation. | ✅ Completed ([Obs 22](../observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md)) |
 | **Multi-Model Capability Boundaries & Dynamic Routing Oracles** | `observations/systems/` | Measuring semantic entropy and reasoning failure thresholds to route tasks across frontier and local open-weights models. | ✅ Completed ([Obs 25](../observations/systems/25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md)) |
-| **Semantic Graph AST Code Memory & Persistent Symbol Indexing** | `observations/systems/` | Graph-based code memory maintaining call graph invariants across multi-file refactoring sessions. | 🔬 In Queue |
+| **Semantic Graph AST Code Memory & Persistent Symbol Indexing** | `observations/systems/` | Graph-based code memory maintaining call graph invariants across multi-file refactoring sessions. | ✅ Completed ([Obs 26](../observations/systems/26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md)) |
 | **eBPF Runtime LSM Kernel Gate & Dynamic Syzcaller Fuzzing** | `observations/systems/` | Real-time in-kernel policy enforcement using LSM hooks under adversarial agent inputs. | 🔬 In Queue |
+| **Differential AST Mutation Fuzzing for Polyglot Boundary Parsers** | `observations/polyglot/` | Grammatical mutation fuzzing evaluating parser convergence, symlink escape detection, and memory leak isolation across multi-language parsers. | 🔬 In Queue |
 
 ---
 
@@ -272,6 +278,7 @@ quadrantChart
     "Context rot auditor": [0.58, 0.88]
     "eBPF process tracer": [0.72, 0.90]
     "Dynamic model router": [0.68, 0.92]
+    "Semantic graph code memory": [0.72, 0.94]
     "Prompt injection scanner": [0.50, 0.50]
     "Toy chat-with-your-code demos": [0.86, 0.12]
     "Unsanitized transcript dumps": [0.16, 0.10]
@@ -325,6 +332,7 @@ quadrantChart
 |  | C++ RAII & Lifetime Invariant Sentinel | Python / C++ / AST | High | Medium | v1.0.0 | ✅ Completed |
 |  | eBPF Process Tracing & Sandbox Introspection | eBPF / Tetragon / Falco / Python | High | High | v1.0.0 | ✅ Completed |
 |  | Dynamic Multi-Model Router & Speculative Cascade | Python / AST / Entropy / SARIF | High | High | v1.0.0 | ✅ Completed |
+|  | Semantic Graph AST Code Memory & Symbol Indexer | Python / AST / Graph / SARIF | High | High | v1.0.0 | ✅ Completed |
 | **Fill-Ins** | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |
 |  | Disciplined Agentic Manifesto | `docs/MANIFESTO.md` | High | Medium | v0.1.0 | ✅ Completed |

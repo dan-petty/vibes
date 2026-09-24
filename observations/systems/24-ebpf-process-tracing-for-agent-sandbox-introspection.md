@@ -1,9 +1,9 @@
 # Observation 24: eBPF Process Tracing for Agent Sandbox Introspection
 
-**Category**: Systems Engineering & Zero-Trust Sandboxing  
-**Status**: Field-Verified  
-**Canonical Implementation**: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)  
-**Verification Suite**: [`tests/test_ebpf_tracer.py`](../../tests/test_ebpf_tracer.py)  
+**Category**: Systems Engineering & Zero-Trust Sandboxing
+**Status**: Field-Verified
+**Canonical Implementation**: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)
+**Verification Suite**: [`tests/test_ebpf_tracer.py`](../../tests/test_ebpf_tracer.py)
 
 ---
 
@@ -186,3 +186,4 @@ spec:
 - [x] OASIS SARIF 2.1.0 telemetry export for GitHub Code Scanning
 - [x] Automated Tetragon `TracingPolicy` and Falco rules synthesizer
 - [x] AST Invariant Sentinel certified compliance ($M \le 6$, depth $\le 3$, parameters $\le 4$)
+
