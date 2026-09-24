@@ -357,3 +357,33 @@ def check_observation_structure(
         )
         for n in missing
     ]
+
+
+def check_linebreak_hygiene(
+    lines: Sequence[str], file_path: Path
+) -> list[DocFinding]:
+    """Verify that lines outside code fences do not contain accidental single trailing whitespace.
+
+    In CommonMark, hard line breaks require at least two trailing spaces ('  ') or a backslash ('\\').
+    A single trailing space produces no line break, introduces un-stripped whitespace, and indicates
+    an aborted or malformed line break attempt.
+    """
+    findings: list[DocFinding] = []
+    for line_no, (line, fenced) in enumerate(zip(lines, fenced_line_flags(lines), strict=True), 1):
+        if fenced:
+            continue
+        if line.endswith(" ") and not line.endswith("  "):
+            findings.append(
+                DocFinding(
+                    file_path=str(file_path),
+                    line_number=line_no,
+                    category="linebreak",
+                    message=(
+                        "Accidental single trailing space detected. CommonMark hard line breaks "
+                        "require at least two trailing spaces ('  ') or a backslash ('\\'). "
+                        "A single trailing space produces no line break and violates whitespace hygiene."
+                    ),
+                )
+            )
+    return findings
+

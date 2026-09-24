@@ -206,13 +206,29 @@ Every pattern must then provide an actionable operational playbook:
 
     This gate runs in `ci.yml` and is authoritative — a diagram that fails it reaches GitHub as a broken block, which is worse than no diagram at all.
   - **A Diagram Must Show a Mechanism, Not a Table of Contents**: Three boxes repeating adjacent prose earn nothing. A diagram belongs where structure is hard to say in a sentence: a cycle, a race, a fan-out, an irreversible transition, a place where two paths diverge. If the caption above it already conveys the whole thing, delete the diagram.
+  - **Bounded Aspect Ratio Invariant (1:3 to 3:1 Usability Ceiling)**:
+    Mermaid diagrams must maintain a balanced 2D aspect ratio and **must not exceed a 3:1 (overly tall and narrow) or 1:3 (overly wide and flat) height-to-width ratio**:
+    $$\frac{1}{3} \le \frac{\text{Height}}{\text{Width}} \le 3$$
+    - In browser rendering and GitHub markdown viewports, diagrams exceeding 3:1 become tall, unreadable vertical ladders that require endless scrolling and shrink text when scaled to fit page width. Conversely, diagrams exceeding 1:3 shrink into microscopic horizontal ribbons.
+    - Decompose unbranched linear vertical ladders (`flowchart TD`) into side-by-side comparative subgraphs (`flowchart LR` with `direction TB` per subgraph) or 2D matrix grids.
+    - Avoid single-row horizontal chains (`flowchart LR` with 5+ unbranched sequential nodes); fold multi-stage pipelines into multi-tier rows or parallel lanes.
 - **Syntax Highlighting & Nested Code Fences**: Always specify the language identifier for code fences (`python`, `bash`, `json`, `yaml`, `markdown`, `mermaid`). For markdown documents embedding markdown examples, use 4-backtick or 5-backtick outer fences (````markdown ... ````) to prevent premature fence closure.
 - **Directory Maps Belong at the Bottom**: A `text` directory tree is reference material, not an introduction. It is the least useful thing a reader meets first and the least useful thing an agent reads at all — an agent that needs the layout runs `ls` or `rglob`, and gets an answer that cannot be stale.
   - Place any directory map as the **final section** of its document, below the content that explains why the files exist.
   - Only keep a map whose entries carry information the filesystem does not: what each file is *for*. A bare listing of names earns nothing and should be deleted rather than relocated.
   - Maps remain mechanically diffed against the filesystem by `docs_validator.py` (`directory_map` rule) wherever they sit.
 - **Clickable Links**: Ensure all cross-references are valid markdown links.
-- **Poetic Conciseness**: Avoid fluff, boilerplate, or repetitive summaries. Deliver maximum information density per token.
+- **Poetic Conciseness & Attention Density**: Avoid fluff, boilerplate, or repetitive summaries. Deliver maximum information density per token. Verbose narrative documentation dilutes prompt context, elevating the Attention Dilution Index ($ADI$) and causing critical safety invariants to suffer lost-in-the-middle extinction ([Observation 23](./observations/systems/23-attention-dilution-context-rot-and-active-compaction.md)).
+- **The 4-Tier Living Documentation Architecture ([Observation 27](./observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md), [Pattern](./patterns/multi-tier-living-documentation.md))**:
+  - **Tier 1 (Deterministic Mechanical Extraction)**: Never allow an LLM to generate what an AST parser, CLI introspection engine, or reflection tool can extract. CLI command references, option tables, and FastMCP schemas must be generated deterministically via code introspection (e.g. `devops-cli/docs/generator.py`), guaranteeing 100% conformance with code reality and eliminating the **Phantom Architecture Trap**.
+  - **Tier 2 (Constrained Generative Synthesis)**: LLMs author only high-level architectural decision records (ADRs), problem framing, design trade-offs, and empirical verification summaries, constrained to rigid markdown templates and embedding verifiable terminal outputs.
+  - **Tier 3 (Fail-Closed Mechanical Gating)**: Documentation is software; it must be linted, type-checked, and tested on every commit via `tools/docs_validator.py`.
+  - **Tier 4 (Active Compaction & Prompt Priming)**: When assembling agent system prompts, transient execution logs and historical task tracking must be compacted via multi-scale summarization, preserving an optimal Attention Dilution Index ($ADI \le 1.5$) to prevent invariant decay.
+- **CommonMark Linebreak Standards & Whitespace Hygiene (`DOC012: linebreak`)**:
+  - In CommonMark and GitHub Flavored Markdown, hard line breaks require two trailing spaces (`  \n`) or a backslash (`\`).
+  - Pre-commit hooks (`trailing-whitespace`) MUST be configured with `args: [--markdown-linebreak-ext=md, --markdown-linebreak-ext=markdown]` so intentional double spaces are not stripped.
+  - Single trailing spaces outside code fences are strictly prohibited and flagged by `docs_validator.py` (`DOC012`) as accidental malformed line breaks. Run `python tools/docs_validator.py --fix` to auto-remediate single spaces while preserving intentional 2-space line breaks.
+- **Author All Documentation as Merged/Committed**: Author all documentation, checklists, deliverable descriptions, and task tracking files from the outset exactly as they will and should read once committed. Never create post-merge administrative PRs solely to flip task checkboxes or status words.
 
 ---
 

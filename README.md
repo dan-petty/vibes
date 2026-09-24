@@ -64,6 +64,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Content-Addressed Caching & Embedding Drift Audits**](./observations/systems/04-content-addressed-two-tier-caching-and-embedding-drift-audits.md) | Distributed Caching & Math | Content-addressed SHA-256 caching (L1 memory + L2 Valkey RESP) and 8-dimensional structural embedding cosine distance ($D_C \le 0.05$) drift verification. |
 | [**Rootless Container Sandboxing & Process Group Containment**](./observations/systems/05-rootless-container-sandboxing-and-process-group-containment.md) | Container Security & POSIX | Hardened rootless container execution with 100% CIS benchmark compliance, POSIX process group isolation (`os.setsid`/`os.killpg`), and bounded stream buffers. |
 | [**Multi-Agent Concurrency & Workspace Hazards**](./observations/systems/06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md) | Concurrency & Swarm Dynamics | Eliminating working tree clobbering, SQLite coverage DB unlinking corruption, and cascading rebase live-locks with git worktrees, scoped data tiers, and FIFO PR shepherding. |
+| [**Agentic Project Self-Documentation**](./observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md) | Systems & Governance | Resolving the dual-audience paradox and the phantom architecture trap with a 4-tier living documentation architecture. |
 
 ---
 
@@ -93,6 +94,7 @@ flowchart TD
 - [**Iterative Resource Refinement Loop**](./patterns/iterative-resource-refinement-loop.md): Closed-loop Scan -> Run -> Review -> Feedback -> Iterate engine generating actionable improvement feedback, backlog tasks, and delta tracking before commit.
 - [**Deterministic Mechanical Oracles & Feedback Inversion**](./patterns/deterministic-oracles-and-feedback-inversion.md): Binding stochastic LLM tokens to mechanical invariant gates (table dispatch, structural tuple assertions, negative tool schemas, process groups, boundary caps) and inverting feedback from reactive bug-fixing to proactive headroom elevation.
 - [**Multi-Agent Codebase Concurrency**](./patterns/multi-agent-codebase-concurrency.md): Architectural spatial isolation, partitioned data tiers, and centralized resource arbitration enabling collision-free multi-agent swarm collaboration on a single codebase.
+- [**Multi-Tier Living Documentation**](./patterns/multi-tier-living-documentation.md): Decoupling deterministic AST extraction from constrained generative narrative synthesis, backed by fail-closed oracles and active compaction.
 
 ---
 
@@ -321,7 +323,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 23-attention-dilution-context-rot-and-active-compaction.md
 │       ├── 24-ebpf-process-tracing-for-agent-sandbox-introspection.md
 │       ├── 25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md
-│       └── 26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md
+│       ├── 26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md
+│       └── 27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -337,6 +340,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── gate-integrity-and-total-input-coverage.md
 │   ├── iterative-resource-refinement-loop.md
 │   ├── multi-agent-codebase-concurrency.md
+│   ├── multi-tier-living-documentation.md
 │   ├── post-v1-deprecation-lifecycle.md
 │   ├── root-cause-hardening.md
 │   ├── streaming-reasoning-isolation-and-token-budgeting.md
