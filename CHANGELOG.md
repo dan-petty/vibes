@@ -9,6 +9,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **CodeQL Advanced Static Analysis Workflow** (`.github/workflows/codeql.yml`): Configured automated semantic code analysis for Python and GitHub Actions workflows, executing on pushes and pull requests targeting `main` as well as a scheduled weekly scan. Implements least-privilege permissions, pinned action commit SHAs, and path scoping (`tools`, `examples`, `benchmarks`, `.github`) excluding external fixtures and generated docs.
+
 - **Automated Seccomp BPF Profile Synthesizer** (`tools/seccomp_synthesizer.py`): Delivers the final deliverable of Milestone 4 (v0.4.0), generating minimal, tool-specific Linux seccomp-bpf JSON filter profiles based on static Python AST symbol analysis and syscall trace profiling. Restricts agent tool execution strictly to required system calls under a zero-trust default-deny model (`defaultAction: SCMP_ACT_ERRNO`), targeting modern OCI / Docker seccomp specification format (`SCMP_ARCH_X86_64`, `SCMP_ARCH_AARCH64`). Features baseline Python interpreter runtime syscall inclusion, static import/call extraction, strace and JSON trace event parsing, high-risk syscall auditing (`ptrace`, `bpf`, `mount`), strict mode gate enforcement, and profile diffing. Accompanied by a comprehensive 15-test suite in `tests/test_seccomp_synthesizer.py` with structural tuple equality assertions and 96% coverage, with all functions certified at $M \le 5$, depth $\le 2$, and $\le 4$ parameters.
 
 ### Security

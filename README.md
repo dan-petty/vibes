@@ -202,6 +202,7 @@ flowchart LR
 - [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
 - [**Instrument Fuzzer (`tools/fuzz_harness.py`)**](./tools/fuzz_harness.py): Turns the oracles on themselves. Generates and mutates Python modules, Markdown documents, roadmaps and manifests, then asserts four mechanically decidable properties of each instrument — that it raises nothing it has not declared, answers identically for identical input across hash seeds, converges when it repairs, and finishes. Every input that breaks one is minimized by delta debugging and kept in [`artifacts/fuzz-corpus/`](./artifacts/fuzz-corpus/), which is replayed as a gate; the random search runs on a schedule, where a lucky run is a finding rather than a red build.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
+- [**CodeQL Static Analysis (`.github/workflows/codeql.yml`)**](./.github/workflows/codeql.yml): Automated semantic security analysis scanning for vulnerabilities and invariant breaches across Python and GitHub Actions workflows.
 - [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
 - [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Automated diff inspection blocking complexity creep and IP leaks.
 - [**Recursive Self-Hardening (`.github/workflows/recursive-hardening.yml`)**](./.github/workflows/recursive-hardening.yml): Enforces the mandate that every defect fix must harden `AGENTS.md`.
@@ -235,6 +236,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
 │   └── workflows/                     # Autonomous recursive CI/CD workflows
 │       ├── ci.yml                     # Multi-version test & AST invariant certification
+│       ├── codeql.yml                 # CodeQL semantic security & invariant analysis
 │       ├── autonomous-triage.yml      # Autonomous taxonomy labeling & onboarding
 │       ├── fuzz.yml                   # Daily instrument fuzzing & hash-seed determinism check
 │       ├── pr-sentinel.yml            # Automated PR diff invariant gate & certification
