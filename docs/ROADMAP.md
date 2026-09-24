@@ -182,9 +182,13 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Multi-format reporting exporting to OASIS SARIF 2.1.0 (for GitHub Code Scanning), JSON, and Markdown summary tables.
   - Accompanied by a comprehensive 13-test suite in `tests/test_deprecation_protocol.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
-- [ ] **Certified Living Standard for Agentic Engineering**:
-  - Formal specification and certification test suite for AI coding assistants.
-  - Standardized open compliance badge (`Passed Vibes Invariant Gate v1.0`) for repositories engineered with disciplined agentic workflows.
+- [x] **Certified Living Standard for Agentic Engineering (`tools/living_standard_certifier.py`)**:
+  - Formal specification and automated certification suite evaluating the Seven Pillars of Agentic Discipline: Architectural Complexity Caps ($M \le 10$, depth $\le 5$), Assertion Sprawl Mitigation & Structural Tuples, Zero-Trust Egress & Sanitization (Zero RFC 1918 IPs, zero secrets), Executable Documentation Integrity & Directory Map Parity, Supply Chain & AIBOM Safety, Adversarial Prompt Guardrails, and Enterprise Change Management.
+  - Standardized open compliance badge adhering to Shields.io Endpoint specification (`generate_shields_badge_json`), dynamically rendering compliance status (`CERTIFIED`, `CONDITIONAL`, `FAILED`) and percentage score.
+  - Cryptographic in-toto statement attestation generator (`generate_attestation_payload`) computing SHA-256 digests of evaluated repository state and verifying standards compliance.
+  - Multi-format reporting exporting to Shields.io badge JSON, in-toto attestation JSON, OASIS SARIF 2.1.0 (for GitHub Code Scanning), and formal Markdown certification certificates.
+  - Accompanied by a comprehensive 9-test suite in `tests/test_living_standard_certifier.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+
 
 ---
 
