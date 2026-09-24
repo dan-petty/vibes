@@ -1,8 +1,9 @@
 # The Disciplined Agentic Manifesto
-### Beyond "Vibe Coding": The Principles of Rigorous Autonomous Engineering
+### Beyond "Vibe Coding": The Principles of Rigorous Autonomous Engineering in the Post-Harness Era
 
 > *"Vibe coding"* is writing prompts, hoping for the best, and manually wrestling with the hallucinated debris.  
-> **Agentic Engineering** is building deterministic scaffolding around non-deterministic intelligence.
+> **Agentic Engineering** is building deterministic scaffolding around non-deterministic intelligence.  
+> **The Post-Harness Era** is the emergence of a self-managed cybernetic loop, where autonomous agents discover invariants and steer execution, while humans govern purpose, capital, and sovereign attestation.
 
 ---
 
@@ -16,25 +17,35 @@ Large Language Models are probabilistic token generators. When given a blank can
 
 Treating agent coding as a casual "vibe" guarantees brittle, unmaintainable software. However, when an AI agent is surrounded by **uncompromising architectural invariants, deterministic quality gates, test-first contracts, and bounded operational state machines**, the equation flips:
 
-The agent transitions from an erratic code generator into a relentless, tire-less software engineer capable of producing enterprise-grade systems with zero defects, continuous $\ge 90.0\%$ test coverage, and mathematically bounded complexity.
+The agent transitions from an erratic code generator into a relentless, tireless software engineer capable of producing enterprise-grade systems with zero defects, continuous $\ge 90.0\%$ test coverage, and mathematically bounded complexity.
+
+As autonomous engineering matures beyond prompt scaffolding into the **Post-Harness Era**, human exceptionalism gives way to cybernetic reality:
+- Autonomous agents equipped with physical execution oracles and AST telemetry are **measurably superior to humans** at discovering hidden mathematical invariants, regulating error budgets via continuous control theory, and conducting systematic landscape gap analyses.
+- Human involvement is neither eliminated nor marginalized; it is **elevated to its irreducible, sovereign core**. The human ceases to be a syntax reviewer or prompt typist, becoming the **Sovereign Governor** of purpose, capital, and cryptographic trust.
 
 ---
 
-## The 6 Pillars of Disciplined Agentic Development
+## The 7 Pillars of Disciplined Agentic Development
 
 ```mermaid
 flowchart LR
-    subgraph Pillars ["The 6 Pillars of Disciplined Engineering"]
+    subgraph Autonomy ["Autonomous Cybernetic Engine"]
         direction TB
         P1["1. Tests as Living Contracts (TDD)"]
-        P2["2. AST-Enforced Invariants (Complexity &le; 10)"]
-        P3["3. Zero Zombie Code & Clean Breaking Changes"]
-        P4["4. Grounded Project Governance (Zero Drift)"]
+        P2["2. AST-Enforced Invariants (M <= 10)"]
+        P3["3. Zero Zombie Code & Clean Solutions"]
+        P4["4. Grounded Project Governance"]
         P5["5. Self-Hardening Instruction Loops"]
-        P6["6. Invariant-Grounded Recursive Self-Improvement"]
+        P6["6. Recursive Self-Improvement (RSI)"]
     end
 
-    Pillars --> Scaffold["High-Reliability Autonomous System<br/>(Post-Agentic-Harness Era)"]
+    subgraph Sovereign ["Sovereign Human Core"]
+        direction TB
+        P7["7. The Sovereign Human Core<br/>(Telos, Capital, Attestation)"]
+    end
+
+    Autonomy --> Scaffold["Post-Harness Living Architecture"]
+    Sovereign -->|"Constitutional Purpose & Release Keys"| Scaffold
 ```
 
 ### Pillar 1: Tests Are Executable Contracts, Not Afterthoughts
@@ -72,22 +83,29 @@ In the post-agentic-harness era, code synthesis velocity exceeds human auditing 
 - Unconstrained stochastic self-improvement collapses into the Phantom Architecture Trap and circular self-consistency.
 - Self-evolution must be grounded in asymmetric mechanical invariants ($P$ vs $NP$), monotonic CEGIS constraint accumulation, and outward ecosystem telemetry.
 
+### Pillar 7: The Sovereign Human Core & Autonomous Invariant Discovery
+As the autonomous cybernetic loop accelerates, the human role inverts from micromanaging implementation details to commanding the sovereign boundary:
+- **Autonomous Invariant Discovery**: Agents equipped with telemetry, AST analyzers, and kinetic exploit engines discover empirical invariants (e.g., parameter cardinality $\le 4$, structural tuple equality, Attention Dilution caps) far more reliably than human intuition.
+- **The Sovereign Triad**: Human involvement condenses into three non-synthetic anchors:
+  1. **Telos (Purpose & Ethics)**: Defining *what* world is worth constructing and *why*.
+  2. **Capital & Economic Boundaries**: Allocating physical token budgets, hardware tiers, and runtime constraints.
+  3. **Sovereign Attestation**: Holding the cryptographic signing keys, bearing legal accountability, and authorizing releases into the physical world.
+
 ---
 
 ## The Shift in Developer Experience
 
-| Traditional "Vibe Coding" | Harness-Era Scaffolding | Post-Harness Invariant Architecture |
-|---|---|---|
-| Prompting in chat and copy-pasting diffs | Direct tool invocation via MCP | Self-operating, closed-loop living repository |
-| Manual testing in terminal | Automated TDD ($\ge 90\%$ coverage) | Monotonic CEGIS regression accumulation |
-| Unchecked procedural sprawl | AST cyclomatic caps ($M \le 10, d \le 5$) | Proactive headroom elevation ($M \le 5, d \le 2$) |
-| Leaking secrets into logs | OS Keyring & RFC 5737 sanitization | Kernel sandboxing & zero-trust egress |
-| Blaming the LLM for bugs | Hardening `AGENTS.md` rules | Tripartite RSI: AST gates + CEGIS + outward survey |
-| Inward-facing defect churn | Linear backlog issue execution | Outward horizon expansion & roadmap ingestion |
+| Traditional "Vibe Coding" | Harness-Era Scaffolding | Post-Harness Invariant Architecture | Sovereign Cybernetic Loop |
+|---|---|---|---|
+| Prompting in chat and copying diffs | Tool invocation via MCP | Self-operating living repository | Self-steering cybernetic engine |
+| Manual testing in terminal | Automated TDD ($\ge 90\%$) | Monotonic CEGIS accumulation | Kinetic counterexample falsification |
+| Unchecked procedural sprawl | AST caps ($M \le 10, d \le 5$) | Proactive headroom ($M \le 5$) | Autonomous invariant discovery |
+| Leaking secrets into logs | OS Keyring & RFC 5737 | Kernel sandboxing & zero egress | Hardware/eBPF runtime enforcement |
+| Blaming LLMs for bugs | Hardening `AGENTS.md` | Tripartite RSI: AST + CEGIS + Survey | Autonomous SRE/PID error budget pacing |
+| Inward-facing defect churn | Linear backlog execution | Outward horizon & roadmap ingestion | Declarative Telos & Sovereign Attestation |
 
 ---
 
 ## Conclusion
 
-The power of AI coding is not determined by raw model parameters alone, nor solely by the external scaffolding that wraps it. In the post-agentic-harness era, software development is governed by **the mathematical rigor of its invariant architecture**. `vibes` exists to document the science of that autonomous evolution.
-
+The power of AI coding is not determined by raw model parameters alone, nor solely by the external scaffolding that wraps it. In the post-agentic-harness era, software development is governed by **the mathematical rigor of its invariant architecture and the clarity of its sovereign human purpose**. `vibes` exists to document the science of that autonomous evolution.

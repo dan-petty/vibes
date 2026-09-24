@@ -23,12 +23,11 @@ timeline
     section Shipped
         v0.1.0 : Foundations and the devops-cli retrospective
         v0.2.0 : Interactive testbeds and executable sample apps
-    section In flight
         v0.3.0 : Multi-agent benchmark suites and observability mesh
         v0.4.0 : Polyglot invariant harnesses and ephemeral sandboxes
-    section Ahead
         v0.5.0 : Autonomous swarm orchestration and self-healing
-        v1.0.0 : Enterprise governance, AIBOM and living standard
+    section Ahead
+        v1.0.0 : Enterprise governance, AIBOM, living standard and the Sovereign Human Core
 ```
 
 ### Delivered: v0.1.0 through v0.3.0
@@ -224,6 +223,13 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Enforces diagnostic rules `SGM001` (Dangling Symbol Reference), `SGM002` (Signature Mismatch Regression), `SGM003` (Cyclic Dependency Induction), `SGM004` (Orphaned Definition), and `SGM005` (High Blast Radius Unverified Refactor for hub symbols with $\ge 5$ upstream callers).
   - Features transitive blast radius reachability calculation via graph BFS, OASIS SARIF 2.1.0 telemetry export for GitHub Code Scanning, and WCAG AA compliant Mermaid flowchart rendering.
   - Accompanied by Observation 26 (`observations/systems/26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md`) and a comprehensive 12-test suite in `tests/test_code_memory.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+- [x] **Deliverable #2020: Kinetic Counterexample Falsification & Invariant Leashing (`tools/kinetic_probe.py`)**:
+  - Replaces discursive, natural-language review debate with minimal executable counterexample probes running in isolated micro-sandboxes, evaluating OS exit codes as ground truth.
+  - Implements `InvariantLeashRegistry` mapping mitigated vulnerabilities to perimeter files, automatically invalidating and re-verifying dormant mitigations upon file changes.
+  - Accompanied by Observation 30 (`observations/systems/30-kinetic-falsification-and-the-ephemeral-exploit-harness.md`), Pattern (`patterns/kinetic-exploit-probes-and-invariant-leashing.md`), and comprehensive unit test suite in `tests/test_kinetic_probe.py`.
+- [x] **Deliverable #2021: The Sovereign Human Core & Cybernetic SDLC Gateway (`docs/MANIFESTO.md`)**:
+  - Elevates the project context to the 7 Pillars of Disciplined Agentic Development, codifying the Sovereign Human Triad: Telos (purpose & ethics), Capital/Resource Boundaries, and Cryptographic Release Attestation.
+  - Recognizes that autonomous agents with AST oracles and telemetry are measurably superior at invariant discovery, cybernetic risk modulation (PID/SRE), and outward roadmap foraging.
 
 ---
 

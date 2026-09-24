@@ -116,6 +116,7 @@ Read the full [**Manifesto**](./docs/MANIFESTO.md) and [**Retrospective Analysis
 4. **Grounded Project Tracking (Zero Invisible Agent Actions).**
 5. **Self-Healing Instructions (Fix Root Causes, Not Symptoms).**
 6. **Invariant-Grounded Recursive Self-Improvement & Continuous Co-Evolution.**
+7. **The Sovereign Human Core & Autonomous Invariant Discovery.**
 
 ---
 
