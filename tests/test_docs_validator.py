@@ -1524,3 +1524,56 @@ def test_doc012_rule_registration() -> None:
         "linebreak" in DOC_PRESETS["structure_only"].active_rules,
     ) == (True, True, True, True, True)
 
+
+def test_math_hygiene_flags_unescaped_ampersand_in_display_math(tmp_path: Path) -> None:
+    """Unescaped ampersand in display math or \\text{...} is flagged as invalid KaTeX syntax."""
+    doc = tmp_path / "math.md"
+    doc.write_text("# Math\n\n$$\\text{Velocity} \\gg \\text{Auditing & Refactoring}$$\n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "math"]
+    assert (len(findings), findings[0].line_number, findings[0].category) == (1, 3, "math")
+
+
+def test_math_hygiene_flags_unescaped_ampersand_in_inline_math(tmp_path: Path) -> None:
+    """Unescaped ampersand in inline math without alignment environment is flagged."""
+    doc = tmp_path / "inline_math.md"
+    doc.write_text("# Math\n\nFormula: $A & B$\n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "math"]
+    assert (len(findings), findings[0].line_number) == (1, 3)
+
+
+def test_math_hygiene_allows_escaped_ampersand_and_alignment_environments(tmp_path: Path) -> None:
+    """Escaped ampersands and valid LaTeX alignment environments pass without findings."""
+    doc = tmp_path / "valid_math.md"
+    valid_content = (
+        "# Math\n\n"
+        "$$\\text{Velocity} \\gg \\text{Auditing \\& Refactoring}$$\n\n"
+        "$$\n\\begin{aligned}\n  a &= b \\\\\n  c &= d\n\\end{aligned}\n$$\n"
+    )
+    doc.write_text(valid_content, encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "math"]
+    assert (len(findings), findings) == (0, [])
+
+
+def test_math_hygiene_ignores_code_fences(tmp_path: Path) -> None:
+    """Math-like expressions inside code fences are ignored."""
+    doc = tmp_path / "fenced_math.md"
+    doc.write_text("# Code\n\n```latex\n$$ A & B $$\n```\n", encoding="utf-8")
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "math"]
+    assert (len(findings), findings) == (0, [])
+
+
+def test_doc013_rule_registration() -> None:
+    """Verify DOC013 is registered in rules, aliases, and presets."""
+    assert (
+        VALIDATOR_RULES["math"] == "LaTeX and KaTeX math syntax, delimiters, and unescaped character hygiene",
+        RULE_CODE_MAP["DOC013"] == "math",
+        normalize_doc_rule_name("DOC013") == "math",
+        normalize_doc_rule_name("katex") == "math",
+        "math" in DOC_PRESETS["structure_only"].active_rules,
+    ) == (True, True, True, True, True)
+
+

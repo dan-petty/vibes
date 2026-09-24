@@ -68,6 +68,7 @@ from doc_rules_structure import (
     OBSERVATION_REQUIRED_SECTION_COUNT,
     check_directory_maps,
     check_documentation_sanitization,
+    check_latex_math_hygiene,
     check_linebreak_hygiene,
     check_observation_structure,
     check_pattern_header,
@@ -98,6 +99,7 @@ __all__ = [
     "DocumentFormat",
     "RulePreset",
     "auto_fix_content",
+    "check_latex_math_hygiene",
     "check_linebreak_hygiene",
     "check_polyglot_documentation",
     "contrast_ratio",
@@ -144,6 +146,7 @@ VALIDATOR_RULES: Final[dict[str, str]] = {
     "sanitization": "Zero-trust egress and RFC 1918 private address sanitization",
     "multi_language": "Multi-format document parsing and polyglot snippet validation (RST, AsciiDoc, HTML, text)",
     "linebreak": "CommonMark hard linebreaks and trailing whitespace hygiene",
+    "math": "LaTeX and KaTeX math syntax, delimiters, and unescaped character hygiene",
 }
 
 ALL_DOC_RULES: Final[frozenset[str]] = frozenset(VALIDATOR_RULES.keys())
@@ -161,6 +164,7 @@ RULE_CODE_MAP: Final[dict[str, str]] = {
     "DOC010": "sanitization",
     "DOC011": "multi_language",
     "DOC012": "linebreak",
+    "DOC013": "math",
 }
 
 RULE_ALIASES: Final[dict[str, str]] = {
@@ -205,6 +209,10 @@ RULE_ALIASES: Final[dict[str, str]] = {
     "linebreaks": "linebreak",
     "whitespace": "linebreak",
     "trailing_whitespace": "linebreak",
+    "math": "math",
+    "latex": "math",
+    "katex": "math",
+    "formula": "math",
 }
 
 DOC_PRESETS: Final[dict[str, RulePreset]] = {
@@ -237,6 +245,7 @@ DOC_PRESETS: Final[dict[str, RulePreset]] = {
             "directory_map",
             "html_tag",
             "linebreak",
+            "math",
         }),
         strict=False,
     ),
@@ -1473,6 +1482,7 @@ class DocsValidator:
             ("sanitization", lambda: check_documentation_sanitization(lines, file_path)),
             ("multi_language", lambda: check_polyglot_documentation(lines, file_path, known_anchors, paths)),
             ("linebreak", lambda: check_linebreak_hygiene(lines, file_path)),
+            ("math", lambda: check_latex_math_hygiene(lines, file_path)),
         )
         findings = [
             finding
@@ -1542,6 +1552,12 @@ class DocsValidator:
     ) -> list[DocFinding]:
         """Validate CommonMark hard linebreaks and trailing whitespace hygiene."""
         return check_linebreak_hygiene(self._to_lines(content), file_path)
+
+    def check_latex_math_hygiene(
+        self, content: str | Sequence[str], file_path: Path = Path("document.md")
+    ) -> list[DocFinding]:
+        """Validate LaTeX and KaTeX math expressions for unescaped characters."""
+        return check_latex_math_hygiene(self._to_lines(content), file_path)
 
     def validate_directory(
         self,
