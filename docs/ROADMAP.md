@@ -207,6 +207,12 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Robust brace-matching block extractor accounting for arbitrarily nested control flow and member functions.
   - Multi-format reporting exporting to OASIS SARIF 2.1.0, JSON telemetry, and formatted Markdown reports.
   - Accompanied by Observation 04 (`observations/polyglot/04-cpp-raii-and-lifetime-invariants-under-llm-synthesis.md`) and a comprehensive 11-test suite in `tests/test_cpp_lifetime_sentinel.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+- [x] **Deliverable #2017: eBPF Process Tracing for Agent Sandbox Introspection (`tools/ebpf_tracer.py`)**:
+  - Mechanical eBPF event stream and syscall trace analyzer enforcing runtime security, least-privilege egress, and sandbox isolation across autonomous subagents.
+  - Detects unauthorized binary executions (`EBPF001`), network egress violations (`EBPF002`), sensitive file tampering and workspace escapes (`EBPF003`), privilege escalation attempts (`EBPF004`), and anti-debugging / ptrace evasion tactics (`EBPF005`).
+  - Automated synthesis of Cilium Tetragon `TracingPolicy` (Kubernetes CRD) and Falco rule definitions for in-kernel LSM enforcement.
+  - Multi-format reporting exporting to OASIS SARIF 2.1.0, JSON telemetry, and formatted Markdown reports.
+  - Accompanied by Observation 24 (`observations/systems/24-ebpf-process-tracing-for-agent-sandbox-introspection.md`) and a comprehensive 13-test suite in `tests/test_ebpf_tracer.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
 ---
 
@@ -228,9 +234,10 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Silent Certification Failures in Mechanical Gates** | `observations/systems/` | When an enforcement tool reads only the first of N inputs and reports success, how long does a green checkmark conceal unaudited code? | ✅ Completed ([Obs 11](../observations/systems/11-silent-certification-failure-and-gate-integrity.md)) |
 | **Oracle Measurement Validity & Harness-Smeared Metrics** | `observations/systems/` | When a deterministic oracle measures its own scaffolding, how long does an agent chase an unfixable defect before suspecting the ruler rather than the object? | ✅ Completed ([Obs 11](../observations/systems/11-silent-certification-failure-and-gate-integrity.md)) |
 | **C++ RAII & Lifetime Invariants Under LLM Synthesis** | `observations/polyglot/` | Can LLMs reliably avoid use-after-free and double-free bugs without Rust-like compile-time guarantees? | ✅ Completed ([Obs 04](../observations/polyglot/04-cpp-raii-and-lifetime-invariants-under-llm-synthesis.md)) |
-| **eBPF Process Tracing for Agent Sandbox Introspection** | `observations/systems/` | Using eBPF probes to capture syscall patterns, file access, and network socket operations of subagents in real-time. | 🔬 In Queue |
+| **eBPF Process Tracing for Agent Sandbox Introspection** | `observations/systems/` | Using eBPF probes to capture syscall patterns, file access, and network socket operations of subagents in real-time. | ✅ Completed ([Obs 24](../observations/systems/24-ebpf-process-tracing-for-agent-sandbox-introspection.md)) |
 | **Attention Dilution & Context Decay in Ultra-Long Sessions** | `observations/systems/` | Measuring degradation in constraint adherence as context lengths exceed 100k tokens and evaluating multi-scale pruning. | ✅ Completed ([Obs 23](../observations/systems/23-attention-dilution-context-rot-and-active-compaction.md)) |
 | **Self-Correction Loops vs. Constraint Accumulation** | `observations/systems/` | Comparing conversational "fix this error" prompting vs. formal CEGIS negative-constraint accumulation. | ✅ Completed ([Obs 22](../observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md)) |
+| **Multi-Model Capability Boundaries & Dynamic Routing Oracles** | `observations/systems/` | Measuring semantic entropy and reasoning failure thresholds to route tasks across frontier and local open-weights models. | 🔬 In Queue |
 
 ---
 
@@ -255,6 +262,7 @@ quadrantChart
     "AIBOM supply-chain scanner": [0.74, 0.94]
     "Certified living standard": [0.92, 0.84]
     "Context rot auditor": [0.58, 0.88]
+    "eBPF process tracer": [0.72, 0.90]
     "Prompt injection scanner": [0.50, 0.50]
     "Toy chat-with-your-code demos": [0.86, 0.12]
     "Unsanitized transcript dumps": [0.16, 0.10]
@@ -306,6 +314,7 @@ quadrantChart
 |  | CEGIS Invariant Repair Engine & Convergence Oracle | Python / AST / CEGIS | High | High | v1.0.0 | ✅ Completed |
 |  | Context Rot Auditor & Multi-Scale Compactor | Python / Attention / AST | High | Medium | v1.0.0 | ✅ Completed |
 |  | C++ RAII & Lifetime Invariant Sentinel | Python / C++ / AST | High | Medium | v1.0.0 | ✅ Completed |
+|  | eBPF Process Tracing & Sandbox Introspection | eBPF / Tetragon / Falco / Python | High | High | v1.0.0 | ✅ Completed |
 | **Fill-Ins** | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |
 |  | Disciplined Agentic Manifesto | `docs/MANIFESTO.md` | High | Medium | v0.1.0 | ✅ Completed |
