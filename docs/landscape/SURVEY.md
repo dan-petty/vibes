@@ -47,7 +47,7 @@ Ours: [`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invaria
 |---|---|---|---|---|---|
 | **auto_fix** — Rewrites source to remove the finding, not only report it | — | ? | ? | ✅ | ? |
 | **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ? | ? |
-| **config_presets** — Ships selectable rule presets rather than one fixed rule set | — | ? | ? | ✅ | ✅ |
+| **config_presets** — Ships selectable rule presets rather than one fixed rule set | ✅ | ? | ? | ✅ | ✅ |
 | **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **editor_lsp** — Provides a language server or first-party editor integration | — | ? | ? | ✅ | ? |
 | **multi_language** — Analyses languages beyond Python | — | — | ✅ | — | ? |
@@ -143,7 +143,7 @@ Ours: [`examples/adaptive-web-crawler/`](../../examples/adaptive-web-crawler/)
 | Feature | vibes | `crawl4ai` | `firecrawl` | `scrapy` |
 |---|---|---|---|---|
 | **javascript_rendering** — Renders client-side pages rather than reading raw HTML only | ✅ | ✅ | ✅ | ? |
-| **llm_ready_output** — Emits text shaped for direct model consumption | — | ✅ | ✅ | ? |
+| **llm_ready_output** — Emits text shaped for direct model consumption | ✅ | ✅ | ✅ | ? |
 | **politeness_controls** — Paces or throttles requests per host | ✅ | ? | ? | ✅ |
 | **strategy_memory** — Remembers a per-domain acquisition strategy across runs | ✅ | ? | ? | ? |
 
@@ -158,7 +158,7 @@ Ours: [`examples/ephemeral-container-sandbox/`](../../examples/ephemeral-contain
 | **benchmark_audit** — Audits configuration against a published hardening benchmark | ✅ | ? | ? | ? |
 | **egress_control** — Denies or restricts outbound network by default | ✅ | ? | ? | ? |
 | **resource_caps** — Bounds memory, CPU or process count | ✅ | ✅ | ✅ | ? |
-| **syscall_isolation** — Confines a workload below the process boundary | — | ✅ | ✅ | ✅ |
+| **syscall_isolation** — Confines a workload below the process boundary | ✅ | ✅ | ✅ | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -182,7 +182,7 @@ Ours: [`examples/agent-telemetry-trace-generator/`](../../examples/agent-telemet
 |---|---|---|---|
 | **cost_attribution** — Attributes token or currency cost to spans | ✅ | ? | ? |
 | **otel_export** — Emits OpenTelemetry spans | ✅ | ✅ | ✅ |
-| **semantic_conventions** — Follows published semantic conventions for AI spans | — | ✅ | ✅ |
+| **semantic_conventions** — Follows published semantic conventions for AI spans | ✅ | ✅ | ✅ |
 | **waterfall_rendering** — Renders a trace as a readable waterfall | ✅ | ? | ? |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
@@ -195,7 +195,7 @@ Ours: [`tools/app_factory.py`](../../tools/app_factory.py)
 |---|---|---|---|---|
 | **contract_driven** — Generates from a declared interface rather than free-form template variables | ✅ | ? | ? | ? |
 | **gate_clean_output** — Emits code that passes the generating project's own quality gates unedited | ✅ | ? | ? | ? |
-| **interactive_prompts** — Collects values from the author interactively | — | ✅ | ✅ | ✅ |
+| **interactive_prompts** — Collects values from the author interactively | ✅ | ✅ | ✅ | ✅ |
 | **regeneration_safe** — Regenerates without overwriting hand-written code | ✅ | ? | ? | ? |
 | **template_ecosystem** — Offers a published library of community templates | — | ✅ | ? | ✅ |
 | **update_in_place** — Re-applies a newer template to a project already generated from it | — | ? | ✅ | ? |
@@ -204,91 +204,88 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-24 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed.
+19 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **12 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
 
-- **App factory: collects values from the author interactively**
-  - Held by: `cookiecutter/cookiecutter`, `copier-org/copier`, `yeoman/generator`
-  - Evidence: cookiecutter/cookiecutter: Prompts for each variable declared in cookiecutter.json
-  - Evidence: copier-org/copier: Questions declared in copier.yml are asked at generation time
-  - Evidence: yeoman/generator: Generators prompt through an interactive dialogue
-- **Sandbox: confines a workload below the process boundary**
-  - Held by: `google/gvisor`, `firecracker-microvm/firecracker`, `e2b-dev/E2B`
-  - Evidence: google/gvisor: Intercepts application system calls in a user-space kernel
-  - Evidence: firecracker-microvm/firecracker: Each workload runs in its own microVM with a minimal device model
-  - Evidence: e2b-dev/E2B: Runs AI-generated code in an isolated sandbox rather than the host
-- **Trace generator: follows published semantic conventions for ai spans**
-  - Held by: `traceloop/openllmetry`, `Arize-ai/openinference`
-  - Evidence: traceloop/openllmetry: Follows published conventions for GenAI span attributes
-  - Evidence: Arize-ai/openinference: Publishes the semantic conventions it instruments against
-- **Web crawler: emits text shaped for direct model consumption**
-  - Held by: `unclecode/crawl4ai`, `firecrawl/firecrawl`
-  - Evidence: unclecode/crawl4ai: Emits Markdown shaped for model consumption
-  - Evidence: firecrawl/firecrawl: Scrape and crawl endpoints return Markdown for LLMs
+- **Complexity gate: use astral-sh/ruff, already a dependency, for auto_fix**
+  - Disposition: `integrate` — ruff is already a declared dependency
+  - Held by: `astral-sh/ruff`
+  - Evidence: astral-sh/ruff: ruff check --fix rewrites source
+- **Complexity gate: use astral-sh/ruff, already a dependency, for editor_lsp**
+  - Disposition: `integrate` — ruff is already a declared dependency
+  - Held by: `astral-sh/ruff`
+  - Evidence: astral-sh/ruff: ruff server implements the Language Server Protocol
+- **Smell quantifier: use rubik/radon, already a dependency, for cyclomatic_complexity**
+  - Disposition: `integrate` — radon is already a declared dependency
+  - Held by: `rubik/radon`
+  - Evidence: rubik/radon: radon cc ranks blocks A-F
+- **CST parser: evaluate adopting tree-sitter/tree-sitter for structural_query**
+  - Disposition: `adopt` — MIT, official Python bindings on PyPI
+  - Held by: `tree-sitter/tree-sitter`, `ast-grep/ast-grep`
+  - Evidence: tree-sitter/tree-sitter: S-expression query language matches syntax nodes by pattern
+  - Evidence: ast-grep/ast-grep: Patterns are written as code and matched structurally, not textually
+- **Complexity gate: evaluate adopting terryyin/lizard for multi_language**
+  - Disposition: `adopt` — MIT, pure Python, multi-language complexity
+  - Held by: `terryyin/lizard`
+  - Evidence: terryyin/lizard: Documents C/C++, Java, JavaScript, Go, Rust, Swift and more
+- **CST parser: evaluate adopting tree-sitter/tree-sitter for incremental_parsing**
+  - Disposition: `adopt` — MIT, official Python bindings on PyPI
+  - Held by: `tree-sitter/tree-sitter`
+  - Evidence: tree-sitter/tree-sitter: Reparses an edited buffer without reparsing the file
+- **Smell quantifier: evaluate adopting tonybaloney/wily for trend_over_time**
+  - Disposition: `adopt` — Apache-2.0, tracks metrics across git history
+  - Held by: `tonybaloney/wily`
+  - Evidence: tonybaloney/wily: wily build indexes metrics across git revisions; wily graph and wily diff report movement
 - **App factory: offers a published library of community templates**
+  - Disposition: `build`
   - Held by: `cookiecutter/cookiecutter`, `yeoman/generator`
   - Evidence: cookiecutter/cookiecutter: A large published index of community templates
   - Evidence: yeoman/generator: A published registry of installable generators
-- **Complexity gate: ships selectable rule presets rather than one fixed rule set**
-  - Held by: `astral-sh/ruff`, `pylint-dev/pylint`
-  - Evidence: astral-sh/ruff: select / extend-select rule families in pyproject.toml
-  - Evidence: pylint-dev/pylint: Enable/disable by message family in pylintrc
 - **Docs validator: ships selectable rule presets rather than one fixed rule set**
+  - Disposition: `build`
   - Held by: `DavidAnson/markdownlint`, `vale-cli/vale`
   - Evidence: DavidAnson/markdownlint: .markdownlint.json enables or disables rules individually
   - Evidence: vale-cli/vale: Styles are installable packages selected in .vale.ini
 - **Docs validator: analyses languages beyond python**
+  - Disposition: `build`
   - Held by: `lycheeverse/lychee`, `vale-cli/vale`
   - Evidence: lycheeverse/lychee: Checks links in any text format, not one markup language
   - Evidence: vale-cli/vale: Supports markdown, reStructuredText, AsciiDoc and code comments
 - **Go leak sentinel: fails an ordinary test run when the defect is present**
+  - Disposition: `build`
   - Held by: `uber-go/goleak`, `fortytw2/leaktest`
   - Evidence: uber-go/goleak: Drops into an existing go test run with no separate tooling
   - Evidence: fortytw2/leaktest: Called from inside a standard Go test function
-- **CST parser: matches code by syntax structure rather than by text**
-  - Held by: `tree-sitter/tree-sitter`, `ast-grep/ast-grep`
-  - Evidence: tree-sitter/tree-sitter: S-expression query language matches syntax nodes by pattern
-  - Evidence: ast-grep/ast-grep: Patterns are written as code and matched structurally, not textually
 - **Prompt fuzzer: drives more than one model provider out of the box**
+  - Disposition: `build`
   - Held by: `NVIDIA/garak`, `promptfoo/promptfoo`
   - Evidence: NVIDIA/garak: Generators for OpenAI, Hugging Face, Replicate, local models and more
   - Evidence: promptfoo/promptfoo: Declarative provider list covering many hosted and local models
 - **Context packer: serializes a repository into a single model-ready artifact**
+  - Disposition: `build`
   - Held by: `yamadashy/repomix`, `Aider-AI/aider`
   - Evidence: yamadashy/repomix: Packs an entire repository into a single model-ready file
   - Evidence: Aider-AI/aider: Builds a repository map of definitions rather than whole files
 - **App factory: re-applies a newer template to a project already generated from it**
+  - Disposition: `build`
   - Held by: `copier-org/copier`
   - Evidence: copier-org/copier: copier update re-applies a newer template revision to an existing project
-- **Complexity gate: rewrites source to remove the finding, not only report it**
-  - Held by: `astral-sh/ruff`
-  - Evidence: astral-sh/ruff: ruff check --fix rewrites source
-- **Complexity gate: provides a language server or first-party editor integration**
-  - Held by: `astral-sh/ruff`
-  - Evidence: astral-sh/ruff: ruff server implements the Language Server Protocol
-- **Complexity gate: analyses languages beyond python**
-  - Held by: `terryyin/lizard`
-  - Evidence: terryyin/lizard: Documents C/C++, Java, JavaScript, Go, Rust, Swift and more
 - **Docs validator: enforces prose style or terminology rules**
+  - Disposition: `build`
   - Held by: `vale-cli/vale`
   - Evidence: vale-cli/vale: Applies configurable prose style guides such as Microsoft or Google
-- **CST parser: reparses only the edited region rather than the whole file**
-  - Held by: `tree-sitter/tree-sitter`
-  - Evidence: tree-sitter/tree-sitter: Reparses an edited buffer without reparsing the file
 - **Prompt fuzzer: classifies probes against a published attack taxonomy**
+  - Disposition: `build`
   - Held by: `NVIDIA/garak`
   - Evidence: NVIDIA/garak: Probes are organised against a published vulnerability taxonomy
 - **Prompt fuzzer: reports only findings introduced relative to a base revision**
+  - Disposition: `build`
   - Held by: `promptfoo/promptfoo`
   - Evidence: promptfoo/promptfoo: Evaluations compare prompt or model variants side by side
 - **Context packer: orders or selects content by estimated relevance**
+  - Disposition: `build`
   - Held by: `Aider-AI/aider`
   - Evidence: Aider-AI/aider: Ranks the map with a graph algorithm over symbol references
-- **Smell quantifier: flags functions exceeding a cyclomatic complexity ceiling**
-  - Held by: `rubik/radon`
-  - Evidence: rubik/radon: radon cc ranks blocks A-F
 - **Smell quantifier: analyses languages beyond python**
+  - Disposition: `build`
   - Held by: `kucherenko/jscpd`
   - Evidence: kucherenko/jscpd: Documents over 150 formats
-- **Smell quantifier: tracks metric movement across git history rather than one snapshot**
-  - Held by: `tonybaloney/wily`
-  - Evidence: tonybaloney/wily: wily build indexes metrics across git revisions; wily graph and wily diff report movement
