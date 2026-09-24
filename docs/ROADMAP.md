@@ -110,8 +110,9 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Multi-persona code review engine orchestrating specialized persona audits (`security`, `architecture`, `devops`, `qa`) against pull request files and diffs.
   - Generates structured Markdown review summaries with per-persona findings tables, severity aggregation (`error`, `warning`, `info`), and overall verdicts (`APPROVE`, `COMMENT`, `REQUEST_CHANGES`). Machine-readable JSON output integration for GitHub Action and check run automation.
   - Accompanied by a comprehensive 10-test suite in `tests/test_pr_triage_bot.py` with structural tuple equality assertions and 95% coverage, with all functions certified at $M \le 3$, depth $\le 2$, and $\le 4$ parameters.
-- [ ] **Autonomous Conversation-to-Case-Study Synthesizer (`tools/synthesizer/`)**:
-  - Automated pipeline ingesting raw agent trajectory logs (JSONL transcripts), applying zero-trust redaction (RFC 5737 IPs, `example.com` domains, secret masking), calculating quantitative token/complexity metrics, and drafting structured observation reports.
+- [x] **Autonomous Conversation-to-Case-Study Synthesizer (`tools/conversation_synthesizer.py`)**:
+  - Automated pipeline ingesting raw agent trajectory logs (JSONL transcripts), enforcing zero-trust redaction (RFC 5737 IPs, `example.com` domains, secret masking, user path generalization), calculating quantitative telemetry and AST complexity metrics, and drafting structured 5-section observation reports with Mermaid diagrams.
+  - Accompanied by a comprehensive 12-test suite in `tests/test_conversation_synthesizer.py` with structural tuple equality assertions and 98% coverage, with all functions certified at $M \le 6$, depth $\le 2$, and $\le 4$ parameters.
 - [ ] **Live Multi-Model Leaderboard & Cost-Per-Invariant Index**:
   - Automated benchmarking matrix running weekly against leading frontier and local open-weights models (Claude, GPT-4o, DeepSeek-V3, Qwen-2.5-Coder).
   - Public dashboard tracking: Pass@1 on AST complexity invariants, patch minimality score, and cloud token expenditure per verified pull request.
@@ -251,8 +252,8 @@ quadrantChart
 |  | Unified SARIF Code Scanning Integration | SARIF 2.1.0 / OASIS Schema | High | Medium | v0.5.0 | ✅ Completed |
 |  | Supply Chain & Network Integration Audit | Python / GitHub API / PyPI | High | Medium | v0.5.0 | ✅ Completed |
 |  | Comparable-Project Landscape Survey & Gap Emitter | Python / GitHub API / YAML | High | Medium | v0.5.0 | ✅ Completed |
-|  | Closed-Loop PR Triage & Invariant Review Bot | FastMCP / GitHub Actions | High | High | v0.5.0 | 📋 Scheduled |
-|  | Autonomous Conversation Synthesizer | Python / NLP / Metrics | High | High | v0.5.0 | 📋 Scheduled |
+|  | Closed-Loop PR Triage & Invariant Review Bot | FastMCP / GitHub Actions | High | High | v0.5.0 | ✅ Completed |
+|  | Autonomous Conversation Synthesizer | Python / NLP / Metrics | High | High | v0.5.0 | ✅ Completed |
 |  | Live Multi-Model Leaderboard & Cost Index | Python / GitHub Pages | High | High | v0.5.0 | 📋 Scheduled |
 |  | AIBOM & Supply-Chain Security Scanner | Python / AST / CycloneDX | High | High | v1.0.0 | 💡 Future Vision |
 |  | Certified Living Standard & Compliance Badge | Specification / Test Suite | High | High | v1.0.0 | 💡 Future Vision |

@@ -201,6 +201,7 @@ flowchart LR
 - [**Portfolio Balance (`tools/portfolio_balance.py`)**](./tools/portfolio_balance.py): Reports what the repository *has* against where its recent lines *went*. The drift it exists to surface is invisible from inside any single change — every tooling commit is defensible and the aggregate is not. Counts added lines rather than touched files, because a repository-wide lint sweep touches many locations and builds nothing: on the window that prompted this, touches read 52/48 and lines read 7/93. Steers, never gates.
 - [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
 - [**Instrument Fuzzer (`tools/fuzz_harness.py`)**](./tools/fuzz_harness.py): Turns the oracles on themselves. Generates and mutates Python modules, Markdown documents, roadmaps and manifests, then asserts four mechanically decidable properties of each instrument — that it raises nothing it has not declared, answers identically for identical input across hash seeds, converges when it repairs, and finishes. Every input that breaks one is minimized by delta debugging and kept in [`artifacts/fuzz-corpus/`](./artifacts/fuzz-corpus/), which is replayed as a gate; the random search runs on a schedule, where a lucky run is a finding rather than a red build.
+- [**Conversation-to-Case-Study Synthesizer (`tools/conversation_synthesizer.py`)**](./tools/conversation_synthesizer.py): Automated pipeline ingesting raw agent trajectory logs (JSONL transcripts), enforcing zero-trust redaction (RFC 5737 IPs, example.com hostnames, secret masking, user path generalization), extracting quantitative telemetry and AST complexity metrics, and drafting structured 5-section observation reports with Mermaid diagrams.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**CodeQL Static Analysis (`.github/workflows/codeql.yml`)**](./.github/workflows/codeql.yml): Automated semantic security analysis scanning for vulnerabilities and invariant breaches across Python and GitHub Actions workflows.
 - [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
@@ -376,6 +377,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 ├── tools/                             # Autonomous project management tooling
 │   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
 │   ├── pr_triage_bot.py               # Closed-Loop PR Triage & Invariant Review Bot
+│   ├── conversation_synthesizer.py    # Autonomous conversation-to-case-study synthesizer
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
@@ -413,6 +415,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
     ├── test_pr_triage_bot.py          # Unit tests for multi-persona PR triage and review bot
+    ├── test_conversation_synthesizer.py # Unit tests for conversation synthesizer & telemetry
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
     ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
     ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
