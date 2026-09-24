@@ -22,6 +22,16 @@ The **AST Invariant Sentinel** converts soft architectural guidelines into deter
 # One or many targets; files and directories may be mixed freely.
 python3 sentinel.py /path/to/python/code
 python3 sentinel.py tools examples tests benchmarks
+
+# Use calibrated rule presets or override limits
+python3 sentinel.py tools --preset strict
+python3 sentinel.py tools --max-complexity 6 --max-depth 3
+
+# Granular rule selection and omission by code or alias
+python3 sentinel.py tools --select CC001,ND001 --ignore ZT001
+
+# Inspect all available presets
+python3 sentinel.py --list-presets
 ```
 
 > [!IMPORTANT]
@@ -34,6 +44,51 @@ python3 sentinel.py tools examples tests benchmarks
 ```bash
 pytest test_sentinel.py -v
 ```
+
+---
+
+## Selectable Rule Presets
+
+The sentinel provides six calibrated presets out-of-the-box:
+
+| Preset Name | Complexity ($M$) | Max Depth | Active Invariant Rules | Description |
+|---|---|---|---|---|
+| `standard` | $\le 10$ | $\le 5$ | All 6 rules | Standard baseline invariants (M <= 10, depth <= 5, zero-trust sanitization) |
+| `strict` | $\le 6$ | $\le 3$ | All 6 rules | Strict proactive headroom invariants (M <= 6, depth <= 3, zero-trust sanitization) |
+| `pedantic` | $\le 4$ | $\le 2$ | All 6 rules | Pedantic ultra-compact invariants for critical concurrency/functional kernels (M <= 4, depth <= 2) |
+| `relaxed` | $\le 15$ | $\le 6$ | All 6 rules | Relaxed migration thresholds for legacy codebases (M <= 15, depth <= 6) |
+| `security_only` | $\le 999$ | $\le 99$ | Security & Integrity | Zero-trust egress and sanitization audit only; complexity/nesting ignored |
+| `structural_only` | $\le 10$ | $\le 5$ | Structural AST & Integrity | Structural AST complexity and nesting depth audit only; sanitization ignored |
+
+---
+
+## Configuration & TOML Support
+
+The sentinel automatically discovers configuration from `pyproject.toml` or `sentinel.toml` in the current or ancestor directories. You can also specify a custom configuration file via `--config path/to/config.toml`.
+
+### Example `pyproject.toml`
+```toml
+[tool.sentinel]
+preset = "strict"
+max_complexity = 6
+max_depth = 3
+select = ["CC001", "ND001", "ZT001"]
+ignore = []
+extend_select = ["TI001"]
+```
+
+### Rule Codes & Aliases
+
+Rules can be referenced by canonical name, rule code, or ergonomic alias:
+
+| Rule Code | Canonical Name | Aliases | Description | Waivable |
+|---|---|---|---|---|
+| `CC001` | `CyclomaticComplexity` | `complexity`, `c901`, `mccabe` | McCabe cyclomatic complexity ceiling | No |
+| `ND001` | `NestingDepth` | `nesting`, `depth` | Maximum statement nesting depth | No |
+| `ZT001` | `ZeroTrustSanitization` | `sanitization`, `security`, `egress` | RFC 1918 private IPs and mock domain subdomains | Yes |
+| `SI001` | `SyntaxIntegrity` | `syntax`, `parse` | Valid Python AST syntax parsing | No |
+| `TI001` | `TargetIntegrity` | `targets`, `paths` | Verification that all audit targets exist | No |
+| `WI001` | `WaiverIntegrity` | `waivers`, `waiver` | Auditable justification and waiver syntax | No |
 
 ```mermaid
 flowchart TD

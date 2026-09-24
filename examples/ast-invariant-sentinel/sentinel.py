@@ -22,9 +22,11 @@ import os
 import re
 import sys
 import tokenize
+import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Final
 
 # Closed-domain RFC 5737 and loopback networks permitted in code/documentation
 ALLOWED_DOCUMENTATION_NETWORKS = (
@@ -100,6 +102,272 @@ class AuditReport:
     def is_clean(self) -> bool:
         """Return True if zero architectural invariant violations were detected."""
         return len(self.violations) == 0
+
+
+ALL_INVARIANT_RULES: Final[frozenset[str]] = frozenset({
+    "CyclomaticComplexity",
+    "NestingDepth",
+    "ZeroTrustSanitization",
+    "SyntaxIntegrity",
+    "TargetIntegrity",
+    "WaiverIntegrity",
+})
+
+RULE_ALIASES: Final[dict[str, str]] = {
+    "cyclomaticcomplexity": "CyclomaticComplexity",
+    "complexity": "CyclomaticComplexity",
+    "c901": "CyclomaticComplexity",
+    "cc001": "CyclomaticComplexity",
+    "nestingdepth": "NestingDepth",
+    "nesting": "NestingDepth",
+    "nd001": "NestingDepth",
+    "zerotrustsanitization": "ZeroTrustSanitization",
+    "sanitization": "ZeroTrustSanitization",
+    "security": "ZeroTrustSanitization",
+    "zt001": "ZeroTrustSanitization",
+    "s101": "ZeroTrustSanitization",
+    "syntaxintegrity": "SyntaxIntegrity",
+    "syntax": "SyntaxIntegrity",
+    "si001": "SyntaxIntegrity",
+    "targetintegrity": "TargetIntegrity",
+    "targets": "TargetIntegrity",
+    "ti001": "TargetIntegrity",
+    "waiverintegrity": "WaiverIntegrity",
+    "waivers": "WaiverIntegrity",
+    "wi001": "WaiverIntegrity",
+}
+
+
+def normalize_rule_name(name: str) -> str:
+    """Normalize a rule alias, code, or invariant name to its canonical rule name."""
+    cleaned = name.strip().lower()
+    return RULE_ALIASES.get(cleaned, name.strip())
+
+
+@dataclass(frozen=True)
+class RulePreset:
+    """Named configuration preset with calibrated invariant thresholds and active rules."""
+
+    name: str
+    description: str
+    max_complexity: int
+    max_depth: int
+    active_rules: frozenset[str]
+
+
+PRESETS: Final[dict[str, RulePreset]] = {
+    "standard": RulePreset(
+        name="standard",
+        description="Standard baseline invariants (M <= 10, depth <= 5, zero-trust sanitization)",
+        max_complexity=10,
+        max_depth=5,
+        active_rules=ALL_INVARIANT_RULES,
+    ),
+    "strict": RulePreset(
+        name="strict",
+        description="Strict proactive headroom invariants (M <= 6, depth <= 3, zero-trust sanitization)",
+        max_complexity=6,
+        max_depth=3,
+        active_rules=ALL_INVARIANT_RULES,
+    ),
+    "pedantic": RulePreset(
+        name="pedantic",
+        description="Pedantic ultra-compact invariants for critical concurrency/functional kernels (M <= 4, depth <= 2)",
+        max_complexity=4,
+        max_depth=2,
+        active_rules=ALL_INVARIANT_RULES,
+    ),
+    "relaxed": RulePreset(
+        name="relaxed",
+        description="Relaxed migration thresholds for legacy codebases (M <= 15, depth <= 6)",
+        max_complexity=15,
+        max_depth=6,
+        active_rules=ALL_INVARIANT_RULES,
+    ),
+    "security_only": RulePreset(
+        name="security_only",
+        description="Zero-trust egress and sanitization audit only; complexity/nesting ignored",
+        max_complexity=999,
+        max_depth=99,
+        active_rules=frozenset({
+            "ZeroTrustSanitization",
+            "SyntaxIntegrity",
+            "TargetIntegrity",
+            "WaiverIntegrity",
+        }),
+    ),
+    "structural_only": RulePreset(
+        name="structural_only",
+        description="Structural AST complexity and nesting depth audit only; sanitization ignored",
+        max_complexity=10,
+        max_depth=5,
+        active_rules=frozenset({
+            "CyclomaticComplexity",
+            "NestingDepth",
+            "SyntaxIntegrity",
+            "TargetIntegrity",
+        }),
+    ),
+}
+
+
+@dataclass(frozen=True)
+class SentinelConfig:
+    """Consolidated configuration for AST invariant sentinel execution."""
+
+    preset_name: str = "standard"
+    max_complexity: int = 10
+    max_depth: int = 5
+    active_rules: frozenset[str] = ALL_INVARIANT_RULES
+    selected_rules: frozenset[str] = field(default_factory=frozenset)
+    ignored_rules: frozenset[str] = field(default_factory=frozenset)
+    extended_rules: frozenset[str] = field(default_factory=frozenset)
+
+    def is_rule_active(self, rule_name: str) -> bool:
+        """Report whether an invariant rule is enabled under this configuration."""
+        canonical = normalize_rule_name(rule_name)
+        return canonical in self.active_rules
+
+
+@dataclass(frozen=True)
+class ConfigOverrides:
+    """Explicit CLI or caller overrides for configuration resolution."""
+
+    preset_name: str | None = None
+    max_complexity: int | None = None
+    max_depth: int | None = None
+    select: Sequence[str] | None = None
+    ignore: Sequence[str] | None = None
+    extend_select: Sequence[str] | None = None
+    config_file: Path | None = None
+
+
+def _find_default_config() -> Path | None:
+    """Find pyproject.toml or sentinel.toml in the current or ancestor directories."""
+    cwd = Path.cwd()
+    for directory in [cwd, *cwd.parents]:
+        pyproject = directory / "pyproject.toml"
+        if pyproject.is_file():
+            return pyproject
+        sentinel_toml = directory / "sentinel.toml"
+        if sentinel_toml.is_file():
+            return sentinel_toml
+    return None
+
+
+def load_toml_config(config_path: Path | None = None) -> dict[str, Any]:
+    """Load configuration from a TOML file (e.g. pyproject.toml or sentinel.toml)."""
+    target = config_path or _find_default_config()
+    if not target or not target.is_file():
+        return {}
+    try:
+        data = tomllib.loads(target.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    if target.name == "pyproject.toml":
+        tool_section = data.get("tool", {})
+        return dict(tool_section.get("sentinel", {}))
+    return dict(data)
+
+
+def _split_csv_tokens(text: str) -> list[str]:
+    """Split comma-separated text into stripped non-empty tokens."""
+    return [token.strip() for token in text.split(",") if token.strip()]
+
+
+def _parse_rule_sequence(raw: Any) -> list[str]:
+    """Parse comma-separated string or sequence into a list of rule strings."""
+    if isinstance(raw, str):
+        return _split_csv_tokens(raw)
+    if isinstance(raw, (list, tuple, set, frozenset)):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    return []
+
+
+def _normalize_rule_set(rules: Sequence[str]) -> frozenset[str]:
+    """Return a frozenset of normalized rule names from a sequence."""
+    return frozenset(normalize_rule_name(r) for r in rules)
+
+
+def _resolve_active_rules(
+    preset: RulePreset,
+    select: Sequence[str],
+    extend: Sequence[str],
+    ignore: Sequence[str],
+) -> frozenset[str]:
+    """Compute final active rule set from preset, explicit select, extensions, and ignores."""
+    base = _normalize_rule_set(select) if select else preset.active_rules
+    if extend:
+        base = base | _normalize_rule_set(extend)
+    if ignore:
+        base = base - _normalize_rule_set(ignore)
+    return base
+
+
+def _extract_threshold(override_val: int | None, toml_val: Any, default_val: int) -> int:
+    """Extract an integer threshold from override, TOML data, or preset default."""
+    if override_val is not None:
+        return override_val
+    if isinstance(toml_val, int):
+        return toml_val
+    return default_val
+
+
+def _pick_raw_sequence(override: Sequence[str] | None, toml_val: Any) -> Any:
+    """Select override sequence if provided, otherwise fallback to TOML value."""
+    if override is not None:
+        return override
+    return toml_val
+
+
+def _resolve_preset_name(override_name: str | None, toml_name: Any) -> str:
+    """Determine effective preset name from override or TOML configuration."""
+    if override_name is not None:
+        return override_name
+    if isinstance(toml_name, str):
+        return toml_name
+    return "standard"
+
+
+def resolve_config(overrides: ConfigOverrides | None = None) -> SentinelConfig:
+    """Resolve final configuration combining defaults, TOML settings, and overrides."""
+    opts = overrides or ConfigOverrides()
+    toml_data = load_toml_config(opts.config_file)
+
+    preset_name = _resolve_preset_name(opts.preset_name, toml_data.get("preset"))
+    preset = PRESETS.get(preset_name, PRESETS["standard"])
+
+    max_c = _extract_threshold(opts.max_complexity, toml_data.get("max_complexity"), preset.max_complexity)
+    max_d = _extract_threshold(opts.max_depth, toml_data.get("max_depth"), preset.max_depth)
+
+    select = _parse_rule_sequence(_pick_raw_sequence(opts.select, toml_data.get("select")))
+    extend = _parse_rule_sequence(_pick_raw_sequence(opts.extend_select, toml_data.get("extend_select")))
+    ignore = _parse_rule_sequence(_pick_raw_sequence(opts.ignore, toml_data.get("ignore")))
+
+    active = _resolve_active_rules(preset, select, extend, ignore)
+    return SentinelConfig(
+        preset_name=preset.name,
+        max_complexity=max_c,
+        max_depth=max_d,
+        active_rules=active,
+        selected_rules=frozenset(normalize_rule_name(r) for r in select),
+        ignored_rules=frozenset(normalize_rule_name(r) for r in ignore),
+        extended_rules=frozenset(normalize_rule_name(r) for r in extend),
+    )
+
+
+def render_presets_table() -> str:
+    """Render a formatted markdown table of available presets."""
+    lines = [
+        "| Preset Name | Complexity ($M$) | Max Depth | Active Invariant Rules | Description |",
+        "|---|---|---|---|---|",
+    ]
+    for preset in PRESETS.values():
+        rule_desc = f"{len(preset.active_rules)} rules" if preset.active_rules == ALL_INVARIANT_RULES else ", ".join(sorted(preset.active_rules))
+        lines.append(
+            f"| `{preset.name}` | $\\le {preset.max_complexity}$ | $\\le {preset.max_depth}$ | {rule_desc} | {preset.description} |"
+        )
+    return "\n".join(lines)
 
 
 # Every construct that puts a branch in the control flow graph. The list used to stop at
@@ -480,30 +748,71 @@ def _late_waiver_violations(file_path: Path, source: str, waived: set[str]) -> l
     return late
 
 
-def audit_file(file_path: Path, max_complexity: int = 10, max_depth: int = 5) -> list[Violation]:
-    """Audit a single Python source file for invariant violations."""
+def _parse_source_tree(file_path: Path) -> tuple[str, ast.AST | None, Exception | None]:
+    """Read source code and parse AST, catching syntax or decode errors."""
     try:
         source = file_path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(file_path))
+        return source, ast.parse(source, filename=str(file_path)), None
     except (SyntaxError, UnicodeDecodeError) as err:
-        return [
-            Violation(
-                file_path=str(file_path),
-                line_number=getattr(err, "lineno", 1) or 1,
-                invariant="SyntaxIntegrity",
-                message=f"Could not parse file: {err}",
-            )
-        ]
+        return "", None, err
 
-    complexity_visitor = ComplexityVisitor(str(file_path), max_complexity, max_depth)
+
+def _syntax_violation(file_path: Path, err: Exception) -> Violation:
+    """Construct a SyntaxIntegrity violation from a parse/decode exception."""
+    return Violation(
+        file_path=str(file_path),
+        line_number=getattr(err, "lineno", 1) or 1,
+        invariant="SyntaxIntegrity",
+        message=f"Could not parse file: {err}",
+    )
+
+
+def _run_visitors(
+    tree: ast.AST,
+    file_path: str,
+    config: SentinelConfig,
+) -> list[Violation]:
+    """Execute AST visitors and collect detected violations."""
+    complexity_visitor = ComplexityVisitor(file_path, config.max_complexity, config.max_depth)
     complexity_visitor.visit(tree)
+    sanitization_visitor = SanitizationVisitor(file_path)
+    if config.is_rule_active("ZeroTrustSanitization"):
+        sanitization_visitor.visit(tree)
+    return complexity_visitor.violations + sanitization_visitor.violations
 
-    sanitization_visitor = SanitizationVisitor(str(file_path))
-    sanitization_visitor.visit(tree)
 
+def _filter_active_violations(
+    detected: Sequence[Violation],
+    waivers: WaiverScan,
+    config: SentinelConfig,
+) -> list[Violation]:
+    """Filter raw violations by active waivers and active configuration rules."""
+    unwaived = (v for v in detected if v.invariant not in waivers.waived)
+    combined = itertools.chain(waivers.violations, unwaived)
+    return [v for v in combined if config.is_rule_active(v.invariant)]
+
+
+def audit_file(
+    file_path: Path,
+    max_complexity: int = 10,
+    max_depth: int = 5,
+    config: SentinelConfig | None = None,
+) -> list[Violation]:
+    """Audit a single Python source file for invariant violations."""
+    active_config = config or SentinelConfig(
+        max_complexity=max_complexity,
+        max_depth=max_depth,
+        active_rules=ALL_INVARIANT_RULES,
+    )
+    source, tree, parse_err = _parse_source_tree(file_path)
+    if parse_err is not None or tree is None:
+        if active_config.is_rule_active("SyntaxIntegrity") and parse_err:
+            return [_syntax_violation(file_path, parse_err)]
+        return []
+
+    detected = _run_visitors(tree, str(file_path), active_config)
     waivers = _scan_waivers(file_path, source)
-    detected = complexity_visitor.violations + sanitization_visitor.violations
-    return list(waivers.violations) + [v for v in detected if v.invariant not in waivers.waived]
+    return _filter_active_violations(detected, waivers, active_config)
 
 
 # Directory names holding code this repository did not write. Kept in step with
@@ -566,10 +875,9 @@ def _expand_targets(paths: Sequence[Path]) -> list[Path]:
     return list(unique.values())
 
 
-def audit_targets(paths: Sequence[Path], max_complexity: int = 10, max_depth: int = 5) -> AuditReport:
-    """Audit every supplied file or directory target into one consolidated report."""
-    report = AuditReport()
-    report.violations.extend(
+def _find_missing_targets(paths: Sequence[Path]) -> list[Violation]:
+    """Identify non-existent audit paths as TargetIntegrity violations."""
+    return [
         Violation(
             file_path=str(path),
             line_number=1,
@@ -578,33 +886,107 @@ def audit_targets(paths: Sequence[Path], max_complexity: int = 10, max_depth: in
         )
         for path in paths
         if not path.exists()
+    ]
+
+
+def audit_targets(
+    paths: Sequence[Path],
+    max_complexity: int = 10,
+    max_depth: int = 5,
+    config: SentinelConfig | None = None,
+) -> AuditReport:
+    """Audit every supplied file or directory target into one consolidated report."""
+    active_config = config or SentinelConfig(
+        max_complexity=max_complexity,
+        max_depth=max_depth,
+        active_rules=ALL_INVARIANT_RULES,
     )
+    report = AuditReport()
+    if active_config.is_rule_active("TargetIntegrity"):
+        report.violations.extend(_find_missing_targets(paths))
     targets = _expand_targets([path for path in paths if path.exists()])
     report.files_checked = len(targets)
     for py_file in targets:
-        report.violations.extend(audit_file(py_file, max_complexity, max_depth))
+        report.violations.extend(audit_file(py_file, config=active_config))
     return report
 
 
-def _parse_cli_targets(argv: Sequence[str] | None) -> list[Path]:
-    """Resolve every CLI path argument; pre-commit passes N filenames, never one.
-
-    Unknown flags exit non-zero via argparse rather than being silently discarded:
-    a sentinel that quietly ignores part of its input certifies code it never read.
-    """
-    parser = argparse.ArgumentParser(description="AST Invariant Sentinel")
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Construct command-line argument parser for the sentinel."""
+    parser = argparse.ArgumentParser(
+        description="AST Invariant Sentinel: Automated static analyzer for agentic codebases.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("paths", nargs="*", default=[], help="File or directory paths to audit")
+    parser.add_argument(
+        "--preset",
+        "-p",
+        choices=list(PRESETS.keys()),
+        default=None,
+        help="Selectable rule preset (standard, strict, relaxed, pedantic, security_only, structural_only)",
+    )
+    parser.add_argument("--select", "-s", help="Comma-separated rule names or codes to activate exclusively")
+    parser.add_argument("--extend-select", help="Comma-separated rule names or codes to activate alongside preset")
+    parser.add_argument("--ignore", "-i", help="Comma-separated rule names or codes to ignore")
+    parser.add_argument("--max-complexity", "-C", type=int, help="Override maximum cyclomatic complexity ceiling")
+    parser.add_argument("--max-depth", "-D", type=int, help="Override maximum nesting depth ceiling")
+    parser.add_argument("--config", "-c", type=Path, help="Path to TOML configuration file (e.g. pyproject.toml)")
+    parser.add_argument("--list-presets", action="store_true", help="List all available presets and exit")
+    return parser
+
+
+def _split_cli_csv(raw: str | None) -> list[str] | None:
+    """Split comma-separated CLI argument string or return None."""
+    if raw is None:
+        return None
+    return [token.strip() for token in raw.split(",") if token.strip()]
+
+
+def _resolve_cli_targets(raw_paths: Sequence[str]) -> list[Path]:
+    """Convert raw path strings to Path objects, defaulting to current directory."""
+    if not raw_paths:
+        return [Path(".")]
+    return [Path(raw) for raw in raw_paths]
+
+
+def parse_cli_args(argv: Sequence[str] | None) -> tuple[list[Path], SentinelConfig, bool]:
+    """Parse command line arguments into target paths, resolved config, and list flag."""
+    parser = _build_arg_parser()
     args = parser.parse_args(list(argv[1:]) if argv is not None else None)
-    return [Path(raw) for raw in args.paths] or [Path(".")]
+    if args.list_presets:
+        return [], resolve_config(), True
+
+    overrides = ConfigOverrides(
+        preset_name=args.preset,
+        max_complexity=args.max_complexity,
+        max_depth=args.max_depth,
+        select=_split_cli_csv(args.select),
+        ignore=_split_cli_csv(args.ignore),
+        extend_select=_split_cli_csv(args.extend_select),
+        config_file=args.config,
+    )
+    target_paths = _resolve_cli_targets(args.paths)
+    return target_paths, resolve_config(overrides), False
+
+
+def _parse_cli_targets(argv: Sequence[str] | None) -> list[Path]:
+    """Resolve every CLI path argument; pre-commit passes N filenames, never one."""
+    targets, _, _ = parse_cli_args(argv)
+    return targets
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI runner for the AST Invariant Sentinel."""
-    target_paths = _parse_cli_targets(argv)
-    scanned = ", ".join(f"'{path}'" for path in target_paths)
-    print(f"🛡️  AST Invariant Sentinel: Scanning {scanned}...")
+    target_paths, config, is_list = parse_cli_args(argv)
+    if is_list:
+        print("Available AST Invariant Sentinel Presets:\n")
+        print(render_presets_table())
+        return 0
 
-    report = audit_targets(target_paths)
+    scanned = ", ".join(f"'{path}'" for path in target_paths)
+    print(f"🛡️  AST Invariant Sentinel [preset={config.preset_name}]: Scanning {scanned}...")
+
+    report = audit_targets(target_paths, config=config)
     print(f"Checked {report.files_checked} Python files.")
 
     if report.is_clean:

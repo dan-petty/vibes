@@ -8,7 +8,21 @@ from pathlib import Path
 
 import pytest
 import radon.complexity as cc
-from sentinel import ComplexityVisitor, audit_file, audit_targets, main
+from sentinel import (
+    ALL_INVARIANT_RULES,
+    PRESETS,
+    ComplexityVisitor,
+    ConfigOverrides,
+    SentinelConfig,
+    audit_file,
+    audit_targets,
+    load_toml_config,
+    main,
+    normalize_rule_name,
+    parse_cli_args,
+    render_presets_table,
+    resolve_config,
+)
 
 
 def test_clean_code_passes_all_invariants():
@@ -360,3 +374,232 @@ def test_the_gate_is_never_laxer_than_its_reference(tmp_path: Path) -> None:
     source.write_text(body, encoding="utf-8")
     mine = ComplexityVisitor(str(source))._calculate_complexity(ast.parse(body).body[0])
     assert (mine, _radon_complexity(source)) == (2, 1)
+
+
+def test_render_presets_table_contains_all_presets() -> None:
+    """The preset table lists every available preset name and description."""
+    table = render_presets_table()
+    present = tuple(name in table for name in ("standard", "strict", "relaxed", "pedantic", "security_only", "structural_only"))
+    assert (len(PRESETS), all(present)) == (6, True)
+
+
+def test_main_list_presets(capsys: pytest.CaptureFixture[str]) -> None:
+    """The CLI entrypoint with --list-presets renders the table and exits cleanly."""
+    exit_code = main(["sentinel.py", "--list-presets"])
+    captured = capsys.readouterr().out
+    assert (exit_code, "Available AST Invariant Sentinel Presets:" in captured) == (0, True)
+
+
+def test_normalize_rule_names_and_aliases() -> None:
+    """Rule aliases and code identifiers normalize to canonical invariant names."""
+    cases = (
+        ("cc001", "CyclomaticComplexity"),
+        ("complexity", "CyclomaticComplexity"),
+        ("c901", "CyclomaticComplexity"),
+        ("nd001", "NestingDepth"),
+        ("nesting", "NestingDepth"),
+        ("zt001", "ZeroTrustSanitization"),
+        ("security", "ZeroTrustSanitization"),
+        ("sanitization", "ZeroTrustSanitization"),
+        ("si001", "SyntaxIntegrity"),
+        ("ti001", "TargetIntegrity"),
+        ("wi001", "WaiverIntegrity"),
+    )
+    results = tuple(normalize_rule_name(alias) for alias, _ in cases)
+    expected = tuple(canonical for _, canonical in cases)
+    assert results == expected
+
+
+def test_sentinel_config_defaults() -> None:
+    """SentinelConfig provides standard defaults and rule activation lookups."""
+    cfg = SentinelConfig()
+    assert (
+        cfg.preset_name,
+        cfg.max_complexity,
+        cfg.max_depth,
+        cfg.active_rules == ALL_INVARIANT_RULES,
+        cfg.is_rule_active("CC001"),
+        cfg.is_rule_active("unknown"),
+    ) == ("standard", 10, 5, True, True, False)
+
+
+def test_resolve_config_defaults_and_overrides() -> None:
+    """Config resolution honors presets and applies granular overrides."""
+    std = resolve_config()
+    strict = resolve_config(ConfigOverrides(preset_name="strict"))
+    custom = resolve_config(
+        ConfigOverrides(
+            preset_name="strict",
+            max_complexity=8,
+            max_depth=4,
+            select=["complexity"],
+            extend_select=["sanitization"],
+            ignore=["waivers"],
+        )
+    )
+    assert (
+        (std.preset_name, std.max_complexity, std.max_depth),
+        (strict.preset_name, strict.max_complexity, strict.max_depth),
+        (custom.preset_name, custom.max_complexity, custom.max_depth),
+        custom.active_rules == frozenset({"CyclomaticComplexity", "ZeroTrustSanitization"}),
+    ) == (
+        ("standard", 10, 5),
+        ("strict", 6, 3),
+        ("strict", 8, 4),
+        True,
+    )
+
+
+def test_strict_preset_flags_mid_complexity(tmp_path: Path) -> None:
+    """The strict preset flags functions with M=7 that pass the standard M<=10 ceiling."""
+    source = tmp_path / "mid_complexity.py"
+    code = (
+        "def mid_func(x: int) -> int:\n"
+        "    if x == 1: return 1\n"
+        "    if x == 2: return 2\n"
+        "    if x == 3: return 3\n"
+        "    if x == 4: return 4\n"
+        "    if x == 5: return 5\n"
+        "    if x == 6: return 6\n"
+        "    return 0\n"
+    )
+    source.write_text(code, encoding="utf-8")
+    std_violations = audit_file(source, config=resolve_config(ConfigOverrides(preset_name="standard")))
+    strict_violations = audit_file(source, config=resolve_config(ConfigOverrides(preset_name="strict")))
+    assert (
+        len(std_violations),
+        len(strict_violations),
+        strict_violations[0].invariant if strict_violations else "",
+    ) == (0, 1, "CyclomaticComplexity")
+
+
+def test_pedantic_preset_flags_low_complexity(tmp_path: Path) -> None:
+    """The pedantic preset enforces M<=4 and flags functions with M=5."""
+    source = tmp_path / "low_complexity.py"
+    code = (
+        "def func(x: int) -> int:\n"
+        "    if x == 1: return 1\n"
+        "    if x == 2: return 2\n"
+        "    if x == 3: return 3\n"
+        "    if x == 4: return 4\n"
+        "    return 0\n"
+    )
+    source.write_text(code, encoding="utf-8")
+    pedantic_cfg = resolve_config(ConfigOverrides(preset_name="pedantic"))
+    strict_cfg = resolve_config(ConfigOverrides(preset_name="strict"))
+    pedantic_v = audit_file(source, config=pedantic_cfg)
+    strict_v = audit_file(source, config=strict_cfg)
+    assert (len(strict_v), len(pedantic_v), pedantic_v[0].threshold if pedantic_v else 0) == (0, 1, 4)
+
+
+def test_relaxed_preset_allows_higher_complexity(tmp_path: Path) -> None:
+    """The relaxed preset permits legacy functions with M=12 that breach standard M<=10."""
+    source = tmp_path / "legacy.py"
+    code = "def legacy(x: int) -> int:\n" + "".join(f"    if x == {i}: return {i}\n" for i in range(1, 12)) + "    return 0\n"
+    source.write_text(code, encoding="utf-8")
+    std_v = audit_file(source, config=resolve_config(ConfigOverrides(preset_name="standard")))
+    relaxed_v = audit_file(source, config=resolve_config(ConfigOverrides(preset_name="relaxed")))
+    assert (len(std_v), len(relaxed_v)) == (1, 0)
+
+
+def test_security_only_preset_ignores_complexity(tmp_path: Path) -> None:
+    """The security_only preset ignores complex control flow but flags private host IPs."""
+    source = tmp_path / "sec_check.py"
+    code = (
+        "def complex_with_ip(x: int) -> str:\n"
+        + "".join(f"    if x == {i}: return 'step'\n" for i in range(1, 12))
+        + "    return 'https://api.example.com/resource'\n"
+    )
+    source.write_text(code, encoding="utf-8")
+    sec_cfg = resolve_config(ConfigOverrides(preset_name="security_only"))
+    violations = audit_file(source, config=sec_cfg)
+    assert (len(violations), violations[0].invariant) == (1, "ZeroTrustSanitization")
+
+
+def test_structural_only_preset_ignores_sanitization(tmp_path: Path) -> None:
+    """The structural_only preset ignores IP leaks but flags complexity/nesting violations."""
+    source = tmp_path / "struct_check.py"
+    code = (
+        "def simple_with_ip() -> str:\n"
+        "    return 'https://api.example.com/resource'\n"
+    )
+    source.write_text(code, encoding="utf-8")
+    struct_cfg = resolve_config(ConfigOverrides(preset_name="structural_only"))
+    violations = audit_file(source, config=struct_cfg)
+    assert len(violations) == 0
+
+
+def test_cli_parsing_presets_and_rule_selection(tmp_path: Path) -> None:
+    """CLI flag parsing wires presets, explicit selection, and ignore lists correctly."""
+    targets, config, is_list = parse_cli_args([
+        "sentinel.py",
+        str(tmp_path),
+        "--preset", "strict",
+        "--select", "CC001,ZT001",
+        "--ignore", "sanitization",
+        "--max-complexity", "5",
+        "--max-depth", "2",
+    ])
+    assert (
+        is_list,
+        targets[0],
+        config.preset_name,
+        config.max_complexity,
+        config.max_depth,
+        config.active_rules,
+    ) == (
+        False,
+        tmp_path,
+        "strict",
+        5,
+        2,
+        frozenset({"CyclomaticComplexity"}),
+    )
+
+
+def test_toml_config_loading_and_override(tmp_path: Path) -> None:
+    """TOML configuration in pyproject.toml is loaded and overridden by CLI flags."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[tool.sentinel]\n'
+        'preset = "strict"\n'
+        'max_complexity = 7\n'
+        'max_depth = 3\n'
+        'select = ["complexity", "nesting"]\n',
+        encoding="utf-8",
+    )
+    loaded = load_toml_config(pyproject)
+    cfg = resolve_config(ConfigOverrides(config_file=pyproject))
+    override_cfg = resolve_config(ConfigOverrides(config_file=pyproject, max_complexity=9))
+    assert (
+        (loaded.get("preset"), loaded.get("max_complexity")),
+        (cfg.preset_name, cfg.max_complexity, cfg.max_depth),
+        cfg.active_rules,
+        override_cfg.max_complexity,
+    ) == (
+        ("strict", 7),
+        ("strict", 7, 3),
+        frozenset({"CyclomaticComplexity", "NestingDepth"}),
+        9,
+    )
+
+
+def test_target_integrity_disabled_via_select(tmp_path: Path) -> None:
+    """When TargetIntegrity is not selected, missing paths do not fail the audit."""
+    missing = tmp_path / "nonexistent.py"
+    normal_report = audit_targets([missing])
+    cfg = resolve_config(ConfigOverrides(select=["complexity"]))
+    filtered_report = audit_targets([missing], config=cfg)
+    assert (
+        normal_report.is_clean,
+        len(normal_report.violations),
+        normal_report.violations[0].invariant,
+        filtered_report.is_clean,
+        len(filtered_report.violations),
+    ) == (
+        False,
+        1,
+        "TargetIntegrity",
+        True,
+        0,
+    )

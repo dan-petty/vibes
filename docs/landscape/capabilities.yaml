@@ -80,6 +80,7 @@ capabilities:
       - sarif_output
       - per_file_baseline
       - baseline_diff
+      - config_presets
     alternatives:
       - repo: rubik/xenon
         has:
