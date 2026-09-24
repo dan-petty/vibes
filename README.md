@@ -375,6 +375,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │
 ├── tools/                             # Autonomous project management tooling
 │   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
+│   ├── pr_triage_bot.py               # Closed-Loop PR Triage & Invariant Review Bot
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
@@ -411,6 +412,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_metric_reference.py       # Who computes each metric, and the witnesses why
     ├── test_portfolio_balance.py      # Unit tests for portfolio and investment ratios
     ├── test_project_tooling.py        # Unit tests for autonomous project engine
+    ├── test_pr_triage_bot.py          # Unit tests for multi-persona PR triage and review bot
     ├── test_resources_validation.py   # Unit tests verifying K8s, Docker, and OTel resources
     ├── test_sdlc_project_manager.py   # Unit tests for SDLC project manager & scoring engine
     ├── test_resource_iteration_workbench.py # Unit tests for iteration workbench engine
