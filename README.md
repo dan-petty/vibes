@@ -67,7 +67,8 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Agentic Project Self-Documentation**](./observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md) | Systems & Governance | Resolving the dual-audience paradox and the phantom architecture trap with a 4-tier living documentation architecture. |
 | [**Post-Harness Recursive Self-Improvement**](./observations/systems/28-recursive-self-improvement-and-the-post-harness-mandate.md) | Systems & Governance | Establishing the operational mandate for recursive self-improvement and scaling laws via asymmetric invariant verification ($P$ vs $NP$) and outward landscape telemetry. |
 | [**Epistemic Drift & The Unreliable Teacher**](./observations/systems/29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md) | Multi-Agent Verification | Resolving mitigation-refutation conflation and catalog self-contamination with tripartite verification and immutable epistemic seams. |
-
+| [**Kinetic Falsification & Exploit Harnesses**](./observations/systems/30-kinetic-falsification-and-the-ephemeral-exploit-harness.md) | Verification & Security | Replacing rhetorical verifier debate with minimal executable counterexample probes in micro-sandboxes, evaluating OS exit codes as ground truth. |
+| [**Instruction Ratchet Bloat & JIT Ablation**](./observations/systems/31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md) | Context & Governance | Resolving monolithic prompt bloat and lost-in-the-middle attention decay with two-tier JIT prompt envelopes and empirical counterfactual ablation. |
 
 ---
 
@@ -101,7 +102,7 @@ flowchart TD
 - [**Invariant-Grounded Recursive Self-Improvement**](./patterns/invariant-grounded-recursive-self-improvement.md): Transforming autonomous evolution from unconstrained generative drift into a convergent, closed-loop engine bounded by deterministic AST sentinels, CEGIS constraint sets, and outward telemetry.
 - [**Epistemic Seam & Mitigated Defect Auditing**](./patterns/epistemic-seam-and-mitigated-defect-auditing.md): Eliminating silent defect drops and catalog drift by separating refutation from mitigation and restricting negative catalog learning to ground truth.
 - [**Kinetic Exploit Probes & Invariant Leashing**](./patterns/kinetic-exploit-probes-and-invariant-leashing.md): Replacing rhetorical verifier debate with executable counterexample probes in micro-sandboxes, paired with invariant leashes tracking perimeter dependencies.
-
+- [**Just-In-Time Instruction Decomposition & Ablation**](./patterns/just-in-time-instruction-decomposition-and-ablation.md): Eliminating instruction ratchet bloat and lost-in-the-middle attention degradation with a two-tier JIT prompt governor, rule attribution matrix, and counterfactual ablation.
 
 ---
 
@@ -204,6 +205,7 @@ flowchart LR
 ```
 
 ### Tooling & Automated Workflows:
+- [**JIT Instruction Governor & Ablation Engine (`tools/instruction_governor.py`)**](./tools/instruction_governor.py): Resolves instruction ratchet bloat and lost-in-the-middle attention decay by parsing instructions into token-weighted sections, mapping mechanical gate codes to rule sections (Rule Attribution Matrix), synthesizing lean two-tier JIT prompt envelopes ($\le 2$k kernel + targeted overlays), and evaluating counterfactual ablation candidates.
 - [**Project Tooling CLI (`tools/project_tooling.py`)**](./tools/project_tooling.py): Rate-managed client for issue classification, acceptance criteria parsing, and self-hardening audits.
 - [**SDLC Project Manager CLI (`tools/sdlc_project_manager.py`)**](./tools/sdlc_project_manager.py): Deterministic multi-dimensional priority scoring, dependency graph cycle detection, and agent next-action dispatch.
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
@@ -337,7 +339,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md
 │       ├── 28-recursive-self-improvement-and-the-post-harness-mandate.md
 │       ├── 29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md
-│       └── 30-kinetic-falsification-and-the-ephemeral-exploit-harness.md
+│       ├── 30-kinetic-falsification-and-the-ephemeral-exploit-harness.md
+│       └── 31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -354,6 +357,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── gate-integrity-and-total-input-coverage.md
 │   ├── invariant-grounded-recursive-self-improvement.md
 │   ├── iterative-resource-refinement-loop.md
+│   ├── just-in-time-instruction-decomposition-and-ablation.md
 │   ├── kinetic-exploit-probes-and-invariant-leashing.md
 │   ├── multi-agent-codebase-concurrency.md
 │   ├── multi-tier-living-documentation.md
@@ -409,6 +413,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
+│   ├── instruction_governor.py        # JIT instruction governor, rule attribution & counterfactual ablation
 │   ├── kinetic_probe.py               # Kinetic counterexample probe engine & invariant leash registry
 │   ├── code_memory.py                 # Semantic graph AST code memory, symbol indexer & blast radius oracle
 │   ├── model_router.py                # Dynamic multi-model router & speculative cascade oracle with SARIF export
@@ -454,6 +459,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_instruction_governor.py   # Unit tests for JIT instruction governor & ablation engine
     ├── test_kinetic_probe.py          # Unit tests for kinetic probe execution & invariant leashes
     ├── test_code_memory.py            # Unit tests for code memory, call graph invariants & SARIF
     ├── test_model_router.py           # Unit tests for multi-model router, speculative cascade & SARIF

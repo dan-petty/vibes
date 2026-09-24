@@ -588,8 +588,11 @@ Stochastic language generation must always be bounded by deterministic mechanica
       1. *Telos & Strategic Purpose*: Aligning deliverables to human values, roadmap goals, and ethical boundaries.
       2. *Capital & Physical Resource Constraints*: Enforcing token ceilings, execution timeouts, and hardware footprints.
       3. *Sovereign Attestation & Keyholding*: Presenting cryptographic certification artifacts (`certified-by-sentinel`, in-toto statements) for sovereign human release authorization.
-
-
+23. **JIT Instruction Decomposition & Counterfactual Ablation Protocol**:
+    - **Prohibition of Monotonic Instruction Ratchet Bloat**: Do not allow system instructions and prompt harnesses to accumulate unbounded rules without empirical retention audits. Prompts exceeding 20,000 tokens induce context rot and lost-in-the-middle attention decay (`ROT002`).
+    - **Two-Tier JIT Decomposition**: Separate universal invariants (Tier 1 Invariant Envelope, $\le 2,000$ tokens) from modular domain rules (Tier 2 Overlays). When auditing or refactoring specific targets, hydrate only the relevant domain overlay (Python AST, Documentation, Polyglot Systems, or CI Workflows) via [`tools/instruction_governor.py`](./tools/instruction_governor.py).
+    - **Rule Attribution Mapping**: Every mechanical gate code (`CC001`, `DOC012`, `AIBOM001`, `ROT002`, `EBPF001`, `SGM001`) must map bijectively to an instruction section in the Rule Attribution Matrix (`tools/instruction_governor.py attribute`).
+    - **Counterfactual Rule Pruning**: When a prose guideline has been 100% inverted into a deterministic mechanical gate (e.g. `sentinel.py` or `docs_validator.py`), condense the prose rule to a concise invariant citation rather than retaining multi-paragraph explanations.
 
 ---
 

@@ -114,6 +114,8 @@ flowchart LR
 | **The Language Game Trap** | Verifiers debate code correctness in open-ended prose, accepting semantic vocabulary as proof of safety. | Models accept plausible excuses for unbound buffers or path traversals without executing code. | Kinetic falsification: replace prose arguments with minimal executable counterexample probes. |
 | **The Kolmogorov Verification Gap** | Spending thousands of tokens attempting symbolic safety proofs instead of searching for minimal counterexamples. | Verification stalls in multi-turn debate while program correctness remains unproven. | Exploits are minimal ($NP$-complete search); synthesize ephemeral test cases and evaluate exit codes. |
 | **Mitigation Perimeter Decay** | Dormant vulnerabilities mitigated by external perimeters detonate when refactors modify the wrapper. | Refactoring API routing removes request size limits, detonating an unindexed parser vulnerability. | Invariant leashing: link defect mitigations to perimeter files and re-trigger probes on mutation. |
+| **Instruction Ratchet Bloat** | Monotonic accumulation of system prompt rules without empirical retention audits or pruning. | Prompts expand past 30k tokens, consuming context budgets and driving up inference latency. | JIT instruction governance, token weight auditing, and counterfactual rule ablation (`instruction_governor.py`). |
+| **Lost-in-the-Middle Invariant Extinction** | Crucial rules positioned in the central third of monolithic instruction sets suffer steep attention decay. | Models routinely violate middle-prompt security and formatting invariants despite presence in prompt. | Two-tier JIT decomposition: bounded ($\le 2$k) Tier 1 Invariant Envelope with dynamic Tier 2 domain overlays. |
 
 ---
 
@@ -125,5 +127,7 @@ flowchart LR
 | **Autonomous Invariant Discovery** | Mining execution telemetry, commit trajectories, and AST metrics to formulate new mathematical invariants ($M \le 10$, parameter cardinality, structural tuples) rather than relying on human prompt faith. | Machine discovers the mathematical ceilings that maximize zero-shot recovery; Human ratifies them as constitutional rules. |
 | **Cybernetic Risk Modulation** | SRE/PID control over error budgets (`reliability_slo.py`), dynamically modulating loop velocity, speculative refactoring, and reactive repair based on real-time invariant compliance. | Machine regulates velocity continuously without emotion; Human calibrates risk tolerance ceilings. |
 | **The Epistemic Seam** | The rigid barrier between non-deterministic token generation and deterministic physical truth, prohibiting stochastic models from mutating their own verification catalogs. | Machine operates within the seam; Human arbitrates ambiguous value cliffs. |
+| **Rule Attribution Mapping** | Bijective mapping between deterministic mechanical gate codes (`CC001`, `DOC012`, `AIBOM001`, `ROT002`) and instruction sections, verifying automated coverage. | Machine computes mechanical coverage and token savings; Human retires redundant prose guidelines. |
+| **JIT Instruction Decomposition** | Modularizing instructions into a universal invariant kernel ($\le 2$k tokens) and dynamically hydrated domain overlays based on active diff target paths. | Machine resolves file types and scopes prompts just in time; Human establishes core invariant kernel. |
 
 
