@@ -67,11 +67,11 @@ Output:
 --------------------------------------------------------------------------
 LANGUAGE       | CANONICAL ID   | SYMBOLS    | COMPLEXITY (M)
 --------------------------------------------------------------------------
-Python         | python         | 1          | 2             
-Rust           | rust           | 2          | 2             
-Go             | go             | 2          | 1             
-TypeScript     | typescript     | 2          | 1             
-Bash           | bash           | 1          | 2             
+Python         | python         | 1          | 2  
+Rust           | rust           | 2          | 2  
+Go             | go             | 2          | 1  
+TypeScript     | typescript     | 2          | 1  
+Bash           | bash           | 1          | 2  
 ==========================================================================
 ```
 

@@ -16,7 +16,7 @@ Autonomous coding agents commonly operate as black boxes: an engineer provides a
 
 ## 2. The Observed Phenomenon
 
-During an automated refactoring session on a legacy codebase, a multi-agent system triggered 14 consecutive tool executions before failing due to a timeout. The flat console log contained 1,400 lines of mixed tool outputs, AST visitor dumps, and prompt fragments. 
+During an automated refactoring session on a legacy codebase, a multi-agent system triggered 14 consecutive tool executions before failing due to a timeout. The flat console log contained 1,400 lines of mixed tool outputs, AST visitor dumps, and prompt fragments.
 
 Diagnosing why the agent failed required 40 minutes of manual log dissection. The root cause was not an LLM hallucination, but a silent loop:
 1. Subagent A modified a file.

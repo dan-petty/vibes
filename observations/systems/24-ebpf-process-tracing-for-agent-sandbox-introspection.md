@@ -1,9 +1,9 @@
 # Observation 24: eBPF Process Tracing for Agent Sandbox Introspection
 
-**Category**: Systems Engineering & Zero-Trust Sandboxing
-**Status**: Field-Verified
-**Canonical Implementation**: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)
-**Verification Suite**: [`tests/test_ebpf_tracer.py`](../../tests/test_ebpf_tracer.py)
+**Category**: Systems Engineering & Zero-Trust Sandboxing  
+**Status**: Field-Verified  
+**Canonical Implementation**: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)  
+**Verification Suite**: [`tests/test_ebpf_tracer.py`](../../tests/test_ebpf_tracer.py)  
 
 ---
 

@@ -1,9 +1,9 @@
 # Observation 04 (Polyglot): C++ RAII & Lifetime Invariants Under LLM Synthesis
 
-> **Exhibition**: Polyglot Systems & Memory Safety Invariants
-> **Classification**: Memory Safety, Lifetime Profile & Static Contract Auditing
-> **Target Subsystem**: C++ Lifetime Sentinel (`tools/cpp_lifetime_sentinel.py`)
-> **Key Metric**: 100% elimination of manual memory management (`delete`/`free`); zero use-after-move hazards; 0 dangling view handles (`std::string_view` / `std::span`) across synthesized C++20 components.
+> **Exhibition**: Polyglot Systems & Memory Safety Invariants  
+> **Classification**: Memory Safety, Lifetime Profile & Static Contract Auditing  
+> **Target Subsystem**: C++ Lifetime Sentinel (`tools/cpp_lifetime_sentinel.py`)  
+> **Key Metric**: 100% elimination of manual memory management (`delete`/`free`); zero use-after-move hazards; 0 dangling view handles (`std::string_view` / `std::span`) across synthesized C++20 components.  
 
 ---
 

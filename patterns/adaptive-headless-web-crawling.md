@@ -29,18 +29,18 @@ The **Adaptive Headless Crawling** pattern solves these limitations through a th
 flowchart TD
     URL[Agent Request: Target URL] --> SSRF[SSRF Security Filter: Block RFC 1918]
     SSRF --> MemoryCheck{Domain Strategy Store<br/>Learned Profile?}
-    
+
     MemoryCheck -->|Learned: Requires JS| HeadlessTier[Tier-2: Headless Browser Driver]
     MemoryCheck -->|Unknown or Static| HTTPTier[Tier-1: Fast HTTP + Authentic Headers]
-    
+
     HTTPTier --> SPATest{SPA Detector<br/>Empty Shell or Rich Text?}
     SPATest -->|Rich Semantic Content| ContentCleaner[HTML Content Cleaner]
     SPATest -->|Empty Shell / JS Needed| Escalate[Escalate: Switch to Headless Tier]
-    
+
     Escalate --> HeadlessTier
     HeadlessTier --> HydrationWait[Wait for Content Selector / Network Idle]
     HydrationWait --> ContentCleaner
-    
+
     ContentCleaner --> ModalStrip[Strip Cookie Banners, Nav, Header, Footer]
     ModalStrip --> MarkdownGen[Generate Clean Headings & Code Fences]
     MarkdownGen --> UpdateStore[Update Domain Strategy Store: Tier & Latency]

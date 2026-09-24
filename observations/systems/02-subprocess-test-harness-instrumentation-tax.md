@@ -45,11 +45,11 @@ flowchart TD
     Discover --> LoadXdist["Load pytest-xdist<br/>(Spawns 4 multiprocessing worker processes)"]
     Discover --> LoadCov["Load pytest-cov<br/>(Initializes coverage tracer & branch recorder)"]
     Discover --> LoadLogfire["Load logfire<br/>(Initializes OpenTelemetry telemetry exporters)"]
-    
+
     LoadXdist --> Exec[Execute 5ms Test Logic]
     LoadCov --> Exec
     LoadLogfire --> Exec
-    
+
     Exec --> Teardown["IPC Worker Termination & Report Serialization<br/>(Total Latency: 3,800ms)"]
 ```
 

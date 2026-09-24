@@ -90,12 +90,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const comment = `### 🛡️ Architectural Sentinel: Invariant Violation
-            
+
             This pull request contains code changes that violate non-negotiable architectural invariants:
             - **Cyclomatic Complexity**: Must be $\\le 10$ per function.
             - **Nesting Depth**: Must be $\\le 5$ levels.
             - **Zero-Trust Egress**: Private RFC 1918 IPs and non-standard mock domains are prohibited.
-            
+
             Please run the local sentinel before re-submitting:
             \`\`\`bash
             python examples/ast-invariant-sentinel/sentinel.py <file>
