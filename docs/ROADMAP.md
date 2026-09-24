@@ -237,8 +237,19 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
 - [x] **Deliverable #2023: Dual First-Class Consumer Architecture & Bi-Directional AX Scoring (`patterns/bi-directional-metric-feedback-and-ax-scoring.md`)**:
   - Implements the Dual-Surface Interface Contract pairing human teleological observability (UX) with machine-verifiable negative schemas, AST symbol graphs, and structured CEGIS error vectors (AX).
   - Establishes a synchronized bi-directional scoring engine that pairs deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$: Diagnostic Actionability Index $DAI$, Interface Friction Index $IFI$, and Cognitive Impedance Metric $CIM$).
-  - Closes the cybernetic feedback loop by automatically converting high software friction into automated refactoring and schema-hardening deliverables, ratcheting codebase maintainability and agent convergence velocity.
   - Accompanied by Observation 32 (`observations/systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md`), Pattern (`patterns/bi-directional-metric-feedback-and-ax-scoring.md`), an update to the Seven Architectural Theses in `observations/README.md`, and the zero-dependency executable reference sample application in `examples/agent-experience-evaluator/` (`ax_evaluator.py`, `test_ax_evaluator.py`, `README.md`) featuring OASIS SARIF 2.1.0 telemetry export, Markdown reporting, and 97% unit test coverage certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2024: Differential Polyglot AST Mutation Fuzzer (`examples/polyglot-mutation-fuzzer/`)**:
+  - Grammatical mutation fuzzing engine evaluating parser convergence, boundary depth limits, and `ELOOP` symlink cycle containment across Python, Go, Rust, TypeScript, and Bash.
+  - Accompanied by Observation 05 (`observations/polyglot/05-differential-ast-mutation-fuzzing-for-polyglot-boundary-parsers.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/polyglot-mutation-fuzzer/test_polyglot_fuzzer.py` with 92% coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2025: Autonomous Git Worktree Fleet Allocator (`examples/worktree-swarm-arbiter/`)**:
+  - Ephemeral leased git worktree broker managing concurrent subagent checkouts, heartbeat extensions, index lock contention mitigation, and POSIX process group containment (`os.killpg`).
+  - Accompanied by Pattern (`patterns/collision-free-worktree-fleet-allocation.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/worktree-swarm-arbiter/test_worktree_arbiter.py` with 92% coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2026: Typed Epistemic Seam & Subagent Context Handshake (`examples/epistemic-context-handshake/`)**:
+  - Cryptographically content-addressed context envelope protocol ($H_{\text{ctx}}$) enforcing strict negative schema validation (`additionalProperties: false`), epistemic loss auditing ($E_{\text{loss}}$), and verifiable completion attestation.
+  - Accompanied by Observation 33 (`observations/systems/33-typed-epistemic-seams-and-lossless-subagent-handshakes.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/epistemic-context-handshake/test_context_handshake.py` with 98% coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2027: Chaos Invariant Injector & Resilience Benchmark (`examples/chaos-invariant-monkey/`)**:
+  - Deterministic chaos engineering engine perturbing complexity, nesting, and egress invariants to benchmark autonomous agent self-healing convergence, repair ratio ($R_{\text{repair}}$), and atomic rollback safety.
+  - Accompanied by Pattern (`patterns/synthetic-chaos-and-invariant-convergence-testing.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/chaos-invariant-monkey/test_chaos_monkey.py` with 98% coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
 
 ---
 
@@ -265,9 +276,9 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Self-Correction Loops vs. Constraint Accumulation** | `observations/systems/` | Comparing conversational "fix this error" prompting vs. formal CEGIS negative-constraint accumulation. | ✅ Completed ([Obs 22](../observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md)) |
 | **Multi-Model Capability Boundaries & Dynamic Routing Oracles** | `observations/systems/` | Measuring semantic entropy and reasoning failure thresholds to route tasks across frontier and local open-weights models. | ✅ Completed ([Obs 25](../observations/systems/25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md)) |
 | **Semantic Graph AST Code Memory & Persistent Symbol Indexing** | `observations/systems/` | Graph-based code memory maintaining call graph invariants across multi-file refactoring sessions. | ✅ Completed ([Obs 26](../observations/systems/26-semantic-graph-ast-code-memory-and-persistent-symbol-indexing.md)) |
-| **Dual First-Class Consumers & Bi-Directional Agentic Feedback Loops** | `observations/systems/` | How does treating human and agents as first-class consumers alter the development loop, and can bi-directional metric scoring drive self-improving co-evolution? | ✅ Completed ([Obs 32](../observations/systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md)) |
+| **Differential AST Mutation Fuzzing for Polyglot Boundary Parsers** | `observations/polyglot/` | Grammatical mutation fuzzing evaluating parser convergence, symlink escape detection, and memory leak isolation across multi-language parsers. | ✅ Completed ([Obs 05](../observations/polyglot/05-differential-ast-mutation-fuzzing-for-polyglot-boundary-parsers.md)) |
+| **Typed Epistemic Seams & Subagent Handshakes** | `observations/systems/` | Eliminating delegation drift with content-addressed invariant envelopes and negative schema enforcement. | ✅ Completed ([Obs 33](../observations/systems/33-typed-epistemic-seams-and-lossless-subagent-handshakes.md)) |
 | **eBPF Runtime LSM Kernel Gate & Dynamic Syzcaller Fuzzing** | `observations/systems/` | Real-time in-kernel policy enforcement using LSM hooks under adversarial agent inputs. | 🔬 In Queue |
-| **Differential AST Mutation Fuzzing for Polyglot Boundary Parsers** | `observations/polyglot/` | Grammatical mutation fuzzing evaluating parser convergence, symlink escape detection, and memory leak isolation across multi-language parsers. | 🔬 In Queue |
 
 ---
 
@@ -350,6 +361,10 @@ quadrantChart
 |  | Dynamic Multi-Model Router & Speculative Cascade | Python / AST / Entropy / SARIF | High | High | v1.0.0 | ✅ Completed |
 |  | Semantic Graph AST Code Memory & Symbol Indexer | Python / AST / Graph / SARIF | High | High | v1.0.0 | ✅ Completed |
 |  | Dual-Consumer AX Scoring & Bi-Directional Feedback | Python / AST / CEGIS | High | Medium | v1.0.0 | ✅ Completed |
+|  | Differential Polyglot AST Mutation Fuzzer | Python / AST / Fuzzing | High | Medium | v1.0.0 | ✅ Completed |
+|  | Autonomous Git Worktree Fleet Allocator | Python / Git / Process Groups | High | Medium | v1.0.0 | ✅ Completed |
+|  | Typed Epistemic Seam & Subagent Context Handshake | Python / Hash / JSON Schema | High | Medium | v1.0.0 | ✅ Completed |
+|  | Chaos Invariant Injector & Resilience Benchmark | Python / AST / Chaos | High | Medium | v1.0.0 | ✅ Completed |
 | **Fill-Ins** | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |
 |  | Disciplined Agentic Manifesto | `docs/MANIFESTO.md` | High | Medium | v0.1.0 | ✅ Completed |

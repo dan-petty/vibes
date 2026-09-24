@@ -69,6 +69,8 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Epistemic Drift & The Unreliable Teacher**](./observations/systems/29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md) | Multi-Agent Verification | Resolving mitigation-refutation conflation and catalog self-contamination with tripartite verification and immutable epistemic seams. |
 | [**Kinetic Falsification & Exploit Harnesses**](./observations/systems/30-kinetic-falsification-and-the-ephemeral-exploit-harness.md) | Verification & Security | Replacing rhetorical verifier debate with minimal executable counterexample probes in micro-sandboxes, evaluating OS exit codes as ground truth. |
 | [**Instruction Ratchet Bloat & JIT Ablation**](./observations/systems/31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md) | Context & Governance | Resolving monolithic prompt bloat and lost-in-the-middle attention decay with two-tier JIT prompt envelopes and empirical counterfactual ablation. |
+| [**Differential Polyglot AST Mutation Fuzzing**](./observations/polyglot/05-differential-ast-mutation-fuzzing-for-polyglot-boundary-parsers.md) | Polyglot (Boundary Testing) | Grammatical mutation fuzzing evaluating parser convergence, symlink escape detection, and memory leak isolation. |
+| [**Typed Epistemic Seams & Subagent Handshakes**](./observations/systems/33-typed-epistemic-seams-and-lossless-subagent-handshakes.md) | Multi-Agent Epistemics | Eliminating delegation drift with content-addressed invariant envelopes and negative schema enforcement. |
 
 ---
 
@@ -103,6 +105,8 @@ flowchart TD
 - [**Epistemic Seam & Mitigated Defect Auditing**](./patterns/epistemic-seam-and-mitigated-defect-auditing.md): Eliminating silent defect drops and catalog drift by separating refutation from mitigation and restricting negative catalog learning to ground truth.
 - [**Kinetic Exploit Probes & Invariant Leashing**](./patterns/kinetic-exploit-probes-and-invariant-leashing.md): Replacing rhetorical verifier debate with executable counterexample probes in micro-sandboxes, paired with invariant leashes tracking perimeter dependencies.
 - [**Just-In-Time Instruction Decomposition & Ablation**](./patterns/just-in-time-instruction-decomposition-and-ablation.md): Eliminating instruction ratchet bloat and lost-in-the-middle attention degradation with a two-tier JIT prompt governor, rule attribution matrix, and counterfactual ablation.
+- [**Collision-Free Worktree Fleet Allocation**](./patterns/collision-free-worktree-fleet-allocation.md): Ephemeral leased git worktrees with bounded TTL, jittered lock polling, POSIX process group containment, and automated stale pruning.
+- [**Synthetic Chaos & Invariant Convergence Testing**](./patterns/synthetic-chaos-and-invariant-convergence-testing.md): Deterministic chaos injection perturbing mechanical invariants with rollback safety and automated repair ratio telemetry.
 
 ---
 
@@ -139,6 +143,10 @@ Runnable reference implementations demonstrating core agentic engineering mechan
 | [**Polyglot CST Ingestion Engine**](./examples/polyglot-cst-parser/) | Multi-language CST parser (Python, Rust, Go, TS, Bash) with language-agnostic complexity ($M$) and pre-flight boundary guards. | `pytest examples/polyglot-cst-parser/test_cst_parser.py` |
 | [**Go Goroutine Leak Sentinel**](./examples/go-leak-sentinel/) | Go concurrency leak harness and runtime trace analyzer detecting unbuffered channel hangs, abandoned contexts, and orphan goroutines. | `pytest examples/go-leak-sentinel/test_go_leak_sentinel.py` |
 | [**Agent Experience Evaluator**](./examples/agent-experience-evaluator/) | Static analysis measuring agent usability, cognitive impedance ($M \le 6$, depth $\le 3$), and strict negative tool schemas with SARIF export. | `pytest examples/agent-experience-evaluator/test_ax_evaluator.py` |
+| [**Differential Polyglot Mutation Fuzzer**](./examples/polyglot-mutation-fuzzer/) | Grammatical AST fuzzer evaluating parser resilience, boundary depth, and ELOOP symlink loop containment. | `pytest examples/polyglot-mutation-fuzzer/test_polyglot_fuzzer.py` |
+| [**Worktree Swarm Arbiter**](./examples/worktree-swarm-arbiter/) | Ephemeral git worktree fleet broker with lease heartbeats, index lock contention mitigation, and process group isolation. | `pytest examples/worktree-swarm-arbiter/test_worktree_arbiter.py` |
+| [**Typed Context Handshake**](./examples/epistemic-context-handshake/) | Cryptographically content-addressed context envelope protocol with negative schema enforcement and epistemic loss auditing. | `pytest examples/epistemic-context-handshake/test_context_handshake.py` |
+| [**Chaos Invariant Injector**](./examples/chaos-invariant-monkey/) | Deterministic chaos engineering engine perturbing complexity, nesting, and egress invariants to benchmark self-healing. | `pytest examples/chaos-invariant-monkey/test_chaos_monkey.py` |
 
 ---
 
@@ -309,7 +317,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   │   ├── 01-rust-type-state-invariants.md
 │   │   ├── 02-typescript-cst-and-type-gymnastics.md
 │   │   ├── 03-go-goroutine-leakage-and-context-lifecycles.md
-│   │   └── 04-cpp-raii-and-lifetime-invariants-under-llm-synthesis.md
+│   │   ├── 04-cpp-raii-and-lifetime-invariants-under-llm-synthesis.md
+│   │   └── 05-differential-ast-mutation-fuzzing-for-polyglot-boundary-parsers.md
 │   └── systems/                       # Distributed systems & observability field studies
 │       ├── 01-distributed-telemetry-and-agent-waterfalls.md
 │       ├── 02-subprocess-test-harness-instrumentation-tax.md
@@ -342,7 +351,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md
 │       ├── 30-kinetic-falsification-and-the-ephemeral-exploit-harness.md
 │       ├── 31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md
-│       └── 32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md
+│       ├── 32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md
+│       └── 33-typed-epistemic-seams-and-lossless-subagent-handshakes.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── adaptive-headless-web-crawling.md
@@ -351,6 +361,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── bi-directional-metric-feedback-and-ax-scoring.md
 │   ├── binary-search-context-packing.md
 │   ├── cegis-and-hypothesis-debugging.md
+│   ├── collision-free-worktree-fleet-allocation.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
 │   ├── epistemic-hygiene-and-context-pruning.md
 │   ├── epistemic-seam-and-mitigated-defect-auditing.md
@@ -369,6 +380,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── streaming-reasoning-isolation-and-token-budgeting.md
 │   ├── structural-position-oracles.md
 │   ├── structure-driven-ci-directory-contracts.md
+│   ├── synthetic-chaos-and-invariant-convergence-testing.md
 │   ├── tool-cardinality-budget-management.md
 │   └── zero-trust-sandboxing-and-observability.md
 │
@@ -393,23 +405,27 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── docker-compose/                # Turnkey 6-service local evaluation environment
 │
 ├── examples/                          # Executable reference sample applications
-│   ├── agent-experience-evaluator/    # Agent Experience (AX) evaluator & cognitive impedance auditor
-│   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
-│   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
-│   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
-│   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
 │   ├── adaptive-web-crawler/          # Two-tier adaptive crawler with domain strategy memory
+│   ├── agent-experience-evaluator/    # Agent Experience (AX) evaluator & cognitive impedance auditor
+│   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
+│   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
+│   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
+│   ├── binary-search-context-packer/  # Binary search AST prompt context packer
+│   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
+│   ├── chaos-invariant-monkey/        # Chaos engineering & agent self-healing benchmark
+│   ├── code-smell-quantifier/         # Deterministic smell measurement (MI, clones, LCOM4)
+│   ├── deprecation-lifecycle-sentinel/ # Post-1.0 deprecation contract & removal deadline gate
+│   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
+│   ├── epistemic-context-handshake/   # Typed context envelope protocol & loss auditor
+│   ├── fastmcp-token-bucket-gateway/  # Paced tool gateway with jittered backoff
+│   ├── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
+│   ├── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
+│   ├── polyglot-mutation-fuzzer/      # Differential AST mutator & boundary fuzzer
 │   ├── prompt-mutation-fuzzer/        # Grammar-guided prompt perturbation & invariant drift testbed
+│   ├── streaming-reasoning-sanitizer/ # Streaming reasoning FSM parser & bounded stream sanitizer
 │   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
 │   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
-│   ├── ephemeral-container-sandbox/   # Hardened rootless container sandbox & CIS benchmark auditor
-│   ├── polyglot-cst-parser/           # Multi-language CST/AST engine with boundary containment guards
-│   ├── go-leak-sentinel/              # Go concurrency runtime trace analyzer & leak sentinel
-│   ├── streaming-reasoning-sanitizer/ # Streaming reasoning FSM parser & bounded stream sanitizer
-│   ├── binary-search-context-packer/  # Binary search AST prompt context packer
-│   ├── code-smell-quantifier/         # Deterministic smell measurement (MI, clones, LCOM4)
-│   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
-│   └── deprecation-lifecycle-sentinel/ # Post-1.0 deprecation contract & removal deadline gate
+│   └── worktree-swarm-arbiter/        # Git worktree fleet broker & lease manager
 │
 ├── benchmarks/                        # Multi-agent benchmark suite
 │   ├── README.md                      # Benchmark suite overview and scoring methodology
