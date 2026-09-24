@@ -140,8 +140,8 @@ URL_INTERNAL = "http://10.0.0.15/api"
 URL_SUBDOMAIN = "https://sub.example.com/v1"
 """
     evaluation = InvariantAuditor.evaluate_code("leaky", leaky_code)
-    has_leak_1 = any("10.0.0.15" in v for v in evaluation.violations)
-    has_leak_2 = any("sub.example.com" in v for v in evaluation.violations)
+    has_leak_1 = any("Private host address" in v for v in evaluation.violations)
+    has_leak_2 = any("Subdomain" in v for v in evaluation.violations)
     assert (evaluation.sanitization_leak, len(evaluation.violations), has_leak_1, has_leak_2) == (
         True,
         2,
