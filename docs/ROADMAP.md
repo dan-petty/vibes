@@ -173,9 +173,15 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Multi-target AST and text scanning, OASIS SARIF 2.1.0 output for GitHub Code Scanning, JSON, and Markdown summaries.
   - Accompanied by a comprehensive 18-test suite in `tests/test_prompt_injection_scanner.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
-- [ ] **Enterprise Change Management & Version Deprecation Protocol** (partially delivered):
-  - Delivered: the deprecation contract and removal gate — `since`/`remove_in`/`replacement`, runtime `DeprecationWarning`, major-boundary scheduling, and internal call-site migration ([`examples/deprecation-lifecycle-sentinel/`](../examples/deprecation-lifecycle-sentinel/)).
-  - Remaining: runtime feature flags carrying the same removal obligation, and automated migration tooling for agent tool schemas.
+- [x] **Enterprise Change Management & Version Deprecation Protocol (`tools/deprecation_protocol.py`)**:
+  - Deprecation contract and removal gate: `since`/`remove_in`/`replacement`, runtime `DeprecationWarning`, major-boundary scheduling, and internal call-site migration ([`examples/deprecation-lifecycle-sentinel/`](../examples/deprecation-lifecycle-sentinel/)).
+  - Runtime feature flag lifecycle management (`FeatureFlagRegistry`, `FlagState`: `EXPERIMENTAL` -> `STABLE` -> `DEPRECATED` -> `REMOVED`), verifying contract metadata (`owner`, `introduced_in`, `expires_in`), and enforcing expiration deadlines (`FLAG_EXPIRED`).
+  - AST dead-code conditional branch detection for retired feature flags (`find_dead_flag_branches`, Piranha-style refactoring).
+  - Agent tool schema evolution and parameter migration engine (`ToolSchemaMigrator`): bidirectional argument adaptation, parameter renaming, value transformation (`to_list`, `to_str`), and actionable deprecation warning emission.
+  - Mechanical schema diffing verifying backward compatibility and detecting breaking parameter drops (`diff_schemas`, `SCHEMA_BREAKING_CHANGE`).
+  - Multi-format reporting exporting to OASIS SARIF 2.1.0 (for GitHub Code Scanning), JSON, and Markdown summary tables.
+  - Accompanied by a comprehensive 13-test suite in `tests/test_deprecation_protocol.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+
 - [ ] **Certified Living Standard for Agentic Engineering**:
   - Formal specification and certification test suite for AI coding assistants.
   - Standardized open compliance badge (`Passed Vibes Invariant Gate v1.0`) for repositories engineered with disciplined agentic workflows.
