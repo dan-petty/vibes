@@ -47,7 +47,7 @@ jobs:
           script: |
             const fs = require('fs');
             const plan = fs.readFileSync('/tmp/triage_plan.txt', 'utf8');
-            
+
             // Extract labels line: '   Labels: ['...', '...']'
             const match = plan.match(/Labels:\s*\[(.*?)\]/);
             if (match && match[1]) {
@@ -55,7 +55,7 @@ jobs:
                 .split(',')
                 .map(s => s.replace(/['" ]/g, ''))
                 .filter(Boolean);
-              
+
               if (labels.length > 0) {
                 console.log(`Applying labels: ${labels.join(', ')}`);
                 await github.rest.issues.addLabels({

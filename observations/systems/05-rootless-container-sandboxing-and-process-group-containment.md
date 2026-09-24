@@ -27,7 +27,7 @@ To eliminate these vulnerabilities, we developed the **Ephemeral Rootless Contai
 flowchart TD
     Payload["Untrusted Agent Payload / Test Script"] --> Harness["ContainerSandboxHarness"]
     Harness --> Policy["SandboxSecurityPolicy"]
-    
+
     subgraph CIS["CIS Security Controls"]
         Policy --> C1["CIS-5.1: Read-Only Rootfs"]
         Policy --> C2["CIS-5.2: Network None (Loopback Only)"]

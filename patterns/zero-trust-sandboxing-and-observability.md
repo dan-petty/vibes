@@ -26,7 +26,7 @@ The pattern combines **Container Sandboxing Invariants** with an **OpenTelemetry
 flowchart TD
     subgraph Host / Cluster
         AgentController[Agent Controller] -->|Exec In Sandbox| Sandbox[Hardened Container Sandbox]
-        
+
         subgraph Sandbox Boundary
             direction TB
             UserSpace[Unprivileged User 10001]
@@ -95,7 +95,7 @@ def run_in_sandbox(command: list[str], traceparent: str, timeout_seconds: int = 
     env = os.environ.copy()
     env["TRACEPARENT"] = traceparent
     env["PYTHONUNBUFFERED"] = "1"
-    
+
     return subprocess.run(
         ["docker", "exec", "-e", f"TRACEPARENT={traceparent}", "vibes-agent-sandbox", *command],
         capture_output=True,

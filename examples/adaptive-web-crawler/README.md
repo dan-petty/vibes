@@ -29,18 +29,18 @@ The **Adaptive Web Crawler** resolves these issues with a hybrid execution engin
 flowchart TD
     URL[Target URL] --> SecCheck[SSRF Security Gate: Block RFC 1918]
     SecCheck --> StratLookup{Domain Strategy Store<br/>Known Strategy?}
-    
+
     StratLookup -->|Requires JS / Headless| Tier2[Tier-2: Headless Browser Driver]
     StratLookup -->|Unknown or Static| Tier1[Tier-1: Fast HTTP + Authentic Headers]
-    
+
     Tier1 --> SPADetect{SPA Shell Detector<br/>Empty or Hydrated?}
     SPADetect -->|Rich Content| Clean1[HTML Content Cleaner: Strip Nav & Scripts]
     SPADetect -->|Empty Shell / JS Required| Escalate[Record Strategy: Escalate to Tier-2]
-    
+
     Escalate --> Tier2
     Tier2 --> WaitHydration[Wait for Hydration Selector / Network Idle]
     WaitHydration --> Clean2[HTML Content Cleaner: Strip Modals & Boilerplate]
-    
+
     Clean1 --> RecordSuccess[Update Strategy Store: Success Rate]
     Clean2 --> RecordSuccess
     RecordSuccess --> Output[Clean Markdown + Token Estimates]

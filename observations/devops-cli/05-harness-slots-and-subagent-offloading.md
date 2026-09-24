@@ -44,11 +44,11 @@ In `devops-cli`, we designed the **Agent Harness Slot & Constellation Architectu
 ```mermaid
 flowchart TD
     UserGoal[User Goal / Architecture Task] --> Frontier["Frontier Model ('Big Decides')<br>Decomposes Goal & Designs Interface"]
-    
+
     Frontier --> Slot1["Sub-Agent Slot A: Code Explorer<br>Local Model: Qwen 2.5 Coder"]
     Frontier --> Slot2["Sub-Agent Slot B: AST & Repomap<br>Local Model: Granite Code"]
     Frontier --> Slot3["Sub-Agent Slot C: Test Author<br>Local Model: DeepSeek Coder"]
-    
+
     Slot1 --> FastMCP[Local FastMCP Tools / Valkey L2 Cache]
     Slot2 --> FastMCP
     Slot3 --> FastMCP

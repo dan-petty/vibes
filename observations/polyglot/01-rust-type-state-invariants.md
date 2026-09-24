@@ -40,7 +40,7 @@ pub struct ClusterClient<State> {
 
 impl ClusterClient<Unauthenticated> {
     pub fn new(endpoint: &str) -> Self { ... }
-    
+
     pub fn authenticate(self, token: &str) -> Result<ClusterClient<Authenticated>, AuthError> {
         // Consumes self, returning new state
         Ok(ClusterClient { endpoint: self.endpoint, state: std::marker::PhantomData })

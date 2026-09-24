@@ -1,9 +1,9 @@
 # Observation 25: Multi-Model Capability Boundaries & Dynamic Routing Oracles
 
-**Category**: Distributed Systems & Multi-Model Inference Economics
-**Status**: Field-Verified
-**Canonical Implementation**: [`tools/model_router.py`](../../tools/model_router.py)
-**Verification Suite**: [`tests/test_model_router.py`](../../tests/test_model_router.py)
+**Category**: Distributed Systems & Multi-Model Inference Economics  
+**Status**: Field-Verified  
+**Canonical Implementation**: [`tools/model_router.py`](../../tools/model_router.py)  
+**Verification Suite**: [`tests/test_model_router.py`](../../tests/test_model_router.py)  
 
 ---
 

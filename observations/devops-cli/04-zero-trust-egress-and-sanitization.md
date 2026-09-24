@@ -46,7 +46,7 @@ In `devops-cli`, we codified the **Zero Information Leakage & Comprehensive Envi
 ```mermaid
 flowchart TD
     Raw[Raw Workstation Context] --> Filter[Sanitization Filter & Agent Invariant]
-    
+
     Filter --> SafeIP[IPs: RFC 5737 / Loopback<br>192.0.2.0/24, 198.51.100.0/24, 127.0.0.1]
     Filter --> SafeHost[Hostnames: Standard example.com<br>Strictly NO subdomains]
     Filter --> SafeRole[Abstract Roles<br>&lt;storage-node&gt;, &lt;gpu-worker&gt;]
