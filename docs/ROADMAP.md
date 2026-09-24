@@ -196,6 +196,12 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Multi-format reporting exporting to OASIS SARIF 2.1.0 (for GitHub Code Scanning), JSON telemetry, and formatted Markdown reports.
   - Accompanied by Observation 22 (`observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md`) and a comprehensive 13-test suite in `tests/test_cegis_engine.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
+- [x] **Attention Dilution & Context Rot Auditor with Multi-Scale Compactor (`tools/context_rot_auditor.py`)**:
+  - Automated inspection of long-horizon AI agent transcripts and prompt payloads calculating the Attention Dilution Index (ADI), detecting lost-in-the-middle invariant decay, observation bloat, and repetitive traceback chatter (`ROT001` - `ROT005`).
+  - Active multi-scale context compaction: observation masking (reclaiming 80%+ tokens from verbose command/tool dumps), traceback deduplication, and anchor re-pinning (extracting invariant envelopes and re-anchoring them to the immediate prompt suffix).
+  - Multi-format reporting exporting to OASIS SARIF 2.1.0 (for GitHub Code Scanning), JSON telemetry, and formatted Markdown reports.
+  - Accompanied by Observation 23 (`observations/systems/23-attention-dilution-context-rot-and-active-compaction.md`) and a comprehensive 12-test suite in `tests/test_context_rot_auditor.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+
 ---
 
 ## Research & Observation Backlog (Living Research Queue)
@@ -217,7 +223,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Oracle Measurement Validity & Harness-Smeared Metrics** | `observations/systems/` | When a deterministic oracle measures its own scaffolding, how long does an agent chase an unfixable defect before suspecting the ruler rather than the object? | ✅ Completed ([Obs 11](../observations/systems/11-silent-certification-failure-and-gate-integrity.md)) |
 | **C++ RAII & Lifetime Invariants Under LLM Synthesis** | `observations/polyglot/` | Can LLMs reliably avoid use-after-free and double-free bugs without Rust-like compile-time guarantees? | 🔬 In Queue |
 | **eBPF Process Tracing for Agent Sandbox Introspection** | `observations/systems/` | Using eBPF probes to capture syscall patterns, file access, and network socket operations of subagents in real-time. | 🔬 In Queue |
-| **Attention Dilution & Context Decay in Ultra-Long Sessions** | `observations/cognitive/` | Measuring degradation in constraint adherence as context lengths exceed 100k tokens and evaluating multi-scale pruning. | 🔬 In Queue |
+| **Attention Dilution & Context Decay in Ultra-Long Sessions** | `observations/systems/` | Measuring degradation in constraint adherence as context lengths exceed 100k tokens and evaluating multi-scale pruning. | ✅ Completed ([Obs 23](../observations/systems/23-attention-dilution-context-rot-and-active-compaction.md)) |
 | **Self-Correction Loops vs. Constraint Accumulation** | `observations/systems/` | Comparing conversational "fix this error" prompting vs. formal CEGIS negative-constraint accumulation. | ✅ Completed ([Obs 22](../observations/systems/22-self-correction-loops-vs-cegis-constraint-accumulation.md)) |
 
 ---
@@ -242,6 +248,7 @@ quadrantChart
     "Multi-model leaderboard": [0.88, 0.68]
     "AIBOM supply-chain scanner": [0.74, 0.94]
     "Certified living standard": [0.92, 0.84]
+    "Context rot auditor": [0.58, 0.88]
     "Prompt injection scanner": [0.50, 0.50]
     "Toy chat-with-your-code demos": [0.86, 0.12]
     "Unsanitized transcript dumps": [0.16, 0.10]
@@ -291,6 +298,7 @@ quadrantChart
 |  | Enterprise Change Management & Version Deprecation Protocol | Python / SemVer / AST | High | Medium | v1.0.0 | ✅ Completed |
 |  | Certified Living Standard & Compliance Badge | Specification / Test Suite | High | High | v1.0.0 | ✅ Completed |
 |  | CEGIS Invariant Repair Engine & Convergence Oracle | Python / AST / CEGIS | High | High | v1.0.0 | ✅ Completed |
+|  | Context Rot Auditor & Multi-Scale Compactor | Python / Attention / AST | High | Medium | v1.0.0 | ✅ Completed |
 | **Fill-Ins** | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |
 |  | Disciplined Agentic Manifesto | `docs/MANIFESTO.md` | High | Medium | v0.1.0 | ✅ Completed |
