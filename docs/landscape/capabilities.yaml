@@ -60,6 +60,14 @@ feature_catalog:
   interactive_prompts: Collects values from the author interactively
   template_ecosystem: Offers a published library of community templates
   update_in_place: Re-applies a newer template to a project already generated from it
+  polyglot_fuzzing: Fuzzes polyglot parsers against boundary depth, syntax truncation, and symlinks
+  worktree_arbitration: Coordinates isolated git worktrees, lease heartbeats and index-lock mitigation
+  epistemic_envelopes: Enforces cryptographic context envelopes and negative schema boundaries
+  chaos_injection: Injects controlled, reversible mechanical mutations to benchmark agent resilience
+  lsm_kernel_gate: Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing
+  semantic_reconciliation: Resolves git worktree merge collisions via commutative AST symbol graphs
+  wasm_sandboxing: Sandboxes ephemeral agent tools using WASI 0.2 capability tokens and gas metering
+  ast_crdt: Real-time conflict-free collaborative editing over abstract syntax trees across agents
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a
@@ -391,3 +399,99 @@ capabilities:
         has:
           interactive_prompts: "Generators prompt through an interactive dialogue"
           template_ecosystem: "A published registry of installable generators"
+
+  - key: polyglot-mutation-fuzzer
+    kind: capability
+    title: Differential polyglot AST mutation fuzzer
+    short: Polyglot fuzzer
+    path: examples/polyglot-mutation-fuzzer/
+    paths:
+      - examples/polyglot-mutation-fuzzer/
+    ours:
+      - polyglot_fuzzing
+      - multi_language
+      - sarif_output
+
+  - key: worktree-swarm-arbiter
+    kind: capability
+    title: Autonomous git worktree fleet allocator
+    short: Worktree arbiter
+    path: examples/worktree-swarm-arbiter/
+    paths:
+      - examples/worktree-swarm-arbiter/
+    ours:
+      - worktree_arbitration
+      - sarif_output
+
+  - key: epistemic-context-handshake
+    kind: capability
+    title: Typed epistemic seam and subagent context handshake
+    short: Context handshake
+    path: examples/epistemic-context-handshake/
+    paths:
+      - examples/epistemic-context-handshake/
+    ours:
+      - epistemic_envelopes
+      - sarif_output
+
+  - key: chaos-invariant-monkey
+    kind: capability
+    title: Chaos invariant injector and resilience benchmark
+    short: Chaos monkey
+    path: examples/chaos-invariant-monkey/
+    paths:
+      - examples/chaos-invariant-monkey/
+    ours:
+      - chaos_injection
+      - sarif_output
+
+  - key: lsm-kernel-gate
+    kind: capability
+    title: eBPF runtime LSM kernel gate and dynamic syscall fuzzer
+    short: LSM kernel gate
+    path: examples/ebpf-lsm-kernel-gate/
+    paths:
+      - examples/ebpf-lsm-kernel-gate/
+    ours:
+      - lsm_kernel_gate
+      - syscall_isolation
+      - egress_control
+      - sarif_output
+
+  - key: ast-semantic-reconciler
+    kind: capability
+    title: Autonomous 3-way AST semantic reconciler and conflict arbitrator
+    short: AST reconciler
+    path: examples/ast-semantic-reconciler/
+    paths:
+      - examples/ast-semantic-reconciler/
+    ours:
+      - semantic_reconciliation
+      - sarif_output
+
+  - key: wasm-capability-sandbox
+    kind: capability
+    title: WebAssembly component model and capability-based sandbox gateway
+    short: Wasm sandbox
+    path: examples/wasm-capability-sandbox/
+    paths:
+      - examples/wasm-capability-sandbox/
+    ours:
+      - wasm_sandboxing
+      - resource_caps
+      - egress_control
+      - sarif_output
+
+  - key: ast-crdt-collaborative-editor
+    kind: capability
+    title: Real-time AST conflict-free replicated data type for collaborative editing
+    short: AST CRDT
+    path: examples/ast-crdt-collaborative-editor/
+    paths:
+      - examples/ast-crdt-collaborative-editor/
+    ours:
+      - ast_crdt
+      - sarif_output
+
+
+
