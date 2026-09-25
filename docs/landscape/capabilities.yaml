@@ -67,6 +67,7 @@ feature_catalog:
   lsm_kernel_gate: Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing
   semantic_reconciliation: Resolves git worktree merge collisions via commutative AST symbol graphs
   wasm_sandboxing: Sandboxes ephemeral agent tools using WASI 0.2 capability tokens and gas metering
+  ast_crdt: Real-time conflict-free collaborative editing over abstract syntax trees across agents
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a
@@ -480,5 +481,17 @@ capabilities:
       - resource_caps
       - egress_control
       - sarif_output
+
+  - key: ast-crdt-collaborative-editor
+    kind: capability
+    title: Real-time AST conflict-free replicated data type for collaborative editing
+    short: AST CRDT
+    path: examples/ast-crdt-collaborative-editor/
+    paths:
+      - examples/ast-crdt-collaborative-editor/
+    ours:
+      - ast_crdt
+      - sarif_output
+
 
 

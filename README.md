@@ -74,6 +74,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**eBPF LSM Kernel Gates & Dynamic Containment Fuzzing**](./observations/systems/34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md) | Kernel Security & Invariants | Synchronous pre-execution denial (`-EPERM`), zero race windows, and dynamic Syzkaller boundary fuzzing for agent sandboxes. |
 | [**3-Way AST Semantic Reconciliation & Collision Arbitration**](./observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md) | Multi-Agent Concurrency & Git | Commutative AST symbol reconciliation eliminating line-based false merge conflicts across concurrent subagent worktrees. |
 | [**WASI Component Models & Capability-Based Tool Sandboxing**](./observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md) | Systems & Runtime Sandboxing | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. |
+| [**Real-Time AST-CRDTs & Multi-Agent Swarms**](./observations/systems/37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md) | Multi-Agent Concurrency & CRDTs | Eliminating character-level syntax errors (34.2% -> 0.0%) with replicated AST nodes, Lamport clocks, and fractional ordering. |
 
 ---
 
@@ -113,6 +114,7 @@ flowchart TD
 - [**Kernel-Enforced LSM Sandbox Containment**](./patterns/kernel-enforced-lsm-sandbox-containment.md): Synchronous pre-execution denial (`-EPERM`) at the BPF LSM boundary with dynamic Syzkaller boundary fuzzing and declarative Tetragon policy compilation.
 - [**3-Way AST Semantic Reconciliation**](./patterns/3-way-ast-semantic-reconciliation.md): Decomposing source files into commutative symbol graphs to eliminate line-based false merge conflicts across concurrent agent worktrees.
 - [**Capability-Based Wasm Sandboxing**](./patterns/capability-based-wasm-sandboxing.md): Executing untrusted agent tools inside WebAssembly components governed by unforgeable capability tokens, deterministic gas metering, and linear memory containment.
+- [**AST-CRDTs for Real-Time Agent Collaboration**](./patterns/ast-crdts-for-real-time-agent-collaboration.md): Replicating Abstract Syntax Tree nodes as first-class distributed entities with Lamport timestamps, fractional positioning, and deterministic cycle prevention.
 
 ---
 
@@ -156,6 +158,7 @@ Runnable reference implementations demonstrating core agentic engineering mechan
 | [**eBPF LSM Kernel Gate**](./examples/ebpf-lsm-kernel-gate/) | Synchronous in-kernel LSM policy enforcement (`bpf_lsm_*`) with dynamic Syzkaller boundary fuzzing and Tetragon export. | `pytest examples/ebpf-lsm-kernel-gate/test_lsm_gate.py` |
 | [**AST Semantic Reconciler**](./examples/ast-semantic-reconciler/) | 3-way commutative AST symbol merger eliminating false git conflicts and unifying import sets with SARIF export. | `pytest examples/ast-semantic-reconciler/test_reconciler.py` |
 | [**Wasm Capability Sandbox**](./examples/wasm-capability-sandbox/) | WASI 0.2 object-capability isolation, WIT interface validation, and gas-metered execution eliminating ambient authority. | `pytest examples/wasm-capability-sandbox/test_wasm_sandbox.py` |
+| [**AST-CRDT Collaborative Editor**](./examples/ast-crdt-collaborative-editor/) | Real-time AST Tree-CRDT collaborative editor with Lamport clocks, fractional ordering, and cycle-free distributed convergence. | `pytest examples/ast-crdt-collaborative-editor/test_ast_crdt.py` |
 
 ---
 
@@ -364,12 +367,14 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 33-typed-epistemic-seams-and-lossless-subagent-handshakes.md
 │       ├── 34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md
 │       ├── 35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md
-│       └── 36-wasi-component-models-and-capability-based-tool-sandboxing.md
+│       ├── 36-wasi-component-models-and-capability-based-tool-sandboxing.md
+│       └── 37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
 │   ├── adaptive-headless-web-crawling.md
 │   ├── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
+│   ├── ast-crdts-for-real-time-agent-collaboration.md
 │   ├── autonomous-sdlc-project-management.md
 │   ├── bi-directional-metric-feedback-and-ax-scoring.md
 │   ├── binary-search-context-packing.md
@@ -424,6 +429,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── agent-experience-evaluator/    # Agent Experience (AX) evaluator & cognitive impedance auditor
 │   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
 │   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
+│   ├── ast-crdt-collaborative-editor/ # Real-time AST Tree-CRDT collaborative editor & swarm convergence
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
 │   ├── ast-semantic-reconciler/        # Autonomous 3-way AST semantic reconciler & conflict arbitrator
 │   ├── binary-search-context-packer/  # Binary search AST prompt context packer
