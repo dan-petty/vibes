@@ -103,5 +103,5 @@ Assemble docstring, merged imports, and reconciled statements. Unparse using `as
 ## 5. Reference Implementation
 
 See [`examples/ast-semantic-reconciler/`](../examples/ast-semantic-reconciler/):
-- [`reconciler.py`](../examples/ast-semantic-reconciler/reconciler.py): Production implementation certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$).
+- [`ast_reconciler.py`](../examples/ast-semantic-reconciler/ast_reconciler.py): Production implementation certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$).
 - [`test_reconciler.py`](../examples/ast-semantic-reconciler/test_reconciler.py): Full test suite validating commutative functions, method merging, import union, and SARIF telemetry.

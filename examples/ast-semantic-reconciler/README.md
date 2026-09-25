@@ -70,13 +70,13 @@ flowchart TD
 
 ```bash
 # Perform 3-way semantic reconciliation
-python reconciler.py --base base.py --ours ours.py --theirs theirs.py --output merged.py
+python ast_reconciler.py --base base.py --ours ours.py --theirs theirs.py --output merged.py
 
 # Emit OASIS SARIF 2.1.0 diagnostic report
-python reconciler.py --base base.py --ours ours.py --theirs theirs.py --format sarif
+python ast_reconciler.py --base base.py --ours ours.py --theirs theirs.py --format sarif
 
 # Emit Markdown summary table
-python reconciler.py --base base.py --ours ours.py --theirs theirs.py --format markdown
+python ast_reconciler.py --base base.py --ours ours.py --theirs theirs.py --format markdown
 ```
 
 ### Git Custom Merge Driver Configuration
@@ -87,7 +87,7 @@ Configure git to route Python file merges through the AST Semantic Reconciler:
 # In .git/config or ~/.gitconfig
 [merge "ast-reconciler"]
     name = Autonomous 3-Way AST Semantic Reconciler
-    driver = python /path/to/reconciler.py --base %O --ours %A --theirs %B --output %A
+    driver = python /path/to/ast_reconciler.py --base %O --ours %A --theirs %B --output %A
 ```
 
 ```ini

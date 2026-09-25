@@ -11,7 +11,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from reconciler import (
+from ast_reconciler import (
     ReconciliationStatus,
     SymbolKind,
     classify_statement_symbol,

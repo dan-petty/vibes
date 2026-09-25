@@ -119,6 +119,6 @@ We benchmarked the 3-Way AST Semantic Reconciler against standard Git `diff3` ac
 ## 5. Architectural Invariants & Reference Implementation
 
 The complete executable reference tool is located at [`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/):
-- **Executable Core**: [`reconciler.py`](../../examples/ast-semantic-reconciler/reconciler.py) certified compliant under AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
+- **Executable Core**: [`ast_reconciler.py`](../../examples/ast-semantic-reconciler/ast_reconciler.py) certified compliant under AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 - **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 10 unit tests achieving 94% test coverage.
 - **Git Driver Protocol**: Integrates as a native git custom merge driver via `.gitattributes` (`*.py merge=ast-reconciler`).
