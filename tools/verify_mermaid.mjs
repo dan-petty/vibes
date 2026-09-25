@@ -17,7 +17,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 
-const SKIP_DIRS = new Set([".git", "node_modules", "__pycache__", ".venv"]);
+const SKIP_DIRS = new Set([".git", "node_modules", "__pycache__", ".venv", ".data"]);
 
 function installDom() {
   const dom = new JSDOM("<!DOCTYPE html><body></body>", { pretendToBeVisual: true });
@@ -29,10 +29,18 @@ function installDom() {
 }
 
 function collectMarkdown(target) {
-  if (statSync(target).isFile()) return target.endsWith(".md") ? [target] : [];
-  return readdirSync(target).flatMap((entry) =>
-    SKIP_DIRS.has(entry) ? [] : collectMarkdown(join(target, entry)),
-  );
+  try {
+    if (statSync(target).isFile()) return target.endsWith(".md") ? [target] : [];
+  } catch {
+    return [];
+  }
+  try {
+    return readdirSync(target).flatMap((entry) =>
+      SKIP_DIRS.has(entry) ? [] : collectMarkdown(join(target, entry)),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function extractDiagrams(file) {

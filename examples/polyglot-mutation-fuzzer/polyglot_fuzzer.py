@@ -11,7 +11,9 @@ import argparse
 import ast
 import contextlib
 import json
+import shutil
 import sys
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -179,6 +181,15 @@ def execute_mutation_check(
     )
 
 
+def _cleanup_symlink_tree(base_dir: Path, loop_link: Path) -> None:
+    """Safely unlink loop and remove temporary directory."""
+    with contextlib.suppress(OSError):
+        loop_link.unlink(missing_ok=True)
+        child = base_dir / "cycle_child"
+        if child.exists():
+            shutil.rmtree(child, ignore_errors=True)
+
+
 def evaluate_symlink_containment(base_dir: Path) -> MutationResult:
     """Verify that file traversal terminates on circular symlinks."""
     start_time = time.perf_counter()
@@ -187,20 +198,23 @@ def evaluate_symlink_containment(base_dir: Path) -> MutationResult:
     survived = True
     status = "LOOP_CONTAINED"
 
-    curr = loop_link
-    for _ in range(50):
-        try:
-            resolved = curr.resolve()
-            if resolved in visited:
+    try:
+        curr = loop_link
+        for _ in range(50):
+            try:
+                resolved = curr.resolve()
+                if resolved in visited:
+                    break
+                visited.add(resolved)
+                curr = resolved / "cycle_child" / "loop_back"
+            except (OSError, RuntimeError) as exc:
+                status = f"HANDLED_FS_ERROR: {exc}"
                 break
-            visited.add(resolved)
-            curr = resolved / "cycle_child" / "loop_back"
-        except (OSError, RuntimeError) as exc:
-            status = f"HANDLED_FS_ERROR: {exc}"
-            break
-    else:
-        survived = False
-        status = "SYMLINK_ESCAPE_INFINITE_LOOP"
+        else:
+            survived = False
+            status = "SYMLINK_ESCAPE_INFINITE_LOOP"
+    finally:
+        _cleanup_symlink_tree(base_dir, loop_link)
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
     return MutationResult(
@@ -364,7 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         "typescript": "export function greet(name: string): string {\n    return `Hi ${name}`;\n}\n",
         "bash": "#!/usr/bin/env bash\necho 'hello world'\n",
     }
-    report = run_fuzz_campaign(seeds, Path(".data/fuzz_symlink_test"))
+    with tempfile.TemporaryDirectory(prefix="vibes_fuzz_") as tmp_d:
+        report = run_fuzz_campaign(seeds, Path(tmp_d))
 
     if opts.format == "json":
         body = json.dumps(asdict(report), indent=2)
