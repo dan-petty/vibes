@@ -173,40 +173,33 @@ def test_sarif_and_markdown_exporters() -> None:
     )
 
 
-def test_main_cli_execution_clean(tmp_path: Path) -> None:
-    """Verify main CLI command execution writes merged output to file."""
+def _write_source_files(
+    tmp_path: Path,
+    base_src: str,
+    ours_src: str,
+    theirs_src: str,
+) -> tuple[Path, Path, Path]:
+    """Helper to write 3-way test sources to temporary paths."""
     base_file = tmp_path / "base.py"
     ours_file = tmp_path / "ours.py"
     theirs_file = tmp_path / "theirs.py"
+    base_file.write_text(base_src, encoding="utf-8")
+    ours_file.write_text(ours_src, encoding="utf-8")
+    theirs_file.write_text(theirs_src, encoding="utf-8")
+    return base_file, ours_file, theirs_file
+
+
+def test_main_cli_execution_clean(tmp_path: Path) -> None:
+    """Verify main CLI command execution writes merged output to file."""
+    b, o, t = _write_source_files(tmp_path, "x = 1\n", "x = 1\ndef fa(): pass\n", "x = 1\ndef fb(): pass\n")
     out_file = tmp_path / "out.py"
-
-    base_file.write_text("x = 1\n", encoding="utf-8")
-    ours_file.write_text("x = 1\ndef fa(): pass\n", encoding="utf-8")
-    theirs_file.write_text("x = 1\ndef fb(): pass\n", encoding="utf-8")
-
-    code = main([
-        "--base", str(base_file),
-        "--ours", str(ours_file),
-        "--theirs", str(theirs_file),
-        "--output", str(out_file),
-    ])
+    code = main(["--base", str(b), "--ours", str(o), "--theirs", str(t), "--output", str(out_file)])
     assert (code, out_file.exists(), "def fa" in out_file.read_text(encoding="utf-8")) == (0, True, True)
 
 
 def test_main_cli_execution_collision(tmp_path: Path) -> None:
     """Verify main CLI command returns exit code 1 on collision."""
-    base_file = tmp_path / "base.py"
-    ours_file = tmp_path / "ours.py"
-    theirs_file = tmp_path / "theirs.py"
-
-    base_file.write_text("def run(): return 0\n", encoding="utf-8")
-    ours_file.write_text("def run(): return 1\n", encoding="utf-8")
-    theirs_file.write_text("def run(): return 2\n", encoding="utf-8")
-
-    code = main([
-        "--base", str(base_file),
-        "--ours", str(ours_file),
-        "--theirs", str(theirs_file),
-        "--format", "markdown",
-    ])
+    b, o, t = _write_source_files(tmp_path, "def run(): return 0\n", "def run(): return 1\n", "def run(): return 2\n")
+    code = main(["--base", str(b), "--ours", str(o), "--theirs", str(t), "--format", "markdown"])
     assert code == 1
+

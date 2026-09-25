@@ -419,14 +419,13 @@ def _reconcile_all_symbols(
 
 
 def _build_reconciliation_result(
-    doc_node: ast.Expr | None,
-    imports: list[str],
-    stmts: list[ast.stmt],
+    merged_data: tuple[ast.Expr | None, list[str], list[ast.stmt]],
     collisions: list[CollisionReport],
     false_conflicts: int,
     elapsed_ms: float,
 ) -> ReconciliationResult:
     """Construct final ReconciliationResult data object."""
+    doc_node, imports, stmts = merged_data
     if collisions:
         return ReconciliationResult(
             status=ReconciliationStatus.SEMANTIC_COLLISION,
@@ -470,7 +469,12 @@ def reconcile_3way(base_code: str, ours_code: str, theirs_code: str) -> Reconcil
     total_false = import_conflicts + symbol_conflicts
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
-    return _build_reconciliation_result(doc_node, merged_imports, merged_stmts, collisions, total_false, elapsed_ms)
+    return _build_reconciliation_result(
+        (doc_node, merged_imports, merged_stmts),
+        collisions,
+        total_false,
+        elapsed_ms,
+    )
 
 
 def to_sarif(result: ReconciliationResult) -> dict[str, Any]:
