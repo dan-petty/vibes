@@ -94,8 +94,9 @@ def test_execute_mutation_check_survived() -> None:
 def test_symlink_containment_and_tree(tmp_path: Path) -> None:
     """Verify cyclic symlink generation and containment loop guard."""
     loop_link = build_cyclical_symlink_tree(tmp_path)
+    tree_created = loop_link.parent.exists() and loop_link.is_symlink()
     res = evaluate_symlink_containment(tmp_path)
-    assert (loop_link.parent.exists(), res.survived) == (True, True)
+    assert (tree_created, res.survived, not loop_link.exists()) == (True, True, True)
 
 
 def test_run_fuzz_campaign(tmp_path: Path) -> None:
