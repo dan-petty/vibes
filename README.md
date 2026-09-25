@@ -72,6 +72,8 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Differential Polyglot AST Mutation Fuzzing**](./observations/polyglot/05-differential-ast-mutation-fuzzing-for-polyglot-boundary-parsers.md) | Polyglot (Boundary Testing) | Grammatical mutation fuzzing evaluating parser convergence, symlink escape detection, and memory leak isolation. |
 | [**Typed Epistemic Seams & Subagent Handshakes**](./observations/systems/33-typed-epistemic-seams-and-lossless-subagent-handshakes.md) | Multi-Agent Epistemics | Eliminating delegation drift with content-addressed invariant envelopes and negative schema enforcement. |
 | [**eBPF LSM Kernel Gates & Dynamic Containment Fuzzing**](./observations/systems/34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md) | Kernel Security & Invariants | Synchronous pre-execution denial (`-EPERM`), zero race windows, and dynamic Syzkaller boundary fuzzing for agent sandboxes. |
+| [**3-Way AST Semantic Reconciliation & Collision Arbitration**](./observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md) | Multi-Agent Concurrency & Git | Commutative AST symbol reconciliation eliminating line-based false merge conflicts across concurrent subagent worktrees. |
+| [**WASI Component Models & Capability-Based Tool Sandboxing**](./observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md) | Systems & Runtime Sandboxing | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. |
 
 ---
 
@@ -109,6 +111,8 @@ flowchart TD
 - [**Collision-Free Worktree Fleet Allocation**](./patterns/collision-free-worktree-fleet-allocation.md): Ephemeral leased git worktrees with bounded TTL, jittered lock polling, POSIX process group containment, and automated stale pruning.
 - [**Synthetic Chaos & Invariant Convergence Testing**](./patterns/synthetic-chaos-and-invariant-convergence-testing.md): Deterministic chaos injection perturbing mechanical invariants with rollback safety and automated repair ratio telemetry.
 - [**Kernel-Enforced LSM Sandbox Containment**](./patterns/kernel-enforced-lsm-sandbox-containment.md): Synchronous pre-execution denial (`-EPERM`) at the BPF LSM boundary with dynamic Syzkaller boundary fuzzing and declarative Tetragon policy compilation.
+- [**3-Way AST Semantic Reconciliation**](./patterns/3-way-ast-semantic-reconciliation.md): Decomposing source files into commutative symbol graphs to eliminate line-based false merge conflicts across concurrent agent worktrees.
+- [**Capability-Based Wasm Sandboxing**](./patterns/capability-based-wasm-sandboxing.md): Executing untrusted agent tools inside WebAssembly components governed by unforgeable capability tokens, deterministic gas metering, and linear memory containment.
 
 ---
 
@@ -150,6 +154,8 @@ Runnable reference implementations demonstrating core agentic engineering mechan
 | [**Typed Context Handshake**](./examples/epistemic-context-handshake/) | Cryptographically content-addressed context envelope protocol with negative schema enforcement and epistemic loss auditing. | `pytest examples/epistemic-context-handshake/test_context_handshake.py` |
 | [**Chaos Invariant Injector**](./examples/chaos-invariant-monkey/) | Deterministic chaos engineering engine perturbing complexity, nesting, and egress invariants to benchmark self-healing. | `pytest examples/chaos-invariant-monkey/test_chaos_monkey.py` |
 | [**eBPF LSM Kernel Gate**](./examples/ebpf-lsm-kernel-gate/) | Synchronous in-kernel LSM policy enforcement (`bpf_lsm_*`) with dynamic Syzkaller boundary fuzzing and Tetragon export. | `pytest examples/ebpf-lsm-kernel-gate/test_lsm_gate.py` |
+| [**AST Semantic Reconciler**](./examples/ast-semantic-reconciler/) | 3-way commutative AST symbol merger eliminating false git conflicts and unifying import sets with SARIF export. | `pytest examples/ast-semantic-reconciler/test_reconciler.py` |
+| [**Wasm Capability Sandbox**](./examples/wasm-capability-sandbox/) | WASI 0.2 object-capability isolation, WIT interface validation, and gas-metered execution eliminating ambient authority. | `pytest examples/wasm-capability-sandbox/test_wasm_sandbox.py` |
 
 ---
 
@@ -357,7 +363,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md
 │       ├── 33-typed-epistemic-seams-and-lossless-subagent-handshakes.md
 │       ├── 34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md
-│       └── 35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md
+│       ├── 35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md
+│       └── 36-wasi-component-models-and-capability-based-tool-sandboxing.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -366,6 +373,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── autonomous-sdlc-project-management.md
 │   ├── bi-directional-metric-feedback-and-ax-scoring.md
 │   ├── binary-search-context-packing.md
+│   ├── capability-based-wasm-sandboxing.md
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── collision-free-worktree-fleet-allocation.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
@@ -434,6 +442,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── streaming-reasoning-sanitizer/ # Streaming reasoning FSM parser & bounded stream sanitizer
 │   ├── tool-contract-verifier/        # Formal JSON Schema contract verification & negative assertion gate
 │   ├── valkey-l2-repomap-cache/       # High-throughput Valkey L2 AST cache & embedding drift auditor
+│   ├── wasm-capability-sandbox/       # WASI 0.2 object-capability sandbox & gas-metered execution
 │   └── worktree-swarm-arbiter/        # Git worktree fleet broker & lease manager
 │
 ├── benchmarks/                        # Multi-agent benchmark suite

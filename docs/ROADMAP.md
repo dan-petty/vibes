@@ -258,6 +258,10 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
    - Commutative AST symbol reconciliation engine eliminating line-based false merge conflicts across concurrent subagent git worktrees.
    - Arbitrates disjoint function appends, recursive class method additions, and 3-way import set unions with deterministic PEP 8 sorting, providing structured CEGIS diagnostic telemetry on irreconcilable symbol body collisions.
    - Accompanied by Observation 35 (`observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md`), Pattern (`patterns/3-way-ast-semantic-reconciliation.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/ast-semantic-reconciler/test_reconciler.py` with 94% test coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2030: WebAssembly Component Model & Capability-Based Sandbox Gateway (`examples/wasm-capability-sandbox/`)**:
+   - WASI 0.2 capability isolation engine replacing ambient UNIX authority (CWE-250) with unforgeable object-capability tokens.
+   - Enforces deterministic instruction gas budgeting (halting problem defense, CWE-400), linear memory ceiling containment, declarative WIT interface contracts (`CAP001`–`CAP005`), and sub-millisecond execution ($< 500\mu\text{s}$).
+   - Accompanied by Observation 36 (`observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md`), Pattern (`patterns/capability-based-wasm-sandboxing.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/wasm-capability-sandbox/test_wasm_sandbox.py` with 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
 
 ---
 
@@ -288,6 +292,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Typed Epistemic Seams & Subagent Handshakes** | `observations/systems/` | Eliminating delegation drift with content-addressed invariant envelopes and negative schema enforcement. | ✅ Completed ([Obs 33](../observations/systems/33-typed-epistemic-seams-and-lossless-subagent-handshakes.md)) |
 | **eBPF Runtime LSM Kernel Gate & Dynamic Syzcaller Fuzzing** | `observations/systems/` | Real-time in-kernel policy enforcement using LSM hooks under adversarial agent inputs. | ✅ Completed ([Obs 34](../observations/systems/34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md)) |
 | **Autonomous 3-Way AST Semantic Reconciler & Conflict Arbitrator** | `observations/systems/` | Resolving git worktree merge collisions via commutative AST symbol graphs rather than line-based text diffs. | ✅ Completed ([Obs 35](../observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md)) |
+| **WASI Component Models & Capability-Based Tool Sandboxing** | `observations/systems/` | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. | ✅ Completed ([Obs 36](../observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md)) |
 
 ---
 

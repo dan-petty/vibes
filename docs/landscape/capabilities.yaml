@@ -66,6 +66,7 @@ feature_catalog:
   chaos_injection: Injects controlled, reversible mechanical mutations to benchmark agent resilience
   lsm_kernel_gate: Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing
   semantic_reconciliation: Resolves git worktree merge collisions via commutative AST symbol graphs
+  wasm_sandboxing: Sandboxes ephemeral agent tools using WASI 0.2 capability tokens and gas metering
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a
@@ -466,4 +467,18 @@ capabilities:
     ours:
       - semantic_reconciliation
       - sarif_output
+
+  - key: wasm-capability-sandbox
+    kind: capability
+    title: WebAssembly component model and capability-based sandbox gateway
+    short: Wasm sandbox
+    path: examples/wasm-capability-sandbox/
+    paths:
+      - examples/wasm-capability-sandbox/
+    ours:
+      - wasm_sandboxing
+      - resource_caps
+      - egress_control
+      - sarif_output
+
 
