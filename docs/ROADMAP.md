@@ -251,9 +251,13 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Deterministic chaos engineering engine perturbing complexity, nesting, and egress invariants to benchmark autonomous agent self-healing convergence, repair ratio ($R_{\text{repair}}$), and atomic rollback safety.
   - Accompanied by Pattern (`patterns/synthetic-chaos-and-invariant-convergence-testing.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/chaos-invariant-monkey/test_chaos_monkey.py` with 98% coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
 - [x] **Deliverable #2028: eBPF Runtime LSM Kernel Gate & Dynamic Syscall Fuzzing Oracle (`examples/ebpf-lsm-kernel-gate/`)**:
-  - Synchronous in-kernel Linux Security Module (`bpf_lsm_*`) policy enforcement engine blocking unauthorized binary executions (`LSM001`), private network egress (`LSM002`), sensitive filesystem escapes (`LSM003`), privilege escalation (`LSM004`), and adversarial syscall mutations (`LSM005`).
-  - Features dynamic Syzkaller-style mutation fuzzer asserting monotonic containment ($R_{\text{contain}} \ge 0.85$), alongside BPF CO-RE C and Cilium Tetragon `TracingPolicy` code synthesizers.
-  - Accompanied by Observation 34 (`observations/systems/34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md`), Pattern (`patterns/kernel-enforced-lsm-sandbox-containment.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/ebpf-lsm-kernel-gate/test_lsm_gate.py` with 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+   - Synchronous in-kernel Linux Security Module (`bpf_lsm_*`) policy enforcement engine blocking unauthorized binary executions (`LSM001`), private network egress (`LSM002`), sensitive filesystem escapes (`LSM003`), privilege escalation (`LSM004`), and adversarial syscall mutations (`LSM005`).
+   - Features dynamic Syzkaller-style mutation fuzzer asserting monotonic containment ($R_{\text{contain}} \ge 0.85$), alongside BPF CO-RE C and Cilium Tetragon `TracingPolicy` code synthesizers.
+   - Accompanied by Observation 34 (`observations/systems/34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md`), Pattern (`patterns/kernel-enforced-lsm-sandbox-containment.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/ebpf-lsm-kernel-gate/test_lsm_gate.py` with 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2029: Autonomous 3-Way AST Semantic Reconciler & Conflict Arbitrator (`examples/ast-semantic-reconciler/`)**:
+   - Commutative AST symbol reconciliation engine eliminating line-based false merge conflicts across concurrent subagent git worktrees.
+   - Arbitrates disjoint function appends, recursive class method additions, and 3-way import set unions with deterministic PEP 8 sorting, providing structured CEGIS diagnostic telemetry on irreconcilable symbol body collisions.
+   - Accompanied by Observation 35 (`observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md`), Pattern (`patterns/3-way-ast-semantic-reconciliation.md`), OASIS SARIF 2.1.0 export, and unit test suite in `examples/ast-semantic-reconciler/test_reconciler.py` with 94% test coverage certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
 
 ---
 
@@ -283,7 +287,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Differential AST Mutation Fuzzing for Polyglot Boundary Parsers** | `observations/polyglot/` | Grammatical mutation fuzzing evaluating parser convergence, symlink escape detection, and memory leak isolation across multi-language parsers. | ✅ Completed ([Obs 05](../observations/polyglot/05-differential-ast-mutation-fuzzing-for-polyglot-boundary-parsers.md)) |
 | **Typed Epistemic Seams & Subagent Handshakes** | `observations/systems/` | Eliminating delegation drift with content-addressed invariant envelopes and negative schema enforcement. | ✅ Completed ([Obs 33](../observations/systems/33-typed-epistemic-seams-and-lossless-subagent-handshakes.md)) |
 | **eBPF Runtime LSM Kernel Gate & Dynamic Syzcaller Fuzzing** | `observations/systems/` | Real-time in-kernel policy enforcement using LSM hooks under adversarial agent inputs. | ✅ Completed ([Obs 34](../observations/systems/34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md)) |
-| **Autonomous 3-Way AST Semantic Reconciler & Conflict Arbitrator** | `observations/systems/` | Resolving git worktree merge collisions via commutative AST symbol graphs rather than line-based text diffs. | 🔬 In Queue |
+| **Autonomous 3-Way AST Semantic Reconciler & Conflict Arbitrator** | `observations/systems/` | Resolving git worktree merge collisions via commutative AST symbol graphs rather than line-based text diffs. | ✅ Completed ([Obs 35](../observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md)) |
 
 ---
 

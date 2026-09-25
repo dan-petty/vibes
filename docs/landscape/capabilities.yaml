@@ -65,6 +65,7 @@ feature_catalog:
   epistemic_envelopes: Enforces cryptographic context envelopes and negative schema boundaries
   chaos_injection: Injects controlled, reversible mechanical mutations to benchmark agent resilience
   lsm_kernel_gate: Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing
+  semantic_reconciliation: Resolves git worktree merge collisions via commutative AST symbol graphs
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a
@@ -454,3 +455,15 @@ capabilities:
       - syscall_isolation
       - egress_control
       - sarif_output
+
+  - key: ast-semantic-reconciler
+    kind: capability
+    title: Autonomous 3-way AST semantic reconciler and conflict arbitrator
+    short: AST reconciler
+    path: examples/ast-semantic-reconciler/
+    paths:
+      - examples/ast-semantic-reconciler/
+    ours:
+      - semantic_reconciliation
+      - sarif_output
+

@@ -356,9 +356,11 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md
 │       ├── 32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md
 │       ├── 33-typed-epistemic-seams-and-lossless-subagent-handshakes.md
-│       └── 34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md
+│       ├── 34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md
+│       └── 35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
+│   ├── 3-way-ast-semantic-reconciliation.md
 │   ├── adaptive-headless-web-crawling.md
 │   ├── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
 │   ├── autonomous-sdlc-project-management.md
@@ -415,6 +417,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── agent-telemetry-trace-generator/ # OpenTelemetry waterfall trace generator
 │   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
+│   ├── ast-semantic-reconciler/        # Autonomous 3-way AST semantic reconciler & conflict arbitrator
 │   ├── binary-search-context-packer/  # Binary search AST prompt context packer
 │   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
 │   ├── chaos-invariant-monkey/        # Chaos engineering & agent self-healing benchmark
