@@ -64,6 +64,7 @@ feature_catalog:
   worktree_arbitration: Coordinates isolated git worktrees, lease heartbeats and index-lock mitigation
   epistemic_envelopes: Enforces cryptographic context envelopes and negative schema boundaries
   chaos_injection: Injects controlled, reversible mechanical mutations to benchmark agent resilience
+  lsm_kernel_gate: Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a
@@ -439,4 +440,17 @@ capabilities:
       - examples/chaos-invariant-monkey/
     ours:
       - chaos_injection
+      - sarif_output
+
+  - key: lsm-kernel-gate
+    kind: capability
+    title: eBPF runtime LSM kernel gate and dynamic syscall fuzzer
+    short: LSM kernel gate
+    path: examples/ebpf-lsm-kernel-gate/
+    paths:
+      - examples/ebpf-lsm-kernel-gate/
+    ours:
+      - lsm_kernel_gate
+      - syscall_isolation
+      - egress_control
       - sarif_output
