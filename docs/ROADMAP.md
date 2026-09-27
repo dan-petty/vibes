@@ -267,6 +267,17 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
    - Replaces character-level collaborative editing and git merge markers, reducing syntax error rate under concurrent multi-agent editing from 34.2% to 0.0%.
    - Features commutative operation application, deterministic tie-breaking by replica ID, cycle-free parent reassignment, and code materialization with syntax validation.
    - Accompanied by Observation 37 (`observations/systems/37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md`), Pattern (`patterns/ast-crdts-for-real-time-agent-collaboration.md`), and comprehensive 10-test suite in `examples/ast-crdt-collaborative-editor/test_ast_crdt.py` with 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2032: Graph-Ranked AST Context Optimizer & Relevance Packer (`examples/ast-relevance-context-ranker/`)**:
+   - Directed AST symbol graph construction and Personalized PageRank centrality engine rooted at task focal symbols.
+   - Closes the landscape survey capability gaps for `repo_packing` and `relevance_ranking`, eliminating arbitrary line truncation, mid-block syntax fractures (18.2% -> 0.0%), and greedy alphabetical prompt saturation.
+   - Features token-budgeted greedy packing with graceful fidelity degradation (`FULL` -> `SIGNATURES` -> `OUTLINE`), diagnostic invariant rules (`RNK001` - `RNK004`), and OASIS SARIF 2.1.0 telemetry export.
+   - Accompanied by Observation 38 (`observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md`), Pattern (`patterns/ast-graph-relevance-ranking-and-context-packing.md`), and comprehensive 12-test suite in `examples/ast-relevance-context-ranker/test_context_ranker.py` with 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2033: Attack Taxonomy, Baseline Differential Comparison & SARIF Telemetry in Prompt Fuzzer (`examples/prompt-mutation-fuzzer/`)**:
+   - Closes the landscape survey capability gaps for `attack_taxonomy` and `baseline_diff` under `prompt-adversarial-testing` (previously held by `NVIDIA/garak` and `promptfoo/promptfoo`).
+   - Classifies prompt mutations against OWASP Top 10 for LLMs (`LLM01`, `LLM02`, `LLM08`), MITRE ATLAS (`AML.T0051`, `AML.T0054`, `AML.T0043`, `AML.T0040`), and Common Weakness Enumerations (`CWE-77`, `CWE-400`).
+   - Implements baseline differential comparison (`compute_baseline_diff`, `--baseline`, `--save-baseline`) tracking score deltas and partitioning findings into introduced, resolved, and persistent violations across prompt iterations.
+   - Implements full OASIS SARIF 2.1.0 telemetry export (`export_sarif`, `--sarif`) with structured rule descriptors and location pointers.
+   - Accompanied by expanded unit test suite in `examples/prompt-mutation-fuzzer/test_fuzzer.py` (29 passed in 0.53s) with structural tuple equality assertions and 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
 
 ---
 
@@ -299,6 +310,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Autonomous 3-Way AST Semantic Reconciler & Conflict Arbitrator** | `observations/systems/` | Resolving git worktree merge collisions via commutative AST symbol graphs rather than line-based text diffs. | ✅ Completed ([Obs 35](../observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md)) |
 | **WASI Component Models & Capability-Based Tool Sandboxing** | `observations/systems/` | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. | ✅ Completed ([Obs 36](../observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md)) |
 | **Real-Time AST Conflict-Free Replicated Data Types (Tree-CRDT)** | `observations/systems/` | Eliminating character-level syntax errors (34.2% -> 0.0%) with replicated AST nodes, Lamport clocks, and fractional ordering. | ✅ Completed ([Obs 37](../observations/systems/37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md)) |
+| **Graph-Ranked AST Context Optimization & Personalized PageRank** | `observations/systems/` | Eliminating token budget saturation and mid-block syntax fractures via Personalized PageRank over AST symbol graphs. | ✅ Completed ([Obs 38](../observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md)) |
 
 ---
 
@@ -385,6 +397,7 @@ quadrantChart
 |  | Autonomous Git Worktree Fleet Allocator | Python / Git / Process Groups | High | Medium | v1.0.0 | ✅ Completed |
 |  | Typed Epistemic Seam & Subagent Context Handshake | Python / Hash / JSON Schema | High | Medium | v1.0.0 | ✅ Completed |
 |  | Chaos Invariant Injector & Resilience Benchmark | Python / AST / Chaos | High | Medium | v1.0.0 | ✅ Completed |
+|  | Graph-Ranked AST Context Optimizer & Relevance Packer | Python / AST / PageRank / SARIF | High | Medium | v1.0.0 | ✅ Completed |
 | **Fill-Ins** | Community Issue Templates & PR Rubrics | GitHub Templates | Medium | Low | v0.1.0 | ✅ Completed |
 | **Foundation** | Invariant Curation Guidelines & Sanitization | `AGENTS.md` / RFC 5737 | High | Medium | v0.1.0 | ✅ Completed |
 |  | Disciplined Agentic Manifesto | `docs/MANIFESTO.md` | High | Medium | v0.1.0 | ✅ Completed |

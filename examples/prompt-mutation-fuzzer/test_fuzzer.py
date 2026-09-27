@@ -14,7 +14,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fuzzer import (
+    TAXONOMY_MAP,
+    AttackTaxonomy,
+    FuzzBaselineDiff,
+    FuzzSuiteReport,
     InvariantAuditor,
+    InvariantEvaluation,
     PerturbationConfig,
     PerturbationKind,
     PromptMutationFuzzer,
@@ -22,6 +27,8 @@ from fuzzer import (
     _node_complexity_weight,
     _parse_address,
     _parse_dotted_quad,
+    compute_baseline_diff,
+    export_sarif,
     main,
 )
 from providers import (
@@ -561,4 +568,227 @@ def test_fuzzer_cli_list_providers(capsys: pytest.CaptureFixture[str]) -> None:
         "ollama" in captured,
         "rest" in captured,
     ) == (0, True, True, True, True, True)
+
+
+def test_attack_taxonomy_mappings() -> None:
+    """Ensure every perturbation kind has a valid attack taxonomy mapping."""
+    kinds = list(PerturbationKind)
+    has_all_mapped = all(k in TAXONOMY_MAP for k in kinds)
+    sample_tax = TAXONOMY_MAP[PerturbationKind.INJECTION_ESCAPE]
+
+    assert (
+        has_all_mapped,
+        isinstance(sample_tax, AttackTaxonomy),
+        sample_tax.owasp_id,
+        sample_tax.mitre_atlas_id,
+        sample_tax.cwe_id,
+    ) == (
+        True,
+        True,
+        "LLM01",
+        "AML.T0051",
+        "CWE-77",
+    )
+
+
+def test_baseline_diff_computation() -> None:
+    """Ensure differential comparisons categorize introduced, resolved, and persistent violations."""
+    curr_evals = [
+        InvariantEvaluation(
+            target_name="fuzz-INJECTION_ESCAPE",
+            max_complexity=12,
+            max_depth=3,
+            complexity_violation=True,
+            nesting_violation=False,
+            sanitization_leak=False,
+            violations=["Complexity M=12 breaches cap 10."],
+        ),
+        InvariantEvaluation(
+            target_name="fuzz-TRUNCATION",
+            max_complexity=3,
+            max_depth=2,
+            complexity_violation=False,
+            nesting_violation=False,
+            sanitization_leak=False,
+            violations=["New syntax truncation error."],
+        ),
+    ]
+    curr_report = FuzzSuiteReport(
+        total_runs=2,
+        clean_runs=0,
+        drift_violations=2,
+        resilience_score=0.0,
+        vulnerability_breakdown={"INJECTION_ESCAPE": 1, "TRUNCATION": 1},
+        evaluations=curr_evals,
+    )
+    base_data = {
+        "resilience_score": 50.0,
+        "evaluations": [
+            {
+                "target_name": "fuzz-INJECTION_ESCAPE",
+                "violations": ["Complexity M=12 breaches cap 10."],
+            },
+            {
+                "target_name": "fuzz-DISTRACTION",
+                "violations": ["Private host address leak: 10.0.0.1"],
+            },
+        ],
+    }
+    diff = compute_baseline_diff(curr_report, base_data)
+    d_dict = diff.to_dict()
+
+    assert (
+        diff.baseline_score,
+        diff.current_score,
+        diff.score_delta,
+        diff.status,
+        diff.persistent_violations,
+        diff.resolved_violations,
+        diff.introduced_violations,
+        "score_delta" in d_dict,
+    ) == (
+        50.0,
+        0.0,
+        -50.0,
+        "REGRESSED",
+        ["fuzz-INJECTION_ESCAPE: Complexity M=12 breaches cap 10."],
+        ["fuzz-DISTRACTION: Private host address leak: 10.0.0.1"],
+        ["fuzz-TRUNCATION: New syntax truncation error."],
+        True,
+    )
+
+
+def test_baseline_diff_improved_status() -> None:
+    """Ensure baseline diff sets status IMPROVED and UNCHANGED appropriately."""
+    report_improved = FuzzSuiteReport(
+        total_runs=1,
+        clean_runs=1,
+        drift_violations=0,
+        resilience_score=100.0,
+        vulnerability_breakdown={},
+        evaluations=[],
+    )
+    diff_improved = compute_baseline_diff(report_improved, {"resilience_score": 80.0, "evaluations": []})
+    diff_unchanged = compute_baseline_diff(report_improved, {"resilience_score": 100.0, "evaluations": []})
+
+    assert (
+        diff_improved.status,
+        diff_improved.score_delta,
+        diff_unchanged.status,
+        diff_unchanged.score_delta,
+    ) == (
+        "IMPROVED",
+        20.0,
+        "UNCHANGED",
+        0.0,
+    )
+
+
+def test_export_sarif_telemetry() -> None:
+    """Ensure export_sarif emits valid OASIS SARIF 2.1.0 document with taxonomy tags."""
+    report = FuzzSuiteReport(
+        total_runs=1,
+        clean_runs=0,
+        drift_violations=1,
+        resilience_score=0.0,
+        vulnerability_breakdown={"INJECTION_ESCAPE": 1},
+        evaluations=[
+            InvariantEvaluation(
+                target_name="fuzz-INJECTION_ESCAPE",
+                max_complexity=12,
+                max_depth=2,
+                complexity_violation=True,
+                nesting_violation=False,
+                sanitization_leak=False,
+                violations=["Complexity M=12 breaches cap."],
+            )
+        ],
+    )
+    diff = FuzzBaselineDiff(
+        baseline_score=0.0,
+        current_score=0.0,
+        score_delta=0.0,
+        introduced_violations=[],
+        resolved_violations=[],
+        persistent_violations=[],
+        status="UNCHANGED",
+    )
+    sarif_str = export_sarif(report, diff)
+    doc = json.loads(sarif_str)
+    run = doc["runs"][0]
+    rule_ids = [r["id"] for r in run["tool"]["driver"]["rules"]]
+    result = run["results"][0]
+
+    assert (
+        doc["version"],
+        "sarif-schema-2.1.0.json" in doc["$schema"],
+        len(run["tool"]["driver"]["rules"]),
+        "PMF-LLM01-INJECTION_ESCAPE" in rule_ids,
+        result["ruleId"],
+        result["level"],
+        "baselineDiff" in run["properties"],
+    ) == (
+        "2.1.0",
+        True,
+        5,
+        True,
+        "PMF-LLM01-INJECTION_ESCAPE",
+        "error",
+        True,
+    )
+
+
+def test_render_report_with_diff() -> None:
+    """Ensure render_report includes taxonomy columns and baseline diff summary."""
+    fuzzer = PromptMutationFuzzer()
+    report = FuzzSuiteReport(
+        total_runs=1,
+        clean_runs=1,
+        drift_violations=0,
+        resilience_score=100.0,
+        vulnerability_breakdown={"DILUTION": 0},
+        evaluations=[],
+    )
+    diff = FuzzBaselineDiff(
+        baseline_score=80.0,
+        current_score=100.0,
+        score_delta=20.0,
+        introduced_violations=[],
+        resolved_violations=["fuzz-DILUTION: old breach"],
+        persistent_violations=[],
+        status="IMPROVED",
+    )
+    table = fuzzer.render_report(report, diff)
+
+    assert (
+        "OWASP" in table,
+        "MITRE ATLAS" in table,
+        "BASELINE DIFF: IMPROVED" in table,
+        "Base: 80.0% -> Curr: 100.0% (+20.0%)" in table,
+    ) == (
+        True,
+        True,
+        True,
+        True,
+    )
+
+
+def test_fuzzer_cli_baseline_and_sarif_flags(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Ensure CLI correctly handles --save-baseline, --baseline, and --sarif."""
+    base_file = tmp_path / "base_scorecard.json"
+    exit_save = main(["--save-baseline", str(base_file), "--json"])
+    assert (exit_save, base_file.is_file()) == (0, True)
+
+    capsys.readouterr()  # Flush buffer
+    exit_diff = main(["--baseline", str(base_file), "--json"])
+    diff_out = json.loads(capsys.readouterr().out)
+    assert (exit_diff, "baseline_diff" in diff_out, diff_out["baseline_diff"]["status"]) == (
+        0,
+        True,
+        "UNCHANGED",
+    )
+
+    exit_sarif = main(["--sarif"])
+    sarif_out = json.loads(capsys.readouterr().out)
+    assert (exit_sarif, sarif_out["version"], len(sarif_out["runs"])) == (0, "2.1.0", 1)
 

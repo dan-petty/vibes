@@ -373,7 +373,7 @@ class AnthropicProvider(ModelProvider):
     ) -> None:
         self._model_id = model_id
         self._api_base = api_base.rstrip("/")
-        self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
+        self._api_key: str = str(api_key or os.getenv("ANTHROPIC_API_KEY") or "")
         self._timeout = timeout
         self._transport = transport
 
@@ -401,7 +401,7 @@ class AnthropicProvider(ModelProvider):
     def generate(self, prompt: str, system_prompt: str | None = None) -> ProviderResponse:
         """Call Anthropic messages endpoint."""
         url = f"{self._api_base}/messages"
-        headers = {
+        headers: dict[str, str] = {
             "Content-Type": "application/json",
             "x-api-key": self._api_key,
             "anthropic-version": "2023-06-01",

@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 56 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 57 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -75,6 +75,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**3-Way AST Semantic Reconciliation & Collision Arbitration**](./observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md) | Multi-Agent Concurrency & Git | Commutative AST symbol reconciliation eliminating line-based false merge conflicts across concurrent subagent worktrees. |
 | [**WASI Component Models & Capability-Based Tool Sandboxing**](./observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md) | Systems & Runtime Sandboxing | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. |
 | [**Real-Time AST-CRDTs & Multi-Agent Swarms**](./observations/systems/37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md) | Multi-Agent Concurrency & CRDTs | Eliminating character-level syntax errors (34.2% -> 0.0%) with replicated AST nodes, Lamport clocks, and fractional ordering. |
+| [**Graph-Ranked AST Context Optimizer**](./observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md) | Context & Graph Centrality | Personalized PageRank over AST symbol graphs eliminating prompt pollution and mid-block syntax fractures. |
 
 ---
 
@@ -115,6 +116,7 @@ flowchart TD
 - [**3-Way AST Semantic Reconciliation**](./patterns/3-way-ast-semantic-reconciliation.md): Decomposing source files into commutative symbol graphs to eliminate line-based false merge conflicts across concurrent agent worktrees.
 - [**Capability-Based Wasm Sandboxing**](./patterns/capability-based-wasm-sandboxing.md): Executing untrusted agent tools inside WebAssembly components governed by unforgeable capability tokens, deterministic gas metering, and linear memory containment.
 - [**AST-CRDTs for Real-Time Agent Collaboration**](./patterns/ast-crdts-for-real-time-agent-collaboration.md): Replicating Abstract Syntax Tree nodes as first-class distributed entities with Lamport timestamps, fractional positioning, and deterministic cycle prevention.
+- [**AST Graph Relevance Ranking & Context Packing**](./patterns/ast-graph-relevance-ranking-and-context-packing.md): Personalizing random walks over AST symbol graphs to pack maximal architectural context into tight token budgets with zero syntax fractures.
 
 ---
 
@@ -368,13 +370,15 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md
 │       ├── 35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md
 │       ├── 36-wasi-component-models-and-capability-based-tool-sandboxing.md
-│       └── 37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md
+│       ├── 37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md
+│       └── 38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
 │   ├── adaptive-headless-web-crawling.md
 │   ├── agentic-ide-lifecycle-hooks-and-lsp-oracles.md
 │   ├── ast-crdts-for-real-time-agent-collaboration.md
+│   ├── ast-graph-relevance-ranking-and-context-packing.md
 │   ├── autonomous-sdlc-project-management.md
 │   ├── bi-directional-metric-feedback-and-ax-scoring.md
 │   ├── binary-search-context-packing.md
@@ -431,6 +435,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── agentic-ide-hook-sentinel/     # Zero-trust IDE lifecycle hook & process group guard
 │   ├── ast-crdt-collaborative-editor/ # Real-time AST Tree-CRDT collaborative editor & swarm convergence
 │   ├── ast-invariant-sentinel/        # AST complexity <= 10 & IP leak analyzer
+│   ├── ast-relevance-context-ranker/  # Personalized PageRank AST context optimizer & relevance packer
 │   ├── ast-semantic-reconciler/        # Autonomous 3-way AST semantic reconciler & conflict arbitrator
 │   ├── binary-search-context-packer/  # Binary search AST prompt context packer
 │   ├── cegis-debugging-workbench/     # Counterexample synthesis testbench
