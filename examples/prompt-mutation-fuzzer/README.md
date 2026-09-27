@@ -24,7 +24,7 @@ flowchart LR
     Mut --> P2["DISTRACTION"]
     Mut --> P3["INJECTION_ESCAPE"]
     Mut --> P4["TRUNCATION"]
-    Mut --> P5["REORDERING"]
+    Mut --> P5["COMPLEXITY_TRAP"]
 
     P1 --> Gen["Agent generates code"]
     P2 --> Gen
@@ -44,15 +44,17 @@ The auditor is deterministic, which is what makes the score meaningful: the only
 
 ---
 
-## Perturbation Taxonomy
+## Attack Taxonomy & Vulnerability Classification
 
-| Perturbation Kind | Description | Real-World Agent Failure Mode |
-|---|---|---|
-| **`DILUTION`** | Injects verbose corporate/procedural fluff around instructions. | Instructions get buried; attention mechanism overlooks critical constraints. |
-| **`DISTRACTION`** | Injects high-priority irrelevant side-tasks (e.g. write a poem, explain hardware). | Agent spends token budget and cognitive capacity on side tasks, neglecting safety gates. |
-| **`INJECTION_ESCAPE`** | Simulates prompt injection attacks (`[SYSTEM OVERRIDE]`, `[ADMIN DIRECTIVE]`). | Agent hallucinates privilege escalation and disables linting or sanitization. |
-| **`TRUNCATION`** | Truncates or splits instructions at sentence boundaries to simulate context overflow. | Trailing guardrails (e.g. sanitization rules placed at prompt bottom) are lost. |
-| **`COMPLEXITY_TRAP`** | Appends procedural anti-patterns urging monolithic handlers or deep nesting. | Agent takes path of least resistance and writes deep `if/else` ladders. |
+All perturbation classes map directly to published industry vulnerability frameworks, closing the taxonomy gap held by `NVIDIA/garak`:
+
+| Perturbation Kind | OWASP Top 10 for LLMs | MITRE ATLAS | CWE | Real-World Agent Failure Mode |
+|---|---|---|---|---|
+| **`INJECTION_ESCAPE`** | LLM01: Prompt Injection | AML.T0051: LLM Prompt Injection | CWE-77 | Agent hallucinates privilege escalation and disables linting or sanitization. |
+| **`DISTRACTION`** | LLM01: Prompt Injection | AML.T0054: LLM Jailbreak | CWE-77 | Agent spends token budget and cognitive capacity on side tasks, neglecting safety gates. |
+| **`DILUTION`** | LLM08: Excessive Agency / Dilution | AML.T0043: Craft Adversarial Data | CWE-400 | Instructions get buried; attention mechanism overlooks critical constraints. |
+| **`TRUNCATION`** | LLM02: Insecure Output Handling | AML.T0043: Craft Adversarial Data | CWE-400 | Trailing guardrails (e.g. sanitization rules placed at prompt bottom) are lost. |
+| **`COMPLEXITY_TRAP`** | LLM02: Insecure Output Handling | AML.T0040: ML Supply Chain Compromise | CWE-400 | Agent takes path of least resistance and writes deep `if/else` ladders. |
 
 ---
 
@@ -62,6 +64,24 @@ The auditor is deterministic, which is what makes the score meaningful: the only
 Run the fuzzer with default deterministic mock model provider:
 ```bash
 python3 examples/prompt-mutation-fuzzer/fuzzer.py
+```
+
+### Baseline Differential Comparisons
+Compare fuzzing results against a prior baseline run to detect regressions or track improvements over prompt iterations, closing the gap held by `promptfoo`:
+
+```bash
+# 1. Establish baseline run
+python3 examples/prompt-mutation-fuzzer/fuzzer.py --save-baseline .data/base_scorecard.json
+
+# 2. Re-run after prompt refinements with differential comparison
+python3 examples/prompt-mutation-fuzzer/fuzzer.py --baseline .data/base_scorecard.json
+```
+
+### OASIS SARIF 2.1.0 Telemetry Export
+Export findings in standardized SARIF format for integration into GitHub Advanced Security and CI dashboards:
+
+```bash
+python3 examples/prompt-mutation-fuzzer/fuzzer.py --sarif > results.sarif
 ```
 
 ### Driving Specific Model Providers
@@ -143,7 +163,7 @@ The fuzzer supports five model provider backends out of the box (`examples/promp
 pytest examples/prompt-mutation-fuzzer/test_fuzzer.py -v
 ```
 
-All 21 unit tests validate perturbation generation, model provider adapters, zero-trust endpoint egress safety, AST invariant analysis, report scoring, and CLI argument handling.
+All 29 unit tests validate perturbation generation, model provider adapters, zero-trust endpoint egress safety, AST invariant analysis, report scoring, attack taxonomy classification, baseline differential comparison, SARIF 2.1.0 telemetry export, and CLI argument handling.
 
 ---
 

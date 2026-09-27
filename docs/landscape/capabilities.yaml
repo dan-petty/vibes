@@ -225,6 +225,8 @@ capabilities:
     ours:
       - adversarial_prompts
       - model_providers
+      - attack_taxonomy
+      - baseline_diff
     alternatives:
       - repo: NVIDIA/garak
         has:
