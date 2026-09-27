@@ -334,9 +334,15 @@ capabilities:
     kind: capability
     title: Packing repository context into a model budget
     short: Context packer
-    path: examples/binary-search-context-packer/
+    path: examples/ast-relevance-context-ranker/
+    paths:
+      - examples/binary-search-context-packer/
+      - examples/ast-relevance-context-ranker/
     ours:
       - token_budgeting
+      - repo_packing
+      - relevance_ranking
+      - sarif_output
     alternatives:
       - repo: yamadashy/repomix
         has:
