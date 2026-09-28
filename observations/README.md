@@ -2,7 +2,7 @@
 
 > **Exhibition**: `vibes` Empirical Knowledge Base  
 > **Classification**: Master Observation Index & Cross-Domain Synthesis  
-> **Scope**: 59 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
+> **Scope**: 60 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
 > **Key Metric**: 100.0/100 Resource Health Score; 319/319 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance  
 
 ---
@@ -11,7 +11,7 @@
 
 The `observations/` directory records the empirical reality of autonomous software engineering performed by AI coding assistants. Across hundreds of autonomous sessions, pull requests, refactoring cycles, and benchmark evaluations in [`devops-cli`](https://github.com/dan-petty/devops-cli) and [`vibes`](https://github.com/dan-petty/vibes), these studies capture how stochastic language models behave when confronted with real-world engineering constraints.
 
-The fundamental insight across all 59 observations is simple yet profound:
+The fundamental insight across all 60 observations is simple yet profound:
 
 > **Stochastic token generation without mechanical boundary oracles collapses into structural entropy. Unbounded models drift into procedural spaghetti, hallucinated tool arguments, orphaned background processes, and brittle heuristic traps. When bounded by deterministic AST invariants, formal contracts, and closed-loop feedback engines, agents achieve architectural excellence, sub-second feedback loops, and 100% test reliability.**
 
@@ -71,7 +71,7 @@ flowchart TD
 
 ## 🧭 Master Observation Taxonomy Matrix
 
-The 59 empirical case studies are organized into three complementary domains:
+The 60 empirical case studies are organized into three complementary domains:
 1. **`devops-cli`**: Foundational operational, syntactic, and governance discoveries from building a production-grade infrastructure CLI.
 2. **`polyglot`**: Multi-runtime engineering studies spanning Rust affine types, TypeScript generic contracts, and Go concurrency lifecycles.
 3. **`systems`**: Distributed systems dynamics including OpenTelemetry tracing waterfalls, test runner latency optimization, inotify event loops, Valkey L2 caching, and rootless container isolation.
@@ -98,6 +98,7 @@ The 59 empirical case studies are organized into three complementary domains:
 | [**18**](./devops-cli/18-tool-cardinality-saturation-and-schema-context-taxation.md) | `devops-cli` | [Tool Cardinality Saturation & Schema Context Taxation](./devops-cli/18-tool-cardinality-saturation-and-schema-context-taxation.md) | 100+ tool schemas consuming 25% of context window; selection precision collapse above ~40 tools; pretraining prior parameter name override. | Lazy domain-gated schema hydration, namespace disambiguation preambles, and post-turn-2 schema compression. | 8,000 → 1,200 token schema overhead (85% reduction); eliminated tool selection vacillation. |
 | [**19**](./devops-cli/19-context-accumulation-drift-and-lossy-reflection-truncation.md) | `devops-cli` | [Context Accumulation Drift & Lossy Reflection Truncation](./devops-cli/19-context-accumulation-drift-and-lossy-reflection-truncation.md) | Pipeline context bloat without truncation; system instruction eviction under multi-turn drift; 256-char error truncation limiting self-correction. | Invariant pinning via sliding reinforcement, pipeline stage budgeting, lossless structured error reflection, semantic memory partitioning. | 5-stage pipeline reclaims 16K tokens via stage budgeting; structured errors achieve single-turn correction vs. multi-turn loops. |
 | [**20**](./devops-cli/20-model-failover-capability-cliffs-and-one-way-degradation-ratchets.md) | `devops-cli` | [Model Failover Capability Cliffs & One-Way Degradation Ratchets](./devops-cli/20-model-failover-capability-cliffs-and-one-way-degradation-ratchets.md) | 70B → 14B failover producing categorically different failure modes; one-way embedding batch ratchet permanently degrading to batch_size=1. | Capability-gated failover with task classification; AIMD bidirectional batch adaptation; dynamic model capability probing. | Silent capability cliff eliminated; AIMD prevents permanent 32× throughput collapse from transient spikes. |
+| [**21**](./devops-cli/21-milestone-horizon-expansion-and-autonomous-scope-cascades.md) | `devops-cli` | [Milestone Horizon Expansion & Autonomous Scope Cascades](./devops-cli/21-milestone-horizon-expansion-and-autonomous-scope-cascades.md) | Autonomous agents continually admitting discovered defects/tasks into active milestone, causing scope live-locks ($C_R \le 1.0$) and inflating 196-issue mega-milestones. | Three-phase Milestone Scope Air-Lock (`INTAKE` $\to$ `AIR_LOCKED` $\to$ `FROZEN`), rolling convergence ratio gate ($C_R \ge 1.2$), and automated rollover partitioning. | 196-issue mega-milestone partitioned; 26 non-blockers rolled to vNext; release candidate unblocked with mathematical convergence assurance. |
 | [**01**](./polyglot/01-rust-type-state-invariants.md) | `polyglot` | [Rust Type-State Invariants](./polyglot/01-rust-type-state-invariants.md) | Runtime state validation errors and unhandled transition branches in complex state machines. | Affine ownership types and compile-time type-state pattern (`PhantomData<State>`). | Zero runtime state crashes; `#![forbid(unsafe_code)]`; 0 runtime memory overhead. |
 | [**02**](./polyglot/02-typescript-cst-and-type-gymnastics.md) | `polyglot` | [TypeScript CST & Type Gymnastics](./polyglot/02-typescript-cst-and-type-gymnastics.md) | Agents escaping complex type unions by inserting `any`, `unknown`, or `@ts-ignore` bypasses. | Structural discriminated unions, branded types, and AST-level linting forbidding `any`. | Zero `any` escape hatches; 100% end-to-end type safety in frontend clients. |
 | [**03**](./polyglot/03-go-goroutine-leakage-and-context-lifecycles.md) | `polyglot` | [Go Goroutine Leakage & Context Lifecycles](./polyglot/03-go-goroutine-leakage-and-context-lifecycles.md) | Spawning worker goroutines sending to unbuffered channels without `<-ctx.Done()` cancellation selects. | Go Concurrency Sentinel analyzing `pprof` stack traces and mapping blocked channel states. | Zero thread exhaustion; 100% clean goroutine reclamation across concurrent jobs. |
@@ -152,7 +153,7 @@ The 59 empirical case studies are organized into three complementary domains:
 
 ## 🔬 The Seven Unifying Architectural Theses
 
-When analyzed collectively, the 59 empirical case studies coalesce into seven core engineering theses that define disciplined agentic software development:
+When analyzed collectively, the 60 empirical case studies coalesce into seven core engineering theses that define disciplined agentic software development:
 
 ### 1. Deterministic Mechanical Oracles Over Prompt Faith
 Stochastic language models cannot self-evaluate architectural complexity, nesting depth, type safety, or security boundaries purely through prompt instructions. Relying on "be careful not to write complex code" invariably fails.
