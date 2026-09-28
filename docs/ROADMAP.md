@@ -278,6 +278,11 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
    - Implements baseline differential comparison (`compute_baseline_diff`, `--baseline`, `--save-baseline`) tracking score deltas and partitioning findings into introduced, resolved, and persistent violations across prompt iterations.
    - Implements full OASIS SARIF 2.1.0 telemetry export (`export_sarif`, `--sarif`) with structured rule descriptors and location pointers.
    - Accompanied by expanded unit test suite in `examples/prompt-mutation-fuzzer/test_fuzzer.py` (29 passed in 0.53s) with structural tuple equality assertions and 100% pass rate certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2034: Test Harness Integration & Zero-Overhead Goroutine Leak Sentinel (`examples/go-leak-sentinel/`)**:
+   - Closes the open `build` gap for `test_harness_integration` under `go-concurrency-leak-detection` in `docs/landscape/capabilities.yaml` (previously held by `uber-go/goleak` and `fortytw2/leaktest`).
+   - Introduces native in-test teardown assertions in Go (`defer sentinel.Check(t)()`, `sentinel.VerifyNone(t)`, `sentinel.VerifyTestMain(m)`) failing ordinary `go test` runs when concurrent worker goroutines outlive tests.
+   - Implements Python test runner integration (`verify_test_run(fail_on_leak=True)`, `assert_no_goroutine_leaks`) raising structured `AssertionError` failures with complete remediation diagnostics, alongside CLI `--fail-on-leak` gating.
+   - Accompanied by Observation 39 (`observations/systems/39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md`), Pattern (`patterns/test-harness-concurrency-leak-sentinel.md`), and expanded 15-test unit suite in `examples/go-leak-sentinel/test_go_leak_sentinel.py` certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
 
 ---
 
@@ -311,6 +316,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **WASI Component Models & Capability-Based Tool Sandboxing** | `observations/systems/` | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. | ✅ Completed ([Obs 36](../observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md)) |
 | **Real-Time AST Conflict-Free Replicated Data Types (Tree-CRDT)** | `observations/systems/` | Eliminating character-level syntax errors (34.2% -> 0.0%) with replicated AST nodes, Lamport clocks, and fractional ordering. | ✅ Completed ([Obs 37](../observations/systems/37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md)) |
 | **Graph-Ranked AST Context Optimization & Personalized PageRank** | `observations/systems/` | Eliminating token budget saturation and mid-block syntax fractures via Personalized PageRank over AST symbol graphs. | ✅ Completed ([Obs 38](../observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md)) |
+| **Test Harness Concurrency Leak Sentinels** | `observations/systems/` | Eliminating the test runner blindspot by integrating deterministic teardown assertions into test functions. | ✅ Completed ([Obs 39](../observations/systems/39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md)) |
 
 ---
 

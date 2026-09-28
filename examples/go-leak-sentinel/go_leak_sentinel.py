@@ -308,6 +308,40 @@ class GoroutineLeakSentinel:
         return rems
 
 
+def verify_test_run(
+    trace_or_path: str | Path,
+    fail_on_leak: bool = True,
+    tolerated_delta: int = 0,
+) -> ConcurrencyAuditReport:
+    """Verify goroutine traces from a test run, failing if leaks outlive the workload.
+
+    Designed for direct integration into test runners (pytest, unittest) to turn
+    latent background concurrency leaks into deterministic test failures.
+    """
+    raw_trace = (
+        trace_or_path.read_text(encoding="utf-8")
+        if isinstance(trace_or_path, Path)
+        else trace_or_path
+    )
+    profiles = GoroutineStackParser.parse_trace(raw_trace)
+    report = GoroutineLeakSentinel.audit(profiles)
+
+    if fail_on_leak and report.leaked_goroutines > tolerated_delta:
+        rems = "\n".join(f"  - {r}" for r in report.remediations)
+        raise AssertionError(
+            f"Test runner concurrency leak failure: {report.leaked_goroutines} leaked goroutines "
+            f"(severity {report.severity.value}, score {report.score}/100.0).\nRemediations:\n{rems}"
+        )
+    return report
+
+
+def assert_no_goroutine_leaks(
+    trace: str, tolerated_delta: int = 0
+) -> ConcurrencyAuditReport:
+    """Assertion helper for test runners to fail ordinary test runs on goroutine leaks."""
+    return verify_test_run(trace, fail_on_leak=True, tolerated_delta=tolerated_delta)
+
+
 # Sample Go stack trace fixtures for demo and testing
 SAMPLE_CLEAN_TRACE = """
 goroutine 1 [running]:
@@ -379,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--demo", action="store_true", help="Run simulated leak detection demo")
     parser.add_argument("--scan", type=Path, help="Path to raw stack dump file to analyze")
     parser.add_argument("--json", action="store_true", help="Emit report in structured JSON format")
+    parser.add_argument("--fail-on-leak", action="store_true", help="Fail ordinary test run with exit code 1 when leaks are present")
 
     args = parser.parse_args(argv)
 
@@ -396,6 +431,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report.to_dict(), indent=2))
         else:
             _print_report(report)
+        if args.fail_on_leak and report.leaked_goroutines > 0:
+            print(f"TEST HARNESS FAILURE: {report.leaked_goroutines} leaked goroutines detected!", file=sys.stderr)
+            return 1
         return 0 if report.leaked_goroutines == 0 else 1
 
     parser.print_help()

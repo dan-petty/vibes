@@ -371,7 +371,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md
 │       ├── 36-wasi-component-models-and-capability-based-tool-sandboxing.md
 │       ├── 37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md
-│       └── 38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md
+│       ├── 38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md
+│       └── 39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -405,6 +406,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── structural-position-oracles.md
 │   ├── structure-driven-ci-directory-contracts.md
 │   ├── synthetic-chaos-and-invariant-convergence-testing.md
+│   ├── test-harness-concurrency-leak-sentinel.md
 │   ├── tool-cardinality-budget-management.md
 │   └── zero-trust-sandboxing-and-observability.md
 │

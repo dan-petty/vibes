@@ -253,6 +253,7 @@ capabilities:
     path: examples/go-leak-sentinel/
     ours:
       - goroutine_leak_detection
+      - test_harness_integration
     alternatives:
       - repo: uber-go/goleak
         has:

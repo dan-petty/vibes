@@ -29,8 +29,10 @@ from go_leak_sentinel import (
     GoroutineStackParser,
     GoroutineState,
     LeakSeverity,
+    assert_no_goroutine_leaks,
     main,
     run_demo,
+    verify_test_run,
 )
 
 
@@ -139,3 +141,39 @@ def test_a_method_frame_keeps_its_receiver(frame: str, name: str) -> None:
     as leaks.
     """
     assert GoroutineStackParser._function_name(frame) == name
+
+
+def test_verify_test_run_clean_passes() -> None:
+    """Verify test harness integration passes clean runs without raising."""
+    report = verify_test_run(SAMPLE_CLEAN_TRACE, fail_on_leak=True)
+    actual = (report.leaked_goroutines, report.severity, report.score)
+    expected = (0, LeakSeverity.CLEAN, 100.0)
+    assert actual == expected
+
+
+def test_verify_test_run_leaky_raises_assertion_error() -> None:
+    """Verify test harness integration fails ordinary test run by raising AssertionError."""
+    with pytest.raises(AssertionError, match="Test runner concurrency leak failure"):
+        verify_test_run(SAMPLE_LEAKY_TRACE, fail_on_leak=True)
+
+
+def test_verify_test_run_fail_on_leak_disabled() -> None:
+    """Verify fail_on_leak=False returns report without raising."""
+    report = verify_test_run(SAMPLE_LEAKY_TRACE, fail_on_leak=False)
+    actual = (report.leaked_goroutines, report.severity)
+    expected = (2, LeakSeverity.CRITICAL)
+    assert actual == expected
+
+
+def test_assert_no_goroutine_leaks_helper() -> None:
+    """Verify assertion helper passes on clean trace."""
+    report = assert_no_goroutine_leaks(SAMPLE_CLEAN_TRACE)
+    assert (report.leaked_goroutines, report.score) == (0, 100.0)
+
+
+def test_cli_fail_on_leak_flag(tmp_path: Path) -> None:
+    """Verify --fail-on-leak flag exits with returncode 1 on leaks."""
+    dump_file = tmp_path / "leaky.dump"
+    dump_file.write_text(SAMPLE_LEAKY_TRACE, encoding="utf-8")
+    rc = main(["--scan", str(dump_file), "--fail-on-leak"])
+    assert rc == 1
