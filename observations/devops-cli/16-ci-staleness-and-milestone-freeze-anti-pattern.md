@@ -129,7 +129,7 @@ The same expansion applied to sentinel and docs validation:
 - **Durability**: Any future `examples/<slug>/test_<slug>.py` addition is automatically covered without touching `ci.yml`.
 - **Discovery latency**: The bug was discovered during a systematic research audit, not from a regression. A future breaking change in the uncovered suites would now be caught at PR time instead of after merge.
 
-> A CI configuration that enumerates test files by name is not CI coverage — it is a curated whitelist with a decaying validity half-life. Structure-driven discovery (`pytest tests/ examples/ benchmarks/`) is the only correct contract for a living repository.
+> A CI configuration that enumerates test files by name is not CI coverage — it is a curated allowlist with a decaying validity half-life. Structure-driven discovery (`pytest tests/ examples/ benchmarks/`) is the only correct contract for a living repository.
 
 **The anti-pattern to prohibit**: Any CI `run:` step that lists specific `*.py` test files by path belongs to the same class of brittle pattern subsets prohibited by `AGENTS.md §1` — an arbitrary selection from an open, unbounded set. Use directory contracts, glob patterns, or `pytest.ini` `testpaths` instead.
 

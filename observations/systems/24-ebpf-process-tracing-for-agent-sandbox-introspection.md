@@ -138,7 +138,7 @@ stateDiagram-v2
 ### The Five Diagnostic Invariants
 
 1. **`EBPF001` (Unauthorized Binary Execution)**: Fires when an agent process attempts to invoke an unauthorized binary outside the declared execution manifest (e.g., interactive shells `bash -i`, network utilities `nc`, `ncat`, `telnet`, or remote fetchers `curl`, `wget` outside allowed tooling).
-2. **`EBPF002` (Network Egress Violation)**: Fires when a socket connection targets private RFC 1918 address space, loopback metadata services (`169.254.169.254`), or non-whitelisted destinations.
+2. **`EBPF002` (Network Egress Violation)**: Fires when a socket connection targets private RFC 1918 address space, loopback metadata services (`169.254.169.254`), or non-allowlisted destinations.
 3. **`EBPF003` (Sensitive File Tampering / Workspace Escape)**: Fires when an agent process opens or modifies files outside the designated workspace sandbox directory (`/etc/`, `~/.ssh/`, `~/.bashrc`, credentials).
 4. **`EBPF004` (Namespace & Privilege Escalation Attempt)**: Fires on unauthorized invocations of `setuid`, `setgid`, `cap_set_proc`, `unshare`, or `pivot_root`.
 5. **`EBPF005` (Anti-Debugging & Invariant Evasion)**: Fires on invocations of `PTRACE_TRACEME`, tampering with `/proc/self/mem`, or unlinking active trace ring buffer channels.

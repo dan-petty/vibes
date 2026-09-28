@@ -18,7 +18,7 @@ $$\text{Verifier Feedback} \to \text{Strict Epistemic Convergence towards Ground
 Telemetry across production review sweeps in `devops-cli` (#509 audit, #514, #515, #523, #524, #525) revealed that this assumption systematically collapses under three compounding failure modes:
 1. **Mitigation-Refutation Conflation**: The verifier confirms a real defect, invents or asserts a mitigation rationale, and classifies the verdict as "Refuted" — silently deleting genuine defects from developer visibility.
 2. **Evaluator Parochialism (Convention Infiltration)**: The verifier evaluates heterogeneous external repositories against the host tool's own parochial conventions (e.g., Python 3.14 runtime requirements, strict typing flags, internal console exemptions), manufacturing false negatives and noisy invalidations.
-3. **The Unreliable Teacher Trap**: The anti-hallucination catalog — designed to filter recurring model false positives — was configured to autonomously learn from model verdicts. The student model taught the filter catalog, causing epistemic drift where true vulnerabilities were permanently whitelisted.
+3. **The Unreliable Teacher Trap**: The anti-hallucination catalog — designed to filter recurring model false positives — was configured to autonomously learn from model verdicts. The student model taught the filter catalog, causing epistemic drift where true vulnerabilities were permanently allowlisted.
 
 ```mermaid
 flowchart LR

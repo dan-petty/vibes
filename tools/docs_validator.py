@@ -73,6 +73,7 @@ from doc_rules_structure import (
     check_observation_structure,
     check_pattern_header,
 )
+from doc_rules_style import check_prose_style
 from source_tree_policy import iter_source_files
 
 if TYPE_CHECKING:
@@ -102,6 +103,7 @@ __all__ = [
     "check_latex_math_hygiene",
     "check_linebreak_hygiene",
     "check_polyglot_documentation",
+    "check_prose_style",
     "contrast_ratio",
     "detect_document_format",
     "extract_document_anchors",
@@ -147,6 +149,7 @@ VALIDATOR_RULES: Final[dict[str, str]] = {
     "multi_language": "Multi-format document parsing and polyglot snippet validation (RST, AsciiDoc, HTML, text)",
     "linebreak": "CommonMark hard linebreaks and trailing whitespace hygiene",
     "math": "LaTeX and KaTeX math syntax, delimiters, and unescaped character hygiene",
+    "prose_style": "Prose style, terminology, inclusive language, and doubled-word rules",
 }
 
 ALL_DOC_RULES: Final[frozenset[str]] = frozenset(VALIDATOR_RULES.keys())
@@ -165,6 +168,7 @@ RULE_CODE_MAP: Final[dict[str, str]] = {
     "DOC011": "multi_language",
     "DOC012": "linebreak",
     "DOC013": "math",
+    "DOC014": "prose_style",
 }
 
 RULE_ALIASES: Final[dict[str, str]] = {
@@ -213,6 +217,11 @@ RULE_ALIASES: Final[dict[str, str]] = {
     "latex": "math",
     "katex": "math",
     "formula": "math",
+    "prose_style": "prose_style",
+    "style": "prose_style",
+    "prose": "prose_style",
+    "terminology": "prose_style",
+    "vale": "prose_style",
 }
 
 DOC_PRESETS: Final[dict[str, RulePreset]] = {
@@ -265,6 +274,12 @@ DOC_PRESETS: Final[dict[str, RulePreset]] = {
         name="sanitization_only",
         description="Zero-trust documentation sanitization and private IP egress check only",
         active_rules=frozenset({"sanitization"}),
+        strict=False,
+    ),
+    "style_only": RulePreset(
+        name="style_only",
+        description="Prose style, terminology, inclusive language, and doubled-word rules only",
+        active_rules=frozenset({"prose_style"}),
         strict=False,
     ),
 }
@@ -1483,6 +1498,7 @@ class DocsValidator:
             ("multi_language", lambda: check_polyglot_documentation(lines, file_path, known_anchors, paths)),
             ("linebreak", lambda: check_linebreak_hygiene(lines, file_path)),
             ("math", lambda: check_latex_math_hygiene(lines, file_path)),
+            ("prose_style", lambda: check_prose_style(lines, file_path)),
         )
         findings = [
             finding
@@ -1558,6 +1574,15 @@ class DocsValidator:
     ) -> list[DocFinding]:
         """Validate LaTeX and KaTeX math expressions for unescaped characters."""
         return check_latex_math_hygiene(self._to_lines(content), file_path)
+
+    def check_prose_style(
+        self,
+        content: str | Sequence[str],
+        file_path: Path = Path("document.md"),
+        guide: str | None = None,
+    ) -> list[DocFinding]:
+        """Validate prose style, terminology, inclusive language, and doubled words."""
+        return check_prose_style(self._to_lines(content), file_path, guide=guide)
 
     def validate_directory(
         self,
@@ -1740,7 +1765,7 @@ def parse_cli_args(
     parser.add_argument("--rule", help="Filter findings by category rule (legacy option)")
     parser.add_argument(
         "--preset",
-        help="Select calibrated rule preset (standard, strict, polyglot, structure_only, links_only, code_only, sanitization_only)",
+        help="Select calibrated rule preset (standard, strict, polyglot, structure_only, links_only, code_only, sanitization_only, style_only)",
     )
     parser.add_argument("--select", help="Comma-separated rules or codes to activate (e.g. DOC001,DOC004)")
     parser.add_argument("--ignore", help="Comma-separated rules or codes to exclude (e.g. DOC008)")
