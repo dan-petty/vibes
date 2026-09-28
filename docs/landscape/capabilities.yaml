@@ -140,6 +140,7 @@ capabilities:
       - sarif_output
       - per_file_baseline
       - baseline_diff
+      - cyclomatic_complexity
     alternatives:
       - repo: rubik/radon
         package: radon

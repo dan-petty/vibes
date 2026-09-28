@@ -154,6 +154,12 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Dynamic mutation-to-code execution in `PromptMutationFuzzer`, sending perturbed system prompts to model providers and auditing generated code with AST invariant gates.
   - CLI integration with `--provider`, `--model`, `--api-base`, `--api-key`, and `--list-providers` flags.
   - Comprehensive 21-test validation suite with 100% passing rate and certified function-level complexity $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+- [x] **Code smell quantifier: Radon cyclomatic complexity ranking and gating (`examples/code-smell-quantifier/`)**:
+  - Direct AST-level cyclomatic complexity calculation using Radon's `cc_visit_ast` on the shared in-memory AST.
+  - Closes the landscape survey capability gap for `cyclomatic_complexity` under `smell-quantification` (previously held by `rubik/radon`).
+  - Emits `Smell.HIGH_CYCLOMATIC_COMPLEXITY` findings with Radon rank (A–F) and cyclomatic complexity score.
+  - Accompanied by Observation 41 (`observations/systems/41-radon-block-complexity-ranking-in-code-smell-quantification.md`), architectural pattern (`patterns/radon-block-complexity-ranking-and-smell-quantification.md`), and comprehensive unit test suite in `examples/code-smell-quantifier/test_smell_quantifier.py` certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$, $\le 4$ params).
+
 
 ---
 
