@@ -89,6 +89,8 @@ capabilities:
       - per_file_baseline
       - baseline_diff
       - config_presets
+      - auto_fix
+      - editor_lsp
     alternatives:
       - repo: rubik/xenon
         has:

@@ -3,6 +3,7 @@
 # sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting this sentinel detects private IPs and subdomains
 
 import ast
+import io
 import tempfile
 from pathlib import Path
 
@@ -10,18 +11,28 @@ import pytest
 import radon.complexity as cc
 from sentinel import (
     ALL_INVARIANT_RULES,
+    CANONICAL_MOCK_DOMAIN,
     PRESETS,
+    SAFE_DOC_REPLACEMENT_IP,
     ComplexityVisitor,
     ConfigOverrides,
     SentinelConfig,
+    _read_lsp_message,
+    _write_lsp_message,
     audit_file,
+    audit_source,
     audit_targets,
+    auto_fix_file,
+    auto_fix_source,
+    auto_fix_targets,
     load_toml_config,
     main,
     normalize_rule_name,
     parse_cli_args,
+    parse_cli_run_options,
     render_presets_table,
     resolve_config,
+    run_lsp_server,
 )
 
 
@@ -603,3 +614,139 @@ def test_target_integrity_disabled_via_select(tmp_path: Path) -> None:
         True,
         0,
     )
+
+
+def test_auto_fix_source_remediates_private_ip() -> None:
+    """auto_fix_source rewrites private host IPs to safe RFC 5737 documentation addresses."""
+    bad_ip = "192." + "168.1.10"
+    source = f'ENDPOINT = "http://{bad_ip}:8080/api"\n'
+    fixed, count = auto_fix_source(source)
+    assert (
+        count,
+        SAFE_DOC_REPLACEMENT_IP in fixed,
+        bad_ip not in fixed,
+        len(audit_source(fixed)),
+    ) == (1, True, True, 0)
+
+
+def test_auto_fix_source_remediates_subdomain() -> None:
+    """auto_fix_source rewrites non-canonical example.com subdomains to canonical example.com."""
+    source = 'URL = "https://api.example.com/v1/resource"\n'
+    fixed, count = auto_fix_source(source)
+    assert (
+        count,
+        f"https://{CANONICAL_MOCK_DOMAIN}/v1/resource" in fixed,
+        len(audit_source(fixed)),
+    ) == (1, True, 0)
+
+
+def test_auto_fix_source_remediates_waiver_justification() -> None:
+    """auto_fix_source appends compliant justification to bare or truncated waiver pragmas."""
+    source = "# sentinel: allow[ZeroTrustSanitization]\n"
+    fixed, count = auto_fix_source(source)
+    assert (
+        count,
+        "sanitized mock reference" in fixed,
+        fixed.startswith("# sentinel: allow[ZeroTrustSanitization] —"),
+    ) == (1, True, True)
+
+
+def test_auto_fix_source_clean_noop() -> None:
+    """Clean source code produces zero fixes and returns unmodified string."""
+    clean = 'SAFE = "https://example.com/data"\n'
+    fixed, count = auto_fix_source(clean)
+    assert (count, fixed) == (0, clean)
+
+
+def test_auto_fix_file_and_targets(tmp_path: Path) -> None:
+    """auto_fix_file and auto_fix_targets write remediated source to disk and resolve violations."""
+    bad_ip = "10." + "0.0.5"
+    py_file = tmp_path / "leaky.py"
+    py_file.write_text(f'HOST = "{bad_ip}"\n', encoding="utf-8")
+
+    initial_violations = audit_file(py_file)
+    repaired_file_count = auto_fix_file(py_file)
+    post_violations = audit_file(py_file)
+
+    py_file2 = tmp_path / "leaky2.py"
+    py_file2.write_text(f'HOST2 = "{bad_ip}"\n', encoding="utf-8")
+    repaired_targets_count = auto_fix_targets([tmp_path])
+
+    assert (
+        len(initial_violations),
+        repaired_file_count,
+        len(post_violations),
+        repaired_targets_count,
+        SAFE_DOC_REPLACEMENT_IP in py_file.read_text(encoding="utf-8"),
+        SAFE_DOC_REPLACEMENT_IP in py_file2.read_text(encoding="utf-8"),
+    ) == (1, 1, 0, 1, True, True)
+
+
+def test_lsp_framing_read_and_write() -> None:
+    """LSP Content-Length header framing reads and writes JSON-RPC messages cleanly."""
+    buf = io.BytesIO()
+    payload = {"jsonrpc": "2.0", "id": 42, "method": "test"}
+    _write_lsp_message(buf, payload)
+    buf.seek(0)
+    read_back = _read_lsp_message(buf)
+    assert read_back == payload
+
+
+def test_lsp_server_lifecycle_and_diagnostics() -> None:
+    """run_lsp_server completes full initialize/didOpen/codeAction/shutdown/exit lifecycle."""
+    in_buf = io.BytesIO()
+    out_buf = io.BytesIO()
+
+    bad_ip = "172." + "16.0.1"
+    doc_uri = "file:///workspace/test.py"
+    doc_text = f'HOST = "{bad_ip}"\n'
+
+    init_req = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    open_notif = {
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {"textDocument": {"uri": doc_uri, "text": doc_text}},
+    }
+    action_req = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/codeAction",
+        "params": {"textDocument": {"uri": doc_uri}},
+    }
+    shutdown_req = {"jsonrpc": "2.0", "id": 3, "method": "shutdown", "params": {}}
+    exit_notif = {"jsonrpc": "2.0", "method": "exit", "params": {}}
+
+    for msg in (init_req, open_notif, action_req, shutdown_req, exit_notif):
+        _write_lsp_message(in_buf, msg)
+
+    in_buf.seek(0)
+    exit_code = run_lsp_server(reader=in_buf, writer=out_buf)
+
+    out_buf.seek(0)
+    responses: list[dict] = []
+    while True:
+        parsed = _read_lsp_message(out_buf)
+        if parsed is None:
+            break
+        responses.append(parsed)
+
+    methods = [r.get("method") for r in responses if "method" in r]
+    ids = [r.get("id") for r in responses if "id" in r]
+
+    assert (
+        exit_code,
+        ids,
+        "textDocument/publishDiagnostics" in methods,
+        len(responses),
+    ) == (0, [1, 2, 3], True, 4)
+
+
+def test_cli_run_options_with_fix_and_lsp() -> None:
+    """CLI run options parser correctly extracts --fix and --lsp flags."""
+    targets, _config, is_list, is_fix, is_lsp = parse_cli_run_options([
+        "sentinel.py",
+        "some_path.py",
+        "--fix",
+        "--lsp",
+    ])
+    assert (is_list, is_fix, is_lsp, str(targets[0])) == (False, True, True, "some_path.py")
