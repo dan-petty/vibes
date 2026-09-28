@@ -372,7 +372,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 36-wasi-component-models-and-capability-based-tool-sandboxing.md
 │       ├── 37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md
 │       ├── 38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md
-│       └── 39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md
+│       ├── 39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md
+│       └── 40-configurable-prose-style-guides-and-inclusive-terminology-gates.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -386,6 +387,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── capability-based-wasm-sandboxing.md
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── collision-free-worktree-fleet-allocation.md
+│   ├── configurable-prose-style-and-terminology-gates.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
 │   ├── epistemic-hygiene-and-context-pruning.md
 │   ├── epistemic-seam-and-mitigated-defect-auditing.md
@@ -488,6 +490,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── doc_rules_mermaid.py           # Mermaid label, diagram type, and WCAG contrast rules
 │   ├── doc_rules_polyglot.py          # Multi-format doc parsing and polyglot snippet validation
 │   ├── doc_rules_structure.py         # Observation structure and directory map oracles
+│   ├── doc_rules_style.py             # Prose style, terminology, and inclusive language rules
 │   ├── docs_validator.py              # Documentation syntax, code fence, Mermaid, and link validator
 │   ├── reliability_slo.py             # SLO objectives, error budgets, and loop phase policy
 │   ├── roadmap_ingest.py              # Parses roadmap deliverables into the SDLC backlog

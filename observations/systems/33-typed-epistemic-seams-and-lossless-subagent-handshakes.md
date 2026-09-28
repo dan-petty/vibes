@@ -72,7 +72,7 @@ flowchart TD
 Every delegation payload is bundled into an immutable `ContextEnvelope` carrying a deterministic SHA-256 hash ($H_{\text{ctx}}$) over:
 - Required symbol definitions
 - Explicit preconditions (e.g. test suites passing, clean working tree)
-- Whitelisted tool parameters
+- Allowlisted tool parameters
 
 ### 3.2 Negative Schema Boundary Enforcement
 All parameters exchanged across the boundary enforce strict `additionalProperties: false` semantics. Any uncontracted argument immediately fails the handshake with an actionable diagnostic.

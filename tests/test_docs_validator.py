@@ -31,6 +31,7 @@ from docs_validator import (
     DocsValidatorConfig,
     DocumentFormat,
     auto_fix_content,
+    check_prose_style,
     contrast_ratio,
     detect_document_format,
     extract_document_anchors,
@@ -1575,5 +1576,80 @@ def test_doc013_rule_registration() -> None:
         normalize_doc_rule_name("katex") == "math",
         "math" in DOC_PRESETS["structure_only"].active_rules,
     ) == (True, True, True, True, True)
+
+
+def test_doc014_rule_registration() -> None:
+    """Verify DOC014 is registered in rules, aliases, and presets."""
+    assert (
+        VALIDATOR_RULES["prose_style"] == "Prose style, terminology, inclusive language, and doubled-word rules",
+        RULE_CODE_MAP["DOC014"] == "prose_style",
+        normalize_doc_rule_name("DOC014") == "prose_style",
+        normalize_doc_rule_name("style") == "prose_style",
+        normalize_doc_rule_name("vale") == "prose_style",
+        "prose_style" in DOC_PRESETS["style_only"].active_rules,
+    ) == (True, True, True, True, True, True)
+
+
+def test_prose_style_detects_non_inclusive_terminology(tmp_path: Path) -> None:
+    """Non-inclusive terms (blacklist, whitelist, master-slave, sanity-check) are flagged."""
+    doc = tmp_path / "terms.md"
+    content = (
+        "# Terminology\n\n"
+        "Configure the blacklist and whitelist for the proxy.\n"
+        "Set up the master-slave replication model.\n"
+        "Run a quick sanity check before deployment.\n"
+    )
+    doc.write_text(content, encoding="utf-8")
+    direct_findings = check_prose_style(content.splitlines(), doc)
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "prose_style"]
+    severities = [f.severity for f in findings]
+    assert (len(findings), len(direct_findings), severities) == (4, 4, ["error", "error", "error", "error"])
+
+
+def test_prose_style_ignores_inline_code_and_fences(tmp_path: Path) -> None:
+    """Code spans and fenced code blocks with technical identifiers are immune."""
+    doc = tmp_path / "code_immune.md"
+    doc.write_text(
+        "# Safe Code Spans\n\n"
+        "Pass `--whitelist` flag to the CLI.\n\n"
+        "```python\n"
+        "def check_blacklist(entry):\n"
+        "    return entry in master_slave_map\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "prose_style"]
+    assert (len(findings), findings) == (0, [])
+
+
+def test_prose_style_detects_doubled_words(tmp_path: Path) -> None:
+    """Duplicated adjacent words in prose are flagged while code-separated words pass."""
+    doc = tmp_path / "doubled.md"
+    doc.write_text(
+        "# Doubled Words\n\n"
+        "This is the the problem with duplicated words.\n"
+        "We tested without `pyyaml` and `markdown-it-py` and aborted cleanly.\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "prose_style"]
+    assert (len(findings), findings[0].line_number, findings[0].severity) == (1, 3, "error")
+
+
+def test_prose_style_detects_unresolved_placeholders(tmp_path: Path) -> None:
+    """Unresolved TODO and FIXME placeholders emit warnings in documentation."""
+    doc = tmp_path / "placeholder.md"
+    doc.write_text(
+        "# Documentation\n\n"
+        "TODO: document the authentication workflow.\n"
+        "FIXME: clarify response codes.\n",
+        encoding="utf-8",
+    )
+    validator = DocsValidator()
+    findings = [f for f in validator.validate_file(doc) if f.category == "prose_style"]
+    assert (len(findings), [f.severity for f in findings]) == (2, ["warning", "warning"])
+
 
 

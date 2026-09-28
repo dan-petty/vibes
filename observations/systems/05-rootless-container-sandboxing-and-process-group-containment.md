@@ -63,7 +63,7 @@ To ensure that all descendants of a sandboxed execution are terminated when a ti
 - On termination or timeout, the harness sends signals to the entire group using `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`, followed by `signal.SIGKILL`. This guarantees zero orphaned grandchild processes.
 
 ### 2. Zero-Trust Environment Stripping
-Host environments contain hundreds of variables, many of which contain secrets or configuration overrides. The harness enforces a strict whitelist:
+Host environments contain hundreds of variables, many of which contain secrets or configuration overrides. The harness enforces a strict allowlist:
 ```python
 DEFAULT_SAFE_VARS = frozenset({"PATH", "LANG", "LC_ALL", "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"})
 ```
