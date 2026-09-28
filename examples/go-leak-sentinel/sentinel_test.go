@@ -2,6 +2,7 @@ package sentinel
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -68,5 +69,56 @@ func TestLeakyChannelWorkerDetected(t *testing.T) {
 	}
 	if report.StackDump == "" {
 		t.Fatal("expected non-empty stack dump on leak detection")
+	}
+}
+
+type mockTestingT struct {
+	errors []string
+}
+
+func (m *mockTestingT) Errorf(format string, args ...any) {
+	m.errors = append(m.errors, fmt.Sprintf(format, args...))
+}
+
+func TestCheckHarnessCleanPasses(t *testing.T) {
+	defer Check(t)()
+
+	ch := SafeChannelWorker(10)
+	if val := <-ch; val != 10 {
+		t.Fatalf("expected 10, got %d", val)
+	}
+}
+
+func TestCheckHarnessLeakyFailsMockT(t *testing.T) {
+	mock := &mockTestingT{}
+	teardown := Check(mock, WithTimeout(50*time.Millisecond))
+
+	_ = LeakyChannelWorker(777)
+	time.Sleep(20 * time.Millisecond)
+
+	teardown()
+
+	if len(mock.errors) == 0 {
+		t.Fatal("expected mockTestingT to record error for leaked goroutine, got none")
+	}
+}
+
+func TestVerifyNoneCleanPasses(t *testing.T) {
+	VerifyNone(t)
+}
+
+type mockRunner struct {
+	exitCode int
+}
+
+func (r *mockRunner) Run() int {
+	return r.exitCode
+}
+
+func TestVerifyTestMainClean(t *testing.T) {
+	runner := &mockRunner{exitCode: 0}
+	code := VerifyTestMain(runner)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
 	}
 }

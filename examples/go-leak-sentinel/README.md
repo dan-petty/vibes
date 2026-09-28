@@ -125,9 +125,49 @@ Concurrency Score:   50.0/100.0
 python3 examples/go-leak-sentinel/go_leak_sentinel.py --scan /path/to/stack.dump --json
 ```
 
+### Test Harness Integration (Fail Ordinary Test Runs on Leaks)
+
+#### Go `testing.T` Integration:
+```go
+import (
+    "testing"
+    "time"
+    sentinel "example.com/go-leak-sentinel"
+)
+
+func TestMyConcurrentWorker(t *testing.T) {
+    // Fails t with a stack dump and diagnostic if goroutines outlive the test
+    defer sentinel.Check(t, sentinel.WithTimeout(50*time.Millisecond))()
+
+    ch := SafeChannelWorker(42)
+    <-ch
+}
+
+func TestImmediateVerification(t *testing.T) {
+    // Verifies no leaks exist at this moment
+    sentinel.VerifyNone(t)
+}
+```
+
+#### Python Test Runner Integration (`pytest` / `unittest`):
+```python
+from go_leak_sentinel import assert_no_goroutine_leaks, verify_test_run
+
+def test_service_concurrency():
+    # Executes workload...
+    # Automatically raises AssertionError failing the test if leaks are detected:
+    verify_test_run(stack_dump_text, fail_on_leak=True)
+```
+
+#### CLI Test Runner Gate:
+```bash
+# Returns exit code 1 and writes diagnostic to stderr if leaks are detected:
+python3 examples/go-leak-sentinel/go_leak_sentinel.py --scan /path/to/stack.dump --fail-on-leak
+```
+
 ### Run Automated Unit Tests
 ```bash
-python3 -m pytest -v examples/go-leak-sentinel/test_go_leak_sentinel.py
+uv run pytest examples/go-leak-sentinel/test_go_leak_sentinel.py
 ```
 
 ---
@@ -136,9 +176,9 @@ python3 -m pytest -v examples/go-leak-sentinel/test_go_leak_sentinel.py
 
 ```text
 ├── go.mod                  # Go module specification (example.com/go-leak-sentinel)
-├── sentinel.go             # Native Go sentinel library & leak demonstration patterns
-├── sentinel_test.go        # Go unit tests verifying leak detection
-├── go_leak_sentinel.py     # Python runtime stack dump parser & concurrency scoring engine
-├── test_go_leak_sentinel.py # Automated test suite (6 passing unit tests in < 0.2s)
+├── sentinel.go             # Native Go sentinel library, test harness integration (Check, VerifyNone)
+├── sentinel_test.go        # Go unit tests verifying leak detection & mock TestingT harness
+├── go_leak_sentinel.py     # Python runtime stack dump parser & test runner verification engine
+├── test_go_leak_sentinel.py # Automated test suite (15 passing unit tests in < 0.6s)
 └── README.md               # Architecture, failure mode guide & usage (this file)
 ```

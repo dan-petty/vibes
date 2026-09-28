@@ -133,3 +133,91 @@ func FormatReport(r LeakReport) string {
 	return fmt.Sprintf("LEAK DETECTED: Baseline=%d Current=%d Leaked=%d\n--- Stack Trace ---\n%s",
 		r.BaselineCount, r.CurrentCount, r.LeakedCount, strings.TrimSpace(r.StackDump))
 }
+
+// TestingT captures the subset of *testing.T required to report test failures.
+type TestingT interface {
+	Errorf(format string, args ...any)
+}
+
+// Option configures test harness leak verification behaviors.
+type Option func(*verifyConfig)
+
+type verifyConfig struct {
+	timeout        time.Duration
+	toleratedDelta int
+	ignoredFilters []string
+}
+
+// WithTimeout sets maximum duration to wait for background goroutines to settle.
+func WithTimeout(d time.Duration) Option {
+	return func(c *verifyConfig) {
+		c.timeout = d
+	}
+}
+
+// WithToleratedDelta allows a bounded number of acceptable background delta goroutines.
+func WithToleratedDelta(delta int) Option {
+	return func(c *verifyConfig) {
+		c.toleratedDelta = delta
+	}
+}
+
+// IgnoreGoroutine excludes goroutines whose stack traces contain the given substring.
+func IgnoreGoroutine(substr string) Option {
+	return func(c *verifyConfig) {
+		c.ignoredFilters = append(c.ignoredFilters, substr)
+	}
+}
+
+// Check takes a baseline goroutine snapshot and returns a teardown function.
+// When the teardown function executes (typically via defer sentinel.Check(t)()),
+// it verifies that no leaked goroutines outlive the test function.
+func Check(t TestingT, opts ...Option) func() {
+	cfg := verifyConfig{
+		timeout:        50 * time.Millisecond,
+		toleratedDelta: 0,
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	s := NewSentinel()
+	return func() {
+		report := s.AwaitVerification(cfg.timeout)
+		if !report.Passed {
+			t.Errorf("goroutine leak detected: %s", FormatReport(report))
+		}
+	}
+}
+
+// VerifyNone fails t immediately if any goroutines leaked relative to current baseline.
+func VerifyNone(t TestingT, opts ...Option) {
+	Check(t, opts...)()
+}
+
+// TestMainRunner is the interface for testing.M execution.
+type TestMainRunner interface {
+	Run() int
+}
+
+// VerifyTestMain runs m and verifies no goroutines leaked across the entire test suite.
+// Returns the exit code from m.Run() or 1 if leaks were detected.
+func VerifyTestMain(m TestMainRunner, opts ...Option) int {
+	s := NewSentinel()
+	code := m.Run()
+	if code != 0 {
+		return code
+	}
+	cfg := verifyConfig{
+		timeout:        100 * time.Millisecond,
+		toleratedDelta: 0,
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	report := s.AwaitVerification(cfg.timeout)
+	if !report.Passed {
+		fmt.Printf("FAIL: goroutine leak detected in TestMain: %s\n", FormatReport(report))
+		return 1
+	}
+	return 0
+}
