@@ -346,7 +346,7 @@ def test_update_in_place_preserves_custom_logic_and_updates_contract(tmp_path: P
     )
 
     contract_v2_path = _contract_file(tmp_path, purpose="Version 2 purpose.")
-    result = update_in_place(app_dir, contract_path=contract_v2_path)
+    result = update_in_place(app_dir, contract=contract_v2_path)
 
     updated_module = (app_dir / f"{contract_v1.module}.py").read_text(encoding="utf-8")
     handlers_text = handlers_file.read_text(encoding="utf-8")
@@ -377,7 +377,7 @@ def test_update_in_place_appends_missing_operation_stubs(tmp_path: Path) -> None
             {"name": "archive", "summary": "Archive operation."},
         ],
     )
-    result = update_in_place(target_dir, contract_path=contract_v2_path)
+    result = update_in_place(target_dir, contract=contract_v2_path)
 
     handlers_text = handlers_file.read_text(encoding="utf-8")
     assert (

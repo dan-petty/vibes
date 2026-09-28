@@ -650,10 +650,6 @@ def _json_arguments(operation: Operation) -> str:
 
 # --- Generation and CLI ---------------------------------------------------------------
 
-# `handlers.py` is deliberately absent. Regenerating must never overwrite domain logic, so
-# the one file a developer edits is the one file the factory refuses to touch twice.
-REGENERATED: Final[tuple[str, ...]] = ("module", "tests", "readme")
-
 # Recorded beside the application so a regeneration can replay the dialogue instead of
 # repeating it. `copier` writes `.copier-answers.yml` for the same reason, and it is what
 # re-applying a contract to an existing project will need when that lands.
@@ -789,15 +785,12 @@ def _reconcile_handlers(handlers_path: Path, contract: Contract, result: Generat
 
 def _find_update_contract(
     target_dir: Path,
-    contract_path: Path | None,
-    template: str | None,
+    contract: str | Path | None,
     recorded_answers: Mapping[str, Any],
 ) -> Path:
     """Resolve the contract path for an update operation."""
-    if contract_path is not None:
-        return contract_path
-    if template is not None:
-        return resolve_template(template)
+    if contract is not None:
+        return resolve_template(contract)
     if "_template" in recorded_answers:
         return resolve_template(str(recorded_answers["_template"]))
     if "_contract" in recorded_answers:
@@ -844,14 +837,18 @@ def _write_contract_layer(target_dir: Path, contract: Contract, result: Generate
 def _save_update_answers(
     answers_path: Path,
     contract: Contract,
-    template: str | None,
+    contract_ref: str | Path | None,
     recorded: Mapping[str, Any],
     result: Generated,
 ) -> None:
     """Record updated contract answers and metadata back to disk."""
     answers_data = dict(contract.answers)
     answers_data["_contract"] = str(contract.slug)
-    chosen_template = template or recorded.get("_template")
+    chosen_template = (
+        str(contract_ref)
+        if (contract_ref and not Path(contract_ref).is_file())
+        else recorded.get("_template")
+    )
     if chosen_template:
         answers_data["_template"] = str(chosen_template)
     answers_path.write_text(yaml.safe_dump(answers_data, sort_keys=True), encoding="utf-8")
@@ -860,10 +857,9 @@ def _save_update_answers(
 
 def update_in_place(
     target_dir: Path,
-    contract_path: Path | None = None,
+    contract: str | Path | None = None,
     provided: Mapping[str, Any] | None = None,
     *,
-    template: str | None = None,
     interactive: bool = False,
     ask: Callable[[str], str] = input,
 ) -> Generated:
@@ -873,15 +869,15 @@ def update_in_place(
 
     answers_path = target_dir / ANSWERS_FILENAME
     recorded = _load_recorded_answers(answers_path)
-    resolved_path = _find_update_contract(target_dir, contract_path, template, recorded)
+    resolved_path = _find_update_contract(target_dir, contract, recorded)
     merged_answers = _merge_answers(recorded, provided)
 
-    contract = load_contract(resolved_path, merged_answers, interactive=interactive, ask=ask)
+    loaded_contract = load_contract(resolved_path, merged_answers, interactive=interactive, ask=ask)
     result = Generated()
 
-    _write_contract_layer(target_dir, contract, result)
-    _reconcile_handlers(target_dir / "handlers.py", contract, result)
-    _save_update_answers(answers_path, contract, template, recorded, result)
+    _write_contract_layer(target_dir, loaded_contract, result)
+    _reconcile_handlers(target_dir / "handlers.py", loaded_contract, result)
+    _save_update_answers(answers_path, loaded_contract, contract, recorded, result)
 
     return result
 
@@ -971,12 +967,11 @@ def _handle_update(args: argparse.Namespace) -> int:
     """Update an existing generated application in place."""
     if not args.target:
         raise ContractError("target directory is required for update (e.g. app_factory.py update ./my-app)")
-    contract_path = Path(args.contract) if args.contract else None
+    contract_ref = args.contract or args.template
     result = update_in_place(
         args.target,
-        contract_path=contract_path,
+        contract=contract_ref,
         provided=_supplied(args),
-        template=args.template,
         interactive=_interactive(args),
     )
     for path in result.written:
