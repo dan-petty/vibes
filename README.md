@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 59 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 60 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -44,6 +44,7 @@ The headline exhibition in `vibes` is drawn from the autonomous development of [
 | [**10. Negative Tool Contract Assertions & Prescriptive Prompt Synthesis**](./observations/devops-cli/10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md) | Eliminating agent parameter hallucination through JSON Schema negative assertions (`additionalProperties: false`) and prescriptive error prompts enabling zero-shot recovery. |
 | [**11. Assertion Density & Structural Tuple Consolidation**](./observations/devops-cli/11-assertion-density-and-structural-tuple-consolidation.md) | Resolving test suite cyclomatic complexity traps ($M \le 10$) by consolidating linear assertion sprawl into structural tuple equality checks without loss of pytest diagnostics. |
 | [**12. Polyglot CST Boundary Guards & Symlink Containment**](./observations/devops-cli/12-polyglot-cst-boundary-guards-and-symlink-containment.md) | Eliminating OOM crashes and circular symlink loops (`ELOOP`) during multi-language AST crawling with pre-flight file size caps ($\le 5$MB) and workspace boundary verification. |
+| [**21. Milestone Horizon Expansion & Scope Cascades**](./observations/devops-cli/21-milestone-horizon-expansion-and-autonomous-scope-cascades.md) | Resolving the Milestone Horizon Inflation Trap and release live-locks with mathematical convergence tracking ($C_R \ge 1.2$) and three-phase release air-lock governance. |
 
 ---
 
@@ -121,6 +122,7 @@ flowchart TD
 - [**AST Graph Relevance Ranking & Context Packing**](./patterns/ast-graph-relevance-ranking-and-context-packing.md): Personalizing random walks over AST symbol graphs to pack maximal architectural context into tight token budgets with zero syntax fractures.
 - [**Contract Template Ecosystem and In-Place Updates**](./patterns/contract-template-ecosystem-and-in-place-updates.md): Decoupling contract layer schemas and dispatch tables from hand-written domain logic with AST-reconciled in-place upgrades and automatic stub synthesis.
 - [**Polyglot Token Normalization and Clone Quantification**](./patterns/polyglot-token-normalization-and-clone-quantification.md): Language-agnostic Type-2 token normalization erasing identifiers and literals to generic placeholders, computing cross-language clone detection and normalized Maintainability Index without native compiler dependencies.
+- [**Milestone Scope Air-Lock & Triage Ratchet Governance**](./patterns/milestone-airlock-and-scope-freeze-governance.md): Three-phase milestone lifecycle ratchet (`INTAKE` → `AIR_LOCKED` → `FROZEN`) with mathematical convergence ratio gates ($C_R \ge 1.2$) and automated rollover partitioning to eliminate release live-locks.
 
 ---
 
@@ -248,6 +250,7 @@ flowchart LR
 - [**Portfolio Balance (`tools/portfolio_balance.py`)**](./tools/portfolio_balance.py): Reports what the repository *has* against where its recent lines *went*. The drift it exists to surface is invisible from inside any single change — every tooling commit is defensible and the aggregate is not. Counts added lines rather than touched files, because a repository-wide lint sweep touches many locations and builds nothing: on the window that prompted this, touches read 52/48 and lines read 7/93. Steers, never gates.
 - [**Finding Baseline (`tools/finding_baseline.py`)**](./tools/finding_baseline.py): Records a codebase's existing findings so a gate can be turned on before the codebase passes it — the most-cited gap in [the landscape survey](./docs/landscape/SURVEY.md), held by `lizard`, `vulture`, `wily` and `promptfoo`. Operates on normalized SARIF results, so one baseline covers every oracle and composes with any SARIF-emitting tool. Entries are pruned when their finding is fixed, because a suppression file that never shrinks goes on hiding a defect that was repaired and later reintroduced. This repository's own baseline is empty and a test keeps it that way.
 - [**Instrument Fuzzer (`tools/fuzz_harness.py`)**](./tools/fuzz_harness.py): Turns the oracles on themselves. Generates and mutates Python modules, Markdown documents, roadmaps and manifests, then asserts four mechanically decidable properties of each instrument — that it raises nothing it has not declared, answers identically for identical input across hash seeds, converges when it repairs, and finishes. Every input that breaks one is minimized by delta debugging and kept in [`artifacts/fuzz-corpus/`](./artifacts/fuzz-corpus/), which is replayed as a gate; the random search runs on a schedule, where a lucky run is a finding rather than a red build.
+- [**Milestone Scope Governor & Release Air-Lock Oracle (`tools/milestone_governor.py`)**](./tools/milestone_governor.py): Detects and resolves the Milestone Horizon Inflation Trap and scope cascades in autonomous AI agent workflows. Enforces a 3-phase milestone lifecycle (`INTAKE` → `AIR_LOCKED` → `FROZEN`), computes rolling Scope Injection Velocity ($V_{\text{scope}}$), Burn Velocity ($V_{\text{burn}}$), and the Convergence Ratio ($C_R \ge 1.2$), and partitions open backlogs into retained P0 blockers vs. `vNext` rollover candidates with OASIS SARIF 2.1.0 telemetry export.
 - [**Conversation-to-Case-Study Synthesizer (`tools/conversation_synthesizer.py`)**](./tools/conversation_synthesizer.py): Automated pipeline ingesting raw agent trajectory logs (JSONL transcripts), enforcing zero-trust redaction (RFC 5737 IPs, example.com hostnames, secret masking, user path generalization), extracting quantitative telemetry and AST complexity metrics, and drafting structured 5-section observation reports with Mermaid diagrams.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**CodeQL Static Analysis (`.github/workflows/codeql.yml`)**](./.github/workflows/codeql.yml): Automated semantic security analysis scanning for vulnerabilities and invariant breaches across Python and GitHub Actions workflows.
@@ -330,7 +333,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   │   ├── 17-semantic-validators-vs-structural-position-oracles.md
 │   │   ├── 18-tool-cardinality-saturation-and-schema-context-taxation.md
 │   │   ├── 19-context-accumulation-drift-and-lossy-reflection-truncation.md
-│   │   └── 20-model-failover-capability-cliffs-and-one-way-degradation-ratchets.md
+│   │   ├── 20-model-failover-capability-cliffs-and-one-way-degradation-ratchets.md
+│   │   └── 21-milestone-horizon-expansion-and-autonomous-scope-cascades.md
 │   ├── polyglot/                      # Cross-language agentic engineering observations
 │   │   ├── 01-rust-type-state-invariants.md
 │   │   ├── 02-typescript-cst-and-type-gymnastics.md
@@ -410,6 +414,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── kernel-enforced-lsm-sandbox-containment.md
 │   ├── kinetic-exploit-probes-and-invariant-leashing.md
 │   ├── lsp-diagnostics-and-automated-invariant-repair.md
+│   ├── milestone-airlock-and-scope-freeze-governance.md
 │   ├── multi-agent-codebase-concurrency.md
 │   ├── multi-tier-living-documentation.md
 │   ├── polyglot-token-normalization-and-clone-quantification.md
@@ -498,6 +503,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── sdlc_project_manager.py        # SDLC resource prioritization & Kanban engine
 │   ├── resource_iteration_workbench.py # Automated Scan-Run-Review-Iterate workbench
 │   ├── ast_refactorer.py              # Automated AST conditional refactorer
+│   ├── milestone_governor.py          # Milestone scope governor, convergence ratio & release air-lock oracle
 │   ├── doc_core.py                    # Shared finding types and fenced-block extraction
 │   ├── doc_rules_mermaid.py           # Mermaid label, diagram type, and WCAG contrast rules
 │   ├── doc_rules_polyglot.py          # Multi-format doc parsing and polyglot snippet validation
@@ -526,6 +532,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │
 └── tests/                             # Automated test suites for tools and harnesses
     ├── test_instruction_governor.py   # Unit tests for JIT instruction governor & ablation engine
+    ├── test_milestone_governor.py     # Unit tests for milestone scope governor and air-lock oracle
     ├── test_kinetic_probe.py          # Unit tests for kinetic probe execution & invariant leashes
     ├── test_code_memory.py            # Unit tests for code memory, call graph invariants & SARIF
     ├── test_model_router.py           # Unit tests for multi-model router, speculative cascade & SARIF
