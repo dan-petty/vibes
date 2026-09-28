@@ -159,6 +159,12 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Closes the landscape survey capability gap for `cyclomatic_complexity` under `smell-quantification` (previously held by `rubik/radon`).
   - Emits `Smell.HIGH_CYCLOMATIC_COMPLEXITY` findings with Radon rank (A–F) and cyclomatic complexity score.
   - Accompanied by Observation 41 (`observations/systems/41-radon-block-complexity-ranking-in-code-smell-quantification.md`), architectural pattern (`patterns/radon-block-complexity-ranking-and-smell-quantification.md`), and comprehensive unit test suite in `examples/code-smell-quantifier/test_smell_quantifier.py` certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$, $\le 4$ params).
+- [x] **Complexity gate: Language Server Protocol (LSP 3.17) & automated AST invariant repair (`examples/ast-invariant-sentinel/`)**:
+  - In-process, zero-dependency Language Server Protocol server operating over stdio (`--lsp`, `run_lsp_server`), delivering real-time diagnostics (`textDocument/publishDiagnostics`) and QuickFix code actions (`textDocument/codeAction`).
+  - Closes the landscape survey capability gaps for `auto_fix` and `editor_lsp` under `complexity-gating` (previously held by `astral-sh/ruff`), eliminating all `integrate` gaps across the repository.
+  - Deterministic AST-verified automated remediation (`--fix`, `auto_fix_source`, `auto_fix_file`, `auto_fix_targets`) repairing private IP leaks, non-canonical mock subdomains, and malformed waiver headers.
+  - Accompanied by Observation 42 (`observations/systems/42-language-server-protocol-and-automated-ast-invariant-repair.md`), architectural pattern (`patterns/lsp-diagnostics-and-automated-invariant-repair.md`), and comprehensive unit test suite in `examples/ast-invariant-sentinel/test_sentinel.py` certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, $\le 4$ params).
+
 
 
 ---

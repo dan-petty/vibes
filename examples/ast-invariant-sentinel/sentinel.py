@@ -18,8 +18,11 @@ import ast
 import io
 import ipaddress
 import itertools
+import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tokenize
 import tomllib
@@ -65,6 +68,7 @@ PRIVATE_HOST_NETWORKS = (
 
 # Standard dummy mock domain; subdomains are strictly prohibited
 CANONICAL_MOCK_DOMAIN = "example.com"
+SAFE_DOC_REPLACEMENT_IP = "192.0.2.1"
 
 # IPv4 regex for detecting hardcoded addresses in string literals
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -815,6 +819,24 @@ def audit_file(
     return _filter_active_violations(detected, waivers, active_config)
 
 
+def audit_source(
+    source: str,
+    file_path: str = "<source>",
+    config: SentinelConfig | None = None,
+) -> list[Violation]:
+    """Audit Python source code directly for invariant violations."""
+    active_config = config or SentinelConfig(active_rules=ALL_INVARIANT_RULES)
+    path_obj = Path(file_path)
+    try:
+        tree = ast.parse(source, filename=file_path)
+    except (SyntaxError, UnicodeDecodeError) as err:
+        return [_syntax_violation(path_obj, err)] if active_config.is_rule_active("SyntaxIntegrity") else []
+
+    detected = _run_visitors(tree, file_path, active_config)
+    waivers = _scan_waivers(path_obj, source)
+    return _filter_active_violations(detected, waivers, active_config)
+
+
 # Directory names holding code this repository did not write. Kept in step with
 # `tools/source_tree_policy.py`, which is the repository's single definition of its own
 # corpus; this sample application is standalone by design and cannot import it, so
@@ -911,6 +933,357 @@ def audit_targets(
     return report
 
 
+_SUBDOMAIN_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"(https?://)[a-zA-Z0-9_\-\.]+\.example\.com"
+)
+
+
+def _collect_prohibited_ips(line: str) -> list[str]:
+    """Extract prohibited IPv4 addresses found in a line."""
+    return [
+        m.group(0) for m in IPV4_PATTERN.finditer(line) if _is_prohibited_ip(m.group(0))
+    ]
+
+
+def _fix_ip_in_line(line: str) -> tuple[str, int]:
+    """Replace private IPv4 addresses with safe documentation IP."""
+    if "# sentinel:" in line or "ipaddress.ip_network(" in line:
+        return line, 0
+    matches = _collect_prohibited_ips(line)
+    if not matches:
+        return line, 0
+    fixed = line
+    for ip in set(matches):
+        fixed = fixed.replace(ip, SAFE_DOC_REPLACEMENT_IP)
+    return fixed, len(matches)
+
+
+def _fix_subdomains_in_line(line: str) -> tuple[str, int]:
+    """Normalize non-canonical example.com subdomains to canonical example.com."""
+    if "example.com" not in line or "://" not in line or "# sentinel:" in line:
+        return line, 0
+    fixed, count = _SUBDOMAIN_PATTERN.subn(r"\g<1>example.com", line)
+    return fixed, count
+
+
+def _is_valid_waiver_line(line: str) -> bool:
+    """Return True if line has a compliant waiver justification."""
+    match = WAIVER_PRAGMA_RE.match(line.strip())
+    return bool(match and len(match.group("reason").strip()) >= MIN_WAIVER_JUSTIFICATION_CHARS)
+
+
+def _fix_waiver_in_line(line: str) -> tuple[str, int]:
+    """Normalize malformed waiver justifications to compliant form."""
+    if "sentinel: allow" not in line or not line.strip().startswith("#"):
+        return line, 0
+    if _is_valid_waiver_line(line):
+        return line, 0
+    inv_match = re.search(r"allow\[([A-Za-z]+)\]", line)
+    if not inv_match or inv_match.group(1) not in WAIVABLE_INVARIANTS:
+        return line, 0
+    return f"# sentinel: allow[{inv_match.group(1)}] — sanitized mock reference\n", 1
+
+
+def auto_fix_source(
+    source: str,
+    file_path: str = "<source>",
+    config: SentinelConfig | None = None,
+) -> tuple[str, int]:
+    """Automatically remediate fixable invariant violations in Python source."""
+    active_config = config or SentinelConfig(active_rules=ALL_INVARIANT_RULES)
+    if not active_config.is_rule_active("ZeroTrustSanitization"):
+        return source, 0
+
+    lines = source.splitlines(keepends=True)
+    total_fixes = 0
+    remediated_lines: list[str] = []
+
+    for line in lines:
+        curr, fixes1 = _fix_ip_in_line(line)
+        curr, fixes2 = _fix_subdomains_in_line(curr)
+        curr, fixes3 = _fix_waiver_in_line(curr)
+        total_fixes += fixes1 + fixes2 + fixes3
+        remediated_lines.append(curr)
+
+    if total_fixes == 0:
+        return source, 0
+
+    candidate = "".join(remediated_lines)
+    try:
+        ast.parse(candidate, filename=file_path)
+    except SyntaxError:
+        return source, 0
+    return candidate, total_fixes
+
+
+def auto_fix_file(file_path: Path, config: SentinelConfig | None = None) -> int:
+    """Remediate fixable invariant violations in a single Python file."""
+    try:
+        source = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return 0
+    fixed_source, count = auto_fix_source(source, str(file_path), config)
+    if count > 0 and fixed_source != source:
+        file_path.write_text(fixed_source, encoding="utf-8")
+    return count
+
+
+def auto_fix_targets(
+    paths: Sequence[Path], config: SentinelConfig | None = None
+) -> int:
+    """Expand targets and apply auto-fixes across all Python source files."""
+    targets = _expand_targets([p for p in paths if p.exists()])
+    return sum(auto_fix_file(p, config=config) for p in targets)
+
+
+def run_ruff_fix(paths: Sequence[Path]) -> int:
+    """Run `ruff check --fix` over targets if ruff is installed in the environment."""
+    ruff_bin = shutil.which("ruff")
+    if not ruff_bin:
+        return 0
+    cmd = [ruff_bin, "check", "--fix", *[str(p) for p in paths]]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        return 1 if proc.returncode == 0 else 0
+    except (OSError, subprocess.SubprocessError):
+        return 0
+
+
+def _parse_content_length(header_line: bytes) -> int | None:
+    """Parse integer Content-Length from header line bytes."""
+    if not header_line.lower().startswith(b"content-length:"):
+        return None
+    parts = header_line.split(b":", 1)
+    try:
+        return int(parts[1].strip())
+    except ValueError:
+        return None
+
+
+def _read_lsp_headers(stream: io.BufferedReader) -> int | None:
+    """Read LSP headers until empty separator line, extracting Content-Length."""
+    content_length: int | None = None
+    while True:
+        line = stream.readline()
+        if not line:
+            return None
+        stripped = line.strip()
+        if not stripped:
+            break
+        parsed = _parse_content_length(stripped)
+        if parsed is not None:
+            content_length = parsed
+    return content_length
+
+
+def _read_lsp_message(stream: io.BufferedReader) -> dict[str, Any] | None:
+    """Read a single Content-Length framed JSON-RPC message from an input stream."""
+    content_length = _read_lsp_headers(stream)
+    if not content_length or content_length <= 0:
+        return None
+    body = stream.read(content_length)
+    if len(body) < content_length:
+        return None
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def _write_lsp_message(stream: io.BufferedWriter, data: dict[str, Any]) -> None:
+    """Write a Content-Length framed JSON-RPC message to an output stream."""
+    body = json.dumps(data, separators=(",", ":")).encode("utf-8")
+    header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+    stream.write(header + body)
+    stream.flush()
+
+
+def _violation_to_lsp_diagnostic(v: Violation) -> dict[str, Any]:
+    """Convert an architectural Violation into an LSP Diagnostic object."""
+    line = max(0, v.line_number - 1)
+    return {
+        "range": {
+            "start": {"line": line, "character": 0},
+            "end": {"line": line, "character": 80},
+        },
+        "severity": 1,
+        "code": v.invariant,
+        "source": "ast-invariant-sentinel",
+        "message": f"[{v.invariant}] {v.message}",
+    }
+
+
+def _handle_code_action(
+    req_id: Any,
+    params: dict[str, Any],
+    open_docs: dict[str, str],
+    config: SentinelConfig,
+) -> dict[str, Any]:
+    """Synthesize QuickFix CodeAction proposing auto-fix remediations."""
+    uri = params.get("textDocument", {}).get("uri", "")
+    source = open_docs.get(uri, "")
+    if not source:
+        return {"jsonrpc": "2.0", "id": req_id, "result": []}
+    fixed, count = auto_fix_source(source, uri, config)
+    if count == 0 or fixed == source:
+        return {"jsonrpc": "2.0", "id": req_id, "result": []}
+    lines = source.splitlines()
+    last_line = max(0, len(lines) - 1)
+    last_char = len(lines[last_line]) if lines else 0
+    full_range = {
+        "start": {"line": 0, "character": 0},
+        "end": {"line": last_line, "character": last_char},
+    }
+    action = {
+        "title": f"Fix {count} invariant violation(s) (ast-invariant-sentinel)",
+        "kind": "quickfix",
+        "isPreferred": True,
+        "edit": {
+            "changes": {
+                uri: [{"range": full_range, "newText": fixed}]
+            }
+        },
+    }
+    return {"jsonrpc": "2.0", "id": req_id, "result": [action]}
+
+
+def _handle_lsp_request(
+    msg: dict[str, Any],
+    open_docs: dict[str, str],
+    config: SentinelConfig,
+) -> dict[str, Any] | None:
+    """Dispatch an LSP request and synthesize response payload."""
+    req_id = msg.get("id")
+    method = msg.get("method", "")
+    params = msg.get("params", {})
+
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "capabilities": {
+                    "textDocumentSync": 1,
+                    "codeActionProvider": True,
+                },
+                "serverInfo": {
+                    "name": "ast-invariant-sentinel",
+                    "version": "0.4.0",
+                },
+            },
+        }
+
+    if method == "shutdown":
+        return {"jsonrpc": "2.0", "id": req_id, "result": None}
+
+    if method == "textDocument/codeAction":
+        return _handle_code_action(req_id, params, open_docs, config)
+
+    return {"jsonrpc": "2.0", "id": req_id, "result": None}
+
+
+def _on_did_change_doc(
+    params: dict[str, Any],
+    writer: io.BufferedWriter,
+    open_docs: dict[str, str],
+    config: SentinelConfig,
+) -> None:
+    """Extract document text, store in open_docs, and publish diagnostics."""
+    doc = params.get("textDocument", {})
+    uri = doc.get("uri", "")
+    changes = params.get("contentChanges", [])
+    text = changes[0].get("text", "") if changes else doc.get("text", "")
+    if uri:
+        open_docs[uri] = text
+        violations = audit_source(text, file_path=uri, config=config)
+        diagnostics = [_violation_to_lsp_diagnostic(v) for v in violations]
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "textDocument/publishDiagnostics",
+            "params": {"uri": uri, "diagnostics": diagnostics},
+        }
+        _write_lsp_message(writer, notification)
+
+
+def _handle_lsp_notification(
+    msg: dict[str, Any],
+    writer: io.BufferedWriter,
+    open_docs: dict[str, str],
+    config: SentinelConfig,
+) -> bool:
+    """Handle an LSP notification, publishing diagnostics or signaling exit."""
+    method = msg.get("method", "")
+    params = msg.get("params", {})
+
+    if method == "exit":
+        return True
+
+    if method in ("textDocument/didOpen", "textDocument/didChange"):
+        _on_did_change_doc(params, writer, open_docs, config)
+        return False
+
+    if method == "textDocument/didClose":
+        uri = params.get("textDocument", {}).get("uri")
+        if uri:
+            open_docs.pop(uri, None)
+        return False
+
+    return False
+
+
+def _dispatch_lsp_msg(
+    msg: dict[str, Any],
+    out_stream: io.BufferedWriter,
+    open_docs: dict[str, str],
+    config: SentinelConfig,
+) -> bool:
+    """Dispatch a single parsed LSP message, returning True if server should exit."""
+    if "id" in msg:
+        response = _handle_lsp_request(msg, open_docs, config)
+        if response is not None:
+            _write_lsp_message(out_stream, response)
+        return False
+    return _handle_lsp_notification(msg, out_stream, open_docs, config)
+
+
+def _iter_lsp_messages(stream: io.BufferedReader) -> Iterator[dict[str, Any]]:
+    """Yield parsed LSP messages until stream closure."""
+    while True:
+        msg = _read_lsp_message(stream)
+        if msg is None:
+            break
+        yield msg
+
+
+def run_lsp_server(
+    reader: io.BufferedReader | None = None,
+    writer: io.BufferedWriter | None = None,
+    config: SentinelConfig | None = None,
+) -> int:
+    """Execute the AST Invariant Sentinel as a Language Server Protocol (LSP) server."""
+    in_stream = reader or sys.stdin.buffer
+    out_stream = writer or sys.stdout.buffer
+    active_config = config or SentinelConfig(active_rules=ALL_INVARIANT_RULES)
+    open_docs: dict[str, str] = {}
+
+    for msg in _iter_lsp_messages(in_stream):
+        if _dispatch_lsp_msg(msg, out_stream, open_docs, active_config):
+            break
+    return 0
+
+
+def run_ruff_server() -> int:
+    """Launch `ruff server` as the language server if ruff binary is available."""
+    ruff_bin = shutil.which("ruff")
+    if not ruff_bin:
+        return run_lsp_server()
+    try:
+        proc = subprocess.run([ruff_bin, "server"], check=False)
+        return proc.returncode
+    except (OSError, subprocess.SubprocessError):
+        return run_lsp_server()
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     """Construct command-line argument parser for the sentinel."""
     parser = argparse.ArgumentParser(
@@ -932,6 +1305,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-depth", "-D", type=int, help="Override maximum nesting depth ceiling")
     parser.add_argument("--config", "-c", type=Path, help="Path to TOML configuration file (e.g. pyproject.toml)")
     parser.add_argument("--list-presets", action="store_true", help="List all available presets and exit")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Automatically remediate fixable invariant violations (IP sanitization, mock domains, waivers)",
+    )
+    parser.add_argument(
+        "--lsp",
+        action="store_true",
+        help="Run as a Language Server Protocol (LSP) server communicating over stdio",
+    )
     return parser
 
 
@@ -951,10 +1334,18 @@ def _resolve_cli_targets(raw_paths: Sequence[str]) -> list[Path]:
 
 def parse_cli_args(argv: Sequence[str] | None) -> tuple[list[Path], SentinelConfig, bool]:
     """Parse command line arguments into target paths, resolved config, and list flag."""
+    targets, config, is_list, _, _ = parse_cli_run_options(argv)
+    return targets, config, is_list
+
+
+def parse_cli_run_options(
+    argv: Sequence[str] | None,
+) -> tuple[list[Path], SentinelConfig, bool, bool, bool]:
+    """Parse command line arguments into targets, config, list flag, fix flag, and lsp flag."""
     parser = _build_arg_parser()
     args = parser.parse_args(list(argv[1:]) if argv is not None else None)
     if args.list_presets:
-        return [], resolve_config(), True
+        return [], resolve_config(), True, False, False
 
     overrides = ConfigOverrides(
         preset_name=args.preset,
@@ -966,7 +1357,7 @@ def parse_cli_args(argv: Sequence[str] | None) -> tuple[list[Path], SentinelConf
         config_file=args.config,
     )
     target_paths = _resolve_cli_targets(args.paths)
-    return target_paths, resolve_config(overrides), False
+    return target_paths, resolve_config(overrides), False, bool(args.fix), bool(args.lsp)
 
 
 def _parse_cli_targets(argv: Sequence[str] | None) -> list[Path]:
@@ -975,28 +1366,33 @@ def _parse_cli_targets(argv: Sequence[str] | None) -> list[Path]:
     return targets
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """CLI runner for the AST Invariant Sentinel."""
-    target_paths, config, is_list = parse_cli_args(argv)
-    if is_list:
-        print("Available AST Invariant Sentinel Presets:\n")
-        print(render_presets_table())
-        return 0
-
+def _run_cli_audit(target_paths: list[Path], config: SentinelConfig) -> int:
+    """Execute target scan and report violations."""
     scanned = ", ".join(f"'{path}'" for path in target_paths)
     print(f"🛡️  AST Invariant Sentinel [preset={config.preset_name}]: Scanning {scanned}...")
-
     report = audit_targets(target_paths, config=config)
     print(f"Checked {report.files_checked} Python files.")
-
     if report.is_clean:
         print("✅ All architectural invariants PASSED! Zero violations.")
         return 0
-
     print(f"\n❌ Found {len(report.violations)} architectural invariant violation(s):")
     for v in report.violations:
         print(f"  [{v.invariant}] {v.file_path}:{v.line_number} — {v.message}")
     return 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI runner for the AST Invariant Sentinel."""
+    target_paths, config, is_list, is_fix, is_lsp = parse_cli_run_options(argv)
+    if is_lsp:
+        return run_lsp_server(config=config)
+    if is_list:
+        print(f"Available AST Invariant Sentinel Presets:\n\n{render_presets_table()}")
+        return 0
+    if is_fix:
+        fixes = auto_fix_targets(target_paths, config=config)
+        print(f"🛠️  AST Invariant Sentinel: Applied {fixes} automatic remediation(s).")
+    return _run_cli_audit(target_paths, config)
 
 
 if __name__ == "__main__":

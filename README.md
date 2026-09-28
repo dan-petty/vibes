@@ -374,7 +374,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md
 │       ├── 39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md
 │       ├── 40-configurable-prose-style-guides-and-inclusive-terminology-gates.md
-│       └── 41-radon-block-complexity-ranking-in-code-smell-quantification.md
+│       ├── 41-radon-block-complexity-ranking-in-code-smell-quantification.md
+│       └── 42-language-server-protocol-and-automated-ast-invariant-repair.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -401,6 +402,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── just-in-time-instruction-decomposition-and-ablation.md
 │   ├── kernel-enforced-lsm-sandbox-containment.md
 │   ├── kinetic-exploit-probes-and-invariant-leashing.md
+│   ├── lsp-diagnostics-and-automated-invariant-repair.md
 │   ├── multi-agent-codebase-concurrency.md
 │   ├── multi-tier-living-documentation.md
 │   ├── post-v1-deprecation-lifecycle.md
