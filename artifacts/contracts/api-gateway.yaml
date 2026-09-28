@@ -1,0 +1,55 @@
+# An API gateway contract in the published ecosystem.
+# Dispatches and authenticates inbound HTTP requests with rate limiting and route scoping.
+variables:
+  - name: service_name
+    prompt: Target microservice name for API routing
+    type: string
+    default: core-service
+  - name: auth_scheme
+    prompt: Authentication scheme enforced at the gateway boundary
+    type: choice
+    choices: [bearer, apikey]
+    default: bearer
+  - name: rate_limit_window
+    prompt: Sliding rate limit evaluation window
+    type: choice
+    choices: [second, minute, hour]
+    default: minute
+
+name: API Gateway
+slug: api-gateway
+module: gateway
+purpose: Dispatch and authenticate inbound HTTP requests to {{ service_name }} with rate limiting.
+operations:
+  - name: route_request
+    summary: Route an incoming request to {{ service_name }} after token and header verification.
+    arguments:
+      - name: path
+        type: string
+        description: Relative URI path to forward to {{ service_name }}.
+      - name: method
+        type: string
+        description: HTTP verb such as GET, POST or PUT.
+      - name: token
+        type: string
+        description: Security token adhering to {{ auth_scheme }} authorization format.
+      - name: timeout_ms
+        type: integer
+        required: false
+        description: Bounded upstream timeout in milliseconds.
+  - name: introspect_token
+    summary: Validate caller claims and credential validity for {{ auth_scheme }} scheme.
+    arguments:
+      - name: token
+        type: string
+        description: Opaque token or JWT credential to verify.
+      - name: required_scope
+        type: string
+        required: false
+        description: Minimum privilege scope demanded for access.
+  - name: query_metrics
+    summary: Retrieve inbound route latencies and quota consumption per {{ rate_limit_window }}.
+    arguments:
+      - name: window_count
+        type: integer
+        description: Number of preceding {{ rate_limit_window }} intervals to inspect.

@@ -1,0 +1,55 @@
+# A batch data processing pipeline contract in the published ecosystem.
+# Extracts partitions, applies schema validation, and loads normalized records.
+variables:
+  - name: pipeline_name
+    prompt: Name of the scheduled batch computation pipeline
+    type: string
+    default: analytical-etl
+  - name: storage_format
+    prompt: Serialization format for staged chunk storage
+    type: choice
+    choices: [parquet, jsonl, csv]
+    default: parquet
+  - name: chunk_size
+    prompt: Record batch size per worker chunk
+    type: string
+    default: "10000"
+
+name: Batch Pipeline
+slug: batch-pipeline
+module: pipeline
+purpose: Orchestrate scheduled chunked extraction, transformation and loading for {{ pipeline_name }}.
+operations:
+  - name: extract_source
+    summary: Extract raw dataset partitions for {{ pipeline_name }} in chunks of {{ chunk_size }}.
+    arguments:
+      - name: source_uri
+        type: string
+        description: Fully qualified URI of the source data warehouse or bucket.
+      - name: partition_date
+        type: string
+        description: Target date partition in YYYY-MM-DD format.
+      - name: limit
+        type: integer
+        required: false
+        description: Optional ceiling on records extracted.
+  - name: transform_records
+    summary: Apply schema normalization and validation to extracted {{ storage_format }} chunks.
+    arguments:
+      - name: chunk_id
+        type: string
+        description: Staged chunk identifier in {{ storage_format }} representation.
+      - name: strict_schema
+        type: boolean
+        required: false
+        description: When enabled, reject chunks with non-conforming types.
+  - name: load_destination
+    summary: Ingest normalized records into target analytics table.
+    arguments:
+      - name: destination_table
+        type: string
+        description: Target warehouse schema and table name.
+      - name: dry_run
+        type: boolean
+        required: false
+        description: Simulate commit without mutating target table.

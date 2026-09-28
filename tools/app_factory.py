@@ -27,6 +27,7 @@ factory that owns the domain logic becomes a framework nobody can leave.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -45,19 +46,27 @@ from contract_variables import (
     resolve,
 )
 
+DEFAULT_TEMPLATES_DIR: Final[Path] = Path(__file__).resolve().parent.parent / "artifacts" / "contracts"
+
 __all__ = [
     "Argument",
     "Contract",
     "ContractError",
     "Generated",
     "Operation",
+    "TemplateInfo",
+    "discover_templates",
+    "emit_handler_stub",
     "emit_handlers",
     "emit_module",
     "emit_readme",
     "emit_tests",
     "generate",
+    "list_templates",
     "load_contract",
+    "resolve_template",
     "schema_for",
+    "update_in_place",
 ]
 
 # JSON Schema primitives, mapped to the Python types the generated runtime checks against
@@ -117,6 +126,19 @@ class Contract:
     answers: Mapping[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class TemplateInfo:
+    """Metadata describing a published contract template in the ecosystem."""
+
+    slug: str
+    name: str
+    module: str
+    purpose: str
+    path: Path
+    operations: tuple[str, ...]
+    variables: tuple[str, ...]
+
+
 def load_contract(
     path: Path,
     provided: Mapping[str, Any] | None = None,
@@ -136,7 +158,8 @@ def load_contract(
     if not isinstance(document, dict):
         raise ContractError(f"{path}: expected a mapping at the top level")
     variables = load_variables(document)
-    answers = resolve(variables, provided or {}, interactive=interactive, ask=ask)
+    clean_provided = {str(k): v for k, v in (provided or {}).items() if not str(k).startswith("_")}
+    answers = resolve(variables, clean_provided, interactive=interactive, ask=ask)
     rendered = render({key: value for key, value in document.items() if key != "variables"}, answers)
     contract = Contract(
         name=str(rendered.get("name", "")).strip(),
@@ -208,7 +231,9 @@ def _operation_problems(contract: Contract) -> list[str]:
     if not contract.operations:
         problems.append("at least one operation is required")
     names = [operation.name for operation in contract.operations]
-    problems += [f"operation name {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)]
+    problems += [
+        f"operation name {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)
+    ]
     problems += [f"duplicate operation {n!r}" for n in sorted({n for n in names if names.count(n) > 1})]
     for operation in contract.operations:
         problems += _argument_problems(operation)
@@ -218,8 +243,15 @@ def _operation_problems(contract: Contract) -> list[str]:
 def _argument_problems(operation: Operation) -> list[str]:
     """Return every breach in one operation's argument list."""
     names = [argument.name for argument in operation.arguments]
-    problems = [f"{operation.name}: argument {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)]
-    problems += [f"{operation.name}: duplicate argument {n!r}" for n in sorted({n for n in names if names.count(n) > 1})]
+    problems = [
+        f"{operation.name}: argument {n!r} must be a lowercase identifier"
+        for n in names
+        if not _IDENTIFIER.match(n)
+    ]
+    problems += [
+        f"{operation.name}: duplicate argument {n!r}"
+        for n in sorted({n for n in names if names.count(n) > 1})
+    ]
     if not operation.summary:
         problems.append(f"{operation.name}: summary is required; it becomes the docstring")
     return problems
@@ -263,6 +295,18 @@ def _signature(operation: Operation) -> str:
     return f"def {operation.name}({', '.join(parts)}) -> dict[str, Any]:"
 
 
+def emit_handler_stub(operation: Operation) -> str:
+    """Emit a typed handler stub for one operation."""
+    lines = [
+        _signature(operation),
+        f'    """{operation.summary}"""',
+        "    # TODO: implement. Returning the declared shape keeps the generated suite green",
+        "    # until this is filled in, and keeps the application runnable in the meantime.",
+        f'    return {{"status": "unimplemented", "operation": "{operation.name}"}}',
+    ]
+    return "\n".join(lines)
+
+
 def emit_handlers(contract: Contract) -> str:
     """Emit the domain logic stubs, which are written once and never regenerated."""
     lines = [
@@ -282,14 +326,8 @@ def emit_handlers(contract: Contract) -> str:
         "",
     ]
     for operation in contract.operations:
-        lines += [
-            "",
-            _signature(operation),
-            f'    """{operation.summary}"""',
-            "    # TODO: implement. Returning the declared shape keeps the generated suite green",
-            "    # until this is filled in, and keeps the application runnable in the meantime.",
-            f'    return {{"status": "unimplemented", "operation": "{operation.name}"}}',
-        ]
+        lines.append("")
+        lines.append(emit_handler_stub(operation))
     return "\n".join(lines) + "\n"
 
 
@@ -379,7 +417,7 @@ def emit_module(contract: Contract) -> str:
         "    for name, value in sorted(arguments.items()):",
         '        expected = declared.get(name, {}).get("type")',
         "        if expected is not None and not _matches(expected, value):",
-        "            found.append(f\"argument {name!r} must be {expected}, got {type(value).__name__}\")",
+        '            found.append(f"argument {name!r} must be {expected}, got {type(value).__name__}")',
         "    return found",
         "",
         "",
@@ -387,16 +425,16 @@ def emit_module(contract: Contract) -> str:
         '    """Return every way the call breaches its contract, so one round trip can fix all of them."""',
         '    spec = SCHEMA["operations"].get(operation)',
         "    if spec is None:",
-        "        declared = sorted(SCHEMA[\"operations\"])",
-        "        return [f\"unknown operation {operation!r}; declared: {declared}\"]",
+        '        declared = sorted(SCHEMA["operations"])',
+        '        return [f"unknown operation {operation!r}; declared: {declared}"]',
         '    properties = spec["properties"]',
         "    problems = [",
-        "        f\"undeclared argument {name!r}; allowed: {sorted(properties)}\"",
+        '        f"undeclared argument {name!r}; allowed: {sorted(properties)}"',
         "        for name in sorted(arguments)",
         "        if name not in properties",
         "    ]",
         "    problems += [",
-        "        f\"missing required argument {name!r}\"",
+        '        f"missing required argument {name!r}"',
         '        for name in spec["required"]',
         "        if name not in arguments",
         "    ]",
@@ -501,7 +539,7 @@ def emit_tests(contract: Contract) -> str:
         f'    arguments = dict({_valid_arguments(first)}, undeclared_argument="x")',
         f'    result = {contract.module}.invoke("{first.name}", arguments)',
         '    assert result.status == "rejected"',
-        "    assert any(\"undeclared_argument\" in problem for problem in result.payload[\"problems\"])",
+        '    assert any("undeclared_argument" in problem for problem in result.payload["problems"])',
         "",
         "",
         "def test_an_unknown_operation_names_the_ones_that_exist() -> None:",
@@ -532,7 +570,7 @@ def _negative_type_test(contract: Contract, operation: Operation, typed: list[Ar
         "",
         "def test_an_argument_of_the_wrong_type_is_refused() -> None:",
         '    """Declared types are enforced at the boundary, not assumed inside the handler."""',
-        f'    arguments = dict({_valid_arguments(operation)}, {argument.name}={WRONG_VALUES[argument.type]})',
+        f"    arguments = dict({_valid_arguments(operation)}, {argument.name}={WRONG_VALUES[argument.type]})",
         f'    result = {contract.module}.invoke("{operation.name}", arguments)',
         '    assert result.status == "rejected"',
         f'    assert any("{argument.name}" in problem for problem in result.payload["problems"])',
@@ -600,8 +638,12 @@ def emit_readme(contract: Contract) -> str:
 def _json_arguments(operation: Operation) -> str:
     """Render a valid argument object as JSON, for the README's example invocation."""
     literal = {
-        "string": "sample", "number": 1.5, "integer": 1,
-        "boolean": True, "array": [], "object": {},
+        "string": "sample",
+        "number": 1.5,
+        "integer": 1,
+        "boolean": True,
+        "array": [],
+        "object": {},
     }
     return json.dumps({a.name: literal[a.type] for a in operation.arguments if a.required})
 
@@ -620,13 +662,75 @@ ANSWERS_FILENAME: Final[str] = ".factory-answers.yaml"
 
 @dataclass
 class Generated:
-    """What one generation run wrote, and what it left alone."""
+    """What one generation or update run wrote, preserved, or appended."""
 
     written: list[Path] = field(default_factory=list)
     preserved: list[Path] = field(default_factory=list)
+    appended: list[Path] = field(default_factory=list)
 
 
-def generate(contract: Contract, out_dir: Path) -> Generated:
+def discover_templates(directory: Path | None = None) -> dict[str, Path]:
+    """Scan the template directory for published contract YAML files."""
+    base = directory or DEFAULT_TEMPLATES_DIR
+    if not base.is_dir():
+        return {}
+    templates: dict[str, Path] = {}
+    for entry in sorted(base.glob("*.yaml")) + sorted(base.glob("*.yml")):
+        templates[entry.stem] = entry
+        _index_template_slug(entry, templates)
+    return templates
+
+
+def _index_template_slug(entry: Path, templates: dict[str, Path]) -> None:
+    """Register the contract's declared slug in the template index if present."""
+    try:
+        doc = yaml.safe_load(entry.read_text(encoding="utf-8"))
+        if isinstance(doc, dict) and "slug" in doc:
+            templates[str(doc["slug"]).strip()] = entry
+    except Exception:
+        pass
+
+
+def list_templates(directory: Path | None = None) -> list[TemplateInfo]:
+    """Return structured metadata for every published contract in the ecosystem."""
+    discovered = discover_templates(directory)
+    unique_paths = sorted({path.resolve(): path for path in discovered.values()}.values())
+    catalog: list[TemplateInfo] = []
+    for path in unique_paths:
+        try:
+            contract = load_contract(path)
+            catalog.append(
+                TemplateInfo(
+                    slug=contract.slug,
+                    name=contract.name,
+                    module=contract.module,
+                    purpose=contract.purpose,
+                    path=path,
+                    operations=tuple(op.name for op in contract.operations),
+                    variables=tuple(var.name for var in contract.variables),
+                )
+            )
+        except Exception:
+            continue
+    return sorted(catalog, key=lambda info: info.slug)
+
+
+def resolve_template(name_or_path: str | Path, directory: Path | None = None) -> Path:
+    """Resolve a template name, slug, or explicit file path to a verified contract path."""
+    candidate = Path(name_or_path)
+    if candidate.is_file():
+        return candidate
+    templates = discover_templates(directory)
+    key = str(name_or_path).strip()
+    if key in templates:
+        return templates[key]
+    available = sorted(set(templates))
+    raise ContractError(
+        f"unknown template {key!r}; available templates: {', '.join(available) if available else 'none'}"
+    )
+
+
+def generate(contract: Contract, out_dir: Path, template_name: str | None = None) -> Generated:
     """Write the application, preserving any handlers that already exist."""
     target = out_dir / contract.slug
     target.mkdir(parents=True, exist_ok=True)
@@ -645,10 +749,140 @@ def generate(contract: Contract, out_dir: Path) -> Generated:
     else:
         handlers.write_text(emit_handlers(contract), encoding="utf-8")
         result.written.append(handlers)
-    if contract.variables:
+    answers_data = dict(contract.answers)
+    if template_name:
+        answers_data["_template"] = template_name
+    answers_data["_contract"] = contract.slug
+    if answers_data:
         answers = target / ANSWERS_FILENAME
-        answers.write_text(yaml.safe_dump(dict(contract.answers), sort_keys=True), encoding="utf-8")
+        answers.write_text(yaml.safe_dump(answers_data, sort_keys=True), encoding="utf-8")
         result.written.append(answers)
+    return result
+
+
+def _declared_handler_names(handlers_path: Path) -> set[str]:
+    """Extract top-level function names from an existing handlers module."""
+    try:
+        tree = ast.parse(handlers_path.read_text(encoding="utf-8"), filename=str(handlers_path))
+    except (SyntaxError, OSError):
+        return set()
+    return {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _reconcile_handlers(handlers_path: Path, contract: Contract, result: Generated) -> None:
+    """Preserve existing handler implementations, appending stubs for new operations."""
+    if not handlers_path.exists():
+        handlers_path.write_text(emit_handlers(contract), encoding="utf-8")
+        result.written.append(handlers_path)
+        return
+
+    existing_funcs = _declared_handler_names(handlers_path)
+    missing_ops = [op for op in contract.operations if op.name not in existing_funcs]
+    if missing_ops:
+        current_content = handlers_path.read_text(encoding="utf-8").rstrip()
+        stubs = "\n\n" + "\n\n".join(emit_handler_stub(op) for op in missing_ops)
+        handlers_path.write_text(current_content + stubs + "\n", encoding="utf-8")
+        result.appended.append(handlers_path)
+    else:
+        result.preserved.append(handlers_path)
+
+
+def _find_update_contract(
+    target_dir: Path,
+    contract_path: Path | None,
+    template: str | None,
+    recorded_answers: Mapping[str, Any],
+) -> Path:
+    """Resolve the contract path for an update operation."""
+    if contract_path is not None:
+        return contract_path
+    if template is not None:
+        return resolve_template(template)
+    if "_template" in recorded_answers:
+        return resolve_template(str(recorded_answers["_template"]))
+    if "_contract" in recorded_answers:
+        try:
+            return resolve_template(str(recorded_answers["_contract"]))
+        except ContractError:
+            pass
+    raise ContractError(
+        f"cannot update {target_dir}: no contract or template specified and none recorded in {ANSWERS_FILENAME}"
+    )
+
+
+def _load_recorded_answers(answers_path: Path) -> dict[str, Any]:
+    """Read recorded answers mapping from an application directory."""
+    if not answers_path.exists():
+        return {}
+    try:
+        raw = yaml.safe_load(answers_path.read_text(encoding="utf-8"))
+        return {str(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
+def _merge_answers(recorded: Mapping[str, Any], provided: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Combine recorded answers with user-provided overrides."""
+    merged = {k: v for k, v in recorded.items() if not k.startswith("_")}
+    if provided:
+        merged.update(provided)
+    return merged
+
+
+def _write_contract_layer(target_dir: Path, contract: Contract, result: Generated) -> None:
+    """Regenerate the schema, dispatch and test suite files for an application."""
+    files = {
+        target_dir / f"{contract.module}.py": emit_module(contract),
+        target_dir / f"test_{contract.module}.py": emit_tests(contract),
+        target_dir / "README.md": emit_readme(contract),
+    }
+    for path, content in files.items():
+        path.write_text(content, encoding="utf-8")
+        result.written.append(path)
+
+
+def _save_update_answers(
+    answers_path: Path,
+    contract: Contract,
+    template: str | None,
+    recorded: Mapping[str, Any],
+    result: Generated,
+) -> None:
+    """Record updated contract answers and metadata back to disk."""
+    answers_data = dict(contract.answers)
+    answers_data["_contract"] = str(contract.slug)
+    chosen_template = template or recorded.get("_template")
+    if chosen_template:
+        answers_data["_template"] = str(chosen_template)
+    answers_path.write_text(yaml.safe_dump(answers_data, sort_keys=True), encoding="utf-8")
+    result.written.append(answers_path)
+
+
+def update_in_place(
+    target_dir: Path,
+    contract_path: Path | None = None,
+    provided: Mapping[str, Any] | None = None,
+    *,
+    template: str | None = None,
+    interactive: bool = False,
+    ask: Callable[[str], str] = input,
+) -> Generated:
+    """Re-apply a contract to an existing generated project, preserving domain logic."""
+    if not target_dir.is_dir():
+        raise ContractError(f"target directory {target_dir} does not exist")
+
+    answers_path = target_dir / ANSWERS_FILENAME
+    recorded = _load_recorded_answers(answers_path)
+    resolved_path = _find_update_contract(target_dir, contract_path, template, recorded)
+    merged_answers = _merge_answers(recorded, provided)
+
+    contract = load_contract(resolved_path, merged_answers, interactive=interactive, ask=ask)
+    result = Generated()
+
+    _write_contract_layer(target_dir, contract, result)
+    _reconcile_handlers(target_dir / "handlers.py", contract, result)
+    _save_update_answers(answers_path, contract, template, recorded, result)
+
     return result
 
 
@@ -677,10 +911,20 @@ def _interactive(args: argparse.Namespace) -> bool:
     return not args.no_input and sys.stdin.isatty()
 
 
+def _resolve_contract_path(args: argparse.Namespace) -> Path:
+    """Determine the contract path from either --contract or --template."""
+    if args.contract:
+        return Path(args.contract)
+    if args.template:
+        return resolve_template(args.template)
+    raise ContractError("either --contract <path> or --template <name> is required")
+
+
 def _handle_new(args: argparse.Namespace) -> int:
-    """Generate an application from a contract."""
-    contract = load_contract(args.contract, _supplied(args), interactive=_interactive(args))
-    result = generate(contract, args.out)
+    """Generate an application from a contract or template."""
+    contract_path = _resolve_contract_path(args)
+    contract = load_contract(contract_path, _supplied(args), interactive=_interactive(args))
+    result = generate(contract, args.out, template_name=args.template)
     for path in result.written:
         print(f"  wrote     {path}")
     for path in result.preserved:
@@ -694,8 +938,9 @@ def _handle_new(args: argparse.Namespace) -> int:
 
 def _handle_validate(args: argparse.Namespace) -> int:
     """Check a contract without writing anything, resolving variables but never asking."""
+    contract_path = _resolve_contract_path(args)
     supplied = _supplied(args)
-    contract = load_contract(args.contract, supplied)
+    contract = load_contract(contract_path, supplied)
     operations = ", ".join(operation.name for operation in contract.operations)
     for variable in contract.variables:
         source = "supplied" if variable.name in supplied else "default"
@@ -704,14 +949,61 @@ def _handle_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-_HANDLERS: Final[dict[str, Any]] = {"new": _handle_new, "validate": _handle_validate}
+def _handle_templates(args: argparse.Namespace) -> int:
+    """List available templates in the published contract ecosystem."""
+    templates = list_templates()
+    if not templates:
+        print("No contract templates found.")
+        return 0
+    print(f"Published Contract Ecosystem ({len(templates)} templates):\n")
+    for t in templates:
+        ops = ", ".join(t.operations)
+        vars_str = ", ".join(t.variables) if t.variables else "none"
+        print(f"• {t.slug} ({t.name})")
+        print(f"    Purpose:   {t.purpose}")
+        print(f"    Module:    {t.module}")
+        print(f"    Operations ({len(t.operations)}): {ops}")
+        print(f"    Variables ({len(t.variables)}):  {vars_str}\n")
+    return 0
+
+
+def _handle_update(args: argparse.Namespace) -> int:
+    """Update an existing generated application in place."""
+    if not args.target:
+        raise ContractError("target directory is required for update (e.g. app_factory.py update ./my-app)")
+    contract_path = Path(args.contract) if args.contract else None
+    result = update_in_place(
+        args.target,
+        contract_path=contract_path,
+        provided=_supplied(args),
+        template=args.template,
+        interactive=_interactive(args),
+    )
+    for path in result.written:
+        print(f"  updated   {path}")
+    for path in result.appended:
+        print(f"  appended  {path}  (new operation stubs added)")
+    for path in result.preserved:
+        print(f"  preserved {path}  (domain logic is never overwritten)")
+    print(f"Update complete: {len(result.written)} file(s) updated, {len(result.appended)} appended.")
+    return 0
+
+
+_HANDLERS: Final[dict[str, Any]] = {
+    "new": _handle_new,
+    "templates": _handle_templates,
+    "update": _handle_update,
+    "validate": _handle_validate,
+}
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct the CLI parser for the application factory."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=sorted(_HANDLERS))
-    parser.add_argument("--contract", type=Path, required=True, help="Contract YAML to build from")
+    parser.add_argument("command", choices=sorted(_HANDLERS), help="Subcommand to execute")
+    parser.add_argument("target", nargs="?", type=Path, help="Target directory for update command")
+    parser.add_argument("--contract", type=Path, help="Contract YAML to build from")
+    parser.add_argument("--template", type=str, help="Published template slug or name from ecosystem")
     parser.add_argument("--out", type=Path, default=Path("."), help="Directory to generate into")
     parser.add_argument("--answers", type=Path, help="YAML file of answers to the contract's variables")
     parser.add_argument("--set", action="append", metavar="NAME=VALUE", help="Answer one variable")
@@ -725,7 +1017,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return int(_HANDLERS[args.command](args))
     except ContractError as err:
-        print(f"❌ {args.contract}: {err}", file=sys.stderr)
+        target_info = args.contract or args.template or getattr(args, "target", None) or "contract"
+        print(f"❌ {target_info}: {err}", file=sys.stderr)
         return 2
 
 

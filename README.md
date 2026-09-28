@@ -28,7 +28,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 57 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 58 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -76,6 +76,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**WASI Component Models & Capability-Based Tool Sandboxing**](./observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md) | Systems & Runtime Sandboxing | Sub-millisecond tool execution ($< 500\mu\text{s}$) with unforgeable object capabilities, deterministic gas metering, and zero ambient UNIX authority. |
 | [**Real-Time AST-CRDTs & Multi-Agent Swarms**](./observations/systems/37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md) | Multi-Agent Concurrency & CRDTs | Eliminating character-level syntax errors (34.2% -> 0.0%) with replicated AST nodes, Lamport clocks, and fractional ordering. |
 | [**Graph-Ranked AST Context Optimizer**](./observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md) | Context & Graph Centrality | Personalized PageRank over AST symbol graphs eliminating prompt pollution and mid-block syntax fractures. |
+| [**Contract-Driven Template Ecosystems & In-Place Updates**](./observations/systems/43-contract-driven-template-ecosystems-and-in-place-updates.md) | Systems & Application Scaffolding | Decoupling contract boundaries from hand-written domain logic via AST reconciliation, eliminating destructive regenerations and interface drift. |
 
 ---
 
@@ -117,6 +118,7 @@ flowchart TD
 - [**Capability-Based Wasm Sandboxing**](./patterns/capability-based-wasm-sandboxing.md): Executing untrusted agent tools inside WebAssembly components governed by unforgeable capability tokens, deterministic gas metering, and linear memory containment.
 - [**AST-CRDTs for Real-Time Agent Collaboration**](./patterns/ast-crdts-for-real-time-agent-collaboration.md): Replicating Abstract Syntax Tree nodes as first-class distributed entities with Lamport timestamps, fractional positioning, and deterministic cycle prevention.
 - [**AST Graph Relevance Ranking & Context Packing**](./patterns/ast-graph-relevance-ranking-and-context-packing.md): Personalizing random walks over AST symbol graphs to pack maximal architectural context into tight token budgets with zero syntax fractures.
+- [**Contract Template Ecosystem and In-Place Updates**](./patterns/contract-template-ecosystem-and-in-place-updates.md): Decoupling contract layer schemas and dispatch tables from hand-written domain logic with AST-reconciled in-place upgrades and automatic stub synthesis.
 
 ---
 
@@ -375,7 +377,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md
 │       ├── 40-configurable-prose-style-guides-and-inclusive-terminology-gates.md
 │       ├── 41-radon-block-complexity-ranking-in-code-smell-quantification.md
-│       └── 42-language-server-protocol-and-automated-ast-invariant-repair.md
+│       ├── 42-language-server-protocol-and-automated-ast-invariant-repair.md
+│       └── 43-contract-driven-template-ecosystems-and-in-place-updates.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -390,6 +393,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── cegis-and-hypothesis-debugging.md
 │   ├── collision-free-worktree-fleet-allocation.md
 │   ├── configurable-prose-style-and-terminology-gates.md
+│   ├── contract-template-ecosystem-and-in-place-updates.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
 │   ├── epistemic-hygiene-and-context-pruning.md
 │   ├── epistemic-seam-and-mitigated-defect-auditing.md

@@ -1,0 +1,53 @@
+# An asynchronous streaming event consumer contract in the published ecosystem.
+# Consumes streaming batches with consumer group coordination and dead-letter isolation.
+variables:
+  - name: topic_name
+    prompt: Event stream topic name to subscribe and consume
+    type: string
+    default: events.telemetry
+  - name: consumer_group
+    prompt: Identifier of the shared consumer group
+    type: string
+    default: telemetry-workers
+  - name: dead_letter_target
+    prompt: Destination queue for unrecoverable event errors
+    type: string
+    default: dlq.telemetry
+
+name: Event Consumer
+slug: event-consumer
+module: consumer
+purpose: Consume streaming batches from {{ topic_name }} under {{ consumer_group }} with dead-letter isolation.
+operations:
+  - name: process_batch
+    summary: Ingest and decode a contiguous batch of messages from {{ topic_name }}.
+    arguments:
+      - name: batch_id
+        type: string
+        description: Monotonic batch identifier for idempotent acknowledgement.
+      - name: max_records
+        type: integer
+        description: Maximum number of events to process in one cycle.
+      - name: commit_offset
+        type: boolean
+        required: false
+        description: Whether to auto-commit streaming consumer offset upon batch completion.
+  - name: rebalance_partitions
+    summary: Reconcile active partition assignments for group {{ consumer_group }}.
+    arguments:
+      - name: member_id
+        type: string
+        description: Assigned cluster worker identifier within {{ consumer_group }}.
+      - name: epoch
+        type: integer
+        description: Monotonic cluster generation epoch.
+  - name: purge_dead_letters
+    summary: Discard or archive poison messages routed to {{ dead_letter_target }}.
+    arguments:
+      - name: older_than_hours
+        type: integer
+        description: Age threshold in hours beyond which poison events are purged.
+      - name: dry_run
+        type: boolean
+        required: false
+        description: If true, calculate count of purgeable records without deletion.

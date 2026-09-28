@@ -400,6 +400,8 @@ capabilities:
       - gate_clean_output
       - regeneration_safe
       - interactive_prompts
+      - template_ecosystem
+      - update_in_place
     alternatives:
       - repo: cookiecutter/cookiecutter
         has:
