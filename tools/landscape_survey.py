@@ -310,9 +310,13 @@ def _comparison_tables(manifest: Manifest, snapshot: dict[str, RepoFacts]) -> It
         yield ""
         features = sorted(_matrix_features(capability))
         alternatives = capability.get("alternatives", [])
-        header = " | ".join(f"`{a['repo'].split('/')[-1]}`" for a in alternatives)
-        yield f"| Feature | vibes | {header} |"
-        yield "|---|---|" + "---|" * len(alternatives)
+        if alternatives:
+            header = " | ".join(f"`{a['repo'].split('/')[-1]}`" for a in alternatives)
+            yield f"| Feature | vibes | {header} |"
+            yield "|---|---|" + "---|" * len(alternatives)
+        else:
+            yield "| Feature | vibes |"
+            yield "|---|---|"
         for feature in features:
             yield _comparison_row(manifest, capability, feature, alternatives)
         yield ""
@@ -339,8 +343,10 @@ def _comparison_row(
 ) -> str:
     """Render one feature row: ours, then each alternative's cited position."""
     ours = "✅" if feature in set(capability.get("ours", [])) else "—"
-    cells = [_cell(alternative, feature) for alternative in alternatives]
     summary = manifest.feature_catalog.get(feature, feature)
+    if not alternatives:
+        return f"| **{feature}** — {summary} | {ours} |"
+    cells = [_cell(alternative, feature) for alternative in alternatives]
     return f"| **{feature}** — {summary} | {ours} | " + " | ".join(cells) + " |"
 
 

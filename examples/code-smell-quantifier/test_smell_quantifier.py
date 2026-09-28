@@ -10,6 +10,7 @@ from smell_quantifier import (
     LOW_MAINTAINABILITY_INDEX,
     Smell,
     _count_disjoint_clusters,
+    _normalize_polyglot_line,
     analyze,
     detect_cyclomatic_complexity,
     detect_duplicated_blocks,
@@ -18,9 +19,11 @@ from smell_quantifier import (
     detect_long_functions,
     detect_long_parameter_lists,
     detect_low_cohesion,
+    detect_polyglot_clones,
     detect_unreferenced_symbols,
     main,
     module_metrics,
+    polyglot_module_metrics,
 )
 
 
@@ -380,4 +383,156 @@ def test_cyclomatic_complexity_in_gating_analysis(tmp_path: Path) -> None:
     lines.append("    return -1\n")
     source = "\n".join(lines)
     assert _gating(source, tmp_path) == ["HIGH_CYCLOMATIC_COMPLEXITY:12.0"]
+
+
+def test_polyglot_line_normalization_erases_identifiers_and_literals() -> None:
+    """Polyglot line normalization strips names/values while preserving structural tokens."""
+    js_line = "function calculateBonus(userSalary, multiplier) {"
+    ts_line = "const total: number = baseAmount * 1.05;"
+    go_line = 'if err != nil { return fmt.Errorf("failed: %v", err) }'
+    comment = "// this is a comment"
+
+    assert (
+        _normalize_polyglot_line(js_line, "javascript"),
+        _normalize_polyglot_line(ts_line, "typescript"),
+        _normalize_polyglot_line(go_line, "go"),
+        _normalize_polyglot_line(comment, "javascript"),
+    ) == (
+        "function <ID> ( <ID> , <ID> ) {",
+        "const <ID> : <ID> = <ID> * <LIT> ;",
+        "if <ID> != <ID> { return <ID> . <ID> ( <LIT> , <ID> ) }",
+        "",
+    )
+
+
+def test_polyglot_clone_detection_finds_type2_duplicates_across_ts_files(tmp_path: Path) -> None:
+    """Type-2 clone detection matches structural duplicates across non-Python files."""
+    code_a = (
+        "function handleFirst(a, b) {\n"
+        "    if (a > 0) {\n"
+        "        const val = a * b;\n"
+        "        return val + 10;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n"
+    )
+    code_b = (
+        "function handleSecond(x, y) {\n"
+        "    if (x > 0) {\n"
+        "        const res = x * y;\n"
+        "        return res + 10;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n"
+    )
+    file_a = _write(tmp_path, "first.ts", code_a)
+    file_b = _write(tmp_path, "second.ts", code_b)
+
+    findings = detect_polyglot_clones({file_a: code_a, file_b: code_b}, size=6)
+    assert (
+        len(findings),
+        findings[0].smell,
+        findings[0].measured,
+        findings[0].threshold,
+    ) == (1, Smell.DUPLICATED_BLOCK, 2, 1)
+
+
+def test_polyglot_clone_detection_ignores_distinct_code(tmp_path: Path) -> None:
+    """Distinct polyglot files do not report spurious clone findings."""
+    code_a = "func A() int {\n    x := 1\n    y := 2\n    return x + y\n}\n"
+    code_b = "func B(msg string) bool {\n    println(msg)\n    return true\n}\n"
+    file_a = _write(tmp_path, "a.go", code_a)
+    file_b = _write(tmp_path, "b.go", code_b)
+
+    findings = detect_polyglot_clones({file_a: code_a, file_b: code_b}, size=4)
+    assert (len(findings), findings) == (0, [])
+
+
+def test_polyglot_module_metrics_normalized_scale() -> None:
+    """Polyglot metrics calculate LOC, Halstead volume, and normalized MI on 0-100 scale."""
+    clean_ts = (
+        "function add(a: number, b: number): number {\n"
+        "    return a + b;\n"
+        "}\n"
+    )
+    tangled_ts = "\n".join(
+        f"function fn{i}(x: number): number {{ if (x > {i}) {{ return x * 2; }} else {{ return 0; }} }}"
+        for i in range(50)
+    )
+
+    clean_mi, clean_vol, clean_cc = polyglot_module_metrics(clean_ts, "typescript")
+    tangled_mi, tangled_vol, tangled_cc = polyglot_module_metrics(tangled_ts, "typescript")
+
+    assert (
+        0.0 <= tangled_mi < clean_mi <= 100.0,
+        clean_vol > 0.0,
+        tangled_vol > clean_vol,
+        clean_cc,
+        tangled_cc > clean_cc,
+    ) == (True, True, True, 1, True)
+
+
+def test_analyze_scores_polyglot_files_in_advisory_mode(tmp_path: Path) -> None:
+    """analyze() discovers and scores polyglot modules alongside Python."""
+    _write(tmp_path, "worker.py", "def work():\n    return 42\n")
+    _write(
+        tmp_path,
+        "handler.ts",
+        "export function run(req: any): any {\n    return req.body;\n}\n",
+    )
+
+    report = analyze([tmp_path], include_advisory=True, languages=["all"])
+    scored_names = {Path(m.path).name for m in report.modules}
+
+    assert (
+        "worker.py" in scored_names,
+        "handler.ts" in scored_names,
+        len(report.modules),
+        0.0 <= report.mean_maintainability <= 100.0,
+    ) == (True, True, 2, True)
+
+
+def test_analyze_gates_on_excessive_polyglot_complexity(tmp_path: Path) -> None:
+    """Excessive cyclomatic complexity in polyglot files is reported in report.gating."""
+    branches = "\n".join(f"    if (x == {i}) {{ return {i}; }}" for i in range(12))
+    complex_ts = f"function evalNum(x: number): number {{\n{branches}\n    return -1;\n}}\n"
+    _write(tmp_path, "complex.ts", complex_ts)
+
+    report = analyze([tmp_path], include_advisory=False, languages=["all"])
+    gating_smells = [f.smell for f in report.gating]
+
+    assert (
+        Smell.HIGH_CYCLOMATIC_COMPLEXITY in gating_smells,
+        len(report.gating),
+    ) == (True, 1)
+
+
+def test_polyglot_languages_filter_selectively_scans(tmp_path: Path) -> None:
+    """Specifying languages filter restricts scanning to the requested extensions."""
+    _write(tmp_path, "app.ts", "const x = 1;\n")
+    _write(tmp_path, "lib.rs", "fn run() -> i32 { 1 }\n")
+
+    report_ts = analyze([tmp_path], languages=["ts"])
+    report_rs = analyze([tmp_path], languages=["rs"])
+
+    scored_ts = [Path(m.path).name for m in report_ts.modules]
+    scored_rs = [Path(m.path).name for m in report_rs.modules]
+
+    assert (
+        scored_ts,
+        scored_rs,
+    ) == (["app.ts"], ["lib.rs"])
+
+
+def test_cli_languages_argument_parsing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """CLI --languages argument properly filters target analysis."""
+    _write(tmp_path, "service.go", "package main\n\nfunc main() {}\n")
+    exit_code = main(["quantify", "--languages", "go", "--json", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert (
+        exit_code,
+        "service.go" in out,
+        "mean_maintainability" in out,
+    ) == (0, True, True)
 

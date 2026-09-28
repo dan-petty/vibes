@@ -165,6 +165,11 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Closes the landscape survey capability gaps for `auto_fix` and `editor_lsp` under `complexity-gating` (previously held by `astral-sh/ruff`), eliminating all `integrate` gaps across the repository.
   - Deterministic AST-verified automated remediation (`--fix`, `auto_fix_source`, `auto_fix_file`, `auto_fix_targets`) repairing private IP leaks, non-canonical mock subdomains, and malformed waiver headers.
   - Accompanied by Observation 42 (`observations/systems/42-language-server-protocol-and-automated-ast-invariant-repair.md`), architectural pattern (`patterns/lsp-diagnostics-and-automated-invariant-repair.md`), and comprehensive unit test suite in `examples/ast-invariant-sentinel/test_sentinel.py` certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, $\le 4$ params).
+- [x] **Code smell quantifier: Polyglot token normalization & multi-language clone detection (`examples/code-smell-quantifier/`)**:
+  - Zero-dependency Type-2 regex token normalization erasing identifiers and literals to generic `<ID>` and `<LIT>` placeholders while preserving control flow keywords, operators, and structural syntax across TypeScript/JavaScript (`.ts`, `.tsx`, `.js`), Go (`.go`), Rust (`.rs`), C/C++ (`.c`, `.cpp`, `.h`), Shell (`.sh`, `.bash`), JSON, and YAML.
+  - Closes the final open `build` gap in the landscape survey (`multi_language` under `smell-quantification`, previously held by `kucherenko/jscpd`), reducing total survey gaps from 5 down to 4 and completely eliminating all open build gaps across the entire repository (0 build gaps remaining).
+  - Language-agnostic Halstead volume, operator/operand counts, and normalized Maintainability Index (0–100 scale) for polyglot codebases without requiring native compiler bindings or node/npm dependencies.
+  - Accompanied by Observation 44 (`observations/systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md`), architectural pattern (`patterns/polyglot-token-normalization-and-clone-quantification.md`), and comprehensive unit test suite in `examples/code-smell-quantifier/test_smell_quantifier.py` (39 passed) certified compliant with AST Invariant Sentinel ($M \le 7$, depth $\le 3$, $\le 3$ params).
 
 
 
