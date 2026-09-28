@@ -29,7 +29,7 @@ import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, BinaryIO, Final
 
 # Closed-domain RFC 5737 and loopback networks permitted in code/documentation
 ALLOWED_DOCUMENTATION_NETWORKS = (
@@ -1060,7 +1060,7 @@ def _parse_content_length(header_line: bytes) -> int | None:
         return None
 
 
-def _read_lsp_headers(stream: io.BufferedReader) -> int | None:
+def _read_lsp_headers(stream: BinaryIO) -> int | None:
     """Read LSP headers until empty separator line, extracting Content-Length."""
     content_length: int | None = None
     while True:
@@ -1076,7 +1076,7 @@ def _read_lsp_headers(stream: io.BufferedReader) -> int | None:
     return content_length
 
 
-def _read_lsp_message(stream: io.BufferedReader) -> dict[str, Any] | None:
+def _read_lsp_message(stream: BinaryIO) -> dict[str, Any] | None:
     """Read a single Content-Length framed JSON-RPC message from an input stream."""
     content_length = _read_lsp_headers(stream)
     if not content_length or content_length <= 0:
@@ -1090,7 +1090,7 @@ def _read_lsp_message(stream: io.BufferedReader) -> dict[str, Any] | None:
         return None
 
 
-def _write_lsp_message(stream: io.BufferedWriter, data: dict[str, Any]) -> None:
+def _write_lsp_message(stream: BinaryIO, data: dict[str, Any]) -> None:
     """Write a Content-Length framed JSON-RPC message to an output stream."""
     body = json.dumps(data, separators=(",", ":")).encode("utf-8")
     header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
@@ -1184,7 +1184,7 @@ def _handle_lsp_request(
 
 def _on_did_change_doc(
     params: dict[str, Any],
-    writer: io.BufferedWriter,
+    writer: BinaryIO,
     open_docs: dict[str, str],
     config: SentinelConfig,
 ) -> None:
@@ -1207,7 +1207,7 @@ def _on_did_change_doc(
 
 def _handle_lsp_notification(
     msg: dict[str, Any],
-    writer: io.BufferedWriter,
+    writer: BinaryIO,
     open_docs: dict[str, str],
     config: SentinelConfig,
 ) -> bool:
@@ -1233,7 +1233,7 @@ def _handle_lsp_notification(
 
 def _dispatch_lsp_msg(
     msg: dict[str, Any],
-    out_stream: io.BufferedWriter,
+    out_stream: BinaryIO,
     open_docs: dict[str, str],
     config: SentinelConfig,
 ) -> bool:
@@ -1246,7 +1246,7 @@ def _dispatch_lsp_msg(
     return _handle_lsp_notification(msg, out_stream, open_docs, config)
 
 
-def _iter_lsp_messages(stream: io.BufferedReader) -> Iterator[dict[str, Any]]:
+def _iter_lsp_messages(stream: BinaryIO) -> Iterator[dict[str, Any]]:
     """Yield parsed LSP messages until stream closure."""
     while True:
         msg = _read_lsp_message(stream)
@@ -1256,8 +1256,8 @@ def _iter_lsp_messages(stream: io.BufferedReader) -> Iterator[dict[str, Any]]:
 
 
 def run_lsp_server(
-    reader: io.BufferedReader | None = None,
-    writer: io.BufferedWriter | None = None,
+    reader: BinaryIO | None = None,
+    writer: BinaryIO | None = None,
     config: SentinelConfig | None = None,
 ) -> int:
     """Execute the AST Invariant Sentinel as a Language Server Protocol (LSP) server."""
