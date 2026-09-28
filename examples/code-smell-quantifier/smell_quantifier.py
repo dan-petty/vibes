@@ -24,10 +24,12 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import math
 import os
+import re
 import sys
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -57,6 +59,58 @@ VULTURE_MIN_CONFIDENCE: Final[int] = 60
 # the same normalization with green >= 20. 20 is therefore the A/B boundary, not 65 —
 # 65 belongs to the unnormalized SEI scale and is a common transcription error.
 LOW_MAINTAINABILITY_INDEX: Final[float] = 20.0
+
+POLYGLOT_EXTENSIONS: Final[dict[str, str]] = {
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
+
+LINE_COMMENT_PREFIXES: Final[dict[str, tuple[str, ...]]] = {
+    "python": ("#",),
+    "bash": ("#",),
+    "yaml": ("#",),
+    "javascript": ("//",),
+    "typescript": ("//",),
+    "go": ("//",),
+    "rust": ("//",),
+    "c": ("//",),
+    "cpp": ("//",),
+    "json": (),
+}
+
+BRANCH_KEYWORDS: Final[frozenset[str]] = frozenset({
+    "if", "elif", "else", "for", "while", "case", "match", "catch", "except", "switch",
+    "&&", "||", "?",
+})
+
+_POLYGLOT_TOKEN_RE: Final[re.Pattern[str]] = re.compile(
+    r"""
+    (?P<STRING>"([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`) |
+    (?P<NUMBER>\b\d+(?:\.\d+)?\b) |
+    (?P<KEYWORD>\b(?:if|elif|else|for|while|return|def|fn|func|function|class|struct|enum|interface|type|const|let|var|import|export|from|package|match|switch|case|break|continue|try|catch|except|finally|throw|raise|yield|async|await|select|default|pub|mut|impl|trait)\b) |
+    (?P<IDENTIFIER>\b[a-zA-Z_][a-zA-Z0-9_]*\b) |
+    (?P<OPERATOR>[+\-*/%=&|!<>^~?:;.,()[\]{}]+)
+    """,
+    re.VERBOSE,
+)
 
 
 class Smell(StrEnum):
@@ -469,6 +523,134 @@ def _merge_overlapping_clones(findings: list[SmellFinding], size: int) -> list[S
     return kept
 
 
+def _classify_token(match: re.Match[str]) -> str:
+    """Classify a regex match into its normalized clone token."""
+    if match.group("KEYWORD") or match.group("OPERATOR"):
+        return match.group(0)
+    if match.group("IDENTIFIER"):
+        return "<ID>"
+    return "<LIT>"
+
+
+def _normalize_polyglot_line(line: str, language: str) -> str:
+    """Fingerprint a source code line by structure alone, erasing identifiers and literals."""
+    stripped = line.strip()
+    prefixes = LINE_COMMENT_PREFIXES.get(language, ("#", "//"))
+    if not stripped or any(stripped.startswith(p) for p in prefixes):
+        return ""
+    tokens = [_classify_token(m) for m in _POLYGLOT_TOKEN_RE.finditer(stripped)]
+    return " ".join(tokens)
+
+
+def _polyglot_line_fingerprints(source: str, language: str) -> list[tuple[int, str]]:
+    """Return (line_no, normalized_line) for non-empty normalized lines in source."""
+    lines: list[tuple[int, str]] = []
+    for idx, raw_line in enumerate(source.splitlines(), 1):
+        norm = _normalize_polyglot_line(raw_line, language)
+        if norm:
+            lines.append((idx, norm))
+    return lines
+
+
+def _polyglot_windows(
+    lines: Sequence[tuple[int, str]], path: Path, size: int
+) -> Iterable[tuple[str, str, int]]:
+    """Yield (fingerprint, subject, line_no) for sliding windows of normalized lines."""
+    if len(lines) < size:
+        return
+    for i in range(len(lines) - size + 1):
+        window = lines[i : i + size]
+        fp = "|".join(norm for _, norm in window)
+        start_line = window[0][0]
+        yield fp, f"{path.name}:{start_line}", start_line
+
+
+def detect_polyglot_clones(
+    sources: Mapping[Path, str],
+    size: int = MIN_CLONE_STATEMENTS,
+) -> list[SmellFinding]:
+    """Detect duplicated statement/token blocks across multi-language source files."""
+    groups: dict[str, list[tuple[Path, str, int]]] = defaultdict(list)
+    for path, source in sources.items():
+        lang = POLYGLOT_EXTENSIONS.get(path.suffix, "unknown")
+        lines = _polyglot_line_fingerprints(source, lang)
+        for fp, subject, line_no in _polyglot_windows(lines, path, size):
+            groups[fp].append((path, subject, line_no))
+
+    findings: list[SmellFinding] = []
+    for occurrences in groups.values():
+        sites = {(p, line) for p, _, line in occurrences}
+        if len(sites) < 2:
+            continue
+        path, subject, line = occurrences[0]
+        others = ", ".join(f"{p.name}:{ln}" for p, _, ln in occurrences[1:4])
+        findings.append(
+            SmellFinding(
+                smell=Smell.DUPLICATED_BLOCK,
+                file_path=str(path),
+                line_number=line,
+                subject=subject,
+                measured=len(sites),
+                threshold=1,
+                detail=f"{size}-statement block repeated at {others}, identical once names are erased",
+            )
+        )
+    return _merge_overlapping_clones(findings, size)
+
+
+def _consume_token_match(
+    match: re.Match[str],
+    operators: list[str],
+    operands: list[str],
+) -> int:
+    """Consume a single regex match into operator/operand lists and return branch score."""
+    kw = match.group("KEYWORD")
+    if kw:
+        operators.append(kw)
+        return 1 if kw in BRANCH_KEYWORDS else 0
+    op = match.group("OPERATOR")
+    if op:
+        operators.append(op)
+        return 1 if op in ("&&", "||", "?") else 0
+    ident = match.group("IDENTIFIER")
+    if ident:
+        operands.append(ident)
+        return 0
+    operands.append(match.group(0))
+    return 0
+
+
+def _extract_polyglot_tokens(code_lines: Sequence[str]) -> tuple[list[str], list[str], int]:
+    """Extract operators, operands, and branch complexity from polyglot lines."""
+    operators: list[str] = []
+    operands: list[str] = []
+    complexity = 1
+    for line in code_lines:
+        for match in _POLYGLOT_TOKEN_RE.finditer(line):
+            complexity += _consume_token_match(match, operators, operands)
+    return operators, operands, complexity
+
+
+def polyglot_module_metrics(source: str, language: str) -> tuple[float, float, int]:
+    """Compute (maintainability index, Halstead volume, complexity) for polyglot source."""
+    lines = source.splitlines()
+    prefixes = LINE_COMMENT_PREFIXES.get(language, ("#", "//"))
+    code_lines = [
+        ln for ln in lines
+        if ln.strip() and not any(ln.strip().startswith(p) for p in prefixes)
+    ]
+    loc = max(1, len(code_lines))
+    operators, operands, complexity = _extract_polyglot_tokens(code_lines)
+
+    n = len(operators) + len(operands)
+    eta = len(set(operators)) + len(set(operands))
+    volume = round(n * math.log2(max(2, eta)), 2) if n > 0 and eta > 1 else 0.0
+
+    raw_mi = 171.0 - 5.2 * math.log(max(1.0, volume)) - 0.23 * complexity - 16.2 * math.log(loc)
+    mi = max(0.0, min(100.0, round(raw_mi * 100.0 / 171.0, 1)))
+    return mi, volume, complexity
+
+
 def _local_imports(tree: ast.AST, known: set[str]) -> set[str]:
     """Return imported module stems that belong to the scanned corpus."""
     stems = {s for node in ast.walk(tree) for s in _import_stems(node)}
@@ -685,8 +867,12 @@ def _scan_modules(
     return trees
 
 
-def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport:
-    """Quantify every Python module under the supplied targets.
+def analyze(
+    paths: Sequence[Path],
+    include_advisory: bool = True,
+    languages: Sequence[str] | None = None,
+) -> SmellReport:
+    """Quantify every module under the supplied targets across Python and polyglot languages.
 
     `include_advisory=False` computes only what gates. Measured on this corpus the
     advisory detectors are 94% of the runtime — vulture alone is roughly eight seconds
@@ -697,10 +883,17 @@ def analyze(paths: Sequence[Path], include_advisory: bool = True) -> SmellReport
     report = SmellReport()
     trees = _scan_modules(paths, report, include_advisory)
     report.findings.extend(detect_import_cycles(trees))
+
+    polyglot_sources = _scan_polyglot_sources(paths, languages)
+    report.findings.extend(_polyglot_gating_findings(polyglot_sources))
+
     if not include_advisory:
         return report
 
+    _record_polyglot_metrics(polyglot_sources, report)
     report.findings.extend(detect_duplicated_blocks(trees))
+    if polyglot_sources:
+        report.findings.extend(detect_polyglot_clones(polyglot_sources))
     report.findings.extend(detect_unreferenced_symbols(list(paths)))
     report.findings.extend(
         SmellFinding(
@@ -750,6 +943,103 @@ def _python_files(paths: Sequence[Path]) -> list[Path]:
     return [m for group in expanded for m in group]
 
 
+def _is_matching_language(
+    suffix: str,
+    is_explicit_file: bool,
+    languages: Sequence[str] | None,
+) -> bool:
+    """Check if a file suffix matches the requested languages."""
+    if suffix not in POLYGLOT_EXTENSIONS:
+        return False
+    if languages:
+        if "all" in languages:
+            return True
+        norm_langs = {lang.lower().lstrip(".") for lang in languages}
+        file_lang = POLYGLOT_EXTENSIONS[suffix]
+        return file_lang in norm_langs or suffix.lstrip(".") in norm_langs
+    return True if is_explicit_file else suffix == ".py"
+
+
+def _walk_polyglot_files(root: Path, languages: Sequence[str] | None = None) -> list[Path]:
+    """Return repository source files beneath root matching requested languages."""
+    found: list[Path] = []
+    for parent, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
+        for name in files:
+            p = Path(parent) / name
+            if _is_matching_language(p.suffix, False, languages):
+                found.append(p)
+    return sorted(found)
+
+
+def _polyglot_files(
+    paths: Sequence[Path], languages: Sequence[str] | None = None
+) -> list[Path]:
+    """Expand targets into multi-language files matching requested languages."""
+    expanded: list[list[Path]] = []
+    for p in paths:
+        if not p.exists():
+            continue
+        if p.is_file() and _is_matching_language(p.suffix, True, languages):
+            expanded.append([p])
+        elif p.is_dir():
+            expanded.append(_walk_polyglot_files(p, languages))
+    return [m for group in expanded for m in group]
+
+
+def _scan_polyglot_sources(
+    paths: Sequence[Path],
+    languages: Sequence[str] | None,
+) -> dict[Path, str]:
+    """Read non-Python polyglot source files, returning mapping of path to content."""
+    files = [p for p in _polyglot_files(paths, languages) if p.suffix != ".py"]
+    sources: dict[Path, str] = {}
+    for p in files:
+        try:
+            sources[p] = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return sources
+
+
+def _polyglot_gating_findings(sources: Mapping[Path, str]) -> list[SmellFinding]:
+    """Evaluate gating thresholds on polyglot modules (e.g. cyclomatic complexity)."""
+    findings: list[SmellFinding] = []
+    for path, source in sources.items():
+        lang = POLYGLOT_EXTENSIONS.get(path.suffix, "unknown")
+        _, _, complexity = polyglot_module_metrics(source, lang)
+        if complexity > MAX_CYCLOMATIC_COMPLEXITY:
+            findings.append(
+                SmellFinding(
+                    smell=Smell.HIGH_CYCLOMATIC_COMPLEXITY,
+                    file_path=str(path),
+                    line_number=1,
+                    subject=path.name,
+                    measured=float(complexity),
+                    threshold=float(MAX_CYCLOMATIC_COMPLEXITY),
+                    detail=f"Polyglot cyclomatic complexity {complexity}; exceeds threshold {MAX_CYCLOMATIC_COMPLEXITY}",
+                )
+            )
+    return findings
+
+
+def _record_polyglot_metrics(sources: Mapping[Path, str], report: SmellReport) -> None:
+    """Record metrics for non-Python polyglot modules into report."""
+    for path, source in sources.items():
+        lang = POLYGLOT_EXTENSIONS.get(path.suffix, "unknown")
+        mi, volume, complexity = polyglot_module_metrics(source, lang)
+        loc = len([ln for ln in source.splitlines() if ln.strip()])
+        report.modules.append(
+            ModuleScore(
+                path=str(path),
+                loc=loc,
+                halstead_volume=volume,
+                max_complexity=complexity,
+                maintainability=mi,
+            )
+        )
+
+
 def render(report: SmellReport) -> list[str]:
     """Render the quantified report."""
     lines = [
@@ -782,6 +1072,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Which findings cause a non-zero exit (default: gating)",
     )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable output")
+    parser.add_argument(
+        "--languages", "-L", default=None,
+        help="Comma-separated languages or 'all' to analyze (default: python)",
+    )
     return parser
 
 
@@ -812,7 +1106,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """CLI runner for the code smell quantifier."""
     args = build_arg_parser().parse_args(list(argv[1:]) if argv is not None else None)
     present, missing = _resolve_targets(args.paths)
-    report = analyze(present)
+    langs = [lang.strip() for lang in args.languages.split(",")] if args.languages else None
+    report = analyze(present, languages=langs)
     print(_render_json(report) if args.json else "\n".join(render(report)))
 
     blocking = {"none": [], "gating": report.gating, "any": report.findings}[args.fail_on]

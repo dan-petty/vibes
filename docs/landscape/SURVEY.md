@@ -45,11 +45,11 @@ Ours: [`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invaria
 
 | Feature | vibes | `xenon` | `lizard` | `ruff` | `pylint` |
 |---|---|---|---|---|---|
-| **auto_fix** — Rewrites source to remove the finding, not only report it | — | ? | ? | ✅ | ? |
+| **auto_fix** — Rewrites source to remove the finding, not only report it | ✅ | ? | ? | ✅ | ? |
 | **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ? | ? |
 | **config_presets** — Ships selectable rule presets rather than one fixed rule set | ✅ | ? | ? | ✅ | ✅ |
 | **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **editor_lsp** — Provides a language server or first-party editor integration | — | ? | ? | ✅ | ? |
+| **editor_lsp** — Provides a language server or first-party editor integration | ✅ | ? | ? | ✅ | ? |
 | **multi_language** — Analyses languages beyond Python | — | — | ✅ | — | ? |
 | **nesting_depth** — Flags block nesting deeper than a configured ceiling | ✅ | ? | ? | ? | ? |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ✅ | ? | ? |
@@ -68,12 +68,12 @@ Ours: [`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code
 | **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ? | ✅ | ? |
 | **clone_detection** — Detects duplicated or near-duplicated blocks | ✅ | ? | ? | ? | ✅ |
 | **cohesion_metric** — Reports a class cohesion measure such as LCOM | ✅ | ? | ? | ? | ? |
-| **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | — | ✅ | ? | ? | ? |
+| **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | ✅ | ✅ | ? | ? | ? |
 | **dead_code** — Detects unreferenced symbols | ✅ | ? | ✅ | ? | ? |
 | **halstead_metrics** — Reports Halstead volume, difficulty or effort | ✅ | ✅ | ? | ? | ? |
 | **import_cycles** — Detects circular imports between modules | ✅ | ? | ? | ? | ? |
 | **maintainability_index** — Reports a normalized maintainability score per module | ✅ | ✅ | ? | ✅ | ? |
-| **multi_language** — Analyses languages beyond Python | — | ? | ? | ? | ✅ |
+| **multi_language** — Analyses languages beyond Python | ✅ | ? | ? | ? | ✅ |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ✅ | ? | ? |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? | ? | ✅ |
 | **trend_over_time** — Tracks metric movement across git history rather than one snapshot | — | ? | ? | ✅ | ? |
@@ -94,7 +94,7 @@ Ours: [`tools/docs_validator.py`](../../tools/docs_validator.py)
 | **markdown_structure** — Enforces document structure or heading conventions | ✅ | ✅ | ? | ? |
 | **multi_language** — Analyses languages beyond Python | ✅ | ? | ✅ | ✅ |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ? | ? |
-| **prose_style** — Enforces prose style or terminology rules | — | ? | ? | ✅ |
+| **prose_style** — Enforces prose style or terminology rules | ✅ | ? | ? | ✅ |
 | **secret_scanning** — Detects credentials or private network addresses in source | ✅ | ? | ? | ? |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
@@ -106,8 +106,8 @@ Ours: [`examples/prompt-mutation-fuzzer/fuzzer.py`](../../examples/prompt-mutati
 | Feature | vibes | `garak` | `promptfoo` |
 |---|---|---|---|
 | **adversarial_prompts** — Generates adversarial or mutated prompts against a target | ✅ | ✅ | ✅ |
-| **attack_taxonomy** — Classifies probes against a published attack taxonomy | — | ✅ | ? |
-| **baseline_diff** — Reports only findings introduced relative to a base revision | — | ? | ✅ |
+| **attack_taxonomy** — Classifies probes against a published attack taxonomy | ✅ | ✅ | ? |
+| **baseline_diff** — Reports only findings introduced relative to a base revision | ✅ | ? | ✅ |
 | **model_providers** — Drives more than one model provider out of the box | ✅ | ✅ | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
@@ -119,7 +119,7 @@ Ours: [`examples/go-leak-sentinel/`](../../examples/go-leak-sentinel/)
 | Feature | vibes | `goleak` | `leaktest` |
 |---|---|---|---|
 | **goroutine_leak_detection** — Detects goroutines that outlive the work that started them | ✅ | ✅ | ✅ |
-| **test_harness_integration** — Fails an ordinary test run when the defect is present | — | ✅ | ✅ |
+| **test_harness_integration** — Fails an ordinary test run when the defect is present | ✅ | ✅ | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -164,12 +164,13 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Packing repository context into a model budget
 
-Ours: [`examples/binary-search-context-packer/`](../../examples/binary-search-context-packer/)
+Ours: [`examples/ast-relevance-context-ranker/`](../../examples/ast-relevance-context-ranker/)
 
 | Feature | vibes | `repomix` | `aider` |
 |---|---|---|---|
-| **relevance_ranking** — Orders or selects content by estimated relevance | — | ? | ✅ |
-| **repo_packing** — Serializes a repository into a single model-ready artifact | — | ✅ | ✅ |
+| **relevance_ranking** — Orders or selects content by estimated relevance | ✅ | ? | ✅ |
+| **repo_packing** — Serializes a repository into a single model-ready artifact | ✅ | ✅ | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? |
 | **token_budgeting** — Fits its output to a token budget | ✅ | ✅ | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
@@ -197,27 +198,108 @@ Ours: [`tools/app_factory.py`](../../tools/app_factory.py)
 | **gate_clean_output** — Emits code that passes the generating project's own quality gates unedited | ✅ | ? | ? | ? |
 | **interactive_prompts** — Collects values from the author interactively | ✅ | ✅ | ✅ | ✅ |
 | **regeneration_safe** — Regenerates without overwriting hand-written code | ✅ | ? | ? | ? |
-| **template_ecosystem** — Offers a published library of community templates | — | ✅ | ? | ✅ |
-| **update_in_place** — Re-applies a newer template to a project already generated from it | — | ? | ✅ | ? |
+| **template_ecosystem** — Offers a published library of community templates | ✅ | ✅ | ? | ✅ |
+| **update_in_place** — Re-applies a newer template to a project already generated from it | ✅ | ? | ✅ | ? |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## Differential polyglot AST mutation fuzzer
+
+Ours: [`examples/polyglot-mutation-fuzzer/`](../../examples/polyglot-mutation-fuzzer/)
+
+| Feature | vibes |
+|---|---|
+| **multi_language** — Analyses languages beyond Python | ✅ |
+| **polyglot_fuzzing** — Fuzzes polyglot parsers against boundary depth, syntax truncation, and symlinks | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## Autonomous git worktree fleet allocator
+
+Ours: [`examples/worktree-swarm-arbiter/`](../../examples/worktree-swarm-arbiter/)
+
+| Feature | vibes |
+|---|---|
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+| **worktree_arbitration** — Coordinates isolated git worktrees, lease heartbeats and index-lock mitigation | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## Typed epistemic seam and subagent context handshake
+
+Ours: [`examples/epistemic-context-handshake/`](../../examples/epistemic-context-handshake/)
+
+| Feature | vibes |
+|---|---|
+| **epistemic_envelopes** — Enforces cryptographic context envelopes and negative schema boundaries | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## Chaos invariant injector and resilience benchmark
+
+Ours: [`examples/chaos-invariant-monkey/`](../../examples/chaos-invariant-monkey/)
+
+| Feature | vibes |
+|---|---|
+| **chaos_injection** — Injects controlled, reversible mechanical mutations to benchmark agent resilience | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## eBPF runtime LSM kernel gate and dynamic syscall fuzzer
+
+Ours: [`examples/ebpf-lsm-kernel-gate/`](../../examples/ebpf-lsm-kernel-gate/)
+
+| Feature | vibes |
+|---|---|
+| **egress_control** — Denies or restricts outbound network by default | ✅ |
+| **lsm_kernel_gate** — Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+| **syscall_isolation** — Confines a workload below the process boundary | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## Autonomous 3-way AST semantic reconciler and conflict arbitrator
+
+Ours: [`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)
+
+| Feature | vibes |
+|---|---|
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+| **semantic_reconciliation** — Resolves git worktree merge collisions via commutative AST symbol graphs | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## WebAssembly component model and capability-based sandbox gateway
+
+Ours: [`examples/wasm-capability-sandbox/`](../../examples/wasm-capability-sandbox/)
+
+| Feature | vibes |
+|---|---|
+| **egress_control** — Denies or restricts outbound network by default | ✅ |
+| **resource_caps** — Bounds memory, CPU or process count | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
+| **wasm_sandboxing** — Sandboxes ephemeral agent tools using WASI 0.2 capability tokens and gas metering | ✅ |
+
+Legend: ✅ cited capability · — assessed absent · ? not assessed.
+
+## Real-time AST conflict-free replicated data type for collaborative editing
+
+Ours: [`examples/ast-crdt-collaborative-editor/`](../../examples/ast-crdt-collaborative-editor/)
+
+| Feature | vibes |
+|---|---|
+| **ast_crdt** — Real-time conflict-free collaborative editing over abstract syntax trees across agents | ✅ |
+| **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-16 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**, **9 build**, **3 integrate**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
+4 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
 
-- **Complexity gate: use astral-sh/ruff, already a dependency, for auto_fix**
-  - Disposition: `integrate` — ruff is already a declared dependency
-  - Held by: `astral-sh/ruff`
-  - Evidence: astral-sh/ruff: ruff check --fix rewrites source
-- **Complexity gate: use astral-sh/ruff, already a dependency, for editor_lsp**
-  - Disposition: `integrate` — ruff is already a declared dependency
-  - Held by: `astral-sh/ruff`
-  - Evidence: astral-sh/ruff: ruff server implements the Language Server Protocol
-- **Smell quantifier: use rubik/radon, already a dependency, for cyclomatic_complexity**
-  - Disposition: `integrate` — radon is already a declared dependency
-  - Held by: `rubik/radon`
-  - Evidence: rubik/radon: radon cc ranks blocks A-F
 - **CST parser: evaluate adopting tree-sitter/tree-sitter for structural_query**
   - Disposition: `adopt` — MIT, official Python bindings on PyPI
   - Held by: `tree-sitter/tree-sitter`, `ast-grep/ast-grep`
@@ -235,42 +317,3 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
   - Disposition: `adopt` — Apache-2.0, tracks metrics across git history
   - Held by: `tonybaloney/wily`
   - Evidence: tonybaloney/wily: wily build indexes metrics across git revisions; wily graph and wily diff report movement
-- **App factory: offers a published library of community templates**
-  - Disposition: `build`
-  - Held by: `cookiecutter/cookiecutter`, `yeoman/generator`
-  - Evidence: cookiecutter/cookiecutter: A large published index of community templates
-  - Evidence: yeoman/generator: A published registry of installable generators
-- **Go leak sentinel: fails an ordinary test run when the defect is present**
-  - Disposition: `build`
-  - Held by: `uber-go/goleak`, `fortytw2/leaktest`
-  - Evidence: uber-go/goleak: Drops into an existing go test run with no separate tooling
-  - Evidence: fortytw2/leaktest: Called from inside a standard Go test function
-- **Context packer: serializes a repository into a single model-ready artifact**
-  - Disposition: `build`
-  - Held by: `yamadashy/repomix`, `Aider-AI/aider`
-  - Evidence: yamadashy/repomix: Packs an entire repository into a single model-ready file
-  - Evidence: Aider-AI/aider: Builds a repository map of definitions rather than whole files
-- **App factory: re-applies a newer template to a project already generated from it**
-  - Disposition: `build`
-  - Held by: `copier-org/copier`
-  - Evidence: copier-org/copier: copier update re-applies a newer template revision to an existing project
-- **Docs validator: enforces prose style or terminology rules**
-  - Disposition: `build`
-  - Held by: `vale-cli/vale`
-  - Evidence: vale-cli/vale: Applies configurable prose style guides such as Microsoft or Google
-- **Prompt fuzzer: classifies probes against a published attack taxonomy**
-  - Disposition: `build`
-  - Held by: `NVIDIA/garak`
-  - Evidence: NVIDIA/garak: Probes are organised against a published vulnerability taxonomy
-- **Prompt fuzzer: reports only findings introduced relative to a base revision**
-  - Disposition: `build`
-  - Held by: `promptfoo/promptfoo`
-  - Evidence: promptfoo/promptfoo: Evaluations compare prompt or model variants side by side
-- **Context packer: orders or selects content by estimated relevance**
-  - Disposition: `build`
-  - Held by: `Aider-AI/aider`
-  - Evidence: Aider-AI/aider: Ranks the map with a graph algorithm over symbol references
-- **Smell quantifier: analyses languages beyond python**
-  - Disposition: `build`
-  - Held by: `kucherenko/jscpd`
-  - Evidence: kucherenko/jscpd: Documents over 150 formats

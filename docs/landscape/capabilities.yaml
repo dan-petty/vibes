@@ -143,6 +143,7 @@ capabilities:
       - per_file_baseline
       - baseline_diff
       - cyclomatic_complexity
+      - multi_language
     alternatives:
       - repo: rubik/radon
         package: radon
