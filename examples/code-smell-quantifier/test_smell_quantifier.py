@@ -11,6 +11,7 @@ from smell_quantifier import (
     Smell,
     _count_disjoint_clusters,
     analyze,
+    detect_cyclomatic_complexity,
     detect_duplicated_blocks,
     detect_god_classes,
     detect_import_cycles,
@@ -344,3 +345,39 @@ def test_a_package_relative_submodule_import_draws_an_edge(tmp_path: Path) -> No
     cycles = [f for f in analyze([package], include_advisory=False).findings
               if f.smell.name == "IMPORT_CYCLE"]
     assert len(cycles) == 1
+
+
+def test_detect_cyclomatic_complexity_clean_function() -> None:
+    """A low-complexity function produces zero findings."""
+    source = "def simple(a, b):\n    return a + b\n"
+    findings = detect_cyclomatic_complexity(_tree(source), Path("simple.py"))
+    assert (len(findings), findings) == (0, [])
+
+
+def test_detect_cyclomatic_complexity_flags_high_complexity() -> None:
+    """Functions exceeding MAX_CYCLOMATIC_COMPLEXITY are flagged with rank and measured value."""
+    lines = ["def complex_fn(x):"]
+    for i in range(11):
+        lines.append(f"    if x == {i}: return {i}")
+    lines.append("    return -1\n")
+    source = "\n".join(lines)
+    findings = detect_cyclomatic_complexity(_tree(source), Path("complex.py"), max_complexity=10)
+    assert (
+        len(findings),
+        findings[0].smell,
+        findings[0].subject,
+        findings[0].measured,
+        findings[0].threshold,
+        "C" in findings[0].detail,
+    ) == (1, Smell.HIGH_CYCLOMATIC_COMPLEXITY, "complex_fn", 12.0, 10.0, True)
+
+
+def test_cyclomatic_complexity_in_gating_analysis(tmp_path: Path) -> None:
+    """High cyclomatic complexity is a gating smell reported by analyze()."""
+    lines = ["def complex_fn(x):"]
+    for i in range(11):
+        lines.append(f"    if x == {i}: return {i}")
+    lines.append("    return -1\n")
+    source = "\n".join(lines)
+    assert _gating(source, tmp_path) == ["HIGH_CYCLOMATIC_COMPLEXITY:12.0"]
+

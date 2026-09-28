@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Final
 
 import networkx
+from radon.complexity import cc_rank, cc_visit_ast
 from radon.metrics import mi_compute, mi_parameters
 from vulture import Vulture
 
@@ -43,6 +44,7 @@ MAX_PARAMETERS: Final[int] = 5           # pylint R0913 default
 MAX_FUNCTION_STATEMENTS: Final[int] = 50  # pylint R0915 default
 MAX_CLASS_METHODS: Final[int] = 20        # pylint R0904 default
 MAX_CLASS_ATTRIBUTES: Final[int] = 7      # pylint R0902 default
+MAX_CYCLOMATIC_COMPLEXITY: Final[int] = 10  # radon cc / repository McCabe ceiling
 MIN_CLONE_STATEMENTS: Final[int] = 6      # PMD-CPD minimum-tokens analogue
 # Statement count alone makes six consecutive imports a "clone" of any other six imports,
 # because they are structurally identical everywhere. CPD avoids this by counting tokens.
@@ -68,6 +70,7 @@ class Smell(StrEnum):
     IMPORT_CYCLE = "ImportCycle"
     UNREFERENCED_SYMBOL = "UnreferencedSymbol"
     LOW_MAINTAINABILITY = "LowMaintainability"
+    HIGH_CYCLOMATIC_COMPLEXITY = "HighCyclomaticComplexity"
 
 
 @dataclass(frozen=True)
@@ -166,6 +169,36 @@ def detect_long_functions(tree: ast.AST, path: Path) -> list[SmellFinding]:
                 subject=node.name, measured=statements, threshold=MAX_FUNCTION_STATEMENTS,
                 detail=f"{statements} statements; branching gates do not see raw length",
             ))
+    return findings
+
+
+def detect_cyclomatic_complexity(
+    tree: ast.AST, path: Path, max_complexity: int = MAX_CYCLOMATIC_COMPLEXITY
+) -> list[SmellFinding]:
+    """Flag functions and methods exceeding the cyclomatic complexity ceiling.
+
+    Delegates to radon's `cc_visit_ast` to score every function, method, and closure,
+    reporting the measured McCabe number alongside radon's letter rank (A through F).
+    """
+    try:
+        blocks = cc_visit_ast(tree)
+    except Exception:
+        return []
+    findings: list[SmellFinding] = []
+    for block in blocks:
+        if block.complexity > max_complexity:
+            rank = cc_rank(block.complexity)
+            findings.append(
+                SmellFinding(
+                    smell=Smell.HIGH_CYCLOMATIC_COMPLEXITY,
+                    file_path=str(path),
+                    line_number=block.lineno,
+                    subject=block.name,
+                    measured=float(block.complexity),
+                    threshold=float(max_complexity),
+                    detail=f"McCabe complexity {block.complexity} (rank {rank}); exceeds threshold {max_complexity}",
+                )
+            )
     return findings
 
 
@@ -539,6 +572,7 @@ PER_FILE_DETECTORS: Final[tuple[Callable[[ast.AST, Path], list[SmellFinding]], .
     detect_long_functions,
     detect_god_classes,
     detect_low_cohesion,
+    detect_cyclomatic_complexity,
 )
 # Per-file detectors whose findings are advisory, and so are skipped when a caller only
 # wants what gates.

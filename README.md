@@ -373,7 +373,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 37-real-time-ast-crdts-and-concurrent-multi-agent-swarms.md
 │       ├── 38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md
 │       ├── 39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md
-│       └── 40-configurable-prose-style-guides-and-inclusive-terminology-gates.md
+│       ├── 40-configurable-prose-style-guides-and-inclusive-terminology-gates.md
+│       └── 41-radon-block-complexity-ranking-in-code-smell-quantification.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -403,6 +404,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── multi-agent-codebase-concurrency.md
 │   ├── multi-tier-living-documentation.md
 │   ├── post-v1-deprecation-lifecycle.md
+│   ├── radon-block-complexity-ranking-and-smell-quantification.md
 │   ├── root-cause-hardening.md
 │   ├── streaming-reasoning-isolation-and-token-budgeting.md
 │   ├── structural-position-oracles.md
