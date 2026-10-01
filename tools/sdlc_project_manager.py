@@ -626,11 +626,10 @@ def _reconcile_existing_tasks(
     """Reconcile each existing task against current scan findings."""
     merged: list[dict[str, Any]] = []
     for task in existing:
-        identity = _card_identity(task)
         if _is_roadmap_card(task):
-            merged.extend(_reconcile_roadmap_card(task, identity, current_by_id, roadmap_ingested, result))
+            merged.extend(_reconcile_roadmap_card(task, current_by_id, roadmap_ingested, result))
         else:
-            merged.extend(_reconcile_defect_card(task, identity, current_by_id, result))
+            merged.extend(_reconcile_defect_card(task, _card_identity(task), current_by_id, result))
     return merged
 
 
@@ -690,12 +689,12 @@ def _reconcile_defect_card(
 
 def _reconcile_roadmap_card(
     task: dict[str, Any],
-    identity: str,
     current_by_id: dict[str, dict[str, Any]],
     roadmap_ingested: bool,
     result: ReconciliationResult,
 ) -> list[dict[str, Any]]:
     """Refresh, close, or carry forward one roadmap card, recording which happened."""
+    identity = _card_identity(task)
     if identity in current_by_id:
         refreshed = _refresh_roadmap_card(task, current_by_id)
         if refreshed != task:
