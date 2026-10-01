@@ -107,6 +107,7 @@ With these seven fundamentals in your toolkit, you are ready to build production
 Ready to see how these fundamentals are implemented in real production code?
 
 - 🏛️ [**Return to Dummy's Guide Home**](./README.md)
+- 🚀 [**Next: Chapter 8 — Fast Checks Beat Slow Tests**](./08-fast-checks-beat-slow-tests.md)
 - 📜 [**The Disciplined Agentic Manifesto**](../MANIFESTO.md)
 - 🧭 [**Taxonomy of Agentic Engineering**](../TAXONOMY.md)
-- 🔬 [**70 Real-World Case Studies (Observations)**](../../observations/README.md)
+- 🔬 [**71 Real-World Case Studies (Observations)**](../../observations/README.md)
