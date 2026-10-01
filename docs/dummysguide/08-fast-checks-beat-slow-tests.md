@@ -151,6 +151,6 @@ Both approaches check the exact same data, and Pytest will still highlight the e
 Ready to explore more fundamentals?
 
 - 🏛️ [**Return to Dummy's Guide Home**](./README.md)
+- 🧭 [**Chapter 9: The Cheat Sheet & Survival Kit**](./09-the-cheat-sheet-and-survival-kit.md)
 - 📜 [**Chapter 2: Test First, Code Second**](./02-tests-are-the-answer-key.md)
-- 🧭 [**Chapter 3: Keep It Simple (Complexity Caps)**](./03-keep-code-simple-complexity-caps.md)
 - 🔬 [**71 Real-World Case Studies (Observations)**](../../observations/README.md)

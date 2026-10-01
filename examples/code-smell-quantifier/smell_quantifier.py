@@ -27,6 +27,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -42,12 +43,12 @@ from vulture import Vulture
 
 # Thresholds are the published defaults of the tools each detector mirrors, so a number
 # here can be traced to a source rather than to taste.
-MAX_PARAMETERS: Final[int] = 5           # pylint R0913 default
+MAX_PARAMETERS: Final[int] = 5  # pylint R0913 default
 MAX_FUNCTION_STATEMENTS: Final[int] = 50  # pylint R0915 default
-MAX_CLASS_METHODS: Final[int] = 20        # pylint R0904 default
-MAX_CLASS_ATTRIBUTES: Final[int] = 7      # pylint R0902 default
+MAX_CLASS_METHODS: Final[int] = 20  # pylint R0904 default
+MAX_CLASS_ATTRIBUTES: Final[int] = 7  # pylint R0902 default
 MAX_CYCLOMATIC_COMPLEXITY: Final[int] = 10  # radon cc / repository McCabe ceiling
-MIN_CLONE_STATEMENTS: Final[int] = 6      # PMD-CPD minimum-tokens analogue
+MIN_CLONE_STATEMENTS: Final[int] = 6  # PMD-CPD minimum-tokens analogue
 # Statement count alone makes six consecutive imports a "clone" of any other six imports,
 # because they are structurally identical everywhere. CPD avoids this by counting tokens.
 # Calibrated on this corpus: import windows peak at 27 AST nodes while code windows have a
@@ -96,10 +97,23 @@ LINE_COMMENT_PREFIXES: Final[dict[str, tuple[str, ...]]] = {
     "json": (),
 }
 
-BRANCH_KEYWORDS: Final[frozenset[str]] = frozenset({
-    "if", "elif", "else", "for", "while", "case", "match", "catch", "except", "switch",
-    "&&", "||", "?",
-})
+BRANCH_KEYWORDS: Final[frozenset[str]] = frozenset(
+    {
+        "if",
+        "elif",
+        "else",
+        "for",
+        "while",
+        "case",
+        "match",
+        "catch",
+        "except",
+        "switch",
+        "&&",
+        "||",
+        "?",
+    }
+)
 
 _POLYGLOT_TOKEN_RE: Final[re.Pattern[str]] = re.compile(
     r"""
@@ -185,11 +199,17 @@ def detect_long_parameter_lists(tree: ast.AST, path: Path) -> list[SmellFinding]
     for node in _function_nodes(tree):
         count = _parameter_count(node)
         if count > MAX_PARAMETERS:
-            findings.append(SmellFinding(
-                smell=Smell.LONG_PARAMETER_LIST, file_path=str(path), line_number=node.lineno,
-                subject=node.name, measured=count, threshold=MAX_PARAMETERS,
-                detail=f"{count} parameters; each one multiplies the call sites that must change together",
-            ))
+            findings.append(
+                SmellFinding(
+                    smell=Smell.LONG_PARAMETER_LIST,
+                    file_path=str(path),
+                    line_number=node.lineno,
+                    subject=node.name,
+                    measured=count,
+                    threshold=MAX_PARAMETERS,
+                    detail=f"{count} parameters; each one multiplies the call sites that must change together",
+                )
+            )
     return findings
 
 
@@ -218,11 +238,17 @@ def detect_long_functions(tree: ast.AST, path: Path) -> list[SmellFinding]:
     for node in _function_nodes(tree):
         statements = _statement_count(node)
         if statements > MAX_FUNCTION_STATEMENTS:
-            findings.append(SmellFinding(
-                smell=Smell.LONG_FUNCTION, file_path=str(path), line_number=node.lineno,
-                subject=node.name, measured=statements, threshold=MAX_FUNCTION_STATEMENTS,
-                detail=f"{statements} statements; branching gates do not see raw length",
-            ))
+            findings.append(
+                SmellFinding(
+                    smell=Smell.LONG_FUNCTION,
+                    file_path=str(path),
+                    line_number=node.lineno,
+                    subject=node.name,
+                    measured=statements,
+                    threshold=MAX_FUNCTION_STATEMENTS,
+                    detail=f"{statements} statements; branching gates do not see raw length",
+                )
+            )
     return findings
 
 
@@ -286,9 +312,7 @@ def _class_attribute_references(node: ast.AST) -> set[str]:
     return {
         child.attr
         for child in ast.walk(node)
-        if isinstance(child, ast.Attribute)
-        and isinstance(child.value, ast.Name)
-        and child.value.id == "self"
+        if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name) and child.value.id == "self"
     }
 
 
@@ -302,10 +326,7 @@ def _class_methods(node: ast.ClassDef) -> list[ast.FunctionDef | ast.AsyncFuncti
     11 private helpers scored 21 here and nothing at all under real pylint.
     """
     kinds = (ast.FunctionDef, ast.AsyncFunctionDef)
-    return [
-        child for child in node.body
-        if isinstance(child, kinds) and not child.name.startswith("_")
-    ]
+    return [child for child in node.body if isinstance(child, kinds) and not child.name.startswith("_")]
 
 
 def _is_data_carrier(node: ast.ClassDef) -> bool:
@@ -322,7 +343,8 @@ def _is_data_carrier(node: ast.ClassDef) -> bool:
     }
     decorators |= {
         getattr(d.func, "id", getattr(d.func, "attr", ""))
-        for d in node.decorator_list if isinstance(d, ast.Call)
+        for d in node.decorator_list
+        if isinstance(d, ast.Call)
     }
     bases = {b.id if isinstance(b, ast.Name) else getattr(b, "attr", "") for b in node.bases}
     return bool(decorators & {"dataclass"}) or bool(
@@ -343,8 +365,12 @@ def _class_ceiling_findings(node: ast.ClassDef, path: Path) -> list[SmellFinding
         checks.append((len(_class_attribute_names(node)), MAX_CLASS_ATTRIBUTES, "instance attributes"))
     return [
         SmellFinding(
-            smell=Smell.GOD_CLASS, file_path=str(path), line_number=node.lineno,
-            subject=node.name, measured=measured, threshold=threshold,
+            smell=Smell.GOD_CLASS,
+            file_path=str(path),
+            line_number=node.lineno,
+            subject=node.name,
+            measured=measured,
+            threshold=threshold,
             detail=f"{measured} {noun}; responsibilities accumulate faster than they are split",
         )
         for measured, threshold, noun in checks
@@ -364,10 +390,11 @@ def _cohesion_components(node: ast.ClassDef) -> int:
         return 1
     method_names = {m.name for m in methods}
     touched = {
-        m.name: _class_attribute_references(m) | {
-            c.func.attr for c in ast.walk(m)
-            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
-            and c.func.attr in method_names
+        m.name: _class_attribute_references(m)
+        | {
+            c.func.attr
+            for c in ast.walk(m)
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr in method_names
         }
         for m in methods
     }
@@ -404,16 +431,12 @@ def _drain_cluster(start: str, unvisited: dict[str, None], touched: dict[str, se
             frontier.append(other)
 
 
-def _linked_methods(
-    current: str, unvisited: dict[str, None], touched: dict[str, set[str]]
-) -> list[str]:
+def _linked_methods(current: str, unvisited: dict[str, None], touched: dict[str, set[str]]) -> list[str]:
     """Return the still-unvisited methods linked to `current`, in stable order."""
     return [
         other
         for other in unvisited
-        if touched[other] & touched[current]
-        or other in touched[current]
-        or current in touched[other]
+        if touched[other] & touched[current] or other in touched[current] or current in touched[other]
     ]
 
 
@@ -425,11 +448,17 @@ def detect_low_cohesion(tree: ast.AST, path: Path) -> list[SmellFinding]:
             continue
         components = _cohesion_components(node)
         if components > 1:
-            findings.append(SmellFinding(
-                smell=Smell.LOW_COHESION, file_path=str(path), line_number=node.lineno,
-                subject=node.name, measured=components, threshold=1,
-                detail=f"LCOM4 = {components}; the methods form {components} groups that share nothing",
-            ))
+            findings.append(
+                SmellFinding(
+                    smell=Smell.LOW_COHESION,
+                    file_path=str(path),
+                    line_number=node.lineno,
+                    subject=node.name,
+                    measured=components,
+                    threshold=1,
+                    detail=f"LCOM4 = {components}; the methods form {components} groups that share nothing",
+                )
+            )
     return findings
 
 
@@ -449,9 +478,7 @@ def _normalize_for_clone(node: ast.AST) -> str:
     return f"({type(node).__name__} {children})" if children else f"({type(node).__name__})"
 
 
-def _statement_windows(
-    tree: ast.AST, path: Path, size: int
-) -> Iterable[tuple[str, str, int]]:
+def _statement_windows(tree: ast.AST, path: Path, size: int) -> Iterable[tuple[str, str, int]]:
     """Yield (fingerprint, subject, line) for each sliding window of sibling statements.
 
     Fingerprint and node mass are computed once per statement and then combined per
@@ -459,24 +486,18 @@ def _statement_windows(
     the `size` windows containing it, which was 39% of the tool's total runtime.
     """
     bodies = (
-        (getattr(node, "name", type(node).__name__), getattr(node, "body", None))
-        for node in ast.walk(tree)
+        (getattr(node, "name", type(node).__name__), getattr(node, "body", None)) for node in ast.walk(tree)
     )
     scopes = ((s, b) for s, b in bodies if isinstance(b, list) and len(b) >= size)
     for subject, body in scopes:
         yield from _windows_in_scope(body, f"{path.name}:{subject}", size)
 
 
-def _windows_in_scope(
-    body: list[ast.stmt], subject: str, size: int
-) -> Iterable[tuple[str, str, int]]:
+def _windows_in_scope(body: list[ast.stmt], subject: str, size: int) -> Iterable[tuple[str, str, int]]:
     """Yield qualifying windows within one statement list."""
     prints = [_normalize_for_clone(stmt) for stmt in body]
     masses = [sum(1 for _ in ast.walk(stmt)) for stmt in body]
-    starts = (
-        s for s in range(len(body) - size + 1)
-        if sum(masses[s : s + size]) >= MIN_CLONE_NODE_MASS
-    )
+    starts = (s for s in range(len(body) - size + 1) if sum(masses[s : s + size]) >= MIN_CLONE_NODE_MASS)
     for start in starts:
         yield "|".join(prints[start : start + size]), subject, body[start].lineno
 
@@ -497,11 +518,17 @@ def detect_duplicated_blocks(
             continue
         path, subject, line = occurrences[0]
         others = ", ".join(f"{p.name}:{ln}" for p, _, ln in occurrences[1:4])
-        findings.append(SmellFinding(
-            smell=Smell.DUPLICATED_BLOCK, file_path=str(path), line_number=line,
-            subject=subject, measured=len(sites), threshold=1,
-            detail=f"{size}-statement block repeated at {others}, identical once names are erased",
-        ))
+        findings.append(
+            SmellFinding(
+                smell=Smell.DUPLICATED_BLOCK,
+                file_path=str(path),
+                line_number=line,
+                subject=subject,
+                measured=len(sites),
+                threshold=1,
+                detail=f"{size}-statement block repeated at {others}, identical once names are erased",
+            )
+        )
     return _merge_overlapping_clones(findings, size)
 
 
@@ -515,8 +542,7 @@ def _merge_overlapping_clones(findings: list[SmellFinding], size: int) -> list[S
     kept: list[SmellFinding] = []
     for finding in sorted(findings, key=lambda f: (f.file_path, f.line_number)):
         overlaps = any(
-            k.file_path == finding.file_path and abs(k.line_number - finding.line_number) < size
-            for k in kept
+            k.file_path == finding.file_path and abs(k.line_number - finding.line_number) < size for k in kept
         )
         if not overlaps:
             kept.append(finding)
@@ -635,10 +661,7 @@ def polyglot_module_metrics(source: str, language: str) -> tuple[float, float, i
     """Compute (maintainability index, Halstead volume, complexity) for polyglot source."""
     lines = source.splitlines()
     prefixes = LINE_COMMENT_PREFIXES.get(language, ("#", "//"))
-    code_lines = [
-        ln for ln in lines
-        if ln.strip() and not any(ln.strip().startswith(p) for p in prefixes)
-    ]
+    code_lines = [ln for ln in lines if ln.strip() and not any(ln.strip().startswith(p) for p in prefixes)]
     loc = max(1, len(code_lines))
     operators, operands, complexity = _extract_polyglot_tokens(code_lines)
 
@@ -702,8 +725,12 @@ def detect_import_cycles(trees: dict[Path, ast.AST]) -> list[SmellFinding]:
     cycles = _cycles_in(graph)
     return [
         SmellFinding(
-            smell=Smell.IMPORT_CYCLE, file_path=str(by_stem[cycle[0]]), line_number=1,
-            subject=" -> ".join([*cycle, cycle[0]]), measured=len(cycle), threshold=0,
+            smell=Smell.IMPORT_CYCLE,
+            file_path=str(by_stem[cycle[0]]),
+            line_number=1,
+            subject=" -> ".join([*cycle, cycle[0]]),
+            measured=len(cycle),
+            threshold=0,
             detail="Cyclic imports force the whole group to load together and resist extraction",
         )
         for cycle in cycles
@@ -742,12 +769,14 @@ def detect_unreferenced_symbols(
 # checkers; normalized clone detection flags deliberate boilerplate; dead-symbol detection
 # cannot see reflective access; maintainability index is dominated by module size. Each is
 # worth knowing and none is worth a red build on its own.
-ADVISORY_SMELLS: Final[frozenset[Smell]] = frozenset({
-    Smell.LOW_COHESION,
-    Smell.DUPLICATED_BLOCK,
-    Smell.UNREFERENCED_SYMBOL,
-    Smell.LOW_MAINTAINABILITY,
-})
+ADVISORY_SMELLS: Final[frozenset[Smell]] = frozenset(
+    {
+        Smell.LOW_COHESION,
+        Smell.DUPLICATED_BLOCK,
+        Smell.UNREFERENCED_SYMBOL,
+        Smell.LOW_MAINTAINABILITY,
+    }
+)
 
 PER_FILE_DETECTORS: Final[tuple[Callable[[ast.AST, Path], list[SmellFinding]], ...]] = (
     detect_long_parameter_lists,
@@ -827,7 +856,10 @@ def _module_scores(path: Path, source: str) -> list[ModuleScore]:
     loc = len([ln for ln in source.splitlines() if ln.strip() and not ln.strip().startswith("#")])
     return [
         ModuleScore(
-            path=str(path), loc=loc, halstead_volume=volume, max_complexity=complexity,
+            path=str(path),
+            loc=loc,
+            halstead_volume=volume,
+            max_complexity=complexity,
             maintainability=maintainability,
         )
     ]
@@ -842,9 +874,7 @@ def _parse_module(file_path: Path) -> tuple[str, ast.AST] | None:
         return None
 
 
-def _scan_modules(
-    paths: Sequence[Path], report: SmellReport, include_advisory: bool
-) -> dict[Path, ast.AST]:
+def _scan_modules(paths: Sequence[Path], report: SmellReport, include_advisory: bool) -> dict[Path, ast.AST]:
     """Run every per-file detector, returning the parsed trees the cross-file ones need.
 
     Split out of `analyze` because the per-file sweep and the cross-file passes are two
@@ -852,9 +882,7 @@ def _scan_modules(
     ceiling was measured correctly.
     """
     trees: dict[Path, ast.AST] = {}
-    detectors = [
-        d for d in PER_FILE_DETECTORS if include_advisory or d not in ADVISORY_DETECTORS
-    ]
+    detectors = [d for d in PER_FILE_DETECTORS if include_advisory or d not in ADVISORY_DETECTORS]
     for file_path in _python_files(paths):
         parsed = _parse_module(file_path)
         if parsed is None:
@@ -897,8 +925,11 @@ def analyze(
     report.findings.extend(detect_unreferenced_symbols(list(paths)))
     report.findings.extend(
         SmellFinding(
-            smell=Smell.LOW_MAINTAINABILITY, file_path=m.path, line_number=1,
-            subject=Path(m.path).name, measured=m.maintainability,
+            smell=Smell.LOW_MAINTAINABILITY,
+            file_path=m.path,
+            line_number=1,
+            subject=Path(m.path).name,
+            measured=m.maintainability,
             threshold=LOW_MAINTAINABILITY_INDEX,
             detail=f"MI {m.maintainability} over {m.loc} lines; dominated by module size",
         )
@@ -920,9 +951,7 @@ VENDORED_DIR_SUFFIXES: Final[tuple[str, ...]] = (".egg-info",)
 
 def _is_repository_dir(name: str) -> bool:
     """Report whether a directory belongs to this repository rather than to a dependency."""
-    return not (
-        name.startswith(".") or name in VENDORED_DIR_NAMES or name.endswith(VENDORED_DIR_SUFFIXES)
-    )
+    return not (name.startswith(".") or name in VENDORED_DIR_NAMES or name.endswith(VENDORED_DIR_SUFFIXES))
 
 
 def _walk_python_files(root: Path) -> list[Path]:
@@ -937,8 +966,7 @@ def _walk_python_files(root: Path) -> list[Path]:
 def _python_files(paths: Sequence[Path]) -> list[Path]:
     """Expand file and directory targets into a sorted list of the repository's modules."""
     expanded = (
-        [p] if p.is_file() and p.suffix == ".py" else _walk_python_files(p)
-        for p in paths if p.exists()
+        [p] if p.is_file() and p.suffix == ".py" else _walk_python_files(p) for p in paths if p.exists()
     )
     return [m for group in expanded for m in group]
 
@@ -972,9 +1000,7 @@ def _walk_polyglot_files(root: Path, languages: Sequence[str] | None = None) -> 
     return sorted(found)
 
 
-def _polyglot_files(
-    paths: Sequence[Path], languages: Sequence[str] | None = None
-) -> list[Path]:
+def _polyglot_files(paths: Sequence[Path], languages: Sequence[str] | None = None) -> list[Path]:
     """Expand targets into multi-language files matching requested languages."""
     expanded: list[list[Path]] = []
     for p in paths:
@@ -1063,18 +1089,366 @@ def render(report: SmellReport) -> list[str]:
     return lines
 
 
+@dataclass(frozen=True)
+class RevisionScore:
+    """Quantified metric summary for a single git commit revision."""
+
+    commit: str
+    short_sha: str
+    subject: str
+    mean_maintainability: float
+    total_loc: int
+    module_count: int
+    gating_findings: int
+    advisory_findings: int
+    delta_maintainability: float = 0.0
+    delta_loc: int = 0
+    delta_findings: int = 0
+
+
+@dataclass
+class TrendReport:
+    """Sequence of historical revision metrics capturing code health trajectory."""
+
+    revisions: list[RevisionScore] = field(default_factory=list)
+
+
+def _git_repo_root() -> Path | None:
+    """Locate the git repository root directory, or None if not in a git tree."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        return Path(res.stdout.strip())
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+
+def _git_rev_list(count: int) -> list[tuple[str, str, str]]:
+    """Retrieve up to count recent git commits formatted as (full_sha, short_sha, subject)."""
+    try:
+        res = subprocess.run(
+            ["git", "log", f"-n{max(1, count)}", "--format=%H%x09%h%x09%s"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        commits: list[tuple[str, str, str]] = []
+        for line in res.stdout.splitlines():
+            parts = line.strip().split("\t", 2)
+            if len(parts) == 3:
+                commits.append((parts[0], parts[1], parts[2]))
+        return commits
+    except (subprocess.SubprocessError, OSError):
+        return []
+
+
+def _git_file_content(commit_sha: str, rel_path: str) -> str | None:
+    """Fetch raw file content from git at a specified revision."""
+    try:
+        res = subprocess.run(
+            ["git", "show", f"{commit_sha}:{rel_path}"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        return res.stdout
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+
+def _git_ls_files(commit_sha: str, rel_prefix: str = "") -> list[str]:
+    """List tracked files at a specific revision beneath an optional relative prefix."""
+    cmd = ["git", "ls-tree", "-r", "--name-only", commit_sha]
+    if rel_prefix and rel_prefix != ".":
+        cmd.append(rel_prefix)
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
+        return [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
+    except (subprocess.SubprocessError, OSError):
+        return []
+
+
+def _is_git_candidate(rel_file: str, languages: Sequence[str] | None) -> bool:
+    """Determine if a git-tracked file is an auditable non-vendored source candidate."""
+    parts = Path(rel_file).parts
+    if any(p in VENDORED_DIR_NAMES or p.startswith(".") for p in parts[:-1]):
+        return False
+    suffix = Path(rel_file).suffix
+    return _is_matching_language(suffix, False, languages)
+
+
+def _score_git_py_file(rel_path: str, source: str) -> tuple[ModuleScore | None, list[SmellFinding]]:
+    """Parse and score a single Python module source string at a historical revision."""
+    try:
+        tree = ast.parse(source, filename=rel_path)
+    except SyntaxError:
+        return None, []
+    scores = _module_scores(Path(rel_path), source)
+    mod_score = scores[0] if scores else None
+    findings: list[SmellFinding] = []
+    for detector in PER_FILE_DETECTORS:
+        findings.extend(detector(tree, Path(rel_path)))
+    return mod_score, findings
+
+
+def _score_git_polyglot_file(
+    rel_path: str, source: str, suffix: str
+) -> tuple[ModuleScore, list[SmellFinding]]:
+    """Score a single non-Python polyglot module source string at a historical revision."""
+    lang = POLYGLOT_EXTENSIONS.get(suffix, "unknown")
+    mi, vol, comp = polyglot_module_metrics(source, lang)
+    loc = len([ln for ln in source.splitlines() if ln.strip()])
+    mod_score = ModuleScore(
+        path=rel_path,
+        loc=loc,
+        halstead_volume=vol,
+        max_complexity=comp,
+        maintainability=mi,
+    )
+    findings: list[SmellFinding] = []
+    if comp > MAX_CYCLOMATIC_COMPLEXITY:
+        findings.append(
+            SmellFinding(
+                smell=Smell.HIGH_CYCLOMATIC_COMPLEXITY,
+                file_path=rel_path,
+                line_number=1,
+                subject=Path(rel_path).name,
+                measured=float(comp),
+                threshold=float(MAX_CYCLOMATIC_COMPLEXITY),
+                detail=f"Polyglot cyclomatic complexity {comp}; exceeds threshold {MAX_CYCLOMATIC_COMPLEXITY}",
+            )
+        )
+    return mod_score, findings
+
+
+def _audit_git_source(
+    rel_path: str, source: str, languages: Sequence[str] | None
+) -> tuple[ModuleScore | None, list[SmellFinding]]:
+    """Route source scoring to Python or polyglot analyzer based on file extension."""
+    suffix = Path(rel_path).suffix
+    if suffix == ".py":
+        return _score_git_py_file(rel_path, source)
+    if _is_matching_language(suffix, False, languages):
+        return _score_git_polyglot_file(rel_path, source, suffix)
+    return None, []
+
+
+def _resolve_git_candidates(
+    commit_sha: str,
+    paths: Sequence[Path],
+    repo_root: Path,
+    languages: Sequence[str] | None,
+) -> list[str]:
+    """Resolve target paths into repository-relative files at a specific revision."""
+    rel_targets: list[str] = []
+    for p in paths:
+        try:
+            rel = p.resolve().relative_to(repo_root)
+            rel_targets.append(str(rel))
+        except (ValueError, OSError):
+            rel_targets.append(str(p))
+
+    if not rel_targets or rel_targets == ["."]:
+        all_files = _git_ls_files(commit_sha)
+        return [f for f in all_files if _is_git_candidate(f, languages)]
+
+    matched: list[str] = []
+    for target in rel_targets:
+        files = _git_ls_files(commit_sha, target)
+        matched.extend(f for f in files if _is_git_candidate(f, languages))
+    return sorted(set(matched))
+
+
+def _collect_rev_modules_and_findings(
+    commit_sha: str,
+    target_files: Sequence[str],
+    languages: Sequence[str] | None,
+) -> tuple[list[ModuleScore], list[SmellFinding]]:
+    """Collect scored modules and findings across target files at one commit."""
+    modules: list[ModuleScore] = []
+    findings: list[SmellFinding] = []
+    for rel_file in target_files:
+        content = _git_file_content(commit_sha, rel_file)
+        if content is None:
+            continue
+        mod, file_findings = _audit_git_source(rel_file, content, languages)
+        if mod is not None:
+            modules.append(mod)
+        findings.extend(file_findings)
+    return modules, findings
+
+
+def _count_finding_severities(findings: Sequence[SmellFinding]) -> tuple[int, int]:
+    """Tally gating and advisory findings."""
+    gating = 0
+    advisory = 0
+    for f in findings:
+        if f.smell in ADVISORY_SMELLS:
+            advisory += 1
+        else:
+            gating += 1
+    return gating, advisory
+
+
+def _compute_rev_deltas(
+    mean_mi: float, tot_loc: int, total_f: int, prev: RevisionScore | None
+) -> tuple[float, int, int]:
+    """Calculate metric deltas relative to previous revision."""
+    if prev is None:
+        return 0.0, 0, 0
+    return (
+        round(mean_mi - prev.mean_maintainability, 1),
+        tot_loc - prev.total_loc,
+        total_f - (prev.gating_findings + prev.advisory_findings),
+    )
+
+
+def _analyze_git_revision(
+    commit_info: tuple[str, str, str],
+    target_files: Sequence[str],
+    languages: Sequence[str] | None,
+    prev_rev: RevisionScore | None,
+) -> RevisionScore:
+    """Analyze all matching files at a single git revision and compute metric deltas."""
+    commit_sha, short_sha, subject = commit_info
+    modules, findings = _collect_rev_modules_and_findings(commit_sha, target_files, languages)
+    scores = [m.maintainability for m in modules]
+    mean_mi = round(sum(scores) / len(scores), 1) if scores else 0.0
+    tot_loc = sum(m.loc for m in modules)
+    gating, advisory = _count_finding_severities(findings)
+    delta_mi, delta_loc, delta_f = _compute_rev_deltas(mean_mi, tot_loc, gating + advisory, prev_rev)
+
+    return RevisionScore(
+        commit=commit_sha,
+        short_sha=short_sha,
+        subject=subject,
+        mean_maintainability=mean_mi,
+        total_loc=tot_loc,
+        module_count=len(modules),
+        gating_findings=gating,
+        advisory_findings=advisory,
+        delta_maintainability=delta_mi,
+        delta_loc=delta_loc,
+        delta_findings=delta_f,
+    )
+
+
+def compute_trend(
+    paths: Sequence[Path],
+    revisions_count: int = 5,
+    languages: Sequence[str] | None = None,
+) -> TrendReport:
+    """Compute metric trajectory across recent git revisions."""
+    root = _git_repo_root()
+    if root is None:
+        return TrendReport()
+
+    raw_commits = _git_rev_list(revisions_count)
+    if not raw_commits:
+        return TrendReport()
+
+    # Step chronologically forward (oldest -> newest) to calculate forward deltas
+    commits = list(reversed(raw_commits))
+    scores: list[RevisionScore] = []
+    prev: RevisionScore | None = None
+    for full_sha, short_sha, subj in commits:
+        candidates = _resolve_git_candidates(full_sha, paths, root, languages)
+        rev_score = _analyze_git_revision((full_sha, short_sha, subj), candidates, languages, prev)
+        scores.append(rev_score)
+        prev = rev_score
+
+    return TrendReport(revisions=scores)
+
+
+def render_trend(report: TrendReport) -> list[str]:
+    """Render historical metric trajectory table and trajectory summary."""
+    lines = [
+        "=" * 86,
+        "📈 CODE HEALTH TREND TRAJECTORY",
+        "=" * 86,
+        f"{'Commit':<9} {'Subject':<36} {'Mods':>5} {'LOC':>7} {'Mean MI':>12} {'Gating':>7} {'Adv':>5}",
+        "-" * 86,
+    ]
+    for rev in report.revisions:
+        mi_str = (
+            f"{rev.mean_maintainability:.1f} ({rev.delta_maintainability:+0.1f})"
+            if rev.delta_maintainability
+            else f"{rev.mean_maintainability:.1f}"
+        )
+        subj = rev.subject[:33] + "..." if len(rev.subject) > 36 else rev.subject
+        lines.append(
+            f"{rev.short_sha:<9} {subj:<36} {rev.module_count:>5} {rev.total_loc:>7} {mi_str:>12} {rev.gating_findings:>7} {rev.advisory_findings:>5}"
+        )
+    lines.append("=" * 86)
+    if report.revisions:
+        first = report.revisions[0]
+        last = report.revisions[-1]
+        lines.append(
+            f"Trajectory ({len(report.revisions)} revs): "
+            f"MI {first.mean_maintainability:.1f} -> {last.mean_maintainability:.1f} ({last.mean_maintainability - first.mean_maintainability:+0.1f}), "
+            f"LOC {first.total_loc} -> {last.total_loc} ({last.total_loc - first.total_loc:+d})"
+        )
+        lines.append("=" * 86)
+    return lines
+
+
+def _render_trend_json(report: TrendReport) -> str:
+    """Serialize the trend report into JSON for automated dashboards."""
+    return json.dumps(
+        {
+            "trend": [
+                {
+                    "commit": r.commit,
+                    "short_sha": r.short_sha,
+                    "subject": r.subject,
+                    "mean_maintainability": r.mean_maintainability,
+                    "total_loc": r.total_loc,
+                    "module_count": r.module_count,
+                    "gating_findings": r.gating_findings,
+                    "advisory_findings": r.advisory_findings,
+                    "delta_maintainability": r.delta_maintainability,
+                    "delta_loc": r.delta_loc,
+                    "delta_findings": r.delta_findings,
+                }
+                for r in report.revisions
+            ]
+        },
+        indent=2,
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct the CLI parser."""
     parser = argparse.ArgumentParser(description="Deterministic code smell quantifier")
     parser.add_argument("paths", nargs="*", default=[], help="Files or directories to analyze")
     parser.add_argument(
-        "--fail-on", choices=("none", "gating", "any"), default="gating",
+        "--fail-on",
+        choices=("none", "gating", "any"),
+        default="gating",
         help="Which findings cause a non-zero exit (default: gating)",
     )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable output")
     parser.add_argument(
-        "--languages", "-L", default=None,
+        "--languages",
+        "-L",
+        default=None,
         help="Comma-separated languages or 'all' to analyze (default: python)",
+    )
+    parser.add_argument(
+        "--trend",
+        nargs="?",
+        const=5,
+        type=int,
+        default=None,
+        metavar="REVISIONS",
+        help="Step back through N git revisions (default: 5) to compute metric trajectory",
     )
     return parser
 
@@ -1094,12 +1468,15 @@ def _resolve_targets(raw_paths: Sequence[str]) -> tuple[list[Path], list[Path]]:
 
 def _render_json(report: SmellReport) -> str:
     """Serialize the report for trending across runs."""
-    return json.dumps({
-        "mean_maintainability": report.mean_maintainability,
-        "counts": report.counts(),
-        "modules": [vars(m) for m in report.modules],
-        "findings": [vars(f) | {"smell": f.smell.value} for f in report.findings],
-    }, indent=2)
+    return json.dumps(
+        {
+            "mean_maintainability": report.mean_maintainability,
+            "counts": report.counts(),
+            "modules": [vars(m) for m in report.modules],
+            "findings": [vars(f) | {"smell": f.smell.value} for f in report.findings],
+        },
+        indent=2,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1107,6 +1484,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(list(argv[1:]) if argv is not None else None)
     present, missing = _resolve_targets(args.paths)
     langs = [lang.strip() for lang in args.languages.split(",")] if args.languages else None
+
+    if args.trend is not None:
+        trend_report = compute_trend(present, revisions_count=args.trend, languages=langs)
+        print(_render_trend_json(trend_report) if args.json else "\n".join(render_trend(trend_report)))
+        return 1 if missing else 0
+
     report = analyze(present, languages=langs)
     print(_render_json(report) if args.json else "\n".join(render(report)))
 

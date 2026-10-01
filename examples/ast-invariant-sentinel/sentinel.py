@@ -77,7 +77,7 @@ IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 # never waivable: a metric you can opt out of is not an invariant.
 WAIVABLE_INVARIANTS = frozenset({"ZeroTrustSanitization"})
 WAIVER_PRAGMA_RE = re.compile(
-    r"^#\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
+    r"^(?:#|//|\*)\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
 )
 WAIVER_HEADER_LINE_LIMIT = 15
 MIN_WAIVER_JUSTIFICATION_CHARS = 12
@@ -100,6 +100,8 @@ class AuditReport:
     """Summary of sentinel audit execution."""
 
     files_checked: int = 0
+    py_files_checked: int = 0
+    polyglot_files_checked: int = 0
     violations: list[Violation] = field(default_factory=list)
 
     @property
@@ -108,14 +110,16 @@ class AuditReport:
         return len(self.violations) == 0
 
 
-ALL_INVARIANT_RULES: Final[frozenset[str]] = frozenset({
-    "CyclomaticComplexity",
-    "NestingDepth",
-    "ZeroTrustSanitization",
-    "SyntaxIntegrity",
-    "TargetIntegrity",
-    "WaiverIntegrity",
-})
+ALL_INVARIANT_RULES: Final[frozenset[str]] = frozenset(
+    {
+        "CyclomaticComplexity",
+        "NestingDepth",
+        "ZeroTrustSanitization",
+        "SyntaxIntegrity",
+        "TargetIntegrity",
+        "WaiverIntegrity",
+    }
+)
 
 RULE_ALIASES: Final[dict[str, str]] = {
     "cyclomaticcomplexity": "CyclomaticComplexity",
@@ -193,24 +197,28 @@ PRESETS: Final[dict[str, RulePreset]] = {
         description="Zero-trust egress and sanitization audit only; complexity/nesting ignored",
         max_complexity=999,
         max_depth=99,
-        active_rules=frozenset({
-            "ZeroTrustSanitization",
-            "SyntaxIntegrity",
-            "TargetIntegrity",
-            "WaiverIntegrity",
-        }),
+        active_rules=frozenset(
+            {
+                "ZeroTrustSanitization",
+                "SyntaxIntegrity",
+                "TargetIntegrity",
+                "WaiverIntegrity",
+            }
+        ),
     ),
     "structural_only": RulePreset(
         name="structural_only",
         description="Structural AST complexity and nesting depth audit only; sanitization ignored",
         max_complexity=10,
         max_depth=5,
-        active_rules=frozenset({
-            "CyclomaticComplexity",
-            "NestingDepth",
-            "SyntaxIntegrity",
-            "TargetIntegrity",
-        }),
+        active_rules=frozenset(
+            {
+                "CyclomaticComplexity",
+                "NestingDepth",
+                "SyntaxIntegrity",
+                "TargetIntegrity",
+            }
+        ),
     ),
 }
 
@@ -367,7 +375,11 @@ def render_presets_table() -> str:
         "|---|---|---|---|---|",
     ]
     for preset in PRESETS.values():
-        rule_desc = f"{len(preset.active_rules)} rules" if preset.active_rules == ALL_INVARIANT_RULES else ", ".join(sorted(preset.active_rules))
+        rule_desc = (
+            f"{len(preset.active_rules)} rules"
+            if preset.active_rules == ALL_INVARIANT_RULES
+            else ", ".join(sorted(preset.active_rules))
+        )
         lines.append(
             f"| `{preset.name}` | $\\le {preset.max_complexity}$ | $\\le {preset.max_depth}$ | {rule_desc} | {preset.description} |"
         )
@@ -695,11 +707,17 @@ def _header_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
 
 def _iter_header_comments(source: str) -> list[tuple[int, str]]:
     """Return real comment tokens within the module header, ignoring string literals."""
-    return [
-        (token.start[0], token.string)
-        for token in _header_tokens(source)
-        if token.type == tokenize.COMMENT
+    tokens = [
+        (token.start[0], token.string) for token in _header_tokens(source) if token.type == tokenize.COMMENT
     ]
+    if tokens:
+        return tokens
+    comments: list[tuple[int, str]] = []
+    for index, line in enumerate(source.splitlines()[:WAIVER_HEADER_LINE_LIMIT], 1):
+        stripped = line.strip()
+        if stripped.startswith(("//", "#", "/*", "*")):
+            comments.append((index, stripped))
+    return comments
 
 
 def _waiver_defect(match: re.Match[str] | None) -> str | None:
@@ -710,7 +728,9 @@ def _waiver_defect(match: re.Match[str] | None) -> str | None:
     if invariant not in WAIVABLE_INVARIANTS:
         return f"Invariant '{invariant}' is not waivable. Waivable: {', '.join(sorted(WAIVABLE_INVARIANTS))}."
     if len(match.group("reason").strip()) < MIN_WAIVER_JUSTIFICATION_CHARS:
-        return f"Waiver for '{invariant}' needs >= {MIN_WAIVER_JUSTIFICATION_CHARS} characters of justification."
+        return (
+            f"Waiver for '{invariant}' needs >= {MIN_WAIVER_JUSTIFICATION_CHARS} characters of justification."
+        )
     return None
 
 
@@ -741,14 +761,20 @@ def _late_waiver_violations(file_path: Path, source: str, waived: set[str]) -> l
     code rather than about the waiver. Costing an hour once is enough; say it plainly.
     """
     late: list[Violation] = []
-    for index, line in enumerate(source.splitlines()[WAIVER_HEADER_LINE_LIMIT:], WAIVER_HEADER_LINE_LIMIT + 1):
+    for index, line in enumerate(
+        source.splitlines()[WAIVER_HEADER_LINE_LIMIT:], WAIVER_HEADER_LINE_LIMIT + 1
+    ):
         match = WAIVER_PRAGMA_RE.match(line.strip())
         if match and match.group(1) not in waived:
-            late.append(Violation(
-                str(file_path), index, "WaiverIntegrity",
-                f"Waiver for '{match.group(1)}' is below line {WAIVER_HEADER_LINE_LIMIT} and has no "
-                "effect. Move it into the module header.",
-            ))
+            late.append(
+                Violation(
+                    str(file_path),
+                    index,
+                    "WaiverIntegrity",
+                    f"Waiver for '{match.group(1)}' is below line {WAIVER_HEADER_LINE_LIMIT} and has no "
+                    "effect. Move it into the module header.",
+                )
+            )
     return late
 
 
@@ -796,18 +822,222 @@ def _filter_active_violations(
     return [v for v in combined if config.is_rule_active(v.invariant)]
 
 
+POLYGLOT_LANGUAGE_EXTENSIONS: Final[dict[str, str]] = {
+    ".rs": "rust",
+    ".go": "go",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+}
+
+_POLYGLOT_FN_RE: Final[re.Pattern[str]] = re.compile(
+    r"""
+    (?:
+        (?:func|fn)\s+(?:\([^)]+\)\s+)?([A-Za-z0-9_]+)\s*(?:<[^>]+>)?\s*\([^)]*\)[^{]*\{ |
+        (?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*(?:<[^>]+>)?\s*\([^)]*\)[^{]*\{ |
+        (?:const|let|var)\s+([A-Za-z0-9_]+)\s*=\s*(?:async\s+)?\([^)]*\)\s*(?::\s*[^=]+)?=>\s*\{ |
+        (?:function\s+)?([A-Za-z0-9_-]+)\s*(?:\(\)\s*)?\{
+    )
+    """,
+    re.VERBOSE,
+)
+
+_POLYGLOT_DECISION_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(if|elif|else\s+if|for|while|case|catch|match|select)\b|&&|\|\||\?"
+)
+
+
+def _extract_brace_body(content: str, brace_pos: int) -> tuple[str, int, int]:
+    """Extract code block within matching braces, returning (body, end_pos, max_nesting)."""
+    depth = 1
+    curr = brace_pos + 1
+    max_nesting = 1
+    while curr < len(content) and depth > 0:
+        ch = content[curr]
+        if ch == "{":
+            depth += 1
+            if depth > max_nesting:
+                max_nesting = depth
+        elif ch == "}":
+            depth -= 1
+        curr += 1
+    return content[brace_pos:curr], curr, max_nesting
+
+
+def _audit_polyglot_function(
+    file_path: str,
+    fn_name: str,
+    fn_body: str,
+    nesting_meta: tuple[int, int],
+    config: SentinelConfig,
+) -> list[Violation]:
+    """Audit single polyglot function block for cyclomatic complexity and nesting depth."""
+    lineno, max_nesting = nesting_meta
+    violations: list[Violation] = []
+    decisions = len(_POLYGLOT_DECISION_RE.findall(fn_body))
+    complexity = 1 + decisions
+    depth = max(1, max_nesting - 1)
+
+    if config.is_rule_active("CyclomaticComplexity") and complexity > config.max_complexity:
+        violations.append(
+            Violation(
+                file_path=file_path,
+                line_number=lineno,
+                invariant="CyclomaticComplexity",
+                message=f"Function '{fn_name}' has cyclomatic complexity of {complexity} (limit: {config.max_complexity}).",
+                metric_value=complexity,
+                threshold=config.max_complexity,
+            )
+        )
+    if config.is_rule_active("NestingDepth") and depth > config.max_depth:
+        violations.append(
+            Violation(
+                file_path=file_path,
+                line_number=lineno,
+                invariant="NestingDepth",
+                message=f"Function '{fn_name}' has nesting depth of {depth} (limit: {config.max_depth}).",
+                metric_value=depth,
+                threshold=config.max_depth,
+            )
+        )
+    return violations
+
+
+def _audit_polyglot_functions(
+    file_path: str, source: str, config: SentinelConfig
+) -> tuple[list[Violation], int]:
+    """Audit declared functions in a polyglot source file."""
+    violations: list[Violation] = []
+    pos = 0
+    fn_found = 0
+    while pos < len(source):
+        match = _POLYGLOT_FN_RE.search(source, pos)
+        if not match:
+            break
+        fn_found += 1
+        fn_name = next(g for g in match.groups() if g is not None)
+        brace_start = match.end() - 1
+        fn_body, end_pos, max_nesting = _extract_brace_body(source, brace_start)
+        lineno = source[: match.start()].count("\n") + 1
+        violations.extend(_audit_polyglot_function(file_path, fn_name, fn_body, (lineno, max_nesting), config))
+        pos = end_pos
+    return violations, fn_found
+
+
+def _audit_polyglot_module_fallback(file_path: str, source: str, config: SentinelConfig) -> list[Violation]:
+    """Audit top-level script code when no declared functions are found."""
+    violations: list[Violation] = []
+    decisions = len(_POLYGLOT_DECISION_RE.findall(source))
+    complexity = 1 + decisions
+    has_brace = "{" in source
+    _, _, max_nesting = _extract_brace_body(source, 0) if has_brace else ("", 0, 1)
+    depth = max(1, max_nesting - 1) if has_brace else 1
+
+    if config.is_rule_active("CyclomaticComplexity") and complexity > config.max_complexity:
+        violations.append(
+            Violation(
+                file_path=file_path,
+                line_number=1,
+                invariant="CyclomaticComplexity",
+                message=f"Module '{Path(file_path).name}' has cyclomatic complexity of {complexity} (limit: {config.max_complexity}).",
+                metric_value=complexity,
+                threshold=config.max_complexity,
+            )
+        )
+    if config.is_rule_active("NestingDepth") and depth > config.max_depth:
+        violations.append(
+            Violation(
+                file_path=file_path,
+                line_number=1,
+                invariant="NestingDepth",
+                message=f"Module '{Path(file_path).name}' has nesting depth of {depth} (limit: {config.max_depth}).",
+                metric_value=depth,
+                threshold=config.max_depth,
+            )
+        )
+    return violations
+
+
+def _audit_polyglot_complexity(file_path: str, source: str, config: SentinelConfig) -> list[Violation]:
+    """Audit cyclomatic complexity and nesting depth across polyglot source."""
+    fn_violations, fn_count = _audit_polyglot_functions(file_path, source, config)
+    if fn_count > 0:
+        return fn_violations
+    return _audit_polyglot_module_fallback(file_path, source, config)
+
+
+def _audit_polyglot_sanitization(file_path: str, source: str) -> list[Violation]:
+    """Scan polyglot source lines for private IP addresses and disallowed mock subdomains."""
+    violations: list[Violation] = []
+    for line_number, line in enumerate(source.splitlines(), 1):
+        if line.strip().startswith(("// sentinel:", "# sentinel:")):
+            continue
+        for match in IPV4_PATTERN.findall(line):
+            if _is_prohibited_ip(match):
+                violations.append(
+                    Violation(
+                        file_path=file_path,
+                        line_number=line_number,
+                        invariant="ZeroTrustSanitization",
+                        message=f"Private host address '{match}' detected. Use RFC 5737 or loopback.",
+                    )
+                )
+        hostname = _extract_disallowed_subdomain(line)
+        if hostname:
+            violations.append(
+                Violation(
+                    file_path=file_path,
+                    line_number=line_number,
+                    invariant="ZeroTrustSanitization",
+                    message=f"Subdomain '{hostname}' detected. Standardize mock hostnames to '{CANONICAL_MOCK_DOMAIN}' with no subdomains.",
+                )
+            )
+    return violations
+
+
+def _audit_polyglot_path(file_path: Path, config: SentinelConfig) -> list[Violation]:
+    """Audit a non-Python polyglot source file."""
+    try:
+        source = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as err:
+        if config.is_rule_active("SyntaxIntegrity"):
+            return [_syntax_violation(file_path, err)]
+        return []
+
+    detected: list[Violation] = []
+    if config.is_rule_active("ZeroTrustSanitization"):
+        detected.extend(_audit_polyglot_sanitization(str(file_path), source))
+    detected.extend(_audit_polyglot_complexity(str(file_path), source, config))
+    waivers = _scan_waivers(file_path, source)
+    return _filter_active_violations(detected, waivers, config)
+
+
 def audit_file(
     file_path: Path,
     max_complexity: int = 10,
     max_depth: int = 5,
     config: SentinelConfig | None = None,
 ) -> list[Violation]:
-    """Audit a single Python source file for invariant violations."""
+    """Audit a single Python or polyglot source file for invariant violations."""
     active_config = config or SentinelConfig(
         max_complexity=max_complexity,
         max_depth=max_depth,
         active_rules=ALL_INVARIANT_RULES,
     )
+    if file_path.suffix in POLYGLOT_LANGUAGE_EXTENSIONS:
+        return _audit_polyglot_path(file_path, active_config)
+
     source, tree, parse_err = _parse_source_tree(file_path)
     if parse_err is not None or tree is None:
         if active_config.is_rule_active("SyntaxIntegrity") and parse_err:
@@ -824,9 +1054,17 @@ def audit_source(
     file_path: str = "<source>",
     config: SentinelConfig | None = None,
 ) -> list[Violation]:
-    """Audit Python source code directly for invariant violations."""
+    """Audit Python or polyglot source code directly for invariant violations."""
     active_config = config or SentinelConfig(active_rules=ALL_INVARIANT_RULES)
     path_obj = Path(file_path)
+    if path_obj.suffix in POLYGLOT_LANGUAGE_EXTENSIONS:
+        detected: list[Violation] = []
+        if active_config.is_rule_active("ZeroTrustSanitization"):
+            detected.extend(_audit_polyglot_sanitization(file_path, source))
+        detected.extend(_audit_polyglot_complexity(file_path, source, active_config))
+        waivers = _scan_waivers(path_obj, source)
+        return _filter_active_violations(detected, waivers, active_config)
+
     try:
         tree = ast.parse(source, filename=file_path)
     except (SyntaxError, UnicodeDecodeError) as err:
@@ -850,9 +1088,7 @@ VENDORED_DIR_SUFFIXES: tuple[str, ...] = (".egg-info",)
 
 def _is_repository_dir(name: str) -> bool:
     """Report whether a directory belongs to this repository rather than to a dependency."""
-    return not (
-        name.startswith(".") or name in VENDORED_DIR_NAMES or name.endswith(VENDORED_DIR_SUFFIXES)
-    )
+    return not (name.startswith(".") or name in VENDORED_DIR_NAMES or name.endswith(VENDORED_DIR_SUFFIXES))
 
 
 def _py_files_in_dir(parent: str, files: Sequence[str]) -> Iterator[Path]:
@@ -880,6 +1116,25 @@ def _collect_py_targets(root_path: Path) -> list[Path]:
     return sorted(_walk_repository_py_files(root_path))
 
 
+def _collect_polyglot_targets(root_path: Path) -> list[Path]:
+    """Expand one target into repository polyglot files beneath it."""
+    if root_path.is_file():
+        return [root_path] if root_path.suffix in POLYGLOT_LANGUAGE_EXTENSIONS else []
+    found: list[Path] = []
+    for parent, dirs, files in os.walk(root_path):
+        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
+        for name in files:
+            p = Path(parent) / name
+            if p.suffix in POLYGLOT_LANGUAGE_EXTENSIONS:
+                found.append(p)
+    return sorted(found)
+
+
+def _collect_audit_targets(root_path: Path) -> list[Path]:
+    """Expand one target into all auditable Python and polyglot files."""
+    return _collect_py_targets(root_path) + _collect_polyglot_targets(root_path)
+
+
 def _dedupe_key(path: Path) -> Path:
     """Return a canonical identity for path, tolerating unresolvable symlinks."""
     try:
@@ -890,10 +1145,10 @@ def _dedupe_key(path: Path) -> Path:
 
 def _expand_targets(paths: Sequence[Path]) -> list[Path]:
     """Expand every file or directory target into a deduplicated, order-preserving file list."""
-    candidates = itertools.chain.from_iterable(_collect_py_targets(path) for path in paths)
+    candidates = itertools.chain.from_iterable(_collect_audit_targets(path) for path in paths)
     unique: dict[Path, Path] = {}
-    for py_file in candidates:
-        unique.setdefault(_dedupe_key(py_file), py_file)
+    for target_file in candidates:
+        unique.setdefault(_dedupe_key(target_file), target_file)
     return list(unique.values())
 
 
@@ -928,21 +1183,19 @@ def audit_targets(
         report.violations.extend(_find_missing_targets(paths))
     targets = _expand_targets([path for path in paths if path.exists()])
     report.files_checked = len(targets)
-    for py_file in targets:
-        report.violations.extend(audit_file(py_file, config=active_config))
+    report.py_files_checked = sum(1 for p in targets if p.suffix == ".py")
+    report.polyglot_files_checked = len(targets) - report.py_files_checked
+    for target_file in targets:
+        report.violations.extend(audit_file(target_file, config=active_config))
     return report
 
 
-_SUBDOMAIN_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"(https?://)[a-zA-Z0-9_\-\.]+\.example\.com"
-)
+_SUBDOMAIN_PATTERN: Final[re.Pattern[str]] = re.compile(r"(https?://)[a-zA-Z0-9_\-\.]+\.example\.com")
 
 
 def _collect_prohibited_ips(line: str) -> list[str]:
     """Extract prohibited IPv4 addresses found in a line."""
-    return [
-        m.group(0) for m in IPV4_PATTERN.finditer(line) if _is_prohibited_ip(m.group(0))
-    ]
+    return [m.group(0) for m in IPV4_PATTERN.finditer(line) if _is_prohibited_ip(m.group(0))]
 
 
 def _fix_ip_in_line(line: str) -> tuple[str, int]:
@@ -1028,9 +1281,7 @@ def auto_fix_file(file_path: Path, config: SentinelConfig | None = None) -> int:
     return count
 
 
-def auto_fix_targets(
-    paths: Sequence[Path], config: SentinelConfig | None = None
-) -> int:
+def auto_fix_targets(paths: Sequence[Path], config: SentinelConfig | None = None) -> int:
     """Expand targets and apply auto-fixes across all Python source files."""
     targets = _expand_targets([p for p in paths if p.exists()])
     return sum(auto_fix_file(p, config=config) for p in targets)
@@ -1138,11 +1389,7 @@ def _handle_code_action(
         "title": f"Fix {count} invariant violation(s) (ast-invariant-sentinel)",
         "kind": "quickfix",
         "isPreferred": True,
-        "edit": {
-            "changes": {
-                uri: [{"range": full_range, "newText": fixed}]
-            }
-        },
+        "edit": {"changes": {uri: [{"range": full_range, "newText": fixed}]}},
     }
     return {"jsonrpc": "2.0", "id": req_id, "result": [action]}
 
@@ -1299,11 +1546,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Selectable rule preset (standard, strict, relaxed, pedantic, security_only, structural_only)",
     )
     parser.add_argument("--select", "-s", help="Comma-separated rule names or codes to activate exclusively")
-    parser.add_argument("--extend-select", help="Comma-separated rule names or codes to activate alongside preset")
+    parser.add_argument(
+        "--extend-select", help="Comma-separated rule names or codes to activate alongside preset"
+    )
     parser.add_argument("--ignore", "-i", help="Comma-separated rule names or codes to ignore")
-    parser.add_argument("--max-complexity", "-C", type=int, help="Override maximum cyclomatic complexity ceiling")
+    parser.add_argument(
+        "--max-complexity", "-C", type=int, help="Override maximum cyclomatic complexity ceiling"
+    )
     parser.add_argument("--max-depth", "-D", type=int, help="Override maximum nesting depth ceiling")
-    parser.add_argument("--config", "-c", type=Path, help="Path to TOML configuration file (e.g. pyproject.toml)")
+    parser.add_argument(
+        "--config", "-c", type=Path, help="Path to TOML configuration file (e.g. pyproject.toml)"
+    )
     parser.add_argument("--list-presets", action="store_true", help="List all available presets and exit")
     parser.add_argument(
         "--fix",
@@ -1371,7 +1624,12 @@ def _run_cli_audit(target_paths: list[Path], config: SentinelConfig) -> int:
     scanned = ", ".join(f"'{path}'" for path in target_paths)
     print(f"🛡️  AST Invariant Sentinel [preset={config.preset_name}]: Scanning {scanned}...")
     report = audit_targets(target_paths, config=config)
-    print(f"Checked {report.files_checked} Python files.")
+    if report.polyglot_files_checked == 0:
+        print(f"Checked {report.files_checked} Python files.")
+    else:
+        print(
+            f"Checked {report.files_checked} files ({report.py_files_checked} Python, {report.polyglot_files_checked} polyglot)."
+        )
     if report.is_clean:
         print("✅ All architectural invariants PASSED! Zero violations.")
         return 0
