@@ -81,6 +81,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 7. [**Chapter 7: Big Brains & Fast Hands**](./07-smart-brains-and-fast-hands.md)  
    *Pairing Big and Small Models* — How to orchestrate frontier models, cheap fast models, and automated scripts without breaking the bank.
 
+8. [**Chapter 8: Fast Checks Beat Slow Tests**](./08-fast-checks-beat-slow-tests.md)  
+   *The Verification Speed Trap* — Why waiting two minutes for tests paralyzes AI coders, and how layered sub-second checks keep them sharp.
+
 ---
 
 ## 🚀 Want to Dive Deeper?
@@ -89,5 +92,5 @@ When you are ready to see how these fundamentals translate into mathematical pro
 
 - [**The Disciplined Agentic Manifesto**](../MANIFESTO.md): The formal engineering thesis behind agentic software development.
 - [**Taxonomy of Agentic Software Engineering**](../TAXONOMY.md): The full architectural classification of agent swarms, memory, and gates.
-- [**Consolidated Field Observations**](../../observations/README.md): 70 deep empirical case studies drawn from real production projects.
+- [**Consolidated Field Observations**](../../observations/README.md): 71 deep empirical case studies drawn from real production projects.
 - [**Architectural Patterns**](../../README.md#reusable-engineering-patterns): Reusable blueprints and operational playbooks for autonomous agents.
