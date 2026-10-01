@@ -332,6 +332,11 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
    - Introduces `EditSpan`, `apply_edit_span`, and `PolyglotCSTParser.incremental_reparse` to re-extract symbols and recalculate metrics exclusively across edited regions while preserving unchanged AST nodes and automatically shifting line offsets for downstream symbols.
    - Synchronizes `docs/landscape/SURVEY.md` with the zero-gap milestone and authors Chapter 10 of The Dummy's Guide to Agentic Engineering ("The Sovereign Human Core: When to Steer, When to Step Back, and How to Hold the Steering Wheel").
    - Accompanied by expanded unit test suite in `examples/polyglot-cst-parser/test_cst_parser.py` (13 passed in 0.05s) certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$, $\le 4$ params).
+- [x] **Deliverable #2037: Verification Pyramid Auditor & Test Horizon Scaling Oracle** (`tools/verification_pyramid_auditor.py`, `tests/test_verification_pyramid_auditor.py`, `docs/TAXONOMY.md`):
+   - Audits test suites and validation workflows for verification horizon health, latency scaling risks, assertion density sprawl (`VER001`), uncontained subprocess invocations (`VER002`), shared state contention (`VER003`), monolithic cold start file sizing (`VER004`), and latency cliff traps (`VER005`).
+   - Classifies test targets against the 4-Tier Verification Pyramid (Layer 0 In-Memory AST, Layer 1 Focused Slice, Layer 2 Pre-Commit Hooks, Layer 3 Gated Remote Matrix CI).
+   - Emits Verification Health Score ($VHS \in [0, 100]$), Agent Friction Index ($VFI$), human-readable Markdown summaries, OASIS SARIF 2.1.0 telemetry, and JSON.
+   - Accompanied by Observation 22 (`observations/devops-cli/22-the-verification-horizon-and-validation-latency-cliffs.md`), Pattern (`patterns/tiered-verification-pyramid-and-sub-second-oracles.md`), Chapter 8 of The Dummy's Guide (`docs/dummysguide/08-fast-checks-beat-slow-tests.md`), enriched taxonomy in `docs/TAXONOMY.md`, and comprehensive 13-test unit suite in `tests/test_verification_pyramid_auditor.py` with 98% coverage certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, $\le 4$ params).
 
 ---
 

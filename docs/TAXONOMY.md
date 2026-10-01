@@ -95,6 +95,34 @@ flowchart LR
   - **Indentation Depth**: $\le 5$ levels (<6 tabs/spaces blocks).
 - Rejects procedural bloat automatically.
 
+### 3.5 The 4-Tier Verification Pyramid Architecture
+As codebases scale past hundreds of tests, monolithic test execution latency balloons from $500\text{ms} \to 45\text{s}+$, triggering the Verification Horizon Latency Cliff where agent single-turn convergence collapses from $94.7\% \to 18.2\%$. Disciplined systems decouple validation depth from iteration cadence via four stratified tiers:
+
+```mermaid
+flowchart TD
+    subgraph Pyramid ["The 4-Tier Verification Pyramid"]
+        L3["Layer 3: Gated Remote Matrix CI (1m - 5m)<br/>Multi-runtime matrix, CodeQL, security audit"]
+        L2["Layer 2: Local Pre-Commit Hooks (2s - 5s)<br/>Docs validator, smell quantifier, fuzz replay"]
+        L1["Layer 1: Focused Slice Oracles (< 500ms)<br/>Targeted pytest -k, in-memory mocks, tuple equality"]
+        L0["Layer 0: In-Memory AST Sentinel (< 50ms)<br/>Cyclomatic M<=10, depth<=5, sanitization"]
+    end
+
+    Edit["Agent Synthesizes Code Edit"] --> L0
+    L0 -->|Pass| L1
+    L1 -->|Iterate / Pass| L2
+    L2 -->|Pre-Push Pass| L3
+```
+
+- **Layer 0: In-Memory AST Sentinel ($\le 50\text{ms}$)**: Sub-50ms static AST verification catching monster functions ($M > 10$), deep nesting ($> 5$), and secret/IP leaks before test invocation.
+- **Layer 1: Focused Slice Oracle ($\le 500\text{ms}$)**: Sub-second execution of touched test modules or functions in isolated environments, delivering precise counterexamples.
+- **Layer 2: Local Pre-Commit Hooks ($\le 5.0\text{s}$)**: Pre-commit git hooks validating documentation integrity, code smells, and regression replay.
+- **Layer 3: Gated Remote Matrix CI ($1\text{m} - 5\text{m}$)**: Full repository CI matrix across multiple runtime versions and environments.
+
+### 3.6 Structural Tuple Consolidation in Test Suites
+- Under Python AST semantics, every `assert expr` statement compiles to an implicit conditional branch (`if not (expr): raise AssertionError`), adding $+1$ to the test function's McCabe cyclomatic complexity $M$.
+- Linear assertion sprawl causes comprehensive test functions to breach architectural complexity limits ($M \le 10$).
+- **Structural Tuple Consolidation** (`assert (actual_a, actual_b) == (expected_a, expected_b)`) and collection predicates (`assert all(...)`) compress multi-property checks down to $M=1$ while fully preserving pytest diff diagnostics.
+
 ---
 
 ## 4. Failure Modes & Cognitive Antipatterns

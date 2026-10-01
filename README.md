@@ -493,6 +493,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── test_benchmark_runner.py       # Automated benchmark certification tests
 │
 ├── tools/                             # Autonomous project management tooling
+│   ├── verification_pyramid_auditor.py # Verification pyramid auditor, latency scaling & assertion sprawl oracle
 │   ├── instruction_governor.py        # JIT instruction governor, rule attribution & counterfactual ablation
 │   ├── kinetic_probe.py               # Kinetic counterexample probe engine & invariant leash registry
 │   ├── code_memory.py                 # Semantic graph AST code memory, symbol indexer & blast radius oracle
@@ -541,6 +542,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_verification_pyramid_auditor.py # Unit tests for verification pyramid auditor & assertion density
     ├── test_instruction_governor.py   # Unit tests for JIT instruction governor & ablation engine
     ├── test_milestone_governor.py     # Unit tests for milestone scope governor and air-lock oracle
     ├── test_kinetic_probe.py          # Unit tests for kinetic probe execution & invariant leashes
