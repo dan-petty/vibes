@@ -3,6 +3,7 @@
 > **Pattern Class**: Verification Architecture / Agent Lifecycle Governance  
 > **Problem**: Monolithic test runs in expanding codebases stall autonomous agents with high latency ($> 30\text{s}$), triggering context decay, tool execution timeouts, and oscillatory repair death spirals.  
 > **Solution**: Implement a 4-tier verification hierarchy separating instant mechanical AST sentinels (<50ms) and focused slice assertions (<500ms) from local pre-commit hooks (<5s) and remote gated CI, paired with structural tuple equality assertions.  
+> **Reference Implementation**: [`tools/verification_pyramid_auditor.py`](../tools/verification_pyramid_auditor.py)  
 > **TLDR**: Shield autonomous agents from slow test suites by providing layered, sub-second mechanical oracles that return precise counterexamples.  
 > **ELI:7b**: Don't make the AI wait for the entire school exam every time it fixes a typo; give it a 1-second flashcard check for fast progress.  
 
