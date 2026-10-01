@@ -28,6 +28,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from collections import Counter
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -48,11 +49,6 @@ from upstream_facts import (
 DEFAULT_MANIFEST: Final[Path] = Path("docs/landscape/capabilities.yaml")
 DEFAULT_SNAPSHOT: Final[Path] = Path("docs/landscape/snapshot.json")
 DEFAULT_ROADMAP: Final[Path] = Path("docs/ROADMAP.md")
-
-
-
-
-
 
 
 @dataclass(frozen=True)
@@ -108,26 +104,6 @@ def load_manifest(path: Path) -> Manifest:
         feature_catalog=dict(raw.get("feature_catalog", {})),
         capabilities=list(raw.get("capabilities", [])),
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # Priority order. `integrate` first because it is the cheapest and the most often missed:
@@ -186,9 +162,7 @@ def find_gaps(manifest: Manifest, installed: set[str] | None = None) -> list[Gap
     """
     present = installed if installed is not None else set()
     gaps = [
-        gap
-        for capability in manifest.capabilities
-        for gap in _capability_gaps(manifest, capability, present)
+        gap for capability in manifest.capabilities for gap in _capability_gaps(manifest, capability, present)
     ]
     return sorted(
         gaps,
@@ -230,14 +204,12 @@ class _Disposal:
         return disposition, note, via
 
 
-def _capability_gaps(
-    manifest: Manifest, capability: dict[str, Any], installed: set[str]
-) -> list[Gap]:
+def _capability_gaps(manifest: Manifest, capability: dict[str, Any], installed: set[str]) -> list[Gap]:
     """Return the cited features one capability is missing."""
     ours = set(capability.get("ours", []))
     disposal = _Disposal.of(capability, installed)
     return [
-        _build_gap(manifest, capability, feature, holders, disposal)
+        _build_gap(manifest, capability, (feature, holders), disposal)
         for feature, holders in _claimed_features(capability).items()
         if feature not in ours
     ]
@@ -256,11 +228,11 @@ def _claimed_features(capability: dict[str, Any]) -> dict[str, list[tuple[str, s
 def _build_gap(
     manifest: Manifest,
     capability: dict[str, Any],
-    feature: str,
-    holders: list[tuple[str, str]],
+    claim: tuple[str, list[tuple[str, str]]],
     disposal: _Disposal,
 ) -> Gap:
     """Assemble one gap with the citations that make it falsifiable, and what to do about it."""
+    feature, holders = claim
     disposition, note, via = disposal.decide(feature, holders)
     return Gap(
         capability=str(capability["key"]),
@@ -287,9 +259,7 @@ def _maturity_table(manifest: Manifest, snapshot: dict[str, RepoFacts]) -> list[
     rows.append("| Project | Score | Band | Stars | Last push | Versions | License |")
     rows.append("|---|---:|---|---:|---|---:|---|")
     assessments = [
-        (assess_maturity(snapshot[repo]), snapshot[repo])
-        for repo in manifest.repos()
-        if repo in snapshot
+        (assess_maturity(snapshot[repo]), snapshot[repo]) for repo in manifest.repos() if repo in snapshot
     ]
     for maturity, facts in sorted(assessments, key=lambda pair: -pair[0].score):
         rows.append(
@@ -394,31 +364,39 @@ def render_report(manifest: Manifest, snapshot: dict[str, RepoFacts]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_gap_entry(gap: Gap) -> list[str]:
+    """Format single gap item markdown lines."""
+    lines = [f"- **{gap.roadmap_title()}**"]
+    note = f" — {gap.adopt_note}" if gap.adopt_note else ""
+    lines.append(f"  - Disposition: `{gap.disposition}`{note}")
+    lines.append(f"  - Held by: {', '.join(f'`{h}`' for h in gap.holders)}")
+    for citation in gap.evidence:
+        lines.append(f"  - Evidence: {citation}")
+    return lines
+
+
+def _gap_summary_text(gaps: Sequence[Gap]) -> str:
+    """Format summary count paragraph for capability gaps."""
+    counts = Counter(gap.disposition for gap in gaps)
+    disposition_breakdown = ", ".join(f"**{n} {kind}**" for kind, n in sorted(counts.items()))
+    return (
+        f"{len(gaps)} feature(s) that a cited alternative has and the matching capability "
+        "here does not. Each carries its evidence so it can be checked rather than believed, "
+        f"and a disposition saying what to do about it: {disposition_breakdown}. `integrate` means "
+        "the library is already a declared dependency of this repository — the cheapest gap "
+        "there is, and the one most often missed."
+    )
+
+
 def _gap_section(gaps: Sequence[Gap]) -> list[str]:
     """Render the gaps, each carrying the citation that would falsify it."""
     lines = ["", "## Capability gaps", ""]
     if not gaps:
         lines.append("No cited capability is missing from this repository.")
         return lines
-    counts: dict[str, int] = {}
+    lines.extend([_gap_summary_text(gaps), ""])
     for gap in gaps:
-        counts[gap.disposition] = counts.get(gap.disposition, 0) + 1
-    lines.append(
-        f"{len(gaps)} feature(s) that a cited alternative has and the matching capability "
-        "here does not. Each carries its evidence so it can be checked rather than believed, "
-        "and a disposition saying what to do about it: "
-        + ", ".join(f"**{n} {kind}**" for kind, n in sorted(counts.items()))
-        + ". `integrate` means the library is already a declared dependency of this "
-        "repository — the cheapest gap there is, and the one most often missed."
-    )
-    lines.append("")
-    for gap in gaps:
-        lines.append(f"- **{gap.roadmap_title()}**")
-        lines.append(f"  - Disposition: `{gap.disposition}`"
-                     + (f" — {gap.adopt_note}" if gap.adopt_note else ""))
-        lines.append(f"  - Held by: {', '.join(f'`{h}`' for h in gap.holders)}")
-        for citation in gap.evidence:
-            lines.append(f"  - Evidence: {citation}")
+        lines.extend(_render_gap_entry(gap))
     return lines
 
 
@@ -466,6 +444,18 @@ def insert_gap_items(
 # --- CLI ------------------------------------------------------------------------------
 
 
+def _report_refresh_outcomes(
+    snapshot_path: Path, facts: Sequence[RepoFacts], failed: Sequence[RepoFacts]
+) -> None:
+    """Print summary and details of refreshed repositories."""
+    renamed = [f for f in facts if not f.error and f.renamed]
+    print(f"Fetched {len(facts) - len(failed)}/{len(facts)} repositories into {snapshot_path}")
+    for fact in renamed:
+        print(f"  renamed: {fact.requested} -> {fact.full_name}")
+    for fact in failed:
+        print(f"  FAILED: {fact.requested}: {fact.error}", file=sys.stderr)
+
+
 def _handle_refresh(args: argparse.Namespace) -> int:
     """Fetch fresh facts for every repository in the manifest and rewrite the snapshot."""
     manifest = load_manifest(args.manifest)
@@ -473,12 +463,7 @@ def _handle_refresh(args: argparse.Namespace) -> int:
     facts = [fetch_facts(repo, now) for repo in manifest.repos()]
     save_snapshot(args.snapshot, facts)
     failed = [f for f in facts if f.error]
-    renamed = [f for f in facts if not f.error and f.renamed]
-    print(f"Fetched {len(facts) - len(failed)}/{len(facts)} repositories into {args.snapshot}")
-    for fact in renamed:
-        print(f"  renamed: {fact.requested} -> {fact.full_name}")
-    for fact in failed:
-        print(f"  FAILED: {fact.requested}: {fact.error}", file=sys.stderr)
+    _report_refresh_outcomes(args.snapshot, facts, failed)
     return 1 if failed else 0
 
 
