@@ -144,11 +144,7 @@ def inventory_requirements(pyproject: Path) -> list[Dependency]:
     project = data.get("project", {})
     groups = [("runtime", project.get("dependencies", []))]
     groups += list(project.get("optional-dependencies", {}).items())
-    found = [
-        parse_requirement(text, str(pyproject), kind)
-        for kind, entries in groups
-        for text in entries
-    ]
+    found = [parse_requirement(text, str(pyproject), kind) for kind, entries in groups for text in entries]
     return [dep for dep in found if dep]
 
 
@@ -160,9 +156,7 @@ def inventory_actions(workflows: Path) -> list[Dependency]:
     for path in sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml")):
         for match in _ACTION_RE.finditer(path.read_text(encoding="utf-8")):
             name, _, ref = match.group("ref").partition("@")
-            actions.append(
-                Dependency(name=name, kind="action", declared=ref, source=str(path), repo=name)
-            )
+            actions.append(Dependency(name=name, kind="action", declared=ref, source=str(path), repo=name))
     return _deduplicate(actions)
 
 
@@ -398,27 +392,25 @@ def check_package_pinning(dep: Dependency) -> Finding | None:
 def check_upstream_health(dep: Dependency, maturity: Maturity, facts: RepoFacts) -> Finding | None:
     """Flag a dependency whose upstream is archived or no longer visibly maintained."""
     if facts.archived:
-        return _upstream_finding(dep, "archived_upstream", "high", "Upstream is archived.", facts)
+        return _upstream_finding(dep, ("archived_upstream", "high", "Upstream is archived."), facts)
     if maturity.band in DORMANT_BANDS:
-        detail = (
-            f"Upstream maturity {maturity.score} ({maturity.band}); "
-            f"last push {facts.pushed_at[:10] or 'unknown'}."
-        )
-        return _upstream_finding(dep, "dormant_upstream", "medium", detail, facts)
+        pushed = facts.pushed_at[:10] or "unknown"
+        detail = f"Upstream maturity {maturity.score} ({maturity.band}); last push {pushed}."
+        return _upstream_finding(dep, ("dormant_upstream", "medium", detail), facts)
     return None
 
 
-def _upstream_finding(
-    dep: Dependency, risk: str, severity: str, detail: str, facts: RepoFacts
-) -> Finding:
+def _upstream_finding(dep: Dependency, assessment: tuple[str, str, str], facts: RepoFacts) -> Finding:
     """Build a finding about an upstream project, citing the facts it was judged on."""
+    risk, severity, detail = assessment
+    pushed = facts.pushed_at[:10] or "—"
     return Finding(
         risk=risk,
         subject=dep.name,
         severity=severity,
         detail=detail,
         evidence=(
-            f"github.com/{facts.full_name}: pushed {facts.pushed_at[:10] or '—'}, "
+            f"github.com/{facts.full_name}: pushed {pushed}, "
             f"{facts.releases} versions ({facts.release_source}), fetched {facts.fetched_at[:10]}"
         ),
         source=dep.source,
@@ -446,19 +438,29 @@ def check_plaintext_endpoint(dep: Dependency) -> Finding | None:
 SEVERITY_ORDER: Final[dict[str, int]] = {"high": 0, "medium": 1, "low": 2}
 
 
+def _collect_action_findings(
+    actions: Sequence[Dependency], snapshot: dict[str, RepoFacts]
+) -> list[Finding | None]:
+    """Gather pinning and upstream findings for actions."""
+    items: list[Finding | None] = []
+    for action in actions:
+        items.append(check_action_pinning(action))
+        items.extend(_upstream_checks(action, snapshot))
+    return items
+
+
+def _collect_inventory_findings(inventory: Inventory, snapshot: dict[str, RepoFacts]) -> list[Finding]:
+    """Gather findings across requirements, actions, packages, and endpoints."""
+    items: list[Finding | None] = [check_floor_drift(d) for d in inventory.requirements]
+    items.extend(_collect_action_findings(inventory.actions, snapshot))
+    items.extend(check_package_pinning(p) for p in inventory.packages)
+    items.extend(check_plaintext_endpoint(e) for e in inventory.endpoints)
+    return [f for f in items if f is not None]
+
+
 def audit(inventory: Inventory, snapshot: dict[str, RepoFacts]) -> list[Finding]:
     """Run every check against every inventoried item, most severe first."""
-    findings: list[Finding | None] = []
-    for dep in inventory.requirements:
-        findings.append(check_floor_drift(dep))
-    for dep in inventory.actions:
-        findings.append(check_action_pinning(dep))
-        findings.extend(_upstream_checks(dep, snapshot))
-    for dep in inventory.packages:
-        findings.append(check_package_pinning(dep))
-    for dep in inventory.endpoints:
-        findings.append(check_plaintext_endpoint(dep))
-    present = [finding for finding in findings if finding]
+    present = _collect_inventory_findings(inventory, snapshot)
     return sorted(present, key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.risk, f.subject))
 
 
@@ -541,6 +543,11 @@ def apply_fixes(root: Path, findings: Sequence[Finding], inventory: Inventory) -
     return applied
 
 
+def _matched_dependencies(targets: Sequence[Finding], by_subject: dict[str, Dependency]) -> list[Dependency]:
+    """Return dependency objects corresponding to finding subjects."""
+    return [by_subject[f.subject] for f in targets if f.subject in by_subject]
+
+
 def _apply_floor_fixes(
     root: Path, findings: Sequence[Finding], by_subject: dict[str, Dependency]
 ) -> list[str]:
@@ -551,16 +558,14 @@ def _apply_floor_fixes(
     path = root / DEFAULT_PYPROJECT
     text = path.read_text(encoding="utf-8")
     applied: list[str] = []
-    for dep in [by_subject[f.subject] for f in targets if f.subject in by_subject]:
+    for dep in _matched_dependencies(targets, by_subject):
         text, applied = _raise_one_floor(text, dep, applied)
     if applied:
         path.write_text(text, encoding="utf-8")
     return applied
 
 
-def _raise_one_floor(
-    text: str, dep: Dependency, applied: list[str]
-) -> tuple[str, list[str]]:
+def _raise_one_floor(text: str, dep: Dependency, applied: list[str]) -> tuple[str, list[str]]:
     """Raise one floor in the manifest text, recording the change if it landed."""
     updated, changed = raise_floor(text, dep)
     if not changed:
@@ -569,19 +574,23 @@ def _raise_one_floor(
     return updated, [*applied, f"floor: {dep.name}{dep.declared} -> >={floor}"]
 
 
-def _apply_pin_fixes(
-    root: Path, findings: Sequence[Finding], by_subject: dict[str, Dependency]
-) -> list[str]:
+def _pin_one_action(root: Path, finding: Finding, by_subject: dict[str, Dependency]) -> list[str]:
+    """Resolve and pin one mutable action finding."""
+    dep = by_subject.get(finding.subject)
+    if dep is None or dep.repo is None:
+        return []
+    sha = resolve_action_sha(dep.repo, dep.declared)
+    if sha is None:
+        return []
+    return _pin_in_workflows(root, dep, sha)
+
+
+def _apply_pin_fixes(root: Path, findings: Sequence[Finding], by_subject: dict[str, Dependency]) -> list[str]:
     """Pin every mutably-referenced action to the commit its tag currently names."""
     applied: list[str] = []
-    for finding in [f for f in findings if f.risk == "mutable_action_ref"]:
-        dep = by_subject.get(finding.subject)
-        if dep is None or dep.repo is None:
-            continue
-        sha = resolve_action_sha(dep.repo, dep.declared)
-        if sha is None:
-            continue
-        applied += _pin_in_workflows(root, dep, sha)
+    targets = [f for f in findings if f.risk == "mutable_action_ref"]
+    for finding in targets:
+        applied.extend(_pin_one_action(root, finding, by_subject))
     return applied
 
 
@@ -640,6 +649,17 @@ def _handle_inventory(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_text_findings(findings: Sequence[Finding], total_items: int) -> None:
+    """Format and print text-based findings to stdout."""
+    print(f"{len(findings)} finding(s) across {total_items} inventoried items:\n")
+    for finding in findings:
+        icon = SEVERITY_ICON.get(finding.severity, "•")
+        fixable = " [fixable]" if finding.fixable else ""
+        print(f"{icon} {finding.risk}: {finding.subject}{fixable}")
+        print(f"    {finding.detail}")
+        print(f"    evidence: {finding.evidence}")
+
+
 def _handle_audit(args: argparse.Namespace) -> int:
     """Report supply-chain risks, most severe first."""
     inventory, snapshot = _load(args)
@@ -647,13 +667,7 @@ def _handle_audit(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps([asdict(finding) for finding in findings], indent=2))
         return 0
-    print(f"{len(findings)} finding(s) across {len(inventory.all())} inventoried items:\n")
-    for finding in findings:
-        icon = SEVERITY_ICON.get(finding.severity, "•")
-        fixable = " [fixable]" if finding.fixable else ""
-        print(f"{icon} {finding.risk}: {finding.subject}{fixable}")
-        print(f"    {finding.detail}")
-        print(f"    evidence: {finding.evidence}")
+    _print_text_findings(findings, len(inventory.all()))
     return 1 if args.strict and findings else 0
 
 
@@ -697,9 +711,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--snapshot", type=Path, default=DEFAULT_SNAPSHOT)
-    parser.add_argument(
-        "--offline", action="store_true", help="Skip PyPI lookups; report only local signals"
-    )
+    parser.add_argument("--offline", action="store_true", help="Skip PyPI lookups; report only local signals")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("inventory", help="List every dependency, action, package and endpoint")
