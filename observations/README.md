@@ -163,6 +163,8 @@ The 72 empirical case studies are organized into three complementary domains:
 
 When analyzed collectively, the 72 empirical case studies coalesce into seven core engineering theses that define disciplined agentic software development:
 
+> 🔬 **Empirical Grounding & External Literature**: For formal cross-examination against external peer-reviewed software engineering research (McCabe, Shepperd, Fenton, Nagappan, Le Goues, Sharma, Liu), counter-evidence analysis, and code samples examining where invariants succeed and where they break down, see [**Empirical Foundations & Critical Synthesis of Agentic Engineering**](../docs/EMPIRICAL_FOUNDATIONS.md).
+
 ### 1. Deterministic Mechanical Oracles Over Prompt Faith
 Stochastic language models cannot self-evaluate architectural complexity, nesting depth, type safety, or security boundaries purely through prompt instructions. Relying on "be careful not to write complex code" invariably fails.
 - **AST Invariants**: Mechanical parsers (`ast.walk`, `ast.NodeVisitor`) enforce unyielding mathematical ceilings ($M \le 10$, depth $\le 5$).

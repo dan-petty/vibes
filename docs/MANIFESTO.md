@@ -112,6 +112,12 @@ As the autonomous cybernetic loop accelerates, the human role inverts from micro
 
 ---
 
+## 🔬 Empirical Grounding & Literature Synthesis
+
+For formal cross-examination against external peer-reviewed software engineering research (McCabe, Shepperd, Fenton, Nagappan, Le Goues, Sharma, Liu), counter-evidence analysis, and code samples examining where invariants succeed and where they break down, see [**Empirical Foundations & Critical Synthesis of Agentic Engineering**](./EMPIRICAL_FOUNDATIONS.md).
+
+---
+
 ## Conclusion
 
 The power of AI coding is not determined by raw model parameters alone, nor solely by the external scaffolding that wraps it. In the post-agentic-harness era, software development is governed by **the mathematical rigor of its invariant architecture and the clarity of its sovereign human purpose**. `vibes` exists to document the science of that autonomous evolution.

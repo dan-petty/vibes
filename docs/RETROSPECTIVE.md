@@ -231,3 +231,20 @@ Every defect below was found by a measurement and survived a first, wrong readin
 - **Measure Artifacts, Not Scaffolding Overhead**: Pytest subprocess invocations charge ~1.7s of interpreter startup and collection overhead to every test suite. Parse self-reported execution times (`N passed in X.XXs`) rather than measuring process wall clock to prevent false-positive slow-test defects.
 - **Isolate Delays in Harness Tests**: Compound `time.sleep` calls across test suites inflate execution latency beyond fast-feedback ceilings. Mock or monkeypatch politeness delays and retry timers in test harnesses.
 
+---
+
+## 9. Epistemic Limits, Threats to Validity & External Scientific Grounding
+
+A systemic retrospective must acknowledge its own methodological boundaries:
+
+1. **The Circularity Threat (Subject-as-Auditor)**:
+   - When a repository designs its own quality gates, optimizes its own code to satisfy those gates, and then evaluates its own success by whether those gates pass, it risks **epistemic circularity**.
+   - A 100.0/100 Health Score proves internal consistency under declared rules; it does not independently prove that those rules are universally optimal across all software domains.
+
+2. **Goodhart's Law & Metric Gaming**:
+   - Any static metric enforced as a hard gating ceiling induces adaptation. As demonstrated in [Empirical Foundations](./EMPIRICAL_FOUNDATIONS.md), dogmatic complexity caps ($M \le 6$) can induce **Accidental Indirection Spaghetti** (fragmenting cohesive algorithms into disjointed 1-line helpers), and strict line coverage floors ($\ge 90\%$) can reward **Test Suite Overfitting** (passing narrow test cases without satisfying general specifications).
+
+3. **External Literature & Cross-Domain Falsification**:
+   - The claims in `vibes` must not be treated as isolated dogma. For formal cross-examination against external peer-reviewed software engineering research (McCabe, Shepperd, Fenton, Nagappan, Le Goues, Sharma, Liu) and counter-evidence analysis, see [**Empirical Foundations & Critical Synthesis of Agentic Engineering**](./EMPIRICAL_FOUNDATIONS.md).
+
+

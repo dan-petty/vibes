@@ -26,6 +26,7 @@ Here you will find:
 4. **Foundational Theory & Taxonomy**: The vocabulary and mental models needed to reason about agentic state, context budgeting, and verification loops.
 5. **Living Agent Instructions (`AGENTS.md`)**: A gold-standard instruction framework enabling autonomous agents to read, curate, and contribute new findings to this repository without human hand-holding.
 6. [**The Dummy's Guide to Agentic Engineering**](./docs/dummysguide/README.md): Core fundamentals explained in plain English without technical mumbo jumbo, complete with "TLDR" and "ELI:7b" header summaries.
+7. [**Empirical Foundations & Critical Synthesis**](./docs/EMPIRICAL_FOUNDATIONS.md): Peer-reviewed external scientific grounding, counter-evidence analysis, and code samples examining where invariants succeed and where they break down.
 
 ---
 
@@ -315,6 +316,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── TAXONOMY.md                    # Structured taxonomy of agentic architectures & failure modes
 │   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
 │   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
+│   ├── EMPIRICAL_FOUNDATIONS.md       # Critical synthesis cross-examining assertions against external literature
 │   ├── archive/                       # Delivered roadmap scope, retained for provenance
 │   ├── dummysguide/                   # Beginner-friendly fundamentals without technical mumbo jumbo
 │   ├── landscape/                     # Comparable-project survey: manifest, facts snapshot, report
@@ -546,6 +548,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
+    ├── test_empirical_foundations.py  # Unit tests for empirical foundations & critical synthesis
     ├── test_verification_pyramid_auditor.py # Unit tests for verification pyramid auditor & assertion density
     ├── test_instruction_governor.py   # Unit tests for JIT instruction governor & ablation engine
     ├── test_milestone_governor.py     # Unit tests for milestone scope governor and air-lock oracle
