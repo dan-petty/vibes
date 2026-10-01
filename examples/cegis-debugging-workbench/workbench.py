@@ -50,6 +50,7 @@ class SynthesisState:
     accumulated_counterexamples: list[ConstraintSpec] = field(default_factory=list)
     verified_patches: int = 0
     converged: bool = False
+    active_hypothesis: Hypothesis | None = None
 
 
 # A defective parser simulating real-world agent edge-case failures
@@ -277,6 +278,7 @@ class CEGISRunner:
         if success:
             self.state.converged = True
             self.state.verified_patches += 1
+            self.state.active_hypothesis = hypothesis
             return True
         return False
 
@@ -307,6 +309,7 @@ class CEGISRunner:
         if success:
             self.state.converged = True
             self.state.verified_patches += 1
+            self.state.active_hypothesis = hypothesis
             return True
         return False
 
@@ -340,7 +343,9 @@ def main() -> None:
 
     # 3. Buggy parser fails against accumulated constraints
     ok, failing = runner.run_oracle(buggy_manifest_parser)
-    print(f"3. Initial parser passes after constraint accumulation: {ok} (Failed: {failing.name if failing else 'None'})")
+    print(
+        f"3. Initial parser passes after constraint accumulation: {ok} (Failed: {failing.name if failing else 'None'})"
+    )
 
     # 4. Naive workaround attempt
     hypo_naive = Hypothesis(
@@ -370,7 +375,9 @@ def main() -> None:
         "parse_manifest_runaway",
         counterexample,
     )
-    print(f"6a. Runaway loop contained safely by sandbox: {res_runaway.timed_out} (Timed out in {res_runaway.duration_ms}ms)")
+    print(
+        f"6a. Runaway loop contained safely by sandbox: {res_runaway.timed_out} (Timed out in {res_runaway.duration_ms}ms)"
+    )
 
     ok_sandboxed = runner.verify_and_converge_sandboxed(
         CANDIDATE_PATCH_CONVERGED_SOURCE,

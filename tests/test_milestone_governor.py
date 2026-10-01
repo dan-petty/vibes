@@ -29,28 +29,44 @@ from milestone_governor import (
 
 def test_milestone_issue_from_dict_and_properties() -> None:
     """Verify MilestoneIssue instantiation, parsing, and predicate properties."""
-    dict_issue = MilestoneIssue.from_dict({
-        "number": 101,
-        "title": "Fix critical memory leak in worker daemon",
-        "state": "open",
-        "labels": [{"name": "priority/p0-critical"}, {"name": "type/bug"}],
-        "created_at": "2026-09-24T10:00:00Z",
-        "milestone": {"title": "v0.2.23"},
-    })
+    dict_issue = MilestoneIssue.from_dict(
+        {
+            "number": 101,
+            "title": "Fix critical memory leak in worker daemon",
+            "state": "open",
+            "labels": [{"name": "priority/p0-critical"}, {"name": "type/bug"}],
+            "created_at": "2026-09-24T10:00:00Z",
+            "milestone": {"title": "v0.2.23"},
+        }
+    )
 
-    string_issue = MilestoneIssue.from_dict({
-        "number": 102,
-        "title": "Implement shiny new dashboard widget",
-        "state": "closed",
-        "labels": ["type/feature", "priority/p2-low"],
-        "created_at": "2026-09-20T08:00:00Z",
-        "closed_at": "2026-09-25T12:00:00Z",
-        "milestone": "v0.2.23",
-    })
+    string_issue = MilestoneIssue.from_dict(
+        {
+            "number": 102,
+            "title": "Implement shiny new dashboard widget",
+            "state": "closed",
+            "labels": ["type/feature", "priority/p2-low"],
+            "created_at": "2026-09-20T08:00:00Z",
+            "closed_at": "2026-09-25T12:00:00Z",
+            "milestone": "v0.2.23",
+        }
+    )
 
     actual_evaluations = (
-        (dict_issue.number, dict_issue.is_open, dict_issue.is_p0_blocker, dict_issue.is_feature, dict_issue.milestone),
-        (string_issue.number, string_issue.is_open, string_issue.is_p0_blocker, string_issue.is_feature, string_issue.milestone),
+        (
+            dict_issue.number,
+            dict_issue.is_open,
+            dict_issue.is_p0_blocker,
+            dict_issue.is_feature,
+            dict_issue.milestone,
+        ),
+        (
+            string_issue.number,
+            string_issue.is_open,
+            string_issue.is_p0_blocker,
+            string_issue.is_feature,
+            string_issue.milestone,
+        ),
     )
     expected_evaluations = (
         (101, True, True, False, "v0.2.23"),
@@ -96,17 +112,27 @@ def test_calculate_milestone_metrics_converging_and_livelocked() -> None:
 
     # 4 issues closed in window (created prior), 1 created in window -> converging
     converging_issues = [
-        MilestoneIssue(1, "Bug 1", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"),
-        MilestoneIssue(2, "Bug 2", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"),
-        MilestoneIssue(3, "Bug 3", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"),
-        MilestoneIssue(4, "Bug 4", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"),
+        MilestoneIssue(
+            1, "Bug 1", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"
+        ),
+        MilestoneIssue(
+            2, "Bug 2", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"
+        ),
+        MilestoneIssue(
+            3, "Bug 3", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"
+        ),
+        MilestoneIssue(
+            4, "Bug 4", "closed", created_at="2026-09-10T00:00:00Z", closed_at="2026-09-27T00:00:00Z"
+        ),
         MilestoneIssue(5, "Bug 5", "open", created_at="2026-09-26T00:00:00Z"),
     ]
     conv_metrics = calculate_milestone_metrics(converging_issues, as_of=ref_time, window_days=7.0)
 
     # 4 created in window, 1 closed in window -> live-locked
     livelocked_issues = [
-        MilestoneIssue(10, "Bug A", "closed", created_at="2026-09-20T00:00:00Z", closed_at="2026-09-27T00:00:00Z"),
+        MilestoneIssue(
+            10, "Bug A", "closed", created_at="2026-09-20T00:00:00Z", closed_at="2026-09-27T00:00:00Z"
+        ),
         MilestoneIssue(11, "Feature B", "open", created_at="2026-09-25T00:00:00Z"),
         MilestoneIssue(12, "Feature C", "open", created_at="2026-09-26T00:00:00Z"),
         MilestoneIssue(13, "Feature D", "open", created_at="2026-09-27T00:00:00Z"),
@@ -189,19 +215,30 @@ def test_partition_milestone_rollover() -> None:
     normal_issue = MilestoneIssue(3, "Enhance CLI help wording", "open", labels=("type/docs",))
     closed_issue = MilestoneIssue(4, "Existing merged PR", "closed")
 
-    keep, rollover = partition_milestone_rollover([p0_issue, epic_issue, normal_issue, closed_issue], target_milestone="v0.2.24")
+    keep, rollover = partition_milestone_rollover(
+        [p0_issue, epic_issue, normal_issue, closed_issue], target_milestone="v0.2.24"
+    )
 
     keep_numbers = [i.number for i in keep]
     rollover_numbers = [i.number for i in rollover]
+    rollover_milestones = [i.milestone for i in rollover]
 
-    assert (keep_numbers, rollover_numbers) == ([1, 2, 4], [3])
+    assert (keep_numbers, rollover_numbers, rollover_milestones) == ([1, 2, 4], [3], ["v0.2.24"])
 
 
 def test_export_sarif() -> None:
     """Verify schema-compliant OASIS SARIF 2.1.0 output structure."""
     findings = [
-        GovernorFinding(rule_id="MLS001", level="error", message="Live-lock detected", recommendation="Apply air-lock"),
-        GovernorFinding(rule_id="MLS002", level="error", message="Air-lock breach", issue_number=42, recommendation="Rollover"),
+        GovernorFinding(
+            rule_id="MLS001", level="error", message="Live-lock detected", recommendation="Apply air-lock"
+        ),
+        GovernorFinding(
+            rule_id="MLS002",
+            level="error",
+            message="Air-lock breach",
+            issue_number=42,
+            recommendation="Rollover",
+        ),
     ]
     sarif_data = export_sarif(findings, milestone_title="v0.2.23")
 
@@ -233,11 +270,18 @@ def test_format_cli_report() -> None:
         estimated_days_to_convergence=2.0,
         is_live_locked=False,
     )
-    findings = [GovernorFinding(rule_id="MLS004", level="warning", message="Stagnant band", recommendation="Rollover")]
+    findings = [
+        GovernorFinding(rule_id="MLS004", level="warning", message="Stagnant band", recommendation="Rollover")
+    ]
     rollover = [MilestoneIssue(99, "Rollover candidate", "open")]
 
     report = format_cli_report(metrics, MilestonePhase.AIR_LOCKED, findings, rollover)
-    assert ("MILESTONE SCOPE GOVERNOR — V0.2.23" in report, "Progress: [" in report, "MLS004" in report, "#99" in report) == (
+    assert (
+        "MILESTONE SCOPE GOVERNOR — V0.2.23" in report,
+        "Progress: [" in report,
+        "MLS004" in report,
+        "#99" in report,
+    ) == (
         True,
         True,
         True,
@@ -248,8 +292,20 @@ def test_format_cli_report() -> None:
 def test_main_cli_execution(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Verify main CLI execution for exit codes, json, and sarif flags."""
     sample_data = [
-        {"number": 1, "title": "P0 Bug", "state": "open", "labels": [{"name": "p0"}], "created_at": "2026-09-24T00:00:00Z"},
-        {"number": 2, "title": "Regular task", "state": "open", "labels": [], "created_at": "2026-09-24T00:00:00Z"},
+        {
+            "number": 1,
+            "title": "P0 Bug",
+            "state": "open",
+            "labels": [{"name": "p0"}],
+            "created_at": "2026-09-24T00:00:00Z",
+        },
+        {
+            "number": 2,
+            "title": "Regular task",
+            "state": "open",
+            "labels": [],
+            "created_at": "2026-09-24T00:00:00Z",
+        },
     ]
     json_file = tmp_path / "milestone.json"
     sarif_file = tmp_path / "findings.sarif"
