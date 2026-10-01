@@ -182,7 +182,9 @@ def _calculate_max_depth(tree: ast.AST) -> int:
 
 def _extract_symbol_name(node: ast.AST) -> str | None:
     """Return symbol name if node is a public function or class definition."""
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and not node.name.startswith("_"):
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and not node.name.startswith(
+        "_"
+    ):
         return node.name
     return None
 
@@ -197,6 +199,28 @@ def extract_public_symbols(code: str) -> tuple[str, ...]:
     return tuple(n for n in names if n is not None)
 
 
+def _check_structural_bounds(tree: ast.AST, constraint: InvariantConstraint) -> str | None:
+    """Validate that code satisfies cyclomatic complexity and nesting depth limits."""
+    complexity = _calculate_mccabe(tree)
+    if complexity > constraint.max_complexity:
+        return f"Cyclomatic complexity {complexity} exceeds ceiling {constraint.max_complexity}"
+    depth = _calculate_max_depth(tree)
+    if depth > constraint.max_depth:
+        return f"Nesting depth {depth} exceeds ceiling {constraint.max_depth}"
+    return None
+
+
+def _check_symbol_preservation(code: str, required_symbols: Sequence[str]) -> str | None:
+    """Validate that required public symbols remain defined."""
+    if not required_symbols:
+        return None
+    extracted = set(extract_public_symbols(code))
+    missing = [sym for sym in required_symbols if sym not in extracted]
+    if missing:
+        return f"Preservation violation: missing required symbol(s) {missing}"
+    return None
+
+
 def verify_code_invariants(code: str, constraint: InvariantConstraint) -> tuple[bool, str]:
     """Verify that Python code satisfies complexity, depth, and symbol invariants."""
     if not code.strip():
@@ -206,18 +230,13 @@ def verify_code_invariants(code: str, constraint: InvariantConstraint) -> tuple[
     except SyntaxError as err:
         return False, f"SyntaxError in generated code: {err}"
 
-    complexity = _calculate_mccabe(tree)
-    if complexity > constraint.max_complexity:
-        return False, f"Cyclomatic complexity {complexity} exceeds ceiling {constraint.max_complexity}"
+    structural_error = _check_structural_bounds(tree, constraint)
+    if structural_error is not None:
+        return False, structural_error
 
-    depth = _calculate_max_depth(tree)
-    if depth > constraint.max_depth:
-        return False, f"Nesting depth {depth} exceeds ceiling {constraint.max_depth}"
-
-    extracted = extract_public_symbols(code)
-    missing = [sym for sym in constraint.required_symbols if sym not in extracted]
-    if missing:
-        return False, f"Preservation violation: missing required symbol(s) {missing}"
+    symbol_error = _check_symbol_preservation(code, constraint.required_symbols)
+    if symbol_error is not None:
+        return False, symbol_error
 
     return True, "All invariants verified."
 
@@ -233,7 +252,9 @@ def format_constraint_envelope(prompt: str, constraints: Sequence[InvariantConst
     ]
     for c in constraints:
         lines.append(f"- **{c.constraint_id}**: {c.description}")
-        lines.append(f"  Ceilings: Max Complexity M <= {c.max_complexity}, Max Nesting Depth <= {c.max_depth}")
+        lines.append(
+            f"  Ceilings: Max Complexity M <= {c.max_complexity}, Max Nesting Depth <= {c.max_depth}"
+        )
         if c.required_symbols:
             lines.append(f"  Required Public Symbols: {', '.join(c.required_symbols)}")
     return "\n".join(lines)
@@ -349,17 +370,54 @@ class SubagentOrchestrator:
         )
 
         code_output = (
-            'def dispatch_request(route: str, payload: dict[str, str]) -> str:\n'
+            "def dispatch_request(route: str, payload: dict[str, str]) -> str:\n"
             '    """Dispatch incoming request based on matching table key."""\n'
             '    handlers = {"login": "auth_ok", "logout": "bye"}\n'
             '    return handlers.get(route, "not_found")\n'
         )
 
         results = [
-            SubagentResult(plan_task.task_id, plan_task.role, plan_task.assigned_model, TaskStatus.COMPLETED, "Plan approved.", 1200, 300, 1.2),
-            SubagentResult(scout_task.task_id, scout_task.role, scout_task.assigned_model, TaskStatus.COMPLETED, "Found 2 files: dispatcher.py, test_dispatcher.py", 800, 150, 0.4),
-            SubagentResult(type_task.task_id, type_task.role, type_task.assigned_model, TaskStatus.COMPLETED, code_output, 2400, 450, 0.9, extracted_symbols=("dispatch_request",)),
-            SubagentResult(verify_task.task_id, verify_task.role, verify_task.assigned_model, TaskStatus.COMPLETED, "All invariants verified (M=1, depth=1).", 900, 180, 0.6),
+            SubagentResult(
+                plan_task.task_id,
+                plan_task.role,
+                plan_task.assigned_model,
+                TaskStatus.COMPLETED,
+                "Plan approved.",
+                1200,
+                300,
+                1.2,
+            ),
+            SubagentResult(
+                scout_task.task_id,
+                scout_task.role,
+                scout_task.assigned_model,
+                TaskStatus.COMPLETED,
+                "Found 2 files: dispatcher.py, test_dispatcher.py",
+                800,
+                150,
+                0.4,
+            ),
+            SubagentResult(
+                type_task.task_id,
+                type_task.role,
+                type_task.assigned_model,
+                TaskStatus.COMPLETED,
+                code_output,
+                2400,
+                450,
+                0.9,
+                extracted_symbols=("dispatch_request",),
+            ),
+            SubagentResult(
+                verify_task.task_id,
+                verify_task.role,
+                verify_task.assigned_model,
+                TaskStatus.COMPLETED,
+                "All invariants verified (M=1, depth=1).",
+                900,
+                180,
+                0.6,
+            ),
         ]
 
         metrics = self.calculate_metrics(results)
@@ -385,11 +443,11 @@ def _format_markdown_sequence(record: ExecutionRecord) -> str:
         "    participant T as Open-Weights Typer (Small Types)",
         "    participant V as AST Verifier (Big Checks)",
         "",
-        '    P->>S: Delegate file & symbol scouting',
-        '    S-->>P: Return candidate file paths & symbol map',
-        '    P->>T: Delegate typed refactoring (with Invariant Envelope)',
-        '    T-->>V: Forward generated source for verification',
-        '    V-->>P: Invariant gate passed (M<=6, depth<=2)',
+        "    P->>S: Delegate file & symbol scouting",
+        "    S-->>P: Return candidate file paths & symbol map",
+        "    P->>T: Delegate typed refactoring (with Invariant Envelope)",
+        "    T-->>V: Forward generated source for verification",
+        "    V-->>P: Invariant gate passed (M<=6, depth<=2)",
         "```",
     ]
     return "\n".join(lines)
@@ -429,18 +487,22 @@ def format_markdown_report(record: ExecutionRecord) -> str:
     ]
     for r in record.results:
         toks = r.prompt_tokens + r.completion_tokens
-        lines.append(f"| `{r.task_id}` | {r.role} | `{r.model_id}` | `{r.status}` | {toks:,} | {r.duration_seconds:.2f}s |")
+        lines.append(
+            f"| `{r.task_id}` | {r.role} | `{r.model_id}` | `{r.status}` | {toks:,} | {r.duration_seconds:.2f}s |"
+        )
 
-    lines.extend([
-        "",
-        "## 4. Synthesis & Architectural Guidance",
-        "",
-        f"{record.final_synthesis}",
-        "",
-        "- **Preserve Invariant Envelopes**: Always pass structured invariants (`InvariantConstraint`) to prevent prompt compression loss.",
-        "- **Explicit Failure Signals**: Reject invalid outputs immediately with `TaskStatus.REJECTED` rather than silently hallucinating success.",
-        "- **Leverage Local Slots for Chores**: Scout files and generate type annotations on local models to reduce frontier expenditure.",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 4. Synthesis & Architectural Guidance",
+            "",
+            f"{record.final_synthesis}",
+            "",
+            "- **Preserve Invariant Envelopes**: Always pass structured invariants (`InvariantConstraint`) to prevent prompt compression loss.",
+            "- **Explicit Failure Signals**: Reject invalid outputs immediately with `TaskStatus.REJECTED` rather than silently hallucinating success.",
+            "- **Leverage Local Slots for Chores**: Scout files and generate type annotations on local models to reduce frontier expenditure.",
+        ]
+    )
     return "\n".join(lines)
 
 

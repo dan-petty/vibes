@@ -108,6 +108,18 @@ def _kept(token: str) -> list[str]:
     return [token] if address is not None and is_private_host(address) else []
 
 
+def _parse_loose_ipv4(parts: list[str]) -> ipaddress.IPv4Address | None:
+    """Parse four octets with resolver semantics (hex, octal, decimal)."""
+    try:
+        octets = [_octet(p) for p in parts]
+    except ValueError:
+        return None
+    for value in octets:
+        if not (0 <= value <= 255):
+            return None
+    return ipaddress.IPv4Address(f"{octets[0]}.{octets[1]}.{octets[2]}.{octets[3]}")
+
+
 def parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse an address the way a resolver does, or return None if it is not one.
 
@@ -121,15 +133,11 @@ def parse_address(token: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address |
     first version of that test missed by testing only canonical spellings.
     """
     parts = token.split(".")
-    if len(parts) != 4:
-        return _strict(token)
-    try:
-        octets = [_octet(part) for part in parts]
-    except ValueError:
-        return _strict(token)
-    if any(value < 0 or value > 255 for value in octets):
-        return _strict(token)
-    return ipaddress.ip_address(".".join(str(value) for value in octets))
+    if len(parts) == 4:
+        parsed = _parse_loose_ipv4(parts)
+        if parsed is not None:
+            return parsed
+    return _strict(token)
 
 
 def _octet(part: str) -> int:

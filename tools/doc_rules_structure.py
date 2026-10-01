@@ -53,7 +53,9 @@ _DOCUMENTABLE_NETWORKS: Final[tuple[ipaddress.IPv4Network, ...]] = (
     ipaddress.IPv4Network("203.0.113.0/24"),
     ipaddress.IPv4Network("169.254.169.254/32"),
 )
-_INTERNAL_HOSTNAME_RE: Final[re.Pattern[str]] = re.compile(r"\b[a-z0-9-]+\.(?:lan|local|internal|home)\b", re.I)
+_INTERNAL_HOSTNAME_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b[a-z0-9-]+\.(?:lan|local|internal|home)\b", re.I
+)
 # A waiver for documents that must quote the thing they warn about. The justification is
 # required, not decorative: an unexplained waiver is how a real leak gets silenced.
 _SANITIZATION_WAIVER_RE: Final[re.Pattern[str]] = re.compile(
@@ -136,41 +138,52 @@ def _check_tree_entry_exists(
     )
 
 
-def _undeclared_children(
-    parent: Path, declared: set[str], kinds: set[bool], oracle: PathOracle
-) -> list[str]:
+def _is_candidate_child(name: str, kind: str, kinds: set[bool]) -> bool:
+    """Predicate: true if name is an on-disk candidate for map enumeration."""
+    if name.startswith(".") or name in TREE_IGNORED_NAMES:
+        return False
+    if name.endswith(TREE_IGNORED_SUFFIXES):
+        return False
+    return (kind == "dir") in kinds
+
+
+def _undeclared_children(parent: Path, declared: set[str], kinds: set[bool], oracle: PathOracle) -> list[str]:
     """Return on-disk children of the kinds the map enumerates that the map omits."""
     listing = oracle.listing(parent)
-    candidates = (
+    return [
         name
         for name, kind in sorted(listing.items())
-        if not name.startswith(".")
-        and name not in TREE_IGNORED_NAMES
-        and not name.endswith(TREE_IGNORED_SUFFIXES)
-        and (kind == "dir") in kinds
-    )
-    return [name for name in candidates if name not in declared]
+        if _is_candidate_child(name, kind, kinds) and name not in declared
+    ]
+
+
+def _group_entries_by_parent(entries: Sequence[TreeEntry]) -> dict[Path, list[TreeEntry]]:
+    """Group tree entries by their immediate parent directory path."""
+    children: dict[Path, list[TreeEntry]] = {}
+    for entry in entries:
+        children.setdefault(entry.path.parent, []).append(entry)
+    return children
+
+
+def _parent_missing_children(parent: Path, listed: list[TreeEntry], oracle: PathOracle) -> list[str]:
+    """Calculate missing children for a specific parent directory."""
+    if not oracle.listing(parent):
+        return []
+    declared = {entry.path.name for entry in listed}
+    return _undeclared_children(parent, declared, {entry.is_directory for entry in listed}, oracle)
 
 
 def _check_tree_completeness(
     entries: Sequence[TreeEntry], root: Path, file_str: str, oracle: PathOracle
 ) -> list[DocFinding]:
     """Report children absent from a map that already enumerates that kind of sibling."""
-    children: dict[Path, list[TreeEntry]] = {}
-    for entry in entries:
-        children.setdefault(entry.path.parent, []).append(entry)
+    children = _group_entries_by_parent(entries)
     findings: list[DocFinding] = []
     for parent, listed in children.items():
-        if not oracle.listing(parent):
-            continue
-        declared = {entry.path.name for entry in listed}
-        missing = _undeclared_children(
-            parent, declared, {entry.is_directory for entry in listed}, oracle
-        )
-        findings.extend(
-            _missing_child_finding(parent, root, name, listed[0].line_number, file_str)
-            for name in missing
-        )
+        missing = _parent_missing_children(parent, listed, oracle)
+        line_no = listed[0].line_number
+        for name in missing:
+            findings.append(_missing_child_finding(parent, root, name, line_no, file_str))
     return findings
 
 
@@ -190,32 +203,37 @@ def _missing_child_finding(
     )
 
 
+def _audit_directory_block(
+    block: list[tuple[int, str]], root: Path, file_str: str, oracle: PathOracle
+) -> list[DocFinding]:
+    """Audit a single fenced directory block for existence and completeness."""
+    entries = _tree_entries(block, root)
+    if not _is_directory_map(entries, oracle):
+        return []
+    findings: list[DocFinding] = []
+    for entry in entries:
+        finding = _check_tree_entry_exists(entry, root, file_str, oracle)
+        if finding:
+            findings.append(finding)
+    findings.extend(_check_tree_completeness(entries, root, file_str, oracle))
+    return findings
+
+
 def check_directory_maps(
     lines: Sequence[str], file_path: Path, oracle: PathOracle | None = None
 ) -> list[DocFinding]:
     """Diff every embedded text directory tree against the filesystem it describes."""
     blocks = _extract_text_blocks(lines)
     if not blocks:
-        # Most documents draw no tree at all. Resolving the root first asked the
-        # filesystem about every document to serve the few that embed a map.
         return []
-    oracle = oracle if oracle is not None else PathOracle()
+    active_oracle = oracle if oracle is not None else PathOracle()
     root = file_path.parent.resolve()
-    if oracle.kind(root) != "dir":
+    if active_oracle.kind(root) != "dir":
         return []
+    file_str = str(file_path)
     findings: list[DocFinding] = []
     for block in blocks:
-        entries = _tree_entries(block, root)
-        if not _is_directory_map(entries, oracle):
-            continue
-        findings.extend(
-            finding
-            for finding in (
-                _check_tree_entry_exists(entry, root, str(file_path), oracle) for entry in entries
-            )
-            if finding
-        )
-        findings.extend(_check_tree_completeness(entries, root, str(file_path), oracle))
+        findings.extend(_audit_directory_block(block, root, file_str, active_oracle))
     return findings
 
 
@@ -226,10 +244,7 @@ def _extract_text_blocks(lines: Sequence[str]) -> list[list[tuple[int, str]]]:
 
 def _is_observation_file(file_path: Path) -> bool:
     """Predicate: true if file is a numbered observation doc under observations/."""
-    return (
-        "observations" in file_path.parts
-        and _OBSERVATION_FILENAME_RE.match(file_path.name) is not None
-    )
+    return "observations" in file_path.parts and _OBSERVATION_FILENAME_RE.match(file_path.name) is not None
 
 
 def _extract_numbered_sections(lines: Sequence[str]) -> set[int]:
@@ -336,9 +351,7 @@ def check_pattern_header(lines: Sequence[str], file_path: Path) -> list[DocFindi
     ]
 
 
-def check_observation_structure(
-    lines: Sequence[str], file_path: Path
-) -> list[DocFinding]:
+def check_observation_structure(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Verify that observation documents contain numbered sections ## 1. through ## 5."""
     if not _is_observation_file(file_path):
         return []
@@ -359,9 +372,7 @@ def check_observation_structure(
     ]
 
 
-def check_linebreak_hygiene(
-    lines: Sequence[str], file_path: Path
-) -> list[DocFinding]:
+def check_linebreak_hygiene(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Verify that lines outside code fences do not contain accidental single trailing whitespace.
 
     In CommonMark, hard line breaks require at least two trailing spaces ('  ') or a backslash ('\\').
@@ -494,9 +505,7 @@ def _inspect_display_math_line(
     return align_env
 
 
-def check_latex_math_hygiene(
-    lines: Sequence[str], file_path: Path
-) -> list[DocFinding]:
+def check_latex_math_hygiene(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
     """Verify that LaTeX and KaTeX math blocks do not contain unescaped ampersands or malformed syntax.
 
     In KaTeX / MathJax, '&' is an alignment delimiter and cannot be used in plain math expressions
@@ -522,6 +531,3 @@ def check_latex_math_hygiene(
         findings.extend(_check_display_math_findings(line, line_no, file_path_str))
         findings.extend(_check_inline_math_findings(line, line_no, file_path_str))
     return findings
-
-
-

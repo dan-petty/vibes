@@ -47,6 +47,7 @@ LABEL_WEIGHT_MODIFIERS = {
 
 class SDLCResourceKind(StrEnum):
     """Classification of SDLC resource on GitHub."""
+
     ISSUE = "issue"
     PULL_REQUEST = "pull_request"
     MILESTONE = "milestone"
@@ -54,6 +55,7 @@ class SDLCResourceKind(StrEnum):
 
 class PriorityLevel(StrEnum):
     """Urgency and business impact priority level."""
+
     P0_CRITICAL = "P0_CRITICAL"
     P1_HIGH = "P1_HIGH"
     P2_MEDIUM = "P2_MEDIUM"
@@ -62,6 +64,7 @@ class PriorityLevel(StrEnum):
 
 class LifecycleState(StrEnum):
     """Canonical GitHub Projects v2 Kanban lifecycle state."""
+
     BACKLOG = "Backlog"
     READY = "Ready"
     IN_PROGRESS = "In Progress"
@@ -73,6 +76,7 @@ class LifecycleState(StrEnum):
 @dataclass
 class SDLCResource:
     """Represents a discrete SDLC artifact tracked on GitHub."""
+
     resource_id: str
     kind: SDLCResourceKind
     number: int
@@ -108,6 +112,7 @@ class SDLCResource:
 @dataclass
 class AgentActionRecommendation:
     """Prescriptive next action for an autonomous agent or swarm."""
+
     action_type: str  # "REMEDIATE_PR", "REVIEW_PR", "IMPLEMENT_ISSUE", "RESOLVE_BLOCKER"
     target_resource: SDLCResource
     rationale: str
@@ -276,6 +281,18 @@ class SDLCProjectManager:
                 )
         return None
 
+    def _find_fallback_progress_action(self, ranked: list[SDLCResource]) -> AgentActionRecommendation | None:
+        """Find the top ranked item not held by a blocker as fallback action."""
+        for res in ranked:
+            if not res.blocked_reason:
+                return AgentActionRecommendation(
+                    action_type="PROGRESS_ITEM",
+                    target_resource=res,
+                    rationale=f"Advance #{res.number} ('{res.title}') through lifecycle.",
+                    priority_score=res.calculated_score,
+                )
+        return None
+
     def recommend_next_agent_action(self) -> AgentActionRecommendation | None:
         """Determine the single highest-leverage action the agent should take next."""
         ranked = self.get_ranked_resources()
@@ -292,20 +309,8 @@ class SDLCProjectManager:
         if issue_action:
             return issue_action
 
-        # Fallback: progress the top ranked item that is not held by a blocker. Rule 2
-        # already refuses blocked issues; without the same filter here a blocked item
-        # simply came back under a different action type, which is the whole point of
-        # a gate that does not cover every path out of the function.
-        schedulable = [res for res in ranked if not res.blocked_reason]
-        if not schedulable:
-            return None
-        top = schedulable[0]
-        return AgentActionRecommendation(
-            action_type="PROGRESS_ITEM",
-            target_resource=top,
-            rationale=f"Advance #{top.number} ('{top.title}') through lifecycle.",
-            priority_score=top.calculated_score,
-        )
+        # Fallback: progress the top ranked item that is not held by a blocker
+        return self._find_fallback_progress_action(ranked)
 
     def render_kanban_board(self) -> str:
         """Render ASCII Kanban board representation of current project state."""
@@ -319,11 +324,19 @@ class SDLCProjectManager:
             "==========================================================================================",
         ]
 
-        states = (LifecycleState.IN_PROGRESS, LifecycleState.IN_REVIEW, LifecycleState.READY, LifecycleState.BACKLOG, LifecycleState.DONE)
+        states = (
+            LifecycleState.IN_PROGRESS,
+            LifecycleState.IN_REVIEW,
+            LifecycleState.READY,
+            LifecycleState.BACKLOG,
+            LifecycleState.DONE,
+        )
         for state in states:
             lines.extend(_render_column(state, columns[state], self.dep_graph))
 
-        lines.append("==========================================================================================")
+        lines.append(
+            "=========================================================================================="
+        )
         return "\n".join(lines)
 
 
@@ -383,11 +396,15 @@ def load_resources_from_json(path: Path) -> list[SDLCResource]:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser for SDLC project manager."""
-    parser = argparse.ArgumentParser(description="Autonomous SDLC Project Management & Prioritization Engine.")
+    parser = argparse.ArgumentParser(
+        description="Autonomous SDLC Project Management & Prioritization Engine."
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Command: prioritize
-    cmd_prio = subparsers.add_parser("prioritize", help="Rank all SDLC resources by calculated priority score.")
+    cmd_prio = subparsers.add_parser(
+        "prioritize", help="Rank all SDLC resources by calculated priority score."
+    )
     cmd_prio.add_argument("--file", "-f", required=True, type=Path, help="Path to resources JSON file.")
     cmd_prio.add_argument("--json", action="store_true", help="Output results in JSON format.")
 
@@ -403,9 +420,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     cmd_sync.add_argument(
         "--scan", type=Path, help="Fresh backlog export to reconcile against (default: the same file)."
     )
-    cmd_sync.add_argument(
-        "--watch", action="store_true", help="Reconcile continuously until interrupted."
-    )
+    cmd_sync.add_argument("--watch", action="store_true", help="Reconcile continuously until interrupted.")
     cmd_sync.add_argument(
         "--interval", type=float, default=WATCH_INTERVAL_SECONDS, help="Seconds between passes."
     )
@@ -425,7 +440,9 @@ def _handle_prioritize(manager: SDLCProjectManager, is_json: bool) -> int:
     print(manager.render_kanban_board())
     print("\n🎯 TOP RANKED PRIORITIES:")
     for i, r in enumerate(ranked[:5], 1):
-        print(f"  {i}. #{r.number} ({r.kind.value}): {r.title} — Score: {r.calculated_score} ({r.priority.value})")
+        print(
+            f"  {i}. #{r.number} ({r.kind.value}): {r.title} — Score: {r.calculated_score} ({r.priority.value})"
+        )
     return 0
 
 
@@ -437,7 +454,9 @@ def _handle_next(manager: SDLCProjectManager) -> int:
         return 0
     print("🤖 RECOMMENDED AGENT NEXT ACTION:")
     print(f"  Action:    {rec.action_type}")
-    print(f"  Target:    #{rec.target_resource.number} ({rec.target_resource.kind.value}) — {rec.target_resource.title}")
+    print(
+        f"  Target:    #{rec.target_resource.number} ({rec.target_resource.kind.value}) — {rec.target_resource.title}"
+    )
     print(f"  Score:     {rec.priority_score}")
     print(f"  Rationale: {rec.rationale}")
     _print_deferred(manager)
@@ -542,6 +561,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     handler = dispatch.get(args.command)
     return handler() if handler else 0
 
+
 @dataclass
 class ReconciliationResult:
     """What one reconciliation pass changed about the board."""
@@ -597,6 +617,36 @@ ROADMAP_DECLARED_FIELDS: Final[tuple[str, ...]] = (
 )
 
 
+def _reconcile_existing_tasks(
+    existing: Sequence[dict[str, Any]],
+    current_by_id: dict[str, dict[str, Any]],
+    roadmap_ingested: bool,
+    result: ReconciliationResult,
+) -> list[dict[str, Any]]:
+    """Reconcile each existing task against current scan findings."""
+    merged: list[dict[str, Any]] = []
+    for task in existing:
+        identity = _card_identity(task)
+        if _is_roadmap_card(task):
+            merged.extend(_reconcile_roadmap_card(task, identity, current_by_id, roadmap_ingested, result))
+        else:
+            merged.extend(_reconcile_defect_card(task, identity, current_by_id, result))
+    return merged
+
+
+def _append_unseen_tasks(
+    merged: list[dict[str, Any]],
+    current_by_id: dict[str, dict[str, Any]],
+    result: ReconciliationResult,
+) -> None:
+    """Append new tasks from the current scan that did not exist on the board."""
+    known = {_card_identity(task) for task in merged}
+    for identity, task in current_by_id.items():
+        if identity not in known:
+            merged.append(task)
+            result.opened.append(identity)
+
+
 def reconcile_backlog(
     existing: Sequence[dict[str, Any]], current: Sequence[dict[str, Any]]
 ) -> tuple[list[dict[str, Any]], ReconciliationResult]:
@@ -615,23 +665,10 @@ def reconcile_backlog(
     """
     result = ReconciliationResult()
     current_by_id = {_card_identity(task): task for task in current}
-    merged: list[dict[str, Any]] = []
     roadmap_ingested = any(_is_roadmap_card(task) for task in current)
 
-    for task in existing:
-        identity = _card_identity(task)
-        if _is_roadmap_card(task):
-            merged.extend(
-                _reconcile_roadmap_card(task, identity, current_by_id, roadmap_ingested, result)
-            )
-        else:
-            merged.extend(_reconcile_defect_card(task, identity, current_by_id, result))
-
-    known = {_card_identity(task) for task in merged}
-    for identity, task in current_by_id.items():
-        if identity not in known:
-            merged.append(task)
-            result.opened.append(identity)
+    merged = _reconcile_existing_tasks(existing, current_by_id, roadmap_ingested, result)
+    _append_unseen_tasks(merged, current_by_id, result)
     return merged, result
 
 
@@ -673,9 +710,7 @@ def _reconcile_roadmap_card(
     return [task]
 
 
-def _refresh_roadmap_card(
-    task: dict[str, Any], current_by_id: dict[str, dict[str, Any]]
-) -> dict[str, Any]:
+def _refresh_roadmap_card(task: dict[str, Any], current_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Re-read a roadmap card's declared fields, keeping the lifecycle state the board owns.
 
     Roadmap cards are exempt from closing, and were previously carried forward verbatim
@@ -691,6 +726,21 @@ def _refresh_roadmap_card(
     return {**task, **declared}
 
 
+def _find_promotion_candidate(manager: SDLCProjectManager) -> SDLCResource | None:
+    """Find the top unblocked backlog item eligible for promotion to Ready."""
+    for res in manager.get_ranked_resources():
+        if res.lifecycle_state is LifecycleState.BACKLOG and manager._is_unblocked_candidate(res):
+            return res
+    return None
+
+
+def _promote_card(task: dict[str, Any], target_title: str) -> dict[str, Any]:
+    """Promote card to Ready state if its identity matches the target."""
+    if _card_identity(task) == target_title:
+        return {**task, "lifecycle_state": LifecycleState.READY.value}
+    return task
+
+
 def advance_ready_item(
     tasks: Sequence[dict[str, Any]], manager: SDLCProjectManager
 ) -> tuple[list[dict[str, Any]], str | None]:
@@ -699,21 +749,12 @@ def advance_ready_item(
     Exactly one card is promoted per pass. A board where everything is Ready states no
     order, which is the same as stating no priority.
     """
-    ranked = manager.get_ranked_resources()
-    candidates = (
-        res for res in ranked
-        if res.lifecycle_state is LifecycleState.BACKLOG and manager._is_unblocked_candidate(res)
-    )
-    target = next(candidates, None)
+    target = _find_promotion_candidate(manager)
     if target is None:
         return list(tasks), None
-    promoted = [
-        {**task, "lifecycle_state": LifecycleState.READY.value}
-        if _card_identity(task) == target.title.strip()
-        else task
-        for task in tasks
-    ]
-    return promoted, target.title.strip()
+    target_title = target.title.strip()
+    promoted = [_promote_card(task, target_title) for task in tasks]
+    return promoted, target_title
 
 
 if __name__ == "__main__":
