@@ -3,6 +3,8 @@
 > **Pattern Class**: Context Engineering & Tool Surface Design
 > **Problem**: Past roughly 40 tools, selection precision collapses and schemas consume a quarter of the context before any reasoning
 > **Solution**: Lazy domain-gated hydration, namespace disambiguation, and schema compression, paying only for the namespace entered
+> **TLDR**: Manage large tool catalogs with lazy domain hydration and schema compression, keeping model context lean and tool selection accurate.
+> **ELI:7b**: If you have 50 tools, don't show all 50 to the AI at once. Show only the 5 tools needed for the current job so it doesn't get confused.
 
 ## 1. Problem Statement
 

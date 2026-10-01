@@ -1,5 +1,8 @@
 # Model Failover Capability Cliffs & One-Way Degradation Ratchets
 
+> **TLDR**: Handle model outages with dynamic capability-aware failover policies rather than silently degrading to models incapable of complex reasoning.
+> **ELI:7b**: If a smart AI model goes down, don't blindly switch to a dumb model for complex jobs—only delegate tasks the backup model can actually handle.
+
 ## 1. Executive Context & Baseline
 
 `devops-cli` implements a multi-tier model routing and failover architecture through its AI Gateway (`src/devops_cli/ai/gateway.py`). The gateway maps four virtual model aliases to physical backends:

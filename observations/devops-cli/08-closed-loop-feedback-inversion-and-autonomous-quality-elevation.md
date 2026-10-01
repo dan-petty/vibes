@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Tiered Feedback Categorization & Autonomous Shift from Defect Firefighting to API Contract Perfection  
 > **Key Metric**: 0 missing docstrings across entire codebase; 100% of resources certified with `[POSITIVE_REINFORCEMENT]` badges; 0 human prompts required to initiate documentation coverage  
+> **TLDR**: Shift agent focus from reactive bug-fixing to proactive contract completion (100% docstring coverage) once high-priority defects are cleared.
+> **ELI:7b**: Once all bugs are squashed, have the AI automatically write complete documentation and clean types for every public function.
 
 ---
 

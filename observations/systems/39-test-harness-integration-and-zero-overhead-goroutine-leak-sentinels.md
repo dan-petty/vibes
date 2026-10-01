@@ -4,6 +4,8 @@
 > **Environment**: Go 1.22+ runtime, Python 3.12+ test harness, CI test execution, subagent concurrency  
 > **Classification**: Concurrency Safety, Test Harness Architecture, Runtime Oracles, Resource Leaks  
 > **Related**: [Observation 03 (Polyglot)](../polyglot/03-go-goroutine-leakage-and-context-lifecycles.md), [Observation 02 (Systems)](./02-subprocess-test-harness-instrumentation-tax.md), [Pattern: Test Harness Concurrency Leak Sentinel](../../patterns/test-harness-concurrency-leak-sentinel.md), [Exhibit: Go Leak Sentinel](../../examples/go-leak-sentinel/)
+> **TLDR**: Embed zero-overhead baseline calibration and teardown assertions in test runners to fail immediately on orphaned goroutines and threads.
+> **ELI:7b**: Catch background goroutines that forget to exit by comparing thread counts before and after each test run.
 
 ---
 

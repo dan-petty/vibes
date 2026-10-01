@@ -3,6 +3,8 @@
 > **Classification**: Polyglot Systems Engineering  
 > **Target Language**: Rust (Edition 2021 / 2024)  
 > **Key Metric**: 90%+ runtime state bugs eliminated at build time by the rustc oracle  
+> **TLDR**: Leverage Rust affine types and zero-sized marker types to eliminate over 90% of invalid state transitions at compile time.
+> **ELI:7b**: Use Rust's compiler to make bugs impossible: define states like Draft and Published as separate types so the compiler stops invalid actions before code even runs.
 
 ---
 

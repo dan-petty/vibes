@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Reasoning Model Integration, `<think>` Token Leakage Prevention, and Streaming FSM Sanitizers  
 > **Key Metric**: 100% containment of leaked reasoning tokens; sub-millisecond per-chunk streaming latency; zero stream deadlocks on unclosed tags  
+> **TLDR**: Sanitize streaming reasoning tokens with finite-state machines to prevent internal thinking blocks from leaking into downstream tools or user output.
+> **ELI:7b**: Filter out the AI's internal 'thinking' monologue in real time so private reasoning doesn't accidentally get passed to shell commands or API calls.
 
 ---
 

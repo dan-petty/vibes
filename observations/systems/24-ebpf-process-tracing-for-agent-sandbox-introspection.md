@@ -1,5 +1,8 @@
 # Observation 24: eBPF Process Tracing for Agent Sandbox Introspection
 
+> **TLDR**: Introspect agent sandbox activity with non-invasive eBPF process tracing to capture raw syscalls, network sockets, and file operations in real time.
+> **ELI:7b**: Use Linux kernel tracing to see every single file and network call the AI makes without having to modify its code.
+
 **Category**: Systems Engineering & Zero-Trust Sandboxing  
 **Status**: Field-Verified  
 **Canonical Implementation**: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)  

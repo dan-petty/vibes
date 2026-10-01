@@ -3,6 +3,8 @@
 > **Pattern Class**: Reliability Engineering & Autonomous Loop Governance
 > **Problem**: A binary health check makes a loop both twitchy and blind — one flaky run freezes it, and permanent green tells it nothing
 > **Solution**: Objectives measured as good events over valid events, an explicit error budget, and a policy table mapping budget state to loop phase
+> **TLDR**: Govern the pace of agent feature delivery by tracking error budget burn rates; halt new scope when reliability thresholds degrade.
+> **ELI:7b**: If the AI is breaking too many tests, stop it from adding new features until it fixes the existing bugs and restores stability.
 > **Reference Implementation**: [`tools/reliability_slo.py`](../tools/reliability_slo.py)
 
 ---

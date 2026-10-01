@@ -4,6 +4,8 @@
 > **Environment**: Autonomous agent instruction sets, context window budgets, continuous CI invariant sentinels
 > **Classification**: Context Budgeting, Attention Dilution, Instruction Pruning, Counterfactual Ablation
 > **Related**: [Observation 08](./08-convention-to-mechanical-enforcement-inversion.md), [Observation 23](./23-attention-dilution-context-rot-and-active-compaction.md), [Observation 27](./27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md), [Observation 29](./29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md)
+> **TLDR**: Resolve prompt bloat and lost-in-the-middle attention decay with two-tier JIT prompt envelopes and empirical counterfactual ablation.
+> **ELI:7b**: Prune giant prompt instruction files by testing which rules actually change agent behavior and deleting rules that don't do anything.
 
 ---
 

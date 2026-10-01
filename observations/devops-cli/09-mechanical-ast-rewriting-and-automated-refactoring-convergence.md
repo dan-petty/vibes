@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Deterministic Structural Refactoring via AST Transformation vs. Non-Deterministic LLM Prompting  
 > **Key Metric**: Net McCabe complexity reduction $\Delta M \ge 7$ per equality ladder; $100\%$ syntactic and behavioral invariance preserved; $0$ prompt-induced semantic regressions  
+> **TLDR**: Apply deterministic AST transformations to flatten complex equality ladders and nested guards without introducing non-deterministic LLM hallucinations.
+> **ELI:7b**: Use a rule-based computer script to safely untangle messy code instead of asking an AI to rewrite it and hoping it doesn't change the meaning.
 
 ---
 

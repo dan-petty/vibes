@@ -4,6 +4,8 @@
 > **Classification**: Concurrency Safety & Runtime Stack Verification  
 > **Target Subsystem**: Go Concurrency Lifecycles (`examples/go-leak-sentinel/`)  
 > **Key Metric**: 100.0/100 Concurrency Safety Score; 0 leaked goroutines; deterministic detection of channel send deadlocks and abandoned context loops  
+> **TLDR**: Inspect runtime stack traces during test teardown to detect orphaned goroutines, unbuffered channel deadlocks, and leaking context lifecycles.
+> **ELI:7b**: Make Go tests check the thread count after finishing so you immediately catch background workers that forgot to exit.
 
 ---
 

@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`  
 > **Topic**: Grounding Agent Sessions into GitHub Projects v2 and Structured Task Files  
 > **Key Metric**: Zero ungrounded tasks, 100% issue-to-commit traceability  
+> **TLDR**: Ground autonomous agent sessions in GitHub Projects v2 and atomic issue cards to eliminate conversational amnesia and ensure 100% commit-to-issue traceability.
+> **ELI:7b**: AIs have short-term memory loss. Keep the AI on track by giving it a written task card and having it check off items as it finishes them.
 
 ---
 

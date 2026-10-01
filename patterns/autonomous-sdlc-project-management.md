@@ -3,6 +3,8 @@
 > **Pattern Class**: Autonomous Governance & Delivery Lifecycle
 > **Problem**: Agents suffer SDLC blindness: they can write code but cannot decide what to work on next, or know when something is blocked
 > **Solution**: Deterministic resource modelling, dependency-aware scoring, and a ranked next-action recommendation the agent can obey
+> **TLDR**: Ground agent execution in atomic GitHub issues, project cards, and state machines to eliminate conversational amnesia and scope drift.
+> **ELI:7b**: Keep the AI focused by making it pick one small ticket from a task board, work on it, and check it off when tests pass.
 > **Reference Implementation**: [`tools/sdlc_project_manager.py`](../tools/sdlc_project_manager.py)
 
 A deterministic project management, resource modeling, and prioritization pattern enabling AI agents and swarms to self-steer through the Software Development Lifecycle (SDLC) without human manual intervention.

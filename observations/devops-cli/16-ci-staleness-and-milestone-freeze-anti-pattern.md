@@ -3,6 +3,8 @@
 > **Project**: `vibes`
 > **Topic**: CI Configuration Staleness, Codelist Enumeration, and Generic Test Runner Contracts
 > **Key Metric**: `ci.yml` coverage expanded from 5 hardcoded test files (Milestone 2) to 192 tests across 21 suites; zero manual test list maintenance required going forward
+> **TLDR**: Replace hardcoded test file enumeration in CI configurations with dynamic directory globbing to prevent new test suites from being silently skipped.
+> **ELI:7b**: Tell your CI pipeline to run all tests in the test folder automatically, rather than listing filenames by hand and forgetting new ones.
 
 ---
 

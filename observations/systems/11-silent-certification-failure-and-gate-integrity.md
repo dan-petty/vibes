@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Mechanical Enforcement Infrastructure
 > **Topic**: Gates That Pass Without Auditing; Oracles That Measure Their Own Scaffolding; Verdicts That Depend on Invocation Shape
 > **Key Metric**: 1 of 3 supplied files actually audited per pre-commit invocation (`✅ All architectural invariants PASSED!` printed over the other 2); 6 of 41 Python modules ungated in CI; top-ranked repository defect (score 370.0) was 81% interpreter boot
+> **TLDR**: Ensure verification gates fail closed and audit their own execution to prevent silent certification passes on untested or skipped inputs.
+> **ELI:7b**: A checker tool that skips a file must fail the build. A gate should never report success when it didn't actually check anything.
 
 ---
 

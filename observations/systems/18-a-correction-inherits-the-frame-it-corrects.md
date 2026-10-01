@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Work Generation & Portfolio Measurement
 > **Topic**: Why the Instrument Built to Close a Blind Spot Reproduced It, and Why the Metric Built to Detect the Imbalance Disagreed With the Change That Corrected It
 > **Key Metric**: A survey added to look outward emitted **13 gaps, 13 of them linter features**, from a manifest naming **3 of this repository's 16 sample applications**; the balance metric added to detect the drift then held capability investment at **exactly 350 lines** across the release that added **512 lines** of application factory
+> **TLDR**: Audit bug fixes to ensure they resolve the root defect class rather than merely shifting the defect into a configuration fallback or declaration.
+> **ELI:7b**: Fix the underlying cause of a bug instead of adding a special-case exception that just moves the bug into a different file.
 
 ---
 

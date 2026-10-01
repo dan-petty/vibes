@@ -3,6 +3,8 @@
 > **Pattern Class**: Living Documentation Architecture & Quality Gates  
 > **Problem**: Technical documentation silently accumulates non-inclusive terminology, duplicated words, and unresolved development placeholders when linter suites verify only markdown syntax without auditing prose  
 > **Solution**: Extract and audit natural language prose across canonical style guides (Google, Microsoft) while insulating code spans and fenced blocks via neutral placeholder tokenization  
+> **TLDR**: Enforce natural language style guides, inclusive terminology, and anti-doubled-word checks in documentation with CommonMark fence awareness.
+> **ELI:7b**: An automated proofreader that checks documentation for typos, repetitive words, and outdated terms without messing up code blocks.
 > **Reference Implementation**: [`tools/doc_rules_style.py`](../tools/doc_rules_style.py)
 
 ---

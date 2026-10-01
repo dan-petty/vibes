@@ -3,6 +3,8 @@
 > **Pattern Class**: Meta-Cognitive Architecture & Deterministic Quality Enforcement
 > **Problem**: Probabilistic generation bounded only by natural-language instructions drifts into structural entropy
 > **Solution**: Deterministic mechanical oracles that bound generation, with the loop inverting from remediation to elevation once they are satisfied
+> **TLDR**: Replace subjective model self-judgment with fast, deterministic mechanical oracles (AST linters, compilers, test runners) to drive feedback loops.
+> **ELI:7b**: Never ask the AI 'does this look good?'. Run a real compiler or test runner to tell the AI exactly what passed and what failed.
 > **Reference Implementation**: [`tools/resource_iteration_workbench.py`](../tools/resource_iteration_workbench.py)
 
 ---

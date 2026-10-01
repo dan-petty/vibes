@@ -3,6 +3,8 @@
 > **Pattern Class**: Editor Integration & Control Plane Governance
 > **Problem**: Tool execution privileges inside an IDE expose credentials, host filesystem, and network egress to an autonomous agent
 > **Solution**: Pre- and post-tool lifecycle hooks enforcing zero-trust egress, process-group containment, and LSP diagnostics as a regression oracle
+> **TLDR**: Wire agent execution directly into IDE hooks and LSP diagnostics to intercept syntax errors and invariant breaches before saving files.
+> **ELI:7b**: Connect the AI directly to your code editor so it gets red squiggly error lines instantly instead of waiting for a slow build to fail.
 > **Reference Implementation**: [`examples/agentic-ide-hook-sentinel/`](../examples/agentic-ide-hook-sentinel/)
 
 ---

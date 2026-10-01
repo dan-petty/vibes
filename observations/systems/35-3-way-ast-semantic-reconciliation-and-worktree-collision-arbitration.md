@@ -4,6 +4,8 @@
 > **Environment**: Multi-agent concurrent worktrees, Git 3-way merge drivers, Python AST symbol graphs  
 > **Classification**: Software Architecture, Git Internals, Multi-Agent Concurrency, AST Engineering  
 > **Related**: [Observation 06](./06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md), [Observation 09](../devops-cli/09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md), [Pattern: 3-Way AST Semantic Reconciliation](../../patterns/3-way-ast-semantic-reconciliation.md)
+> **TLDR**: Reconcile concurrent agent git collisions using commutative AST symbol graphs and 3-way import set unions rather than raw line diffs.
+> **ELI:7b**: Merge code changes from multiple AIs by analyzing the functions and classes instead of line numbers, avoiding false merge conflicts.
 
 ---
 

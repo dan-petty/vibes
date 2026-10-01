@@ -1,5 +1,8 @@
 # Observation 01 (Systems): Distributed Telemetry & Agent Waterfalls
 
+> **TLDR**: Trace multi-agent workflows using W3C traceparent propagation and OpenTelemetry span hierarchies to eliminate the agent black box.
+> **ELI:7b**: Put timing tags on every step each AI helper takes so you can see a visual chart of who did what and why something took so long.
+
 How W3C traceparent context propagation and OpenTelemetry span hierarchies eliminate the "black box" in multi-agent coding workflows.
 
 ---

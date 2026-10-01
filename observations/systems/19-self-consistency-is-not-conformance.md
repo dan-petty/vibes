@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Capability Development Against External Standards
 > **Topic**: Why a Repository With Excellent Gates Is Systematically Wrong at Its Boundaries, and What a Capability Gap Exposes That a Defect Scan Cannot
 > **Key Metric**: Four capabilities built to close gaps an external survey named; **all four** turned out to have an existing implementation that was already wrong — a sandbox reporting **100.0/100 while enforcing 0 of 8 controls**, a trace generator emitting a private vocabulary in a standard envelope, a crawler dropping every code block, and a balance metric counting capability work as instrument work. None was visible to any gate in the repository, and every one became obvious the moment something outside it was consulted
+> **TLDR**: Validate agent outputs against authoritative external ground truth rather than relying on internal model self-consistency or agreement.
+> **ELI:7b**: Two AI models agreeing with each other doesn't make them right. Always test against real compilers, exit codes, and official RFC standards.
 
 ---
 

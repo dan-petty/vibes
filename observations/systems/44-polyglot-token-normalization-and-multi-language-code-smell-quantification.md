@@ -4,6 +4,8 @@
 > **Environment**: Python 3.12+, JavaScript/TypeScript, Go, Rust, Bash, `kucherenko/jscpd`, Radon, Vulture  
 > **Classification**: Code Smell Quantification, Clone Detection, Multi-Language Static Analysis, Halstead Metrics  
 > **Related**: [Observation 41 (Systems)](./41-radon-block-complexity-ranking-in-code-smell-quantification.md), [Pattern: Polyglot Token Normalization and Clone Quantification](../../patterns/polyglot-token-normalization-and-clone-quantification.md), [Exhibit: Code Smell Quantifier](../../examples/code-smell-quantifier/smell_quantifier.py)
+> **TLDR**: Detect copy-paste duplication and structural smells across polyglot source trees (TS, Go, Rust, Bash) using Type-2 regex token normalization.
+> **ELI:7b**: Find duplicate code across multiple programming languages by stripping names to generic tokens and comparing the core structural syntax.
 
 ---
 

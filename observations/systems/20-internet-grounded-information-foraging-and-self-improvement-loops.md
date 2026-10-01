@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Autonomous SDLC & Multi-Model Empirical Evaluation
 > **Topic**: Overcoming the Inward-Looking Agentic Trap: Why Self-Improvement Loops Collapse Without Outward Information Foraging, and How Patch Minimality Reins In Diff Sprawl
 > **Key Metric**: Frontier models (Claude 3.5 Sonnet, GPT-4o) achieve 100% Pass@1 and high invariant compliance ($M \le 2$, depth $\le 2$) at $\$0.002-\$0.010$ per task; high-efficiency open-weights models (DeepSeek-V3, Qwen-2.5-Coder-32B) match $>83\%$ invariant satisfaction at **10× to 20× lower cost** ($\$0.0001-\$0.0006$); while ungrounded self-improvement loops suffer an **"Over-Editing Trap"** where whole-file rewrites degrade patch minimality from $0.90 \to 0.40$ and introduce latent regressions.
+> **TLDR**: Ground agent self-improvement in external web search and documentation foraging to prevent stale knowledge and circular reasoning traps.
+> **ELI:7b**: Let the AI search the web for updated documentation and libraries so it doesn't rely on outdated training memory.
 
 ---
 

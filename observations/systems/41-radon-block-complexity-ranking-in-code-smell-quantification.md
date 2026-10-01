@@ -4,6 +4,8 @@
 > **Environment**: Python 3.12+ AST, radon 6.0+, static code analysis, CI quality gates  
 > **Classification**: Complexity Metrics, Software Decay, Static Analysis, Code Smells  
 > **Related**: [Observation 40 (Systems)](./40-configurable-prose-style-guides-and-inclusive-terminology-gates.md), [Observation 15 (Systems)](./15-a-count-is-not-a-cost.md), [Pattern: Radon Block Complexity Ranking and Smell Quantification](../../patterns/radon-block-complexity-ranking-and-smell-quantification.md), [Exhibit: Code Smell Quantifier](../../examples/code-smell-quantifier/)
+> **TLDR**: Quantify code smells by integrating radon block-level cyclomatic complexity AST visitors directly into quality measurement pipelines.
+> **ELI:7b**: Audit functions individually for cyclomatic complexity so deeply tangled loops and branch ladders can't hide behind a clean file average.
 
 ---
 

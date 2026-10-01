@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Feedback Loop & Instrumentation
 > **Topic**: The First Three Runs of a New Detector Measure Its Reach, Its Frame of Reference, and Only Then the System
 > **Key Metric**: Four consecutive runs of one new fuzzer returned, in order, 0 findings across 320 cases (two of eight instruments were never actually reached), 10 findings of which 10 were false (the harness's scratch path was inside the comparison), 2 findings that were real, and then 2 more that were false at a rate of 0.3% — because the fix for the third run's defect introduced a fourth, in the same place, by applying two normalizations in the wrong order
+> **TLDR**: Audit fuzzer test harnesses for false alarms and parser misunderstandings before treating early fuzzer reports as true target bugs.
+> **ELI:7b**: When a new fuzzer generates 50 bug reports on day one, check the fuzzer's test rules first—many of those reports are just fuzzer configuration mistakes.
 
 ---
 

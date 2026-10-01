@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`  
 > **Topic**: Multi-Tier Model Topologies ("Big Decides, Small Types, Big Checks")  
 > **Key Metric**: 85%+ token cost reduction, sub-second symbol search latency  
+> **TLDR**: Partition agent workflows into swappable slots ('Big Decides, Small Types, Big Checks') to slash token overhead by 85% and achieve sub-second search latency.
+> **ELI:7b**: Use smart expensive models for high-level architecture, fast cheap models for typing and searching, and dumb scripts for grading tests.
 
 ---
 

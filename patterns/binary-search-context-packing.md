@@ -3,6 +3,8 @@
 > **Pattern Class**: Context Topology & Algorithmic Token Budgeting
 > **Problem**: Packing multi-file AST context into a fixed token budget by trial and error is slow and truncates mid-block
 > **Solution**: Monotonic binary search over the inclusion boundary, in O(log N) probes, cutting only at syntactic boundaries
+> **TLDR**: Binary search over token budgets to find the maximal AST syntax slice that fits within model context windows without truncation.
+> **ELI:7b**: When you have too much code to fit in an AI chat, use binary search to quickly find the largest piece of clean code that fits.
 > **Reference Implementation**: [`examples/binary-search-context-packer/`](../examples/binary-search-context-packer/)
 
 ---

@@ -4,6 +4,8 @@
 > **Environment**: WASI 0.2 Component Model, WebAssembly linear memory, POSIX ambient authority  
 > **Classification**: Systems Engineering, Sandboxing, Security Architecture, WebAssembly  
 > **Related**: [Observation 07](./07-agentic-ide-protocols-and-lsp-mcp-convergence.md), [Observation 34](./34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md), [Pattern: Capability-Based Wasm Sandboxing](../../patterns/capability-based-wasm-sandboxing.md)
+> **TLDR**: Execute agent tools with sub-millisecond cold starts, deterministic gas metering, and zero ambient authority using WASI 0.2 WebAssembly sandboxes.
+> **ELI:7b**: Run AI plugins in tiny WebAssembly modules where each tool only has access to the exact files you grant it, with a strict time/CPU limit.
 
 ---
 

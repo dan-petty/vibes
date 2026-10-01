@@ -1,5 +1,8 @@
 # Observation 27: Agentic Project Self-Documentation & The Phantom Architecture Trap
 
+> **TLDR**: Prevent the Phantom Architecture Trap where agents document imagined features by deriving docs directly from AST reflection and schema extraction.
+> **ELI:7b**: Generate CLI and API documentation directly from real code symbols so the docs can never describe features that don't actually exist.
+
 **Category**: Systems & Autonomous Governance
 **Status**: Field-Verified
 **Canonical Implementation**: [`tools/docs_validator.py`](../../tools/docs_validator.py), [`patterns/multi-tier-living-documentation.md`](../../patterns/multi-tier-living-documentation.md)

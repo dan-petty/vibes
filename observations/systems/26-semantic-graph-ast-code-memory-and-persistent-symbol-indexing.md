@@ -1,5 +1,8 @@
 # Observation 26: Semantic Graph AST Code Memory & Persistent Symbol Indexing
 
+> **TLDR**: Index repository symbols and relationships into persistent AST semantic graphs, enabling subagents to query dependencies without full-repo scans.
+> **ELI:7b**: Build a map of all functions and classes in the project so the AI can look up callers and dependencies instantly.
+
 **Category**: Distributed Systems & Multi-Agent Refactoring Invariants  
 **Status**: Field-Verified  
 **Canonical Implementation**: [`tools/code_memory.py`](../../tools/code_memory.py)  

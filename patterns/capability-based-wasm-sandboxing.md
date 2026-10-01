@@ -3,6 +3,8 @@
 > **Pattern Class**: Systems Architecture & Runtime Isolation  
 > **Problem**: Ephemeral agent-generated tool execution suffers from ambient UNIX authority vulnerabilities (CWE-250) or excessive container cold-start latency (150ms–400ms)  
 > **Solution**: Execute untrusted guest code inside WebAssembly components governed by unforgeable object-capability tokens, deterministic instruction gas budgets, and linear memory limits  
+> **TLDR**: Isolate ephemeral agent tools inside WASI 0.2 components with unforgeable capability tokens, deterministic gas metering, and sub-millisecond cold starts.
+> **ELI:7b**: Run AI tools in tiny, super-fast WebAssembly playpens where they only have permission to touch the exact files you handed them.
 > **Reference Implementation**: [`examples/wasm-capability-sandbox/`](../examples/wasm-capability-sandbox/)
 
 ---

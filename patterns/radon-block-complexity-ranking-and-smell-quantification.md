@@ -3,6 +3,8 @@
 > **Pattern Class**: Code Quality Metrics & Static Analysis  
 > **Problem**: Module-level maintainability metrics average out localized function complexity, hiding monolithic dispatchers and high-risk control flow spikes behind deceptive module-level Grade A scores  
 > **Solution**: Integrate radon's reference AST visitor (`cc_visit_ast`) and grade ranker (`cc_rank`) directly into the code smell quantification engine, reporting block-level cyclomatic complexity alongside structural smells  
+> **TLDR**: Measure McCabe cyclomatic complexity at individual block and function levels using AST visitors, preventing complex spikes from hiding behind module averages.
+> **ELI:7b**: Check each individual function for complicated knots instead of averaging the whole file, so giant tangled functions can't hide.
 > **Reference Implementation**: [`examples/code-smell-quantifier/`](../examples/code-smell-quantifier/)
 
 ---

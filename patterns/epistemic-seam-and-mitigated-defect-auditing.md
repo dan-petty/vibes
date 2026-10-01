@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Agent Verification & Epistemic Governance
 > **Problem**: Verifier personas conflate mitigation with refutation, silently discarding genuine defects based on hallucinated safety context, while negative filtering catalogs suffer runaway epistemic drift by learning from model opinions
 > **Solution**: A tripartite verification protocol (Confirmed, Refuted with Line Citation, Mitigated with Named Mechanism) paired with an immutable Epistemic Seam that permits negative catalog learning solely from deterministic ground truth or human verification
+> **TLDR**: Maintain immutable epistemic seams between defect identification and fix synthesis, preventing agents from falsely claiming a bug is resolved.
+> **ELI:7b**: Keep the bug-hunter role separate from the bug-fixer role so the fixer can't grade its own homework and claim it's done when it isn't.
 > **Reference Implementation**: [`tools/finding_baseline.py`](../tools/finding_baseline.py), [`tools/sarif_report.py`](../tools/sarif_report.py)
 
 ---

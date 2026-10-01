@@ -4,6 +4,8 @@
 > **Classification**: Memory Safety, Lifetime Profile & Static Contract Auditing  
 > **Target Subsystem**: C++ Lifetime Sentinel (`tools/cpp_lifetime_sentinel.py`)  
 > **Key Metric**: 100% elimination of manual memory management (`delete`/`free`); zero use-after-move hazards; 0 dangling view handles (`std::string_view` / `std::span`) across synthesized C++20 components.  
+> **TLDR**: Enforce strict RAII ownership semantics and audit dangling view handles to prevent LLM-synthesized C++ from leaking memory or causing use-after-free bugs.
+> **ELI:7b**: Require smart pointers and modern C++ containers so the AI never has to write manual memory cleanup that leads to crashes.
 
 ---
 

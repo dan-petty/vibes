@@ -4,6 +4,8 @@
 > **Environment**: Python 3.12+ AST, Language Server Protocol (LSP 3.17), static analysis, astral-sh/ruff  
 > **Classification**: Developer Ergonomics, Language Server Protocol, Automated Remediation, Static Analysis  
 > **Related**: [Observation 41 (Systems)](./41-radon-block-complexity-ranking-in-code-smell-quantification.md), [Observation 40 (Systems)](./40-configurable-prose-style-guides-and-inclusive-terminology-gates.md), [Pattern: LSP Diagnostics and Automated Invariant Repair](../../patterns/lsp-diagnostics-and-automated-invariant-repair.md), [Exhibit: AST Invariant Sentinel](../../examples/ast-invariant-sentinel/)
+> **TLDR**: Deliver sub-millisecond in-editor diagnostics and automated AST-verified QuickFix remediations using an in-process Language Server Protocol server.
+> **ELI:7b**: Give the AI assistant instant compiler feedback and automated one-click fixes right inside VS Code as it writes code.
 
 ---
 

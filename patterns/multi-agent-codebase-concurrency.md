@@ -3,6 +3,8 @@
 > **Pattern Class**: Swarm Orchestration & Concurrency Architecture
 > **Problem**: Concurrent agents on one working tree clobber each other's edits, corrupt shared state files, and live-lock on rebase
 > **Solution**: Partitioned worktrees, per-agent state directories, and distributed mutexes over the resources that cannot be partitioned
+> **TLDR**: Partition concurrent multi-agent fleets across isolated git worktrees, scoped database directories, and distributed resource locks.
+> **ELI:7b**: Keep multiple AI helpers from stepping on each other's toes by giving each one its own sandbox and separate file paths.
 
 ---
 

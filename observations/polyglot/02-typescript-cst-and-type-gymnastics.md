@@ -3,6 +3,8 @@
 > **Classification**: Polyglot Frontend & Fullstack Engineering  
 > **Target Language**: TypeScript 5.5+  
 > **Key Metric**: 80% reduction in type-checker regressions using CST symbol extraction  
+> **TLDR**: Extract concrete CST symbols and enforce zero-any invariant gates to prevent LLMs from writing overly recursive TypeScript conditional types.
+> **ELI:7b**: Keep TypeScript simple: ban the 'any' keyword and don't let the AI write crazy nested generic puzzles that crash the type-checker.
 
 ---
 

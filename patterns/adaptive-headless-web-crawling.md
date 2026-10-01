@@ -3,6 +3,8 @@
 > **Pattern Class**: Agent Data Acquisition & External Grounding
 > **Problem**: Static fetching silently returns empty SPA shells, and unconditional headless rendering costs seconds per page
 > **Solution**: Two-tier escalation with persistent per-domain strategy memory, so each domain is learned once and paid for once
+> **TLDR**: Extract dynamic web content via adaptive headless browsers with content-addressed caching, DOM sanitization, and bounded execution timeouts.
+> **ELI:7b**: A smart web crawler that loads modern JavaScript pages, cleans out junk ads and tracking scripts, and saves clean text safely without hanging.
 > **Reference Implementation**: [`examples/adaptive-web-crawler/`](../examples/adaptive-web-crawler/)
 
 A robust, two-tier web crawling and documentation extraction pattern for AI agents that mitigates headless browsing limitations through dynamic tier escalation, SPA shell detection, and persistent domain strategy memory.

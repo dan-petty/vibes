@@ -1,5 +1,8 @@
 # Observation 02 (Systems): Subprocess Test Harness Instrumentation Tax
 
+> **TLDR**: Selectively bypass heavy test plugins (xdist, cov, logfire) in fast local loops to restore sub-second test execution for rapid agent iteration.
+> **ELI:7b**: Turn off slow reporting plugins while the AI is actively writing code so tests finish in under half a second instead of several seconds.
+
 How unpruned workspace test plugins (`xdist`, `cov`, `logfire`) create a 10x latency penalty in iterative agent feedback loops, and how selective bypass restores sub-second velocity.
 
 ---

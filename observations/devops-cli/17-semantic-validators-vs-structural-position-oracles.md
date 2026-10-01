@@ -3,6 +3,8 @@
 > **Project**: `vibes` — `tools/docs_validator.py`
 > **Topic**: Keyword Matching Brittleness in Document Structure Validators; Structural Enumeration as the Correct Oracle
 > **Key Metric**: First implementation rejected 26 valid observation files; structural position oracle passed all 25 existing documents and immediately caught 1 genuine defect
+> **TLDR**: Validate required document sections by structural outline position rather than fragile keyword matching against diverse natural language.
+> **ELI:7b**: Check document outlines by section numbers (1, 2, 3) instead of searching for exact words that can change across different writing styles.
 
 ---
 

@@ -5,6 +5,8 @@
 > **Pattern Class**: Mechanical Enforcement & Verification Infrastructure
 > **Problem**: Quality gates default to success when they audit nothing, silently certifying code they never opened
 > **Solution**: Account for every supplied input, measure the artifact rather than the harness, and make unaudited input a failure
+> **TLDR**: Enforce total input coverage across all CLI tools and verification gates, failing closed whenever an input or file is silently skipped.
+> **ELI:7b**: If a checker tool is given five files to test, make sure it actually tests all five instead of quietly skipping two of them.
 > **Reference Implementation**: [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py) — `audit_targets`, `_scan_waivers`
 
 ---

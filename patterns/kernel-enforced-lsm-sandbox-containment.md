@@ -3,6 +3,8 @@
 > **Pattern Class**: Security Architecture & Kernel Gating
 > **Problem**: Post-hoc user-space log monitors fail to prevent unrecoverable sandbox escapes and malicious socket calls by compromised subagents
 > **Solution**: Synchronously intercept syscall operations at the Linux Security Module (BPF LSM) boundary and verify containment with Syzkaller boundary fuzzing
+> **TLDR**: Intercept unauthorized execution, socket egress, and privilege escalation at the Linux Security Module (BPF LSM) boundary with zero race windows.
+> **ELI:7b**: Block unauthorized commands and network connections right inside the Linux kernel so rogue AI scripts are stopped before they can run.
 > **Reference Implementation**: [`examples/ebpf-lsm-kernel-gate/`](../examples/ebpf-lsm-kernel-gate/)
 
 ---

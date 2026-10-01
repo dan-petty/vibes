@@ -4,6 +4,8 @@
 > **Classification**: Grammatical Fuzzing, Parser Convergence, Symlink Containment  
 > **Target Subsystem**: Polyglot Mutation Fuzzer ([`examples/polyglot-mutation-fuzzer/`](../../examples/polyglot-mutation-fuzzer/))  
 > **Key Metric**: 100% graceful syntax error rejection, 0 unhandled interpreter panics, bounded memory (< 5MB), and verified `ELOOP` cycle containment.  
+> **TLDR**: Fuzz multi-language AST boundary parsers with grammatical mutations to verify graceful syntax error handling, symlink containment, and memory bounds.
+> **ELI:7b**: Feed weird, broken code snippets to your code parser to make sure it reports clean errors instead of crashing or leaking memory.
 
 ---
 

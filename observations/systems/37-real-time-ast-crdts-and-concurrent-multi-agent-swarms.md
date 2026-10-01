@@ -4,6 +4,8 @@
 > **Environment**: Distributed AI coding swarms, real-time collaborative editing, AST Tree-CRDTs  
 > **Classification**: Distributed Systems, CRDTs, Multi-Agent Concurrency, AST Engineering  
 > **Related**: [Observation 06](./06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md), [Observation 35](./35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md), [Pattern: AST-CRDTs for Real-Time Agent Collaboration](../../patterns/ast-crdts-for-real-time-agent-collaboration.md)
+> **TLDR**: Eliminate character-level syntax errors under concurrent multi-agent editing using replicated AST-CRDT nodes with Lamport clocks and fractional ordering.
+> **ELI:7b**: Allow multiple AI coders to edit code in real time like Google Docs, using syntax tree nodes instead of raw characters so code stays valid.
 
 ---
 

@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: JSON Schema Draft 2020-12 Verification Gates, Negative Schema Assertions, and Closed-Loop Agent Zero-Shot Self-Correction  
 > **Key Metric**: 100% detection of hallucinated tool parameters; 0 multi-turn parameter correction loops; bounded string length caps ($\le 256$ chars) mitigating CWE-400 log bloat  
+> **TLDR**: Enforce JSON Schema negative assertions (additionalProperties: false) to detect hallucinated tool parameters and synthesize prescriptive error prompts for zero-shot recovery.
+> **ELI:7b**: Forbid extra made-up parameters on AI tools. When the AI hallucinates an argument, give it an exact error message showing the valid parameters.
 
 ---
 

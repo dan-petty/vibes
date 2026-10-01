@@ -3,6 +3,8 @@
 > **Pattern Class**: Architecture & Autonomous Governance  
 > **Problem**: Static codebases decay exponentially in the post-harness era, but unconstrained recursive self-improvement collapses into phantom architectures, circular self-consistency traps, and attention dilution  
 > **Solution**: A tripartite architecture binding deterministic AST invariants, counterexample-guided regression accumulation, and outward landscape foraging into a convergent, closed-loop self-evolution engine  
+> **TLDR**: Anchor recursive agent self-improvement in AST invariant gates, counterexample test accumulation, and outward landscape foraging.
+> **ELI:7b**: Let AI improve its own code and tools, but only allow changes that pass strict math checks, pass all tests, and beat external alternatives.
 > **Reference Implementation**: [`tools/resource_iteration_workbench.py`](../tools/resource_iteration_workbench.py), [`tools/landscape_survey.py`](../tools/landscape_survey.py)
 
 ---

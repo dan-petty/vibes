@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Pure Standard Library File Watchers (`ResourceWatcher`) & Sub-Second Autonomous Invariant Feedback  
 > **Key Metric**: Sub-second change detection (< 50ms tick overhead); 0 external C-dependencies; instant $\Delta M$ / $\Delta t$ diff feedback  
+> **TLDR**: Use native standard-library file watching to trigger continuous sub-second invariant and test validation upon every file modification.
+> **ELI:7b**: Run an automatic watcher that tests the code the instant the AI saves a file, catching errors immediately.
 
 ---
 

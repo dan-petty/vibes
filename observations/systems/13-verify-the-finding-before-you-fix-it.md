@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Feedback Loop & Instrumentation
 > **Topic**: Loops That Manufacture Work; Why a New Instrument's First Reading Measures the Instrument
 > **Key Metric**: 4 of 5 backlog items were measurement error, not work; 6 separate first readings across one session were artifacts of the instrument rather than facts about the system
+> **TLDR**: Treat inbound review findings as unproven hypotheses; verify and reproduce the defect with an executable test before attempting a fix.
+> **ELI:7b**: Never blindly patch a bug reported by an AI reviewer. Write a test that reproduces it first to prove the bug is actually real.
 
 ---
 

@@ -3,6 +3,8 @@
 > **Pattern Class**: Runtime Isolation & Distributed Observability
 > **Problem**: Agents synthesize and execute untrusted code, and raw execution privileges expose the host and the network behind it
 > **Solution**: Rootless, capability-dropped sandboxes paired with high-fidelity telemetry, so isolation is verifiable rather than assumed
+> **TLDR**: Execute untrusted agent code in rootless, capability-dropped containers with full distributed trace telemetry and bounded resource limits.
+> **ELI:7b**: Run AI-generated code in a locked-down container with no root permissions, full activity logging, and strict CPU/memory limits.
 > **Reference Implementation**: [`examples/ephemeral-container-sandbox/`](../examples/ephemeral-container-sandbox/)
 
 A defense-in-depth architectural pattern coupling isolated, unprivileged execution environments with continuous, high-fidelity distributed telemetry.

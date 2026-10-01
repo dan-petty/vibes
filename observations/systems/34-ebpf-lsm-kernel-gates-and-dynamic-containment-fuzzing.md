@@ -4,6 +4,8 @@
 > **Environment**: Unprivileged subagent sandboxes, Linux Security Module (BPF LSM) hooks, Syzkaller syscall fuzzing
 > **Classification**: Kernel Security, eBPF, Invariant Gating, Adversarial Robustness
 > **Related**: [Observation 24](./24-ebpf-process-tracing-for-agent-sandbox-introspection.md), [Observation 30](./30-kinetic-falsification-and-the-ephemeral-exploit-harness.md), [Pattern: Kernel-Enforced LSM Sandbox Containment](../../patterns/kernel-enforced-lsm-sandbox-containment.md)
+> **TLDR**: Enforce synchronous pre-execution denial (-EPERM) and zero race windows for agent sandboxes using in-kernel BPF LSM security hooks.
+> **ELI:7b**: Stop rogue AI commands right inside the Linux kernel before they execute, making it impossible for scripts to escape their sandbox.
 
 ---
 
