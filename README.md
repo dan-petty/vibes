@@ -33,7 +33,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 71 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 72 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -85,6 +85,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Graph-Ranked AST Context Optimizer**](./observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md) | Context & Graph Centrality | Personalized PageRank over AST symbol graphs eliminating prompt pollution and mid-block syntax fractures. |
 | [**Contract-Driven Template Ecosystems & In-Place Updates**](./observations/systems/43-contract-driven-template-ecosystems-and-in-place-updates.md) | Systems & Application Scaffolding | Decoupling contract boundaries from hand-written domain logic via AST reconciliation, eliminating destructive regenerations and interface drift. |
 | [**Polyglot Token Normalization & Clone Quantification**](./observations/systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md) | Systems & Smell Quantification | Zero-dependency Type-2 regex token normalization and cross-language clone detection with normalized MI metrics, closing the final open build gap. |
+| [**Sycophantic Compliance & Mechanical Refusal Oracles**](./observations/systems/45-sycophantic-compliance-and-mechanical-refusal-oracles.md) | Systems & Agent Alignment | Halting architectural collapse and test erasure caused by LLM agreeableness through deterministic mechanical refusal oracles. |
 
 ---
 
@@ -130,6 +131,7 @@ flowchart TD
 - [**Polyglot Token Normalization and Clone Quantification**](./patterns/polyglot-token-normalization-and-clone-quantification.md): Language-agnostic Type-2 token normalization erasing identifiers and literals to generic placeholders, computing cross-language clone detection and normalized Maintainability Index without native compiler dependencies.
 - [**Milestone Scope Air-Lock & Triage Ratchet Governance**](./patterns/milestone-airlock-and-scope-freeze-governance.md): Three-phase milestone lifecycle ratchet (`INTAKE` → `AIR_LOCKED` → `FROZEN`) with mathematical convergence ratio gates ($C_R \ge 1.2$) and automated rollover partitioning to eliminate release live-locks.
 - [**Tiered Verification Pyramid & Sub-Second Oracles**](./patterns/tiered-verification-pyramid-and-sub-second-oracles.md): Tiered testing hierarchy partitioning fast in-memory checks from full regression suites, providing sub-second feedback oracles and structural tuple equality assertions to prevent agent working memory exhaustion.
+- [**Sycophantic Compliance & Mechanical Refusal**](./patterns/sycophantic-compliance-and-mechanical-refusal.md): Decoupling refusal authority from stochastic model psychology using deterministic AST sentinels, negative schema contracts, immutable coverage floors, and network air-gaps.
 
 ---
 
@@ -394,7 +396,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 41-radon-block-complexity-ranking-in-code-smell-quantification.md
 │       ├── 42-language-server-protocol-and-automated-ast-invariant-repair.md
 │       ├── 43-contract-driven-template-ecosystems-and-in-place-updates.md
-│       └── 44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md
+│       ├── 44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md
+│       └── 45-sycophantic-compliance-and-mechanical-refusal-oracles.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -433,6 +436,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── streaming-reasoning-isolation-and-token-budgeting.md
 │   ├── structural-position-oracles.md
 │   ├── structure-driven-ci-directory-contracts.md
+│   ├── sycophantic-compliance-and-mechanical-refusal.md
 │   ├── synthetic-chaos-and-invariant-convergence-testing.md
 │   ├── test-harness-concurrency-leak-sentinel.md
 │   ├── tiered-verification-pyramid-and-sub-second-oracles.md

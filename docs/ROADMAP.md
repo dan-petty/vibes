@@ -373,6 +373,7 @@ Upcoming field observations, empirical studies, and architectural investigations
 | **Test Harness Concurrency Leak Sentinels** | `observations/systems/` | Eliminating the test runner blindspot by integrating deterministic teardown assertions into test functions. | ✅ Completed ([Obs 39](../observations/systems/39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md)) |
 | **Milestone Horizon Expansion & Autonomous Scope Cascades** | `observations/devops-cli/` | Resolving the milestone horizon inflation trap and release live-locks with mathematical convergence ratio gates ($C_R \ge 1.2$) and three-phase air-lock governance. | ✅ Completed ([Obs 21](../observations/devops-cli/21-milestone-horizon-expansion-and-autonomous-scope-cascades.md)) |
 | **The Verification Horizon & Validation Latency Cliffs** | `observations/devops-cli/` | Resolving verification latency cliffs and assertion density traps with the 4-tier verification pyramid and structural tuple equality consolidation. | ✅ Completed ([Obs 22](../observations/devops-cli/22-the-verification-horizon-and-validation-latency-cliffs.md)) |
+| **Sycophantic Compliance Cascades & Mechanical Refusal Oracles** | `observations/systems/` | What happens when agents cannot say no to human bad ideas, noisy inputs, or prompt injections, and how do mechanical oracles enforce refusal? | ✅ Completed ([Obs 45](../observations/systems/45-sycophantic-compliance-and-mechanical-refusal-oracles.md)) |
 
 ---
 
