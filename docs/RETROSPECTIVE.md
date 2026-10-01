@@ -4,6 +4,12 @@
 > **Classification**: Systemic Retrospective & Architectural Synthesis  
 > **Key Metric**: 100.0/100 Resource Health Score; 217/217 passing tests; project-wide $M \le 6$ and depth $\le 3$; sub-second test execution (< 0.5s); 100% CIS Rootless Container Benchmark compliance  
 > **Consolidated Index**: [Master Observation Index & Architectural Synthesis](../observations/README.md)  
+>
+> **TLDR**: An empirical look back over hundreds of autonomous agent turns, demonstrating quantitatively that automated architectural gates and tests reduce complexity by 75% and prevent AI code decay.
+>
+> **ELI:7b**: Real data proving that AI agents write great code only when automated tools grade their homework and stop them from writing messy spaghetti code.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
 
 ---
 

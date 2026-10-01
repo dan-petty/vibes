@@ -1,5 +1,13 @@
 # Landscape Survey
 
+> **TLDR**: An outward-looking benchmarking framework that continuously scores competing AI agent tools, compares capabilities, and converts external gaps into actionable roadmap deliverables.
+>
+> **ELI:7b**: A tool that scans what other AI projects in the open-source world are doing so we don't reinvent the wheel or fall behind on useful features.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](../dummysguide/README.md).*
+
+---
+
 Every other work generator in this repository looks inward. The workbench reports decay,
 the sentinel reports invariant breaches, the quantifier reports smells, and the roadmap
 ingester reports what we said we would build. None of them can notice that somebody else

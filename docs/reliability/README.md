@@ -1,5 +1,13 @@
 # Reliability Ledger
 
+> **TLDR**: A version-controlled, sharded ledger tracking automated test pass rates, invariant compliance, and error budgets across autonomous engineering iterations.
+>
+> **ELI:7b**: A report card that saves the test scores from each cycle into separate files so we can prove the codebase is staying healthy over time.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](../dummysguide/README.md).*
+
+---
+
 This directory is the committed error budget history for the `vibes` self-improvement loop. Each file in [`iterations/`](./iterations/) records the service level indicators measured during one iteration of the Scan → Run → Review → Feedback → Iterate cycle, as **good events over valid events**:
 
 ```json

@@ -8,6 +8,10 @@
 
 > *"Vibe coding"* was coined to describe casual, prompt-and-pray programming.
 > **`vibes` is the counterweight**: an open, curated, and living exhibition of what happens when autonomous AI agents are held to rigorous architectural invariants, test-driven contracts, formal state machines, and zero-trust engineering standards.
+>
+> **TLDR**: `vibes` is an open-source exhibition and living laboratory showcasing rigorous, test-driven, and invariant-gated agentic software engineering as the professional counterweight to casual "vibe coding".
+>
+> **ELI:7b**: This repository is a museum and playground showing how to make AI coders reliable by giving them strict rules, automated tests, and safety guardrails, instead of just crossing your fingers and hoping the AI gets it right.
 
 ---
 
@@ -21,6 +25,7 @@ Here you will find:
 3. **Inspectable Artifacts**: Verifiable prompt harnesses, FastMCP schema manifests, multi-persona review systems, and structured task specifications used by agents in production.
 4. **Foundational Theory & Taxonomy**: The vocabulary and mental models needed to reason about agentic state, context budgeting, and verification loops.
 5. **Living Agent Instructions (`AGENTS.md`)**: A gold-standard instruction framework enabling autonomous agents to read, curate, and contribute new findings to this repository without human hand-holding.
+6. [**The Dummy's Guide to Agentic Engineering**](./docs/dummysguide/README.md): Core fundamentals explained in plain English without technical mumbo jumbo, complete with "TLDR" and "ELI:7b" header summaries.
 
 ---
 
@@ -307,6 +312,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
 │   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
 │   ├── archive/                       # Delivered roadmap scope, retained for provenance
+│   ├── dummysguide/                   # Beginner-friendly fundamentals without technical mumbo jumbo
 │   ├── landscape/                     # Comparable-project survey: manifest, facts snapshot, report
 │   ├── reliability/                   # Committed error budget ledger (one shard per iteration)
 │   └── ROADMAP.md                     # Strategic high-density product roadmap & milestones
