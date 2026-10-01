@@ -59,7 +59,10 @@ VALUE_POINTS: Final[dict[str, int]] = {"High": 8, "Medium": 5, "Low": 2}
 EFFORT_POINTS: Final[dict[str, int]] = {"Low": 2, "Medium": 5, "High": 8}
 DEFAULT_PRIORITY: Final[str] = "P2_MEDIUM"
 PRIORITY_NAMES: Final[dict[str, str]] = {
-    "P0": "P0_CRITICAL", "P1": "P1_HIGH", "P2": "P2_MEDIUM", "P3": "P3_LOW",
+    "P0": "P0_CRITICAL",
+    "P1": "P1_HIGH",
+    "P2": "P2_MEDIUM",
+    "P3": "P3_LOW",
 }
 # Sections recording decisions not to build something.
 REJECTED_MARKERS: Final[tuple[str, ...]] = ("Anti-Patterns", "Rejected")
@@ -68,9 +71,7 @@ REJECTED_MARKERS: Final[tuple[str, ...]] = ("Anti-Patterns", "Rejected")
 # tolerated a "(blocked)" note but nothing acted on it, so a deliberate deferral was
 # discarded and the prioritizer proposed the same item on the next pass. A reason is
 # mandatory: a blocker nobody can read is indistinguishable from an excuse.
-_BLOCKED_RE: Final[re.Pattern[str]] = re.compile(
-    r"\(\s*blocked\s*:\s*(?P<reason>[^)]+?)\s*\)", re.IGNORECASE
-)
+_BLOCKED_RE: Final[re.Pattern[str]] = re.compile(r"\(\s*blocked\s*:\s*(?P<reason>[^)]+?)\s*\)", re.IGNORECASE)
 
 
 @dataclass
@@ -144,9 +145,7 @@ def parse_value_effort_matrix(lines: Sequence[str]) -> dict[str, tuple[int, int]
             continue
         feature = _normalize(match.group("feature"))
         if feature:
-            sized[feature] = (
-                VALUE_POINTS[match.group("value")], EFFORT_POINTS[match.group("effort")]
-            )
+            sized[feature] = (VALUE_POINTS[match.group("value")], EFFORT_POINTS[match.group("effort")])
     return sized
 
 
@@ -157,12 +156,17 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", stripped.lower()).strip()
 
 
+def _matches_key(candidate: str, target: str) -> bool:
+    """Return True if candidate key matches target by mutual containment."""
+    return bool(candidate and (candidate in target or target in candidate))
+
+
 def _match_sizing(title: str, matrix: dict[str, tuple[int, int]]) -> tuple[int, int] | None:
     """Find the matrix row describing an item, by exact key then by containment."""
     key = _normalize(title)
     if key in matrix:
         return matrix[key]
-    candidates = [v for k, v in matrix.items() if k and (k in key or key in k)]
+    candidates = [v for k, v in matrix.items() if _matches_key(k, key)]
     return candidates[0] if len(candidates) == 1 else None
 
 
@@ -190,9 +194,7 @@ class _RoadmapScan:
     rejected: bool = False
 
 
-def _absorb_line(
-    line: str, number: int, scan: _RoadmapScan, matrix: dict[str, tuple[int, int]]
-) -> None:
+def _absorb_line(line: str, number: int, scan: _RoadmapScan, matrix: dict[str, tuple[int, int]]) -> None:
     """Fold one roadmap line into the scan."""
     heading = _MILESTONE_RE.match(line)
     if heading:

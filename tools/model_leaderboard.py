@@ -253,14 +253,17 @@ def _measure_docstring_coverage(functions: Sequence[ast.FunctionDef | ast.AsyncF
     return documented / len(functions)
 
 
+def _relevant_args(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
+    """Return non-receiver argument AST nodes."""
+    return [a for a in fn.args.args if a.arg not in {"self", "cls"}]
+
+
 def _has_type_annotations(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Check if a function definition has argument and return type annotations."""
-    has_returns = fn.returns is not None
-    args = [a for a in fn.args.args if a.arg != "self" and a.arg != "cls"]
-    if not args:
-        return has_returns
-    annotated_args = sum(1 for a in args if a.annotation is not None)
-    return has_returns and (annotated_args == len(args))
+    if fn.returns is None:
+        return False
+    args = _relevant_args(fn)
+    return all(a.annotation is not None for a in args)
 
 
 def _measure_type_coverage(functions: Sequence[ast.FunctionDef | ast.AsyncFunctionDef]) -> float:
@@ -676,15 +679,32 @@ def _parse_model_run_item(item: Any) -> ModelRun | None:
     )
 
 
-def _load_runs_from_file(input_path: Path) -> list[ModelRun] | None:
-    """Load model runs from a JSON file, returning None on failure."""
-    if not input_path.exists():
+def _read_json_safely(path: Path) -> Any | None:
+    """Read and parse JSON from a file, returning None if unreadable or invalid."""
+    if not path.exists():
         return None
     try:
-        raw = json.loads(input_path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
-    items = raw if isinstance(raw, list) else raw.get("runs", [])
+
+
+def _extract_run_items(raw: Any) -> list[Any]:
+    """Extract list of run items from parsed JSON object or array."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        runs = raw.get("runs", [])
+        return runs if isinstance(runs, list) else []
+    return []
+
+
+def _load_runs_from_file(input_path: Path) -> list[ModelRun] | None:
+    """Load model runs from a JSON file, returning None on failure."""
+    raw = _read_json_safely(input_path)
+    if raw is None:
+        return None
+    items = _extract_run_items(raw)
     parsed = [_parse_model_run_item(it) for it in items]
     return [r for r in parsed if r is not None]
 
