@@ -24,7 +24,7 @@ able to respond to it. Prompting is therefore always an override and never a dep
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -105,15 +105,23 @@ class _Missing:
 _MISSING: Final[_Missing] = _Missing()
 
 
-def _declaration_problems(variables: tuple[Variable, ...]) -> list[str]:
-    """Return every breach across the whole block, so one run reports all of them."""
-    names = [variable.name for variable in variables]
+def _name_syntax_problems(names: list[str]) -> list[str]:
+    """Return problems with variable name formatting and duplication."""
     problems = [
         f"variable name {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)
     ]
-    problems += [f"duplicate variable {n!r}" for n in sorted({n for n in names if names.count(n) > 1})]
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    for n in duplicates:
+        problems.append(f"duplicate variable {n!r}")
+    return problems
+
+
+def _declaration_problems(variables: tuple[Variable, ...]) -> list[str]:
+    """Return every breach across the whole block, so one run reports all of them."""
+    names = [variable.name for variable in variables]
+    problems = _name_syntax_problems(names)
     for variable in variables:
-        problems += _one_declaration_problems(variable)
+        problems.extend(_one_declaration_problems(variable))
     return problems
 
 
@@ -289,15 +297,24 @@ def _ask(variable: Variable, ask: Callable[[str], str]) -> Any:
     raise ContractError(f"{variable.name}: no valid answer after {MAX_ATTEMPTS} attempts")
 
 
+def _iter_nested_values(value: Any) -> Iterable[Any]:
+    """Return an iterable over nested values within a dict or list."""
+    if isinstance(value, dict):
+        return value.values()
+    if isinstance(value, list):
+        return value
+    return ()
+
+
 def placeholders(value: Any) -> set[str]:
     """Return every variable name referenced anywhere in a parsed document."""
     if isinstance(value, str):
         return set(_PLACEHOLDER.findall(value))
-    if isinstance(value, dict):
-        return set().union(*(placeholders(item) for item in value.values())) if value else set()
-    if isinstance(value, list):
-        return set().union(*(placeholders(item) for item in value)) if value else set()
-    return set()
+    nested = _iter_nested_values(value)
+    result: set[str] = set()
+    for item in nested:
+        result.update(placeholders(item))
+    return result
 
 
 def render(document: Any, answers: Mapping[str, Any]) -> Any:

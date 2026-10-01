@@ -71,28 +71,36 @@ SARIF_RULES: Final[dict[str, dict[str, Any]]] = {
     "CEGIS005": {
         "id": "CEGIS005",
         "name": "AssertionSprawlDetected",
-        "shortDescription": {"text": "Linear consecutive assert statements detected without structural tuple consolidation."},
+        "shortDescription": {
+            "text": "Linear consecutive assert statements detected without structural tuple consolidation."
+        },
         "defaultConfiguration": {"level": "warning"},
         "helpUri": "https://github.com/dan-petty/vibes",
     },
     "CEGIS006": {
         "id": "CEGIS006",
         "name": "RepairCycleOscillationDetected",
-        "shortDescription": {"text": "Iterative synthesis entered a non-convergent oscillatory cycle between candidate states."},
+        "shortDescription": {
+            "text": "Iterative synthesis entered a non-convergent oscillatory cycle between candidate states."
+        },
         "defaultConfiguration": {"level": "error"},
         "helpUri": "https://github.com/dan-petty/vibes",
     },
     "CEGIS007": {
         "id": "CEGIS007",
         "name": "LatentInvariantRegression",
-        "shortDescription": {"text": "Synthesis repair introduced a regression on a previously satisfied invariant property."},
+        "shortDescription": {
+            "text": "Synthesis repair introduced a regression on a previously satisfied invariant property."
+        },
         "defaultConfiguration": {"level": "error"},
         "helpUri": "https://github.com/dan-petty/vibes",
     },
     "CEGIS008": {
         "id": "CEGIS008",
         "name": "NegativeConstraintViolation",
-        "shortDescription": {"text": "Candidate program reproduced a previously registered negative counterexample pattern."},
+        "shortDescription": {
+            "text": "Candidate program reproduced a previously registered negative counterexample pattern."
+        },
         "defaultConfiguration": {"level": "error"},
         "helpUri": "https://github.com/dan-petty/vibes",
     },
@@ -221,6 +229,7 @@ def _compute_cyclomatic_complexity(node: ast.AST) -> int:
 
 def _compute_nesting_depth(node: ast.AST) -> int:
     """Compute deepest nesting run of compound blocks in AST node."""
+
     def walk(current: ast.AST, depth: int) -> int:
         deeper = depth + 1 if isinstance(current, NESTING_TYPES) else depth
         return max((walk(c, deeper) for c in ast.iter_child_nodes(current)), default=deeper)
@@ -300,7 +309,9 @@ def _find_sprawl_line(func: ast.FunctionDef | ast.AsyncFunctionDef) -> int | Non
     return None
 
 
-def _check_assertion_sprawl(func: ast.FunctionDef | ast.AsyncFunctionDef, filename: str) -> list[Counterexample]:
+def _check_assertion_sprawl(
+    func: ast.FunctionDef | ast.AsyncFunctionDef, filename: str
+) -> list[Counterexample]:
     """Detect consecutive linear assert statements in test functions."""
     if not func.name.startswith("test_"):
         return []
@@ -335,25 +346,19 @@ def _check_function_invariants(
     if cc > thresholds.max_complexity:
         msg = f"Cyclomatic complexity M={cc} exceeds ceiling M<={thresholds.max_complexity} in '{func.name}'"
         h = _compute_hash(f"CEGIS001:{loc}:{func.name}:{cc}")
-        violations.append(
-            Counterexample("CEGIS001", loc, msg, f"complexity_{cc}", h, func.lineno)
-        )
+        violations.append(Counterexample("CEGIS001", loc, msg, f"complexity_{cc}", h, func.lineno))
 
     depth = _compute_nesting_depth(func)
     if depth > thresholds.max_depth:
         msg = f"Nesting depth D={depth} exceeds ceiling D<={thresholds.max_depth} in '{func.name}'"
         h = _compute_hash(f"CEGIS002:{loc}:{func.name}:{depth}")
-        violations.append(
-            Counterexample("CEGIS002", loc, msg, f"depth_{depth}", h, func.lineno)
-        )
+        violations.append(Counterexample("CEGIS002", loc, msg, f"depth_{depth}", h, func.lineno))
 
     params = _count_parameters(func)
     if params > thresholds.max_params:
         msg = f"Parameter count P={params} exceeds ceiling P<={thresholds.max_params} in '{func.name}'"
         h = _compute_hash(f"CEGIS003:{loc}:{func.name}:{params}")
-        violations.append(
-            Counterexample("CEGIS003", loc, msg, f"params_{params}", h, func.lineno)
-        )
+        violations.append(Counterexample("CEGIS003", loc, msg, f"params_{params}", h, func.lineno))
 
     if thresholds.forbid_assertion_sprawl:
         violations.extend(_check_assertion_sprawl(func, filename))
@@ -399,7 +404,9 @@ class ASTInvariantVerifier:
         """Initialize verifier with optional invariant thresholds."""
         self.thresholds = thresholds or PRESET_THRESHOLDS[CEGISPreset.STRICT]
 
-    def verify_source(self, source_code: str, filename: str = "inline.py") -> tuple[list[Counterexample], int, int]:
+    def verify_source(
+        self, source_code: str, filename: str = "inline.py"
+    ) -> tuple[list[Counterexample], int, int]:
         """Verify code against invariants, returning violations, max complexity, and max depth."""
         try:
             tree = ast.parse(source_code, filename=filename)
@@ -451,9 +458,7 @@ class NegativeConstraintAccumulator:
                 loc = v.location
                 msg = f"Negative constraint violation {c.constraint_id}: repeated {v.rule_id} at {loc}"
                 h = _compute_hash(f"CEGIS008:{c.constraint_id}:{v.counterexample_hash}")
-                repeats.append(
-                    Counterexample("CEGIS008", loc, msg, c.constraint_id, h, v.line_number)
-                )
+                repeats.append(Counterexample("CEGIS008", loc, msg, c.constraint_id, h, v.line_number))
         return repeats
 
 
@@ -474,18 +479,23 @@ class ConvergenceOracle:
         return cycles
 
     @staticmethod
-    def detect_latent_regressions(steps: Sequence[TrajectoryStep]) -> list[str]:
+    def _step_regressions(prev_step: TrajectoryStep, curr_step: TrajectoryStep) -> list[str]:
+        """Identify rule violations introduced in curr_step that were absent in prev_step."""
+        if not prev_step.violations:
+            return []
+        prev_rules = {v.rule_id for v in prev_step.violations}
+        curr_rules = {v.rule_id for v in curr_step.violations}
+        new_rules = curr_rules - prev_rules
+        return sorted(new_rules) if new_rules else []
+
+    @classmethod
+    def detect_latent_regressions(cls, steps: Sequence[TrajectoryStep]) -> list[str]:
         """Detect invariant rules that passed in step t-1 but failed in step t."""
         if len(steps) < 2:
             return []
         regressions: list[str] = []
         for i in range(1, len(steps)):
-            prev_rules = {v.rule_id for v in steps[i - 1].violations}
-            curr_rules = {v.rule_id for v in steps[i].violations}
-            # Latent regression: rule was clean at t-1 but introduced at t while other errors fixed
-            new_rules = curr_rules - prev_rules
-            if new_rules and len(prev_rules) > 0:
-                regressions.extend(sorted(new_rules))
+            regressions.extend(cls._step_regressions(steps[i - 1], steps[i]))
         return regressions
 
     @staticmethod
@@ -512,7 +522,9 @@ class ConvergenceOracle:
         return ConvergenceStatus.CONVERGING
 
     @classmethod
-    def evaluate(cls, steps: Sequence[TrajectoryStep], max_iterations: int) -> tuple[ConvergenceStatus, list[tuple[int, int]], list[str]]:
+    def evaluate(
+        cls, steps: Sequence[TrajectoryStep], max_iterations: int
+    ) -> tuple[ConvergenceStatus, list[tuple[int, int]], list[str]]:
         """Evaluate overall trajectory convergence state."""
         if not steps:
             return ConvergenceStatus.BUDGET_EXHAUSTED, [], []
@@ -645,33 +657,38 @@ def export_sarif(result: CEGISResult, filepath: str) -> dict[str, Any]:
     """Export CEGIS findings to OASIS SARIF 2.1.0 formatted dictionary."""
     results: list[dict[str, Any]] = []
     for f in result.findings:
-        rule_def = SARIF_RULES.get(f.rule_id, {
-            "id": f.rule_id,
-            "name": "CEGISInvariantViolation",
-            "shortDescription": {"text": f.message},
-            "defaultConfiguration": {"level": "error"},
-        })
+        rule_def = SARIF_RULES.get(
+            f.rule_id,
+            {
+                "id": f.rule_id,
+                "name": "CEGISInvariantViolation",
+                "shortDescription": {"text": f.message},
+                "defaultConfiguration": {"level": "error"},
+            },
+        )
         parts = f.location.split(":")
         file_target = parts[0] if parts else filepath
         line_num = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else f.line_number
 
-        results.append({
-            "ruleId": f.rule_id,
-            "level": rule_def["defaultConfiguration"]["level"],
-            "message": {"text": f.message},
-            "locations": [
-                {
-                    "physicalLocation": {
-                        "artifactLocation": {"uri": file_target},
-                        "region": {"startLine": max(1, line_num)},
+        results.append(
+            {
+                "ruleId": f.rule_id,
+                "level": rule_def["defaultConfiguration"]["level"],
+                "message": {"text": f.message},
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": file_target},
+                            "region": {"startLine": max(1, line_num)},
+                        }
                     }
-                }
-            ],
-            "properties": {
-                "violatingPattern": f.violating_pattern,
-                "counterexampleHash": f.counterexample_hash,
-            },
-        })
+                ],
+                "properties": {
+                    "violatingPattern": f.violating_pattern,
+                    "counterexampleHash": f.counterexample_hash,
+                },
+            }
+        )
 
     return {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
@@ -750,12 +767,14 @@ def format_markdown_report(result: CEGISResult) -> str:
     lines.append("")
 
     if result.accumulated_constraints:
-        lines.extend([
-            "## Accumulated Negative Constraints",
-            "",
-            "| ID | Rule | Step | Predicate Description |",
-            "| :--- | :--- | :--- | :--- |",
-        ])
+        lines.extend(
+            [
+                "## Accumulated Negative Constraints",
+                "",
+                "| ID | Rule | Step | Predicate Description |",
+                "| :--- | :--- | :--- | :--- |",
+            ]
+        )
         for c in result.accumulated_constraints:
             lines.append(
                 f"| `{c.constraint_id}` | `{c.rule_id}` | {c.introduced_at_step} | {c.predicate_description} |"

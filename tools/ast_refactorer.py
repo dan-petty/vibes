@@ -387,10 +387,7 @@ class CandidateDetector:
 
     @staticmethod
     def _has_inverting_guard_opportunity(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-        return any(
-            isinstance(stmt, ast.If) and len(stmt.body) >= 2 and not stmt.orelse
-            for stmt in fn.body
-        )
+        return any(isinstance(stmt, ast.If) and len(stmt.body) >= 2 and not stmt.orelse for stmt in fn.body)
 
 
 class TableDispatchTransformer:
@@ -509,9 +506,7 @@ class PredicateExtractor:
         helper_fn = cls._create_helper(helper_name, target_if.test, fn_node)
 
         call_args: list[ast.expr] = [
-            ast.Name(id=a.arg, ctx=ast.Load())
-            for a in fn_node.args.args
-            if a.arg not in ("self", "cls")
+            ast.Name(id=a.arg, ctx=ast.Load()) for a in fn_node.args.args if a.arg not in ("self", "cls")
         ]
         target_if.test = ast.Call(func=ast.Name(id=helper_name, ctx=ast.Load()), args=call_args, keywords=[])
 
@@ -770,6 +765,25 @@ class ASTRefactorer:
             error_message=error,
         )
 
+    def _apply_candidate_refactorings(
+        self, content: str, candidates: list[RefactorCandidate]
+    ) -> tuple[list[RefactorResult], str]:
+        results: list[RefactorResult] = []
+        current_content = content
+        for candidate in candidates:
+            res = self.refactor_source(current_content, candidate)
+            results.append(res)
+            if res.success:
+                current_content = res.refactored_code
+        return results, current_content
+
+    @staticmethod
+    def _write_if_applied(path: Path, content: str, results: list[RefactorResult], apply: bool) -> None:
+        if not apply:
+            return
+        if any(r.success for r in results):
+            path.write_text(content, encoding="utf-8")
+
     def refactor_file(self, path: Path, apply: bool = False) -> list[RefactorResult]:
         """Scan and refactor candidates in a given file, optionally modifying in-place."""
         candidates = self.scan_file(path)
@@ -777,18 +791,8 @@ class ASTRefactorer:
             return []
 
         content = path.read_text(encoding="utf-8")
-        results: list[RefactorResult] = []
-        current_content = content
-
-        for candidate in candidates:
-            res = self.refactor_source(current_content, candidate)
-            results.append(res)
-            if res.success:
-                current_content = res.refactored_code
-
-        if apply and any(r.success for r in results):
-            path.write_text(current_content, encoding="utf-8")
-
+        results, current_content = self._apply_candidate_refactorings(content, candidates)
+        self._write_if_applied(path, current_content, results, apply)
         return results
 
     @staticmethod
@@ -852,7 +856,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def _handle_cli_feedback(refactorer: ASTRefactorer, feedback_path_str: str, apply: bool) -> int:
     report = refactorer.refactor_from_feedback_file(Path(feedback_path_str), apply=apply)
     print(f"Feedback refactoring processed {report.total_candidates} candidates.")
-    print(f"Successful: {report.successful_refactorings} | Net M reduction: {report.net_complexity_reduction}")
+    print(
+        f"Successful: {report.successful_refactorings} | Net M reduction: {report.net_complexity_reduction}"
+    )
     return 0
 
 
@@ -868,7 +874,9 @@ def _handle_cli_refactor(refactorer: ASTRefactorer, target_path: Path, opts: arg
     results = refactorer.refactor_file(target_path, apply=opts.apply)
     for r in results:
         print(f"Refactor [{r.candidate.suggested_strategy.value}] {r.candidate.function_name}:")
-        print(f"  Complexity: {r.candidate.initial_complexity} -> {r.final_complexity} (delta: {r.complexity_delta})")
+        print(
+            f"  Complexity: {r.candidate.initial_complexity} -> {r.final_complexity} (delta: {r.complexity_delta})"
+        )
         print(f"  Nesting: {r.candidate.initial_depth} -> {r.final_depth} (delta: {r.depth_delta})")
         if opts.diff and r.diff:
             print(r.diff)
@@ -880,9 +888,7 @@ def _is_scan_mode(opts: argparse.Namespace) -> bool:
     return bool(opts.scan or (not opts.diff and not opts.apply))
 
 
-def _dispatch_cli_target_file(
-    refactorer: ASTRefactorer, target_path: Path, opts: argparse.Namespace
-) -> int:
+def _dispatch_cli_target_file(refactorer: ASTRefactorer, target_path: Path, opts: argparse.Namespace) -> int:
     """Validate file existence and dispatch to scan or refactor handler."""
     if not target_path.is_file():
         print(f"Error: Target file '{target_path}' does not exist.", file=sys.stderr)
