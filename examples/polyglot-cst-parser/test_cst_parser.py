@@ -13,11 +13,15 @@ _app_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_app_dir))
 
 from parser import (
+    EditSpan,
     LanguageDetector,
     PolyglotComplexityCalculator,
     PolyglotCSTParser,
+    StructuralQuery,
     SymbolKind,
+    apply_edit_span,
     main,
+    parse_structural_query,
 )
 
 
@@ -264,3 +268,114 @@ def test_node_decision_weights_and_extractor_dispatch() -> None:
         0,
         [],
     )
+
+
+def test_structural_query_matching() -> None:
+    """Verify StructuralQuery filters symbols by kind, pattern, scope, and line bounds."""
+    code = """
+def init_system() -> None:
+    pass
+
+class DataPipeline:
+    def process_records(self) -> None:
+        pass
+
+    def export_metrics(self) -> None:
+        pass
+
+def teardown_system() -> None:
+    pass
+"""
+    parser = PolyglotCSTParser()
+    node = parser.parse_content(code, "pipeline.py", "python")
+
+    # Match all functions at top level
+    q_top_fn = StructuralQuery(kind=SymbolKind.FUNCTION, parent_scope=None)
+    top_fns = node.query_symbols(q_top_fn)
+
+    # Match methods inside DataPipeline
+    q_methods = StructuralQuery(kind=SymbolKind.METHOD, parent_scope="DataPipeline")
+    methods = node.query_symbols(q_methods)
+
+    # Match by name regex
+    q_regex = StructuralQuery(name_pattern=r"system$")
+    system_syms = node.query_symbols(q_regex)
+
+    # Match using parsed string query
+    parsed_q = parse_structural_query("kind:method scope:DataPipeline name:^export")
+    export_syms = node.query_symbols(parsed_q)
+
+    assert (
+        [s.name for s in top_fns],
+        [s.name for s in methods],
+        [s.name for s in system_syms],
+        [s.name for s in export_syms],
+    ) == (
+        ["init_system", "teardown_system"],
+        ["process_records", "export_metrics"],
+        ["init_system", "teardown_system"],
+        ["export_metrics"],
+    )
+
+
+def test_incremental_parsing_preserves_and_shifts_symbols() -> None:
+    """Verify incremental reparse preserves unchanged symbols and shifts offsets."""
+    code = (
+        "def alpha():\n"
+        "    return 1\n"
+        "\n"
+        "def beta():\n"
+        "    return 2\n"
+        "\n"
+        "def gamma():\n"
+        "    return 3\n"
+    )
+    parser = PolyglotCSTParser()
+    orig_node = parser.parse_content(code, "service.py", "python")
+    orig_sym_names = [s.name for s in orig_node.symbols]
+    orig_gamma_line = next(s.line_start for s in orig_node.symbols if s.name == "gamma")
+
+    # Replace beta() (lines 4-5) with a 4-line function containing a branch
+    edit = EditSpan(
+        start_line=4,
+        old_end_line=5,
+        new_text="def beta_prime():\n    if True:\n        return 20\n    return 10\n",
+    )
+    updated_node, updated_code = parser.incremental_reparse(orig_node, code, edit)
+    updated_syms = {s.name: s for s in updated_node.symbols}
+
+    assert (
+        orig_sym_names,
+        updated_node.incremental,
+        updated_node.reparsed_symbols_count,
+        sorted(updated_syms.keys()),
+        updated_syms["alpha"].line_start,
+        updated_syms["gamma"].line_start,
+        updated_node.metrics.cyclomatic_complexity > orig_node.metrics.cyclomatic_complexity,
+        "def beta_prime():" in updated_code,
+    ) == (
+        ["alpha", "beta", "gamma"],
+        True,
+        1,
+        ["alpha", "beta_prime", "gamma"],
+        1,
+        orig_gamma_line + 2,
+        True,
+        True,
+    )
+
+
+def test_apply_edit_span_and_query_cli(capsys: Any, tmp_path: Path) -> None:
+    """Verify apply_edit_span text splicing and CLI --query option."""
+    content = "line 1\nline 2\nline 3\nline 4\n"
+    edit = EditSpan(start_line=2, old_end_line=3, new_text="replaced content")
+    spliced = apply_edit_span(content, edit)
+    assert spliced == "line 1\nreplaced content\nline 4\n"
+
+    # Test CLI --query filtering
+    sample_py = tmp_path / "mod.py"
+    sample_py.write_text("class Storage:\n    pass\n\ndef fetch_data():\n    pass\n", encoding="utf-8")
+    exit_query = main(["--scan", str(sample_py), "--query", "kind:function"])
+    assert exit_query == 0
+    captured = capsys.readouterr().out
+    assert ("fetch_data" in captured, "class Storage" not in captured) == (True, True)

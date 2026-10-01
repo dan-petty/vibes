@@ -80,6 +80,49 @@ Bash           | bash           | 1          | 2
 python3 examples/polyglot-cst-parser/parser.py --scan path/to/file.ts
 ```
 
+### Match Symbols Structurally (`--query`)
+```bash
+python3 examples/polyglot-cst-parser/parser.py --scan path/to/file.py --query "kind:function name:^test_"
+```
+
+---
+
+## Advanced Capabilities
+
+### 1. Structural Syntax Querying (`structural_query`)
+Matches symbols using structured AST/CST properties rather than crude text regex:
+- **`kind`**: Filter by symbol type (`function`, `method`, `class`, `struct`, `interface`, `trait`).
+- **`name` / `pattern`**: Regex matching against symbol names.
+- **`scope` / `parent`**: Match symbols enclosed within a designated parent structure.
+- **`lang`**: Restrict matches to specific language grammars.
+- **`min_line` / `max_line`**: Spatial boundary filtering.
+
+```python
+from parser import PolyglotCSTParser, parse_structural_query
+
+parser = PolyglotCSTParser()
+node = parser.parse_content(source_code, "app.py", "python")
+query = parse_structural_query("kind:method scope:DataPipeline name:^export")
+matched = node.query_symbols(query)
+```
+
+### 2. Incremental Parsing (`incremental_parsing`)
+Reparses only the modified region (`EditSpan`) across file edits without recomputing unchanged AST nodes:
+- Pre-edit symbols (`line_end < edit.start_line`) are preserved untouched.
+- Post-edit symbols (`line_start > edit.old_end_line`) are shifted by `line_delta` without reparsing.
+- Overlapping symbols are re-extracted exclusively from the edited snippet.
+
+```python
+from parser import EditSpan, PolyglotCSTParser
+
+edit = EditSpan(
+    start_line=12,
+    old_end_line=14,
+    new_text="def compute_discount():\n    return 0.15\n",
+)
+updated_node, updated_code = parser.incremental_reparse(node, source_code, edit)
+```
+
 ---
 
 ## Running Automated Tests
@@ -88,9 +131,11 @@ python3 examples/polyglot-cst-parser/parser.py --scan path/to/file.ts
 python3 -m pytest -v examples/polyglot-cst-parser/test_cst_parser.py
 ```
 
-All 9 unit tests validate:
+All 13 unit tests validate:
 - Language detection across extensions (`.py`, `.rs`, `.go`, `.ts`, `.sh`).
 - Symbol extraction for all 5 languages.
 - Complexity ($M$) and nesting depth calculations.
 - Pre-flight file size boundary enforcement (> 5MB).
 - Symlink containment and workspace boundary defense.
+- Structural query matching across kind, scope, line bounds, and CLI `--query`.
+- Incremental parsing preserving unedited AST symbols and shifting line offsets.
