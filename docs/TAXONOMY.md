@@ -7,6 +7,8 @@ A comprehensive taxonomy of architectures, execution topologies, verification ga
 > **ELI:7b**: A field guide that classifies all the different ways AI coding agents are set up, how they remember things, how they check their work, and the typical traps they fall into.
 >
 > 💡 *Want the fundamentals without technical jargon? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
+>
+> 🔬 *For external academic grounding, empirical critiques, and code samples, see [Empirical Foundations & Critical Synthesis](./EMPIRICAL_FOUNDATIONS.md).*
 
 ---
 
