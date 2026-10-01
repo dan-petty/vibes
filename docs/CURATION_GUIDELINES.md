@@ -2,6 +2,12 @@
 
 This document outlines the acceptance criteria, sanitization requirements, and submission processes for contributing to the `vibes` repository.
 
+> **TLDR**: Rules and pre-commit checklists for submitting new observations, patterns, and artifacts to `vibes`, enforcing strict privacy sanitization and real-world grounding.
+>
+> **ELI:7b**: The submission rules for this repo: your work must be based on real code runs, easy to learn from, and 100% scrubbed of passwords, private home network IPs, and personal data.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
+
 ---
 
 ## 1. Guiding Principles

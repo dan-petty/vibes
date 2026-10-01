@@ -3,6 +3,12 @@
 This document provides foundational context, architectural standards, and operational guidelines for AI coding assistants (GitHub Copilot, Claude, Cursor, Antigravity, Codex) working within the `vibes` repository.
 
 > **Canonical Source**: This file is the authoritative single source of truth for AI agents curating, authoring, verifying, and maintaining the `vibes` living showcase.
+>
+> **TLDR**: Operating rules, sanitization mandates, and autonomous development protocols for AI assistants working within the `vibes` repository.
+>
+> **ELI:7b**: The rulebook for AI helpers: test before writing code, keep functions small, delete old junk, never leak passwords or home Wi-Fi addresses, and check every link.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./docs/dummysguide/README.md).*
 
 ---
 

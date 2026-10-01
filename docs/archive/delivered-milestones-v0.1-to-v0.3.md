@@ -5,6 +5,10 @@
 > delivered items crowding eleven open ones made the next action harder to find, not easier.
 > Nothing here is abandoned — every item shipped, and the detail is kept for anyone tracing
 > why a subsystem exists.
+>
+> **TLDR**: Verbatim historical archive of delivered milestones v0.1.0 through v0.3.0, preserving feature provenance without cluttering the active roadmap.
+>
+> **ELI:7b**: A scrapbook of all the past goals and milestones this project has already finished and shipped.
 
 See [`docs/ROADMAP.md`](../ROADMAP.md) for scope still ahead.
 

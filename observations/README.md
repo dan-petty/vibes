@@ -4,6 +4,12 @@
 > **Classification**: Master Observation Index & Cross-Domain Synthesis  
 > **Scope**: 60 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
 > **Key Metric**: 100.0/100 Resource Health Score; 319/319 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance  
+>
+> **TLDR**: Consolidated master index and comparative matrix of 60 empirical case studies analyzing AI agent behaviors, failure modes, and deterministic engineering solutions.
+>
+> **ELI:7b**: The master catalog of all 60 real-world experiments showing where AI coders got stuck and the clever tricks we used to fix them.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](../docs/dummysguide/README.md).*
 
 ---
 

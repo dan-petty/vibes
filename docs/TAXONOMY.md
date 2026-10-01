@@ -2,6 +2,12 @@
 
 A comprehensive taxonomy of architectures, execution topologies, verification gates, and failure modes observed in autonomous and pair-programmed AI software engineering.
 
+> **TLDR**: A structured catalog classifying agent architectures (single-shot, ReAct, multi-tier constellations), context memory topologies, mechanical verification gates, and cognitive AI failure modes.
+>
+> **ELI:7b**: A field guide that classifies all the different ways AI coding agents are set up, how they remember things, how they check their work, and the typical traps they fall into.
+>
+> 💡 *Want the fundamentals without technical jargon? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
+
 ---
 
 ## 1. Execution Models & Topologies

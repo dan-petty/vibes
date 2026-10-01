@@ -2,6 +2,12 @@
 
 High-density product roadmap, engineering milestones, and open-source curation strategy for the `vibes` living showcase and artifact repository.
 
+> **TLDR**: The multi-version milestone plan for `vibes`, tracking completed releases (v0.1–v0.3), current living showcases (v0.4–v0.5), and future enterprise governance standards (v1.0).
+>
+> **ELI:7b**: The master checklist showing what features and exhibits this project has already shipped, what we are currently building, and where we are heading next.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
+
 ---
 
 ## Core Vision & Design Principles

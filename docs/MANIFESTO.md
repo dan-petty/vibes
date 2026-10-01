@@ -4,6 +4,12 @@
 > *"Vibe coding"* is writing prompts, hoping for the best, and manually wrestling with the hallucinated debris.  
 > **Agentic Engineering** is building deterministic scaffolding around non-deterministic intelligence.  
 > **The Post-Harness Era** is the emergence of a self-managed cybernetic loop, where autonomous agents discover invariants and steer execution, while humans govern purpose, capital, and sovereign attestation.
+>
+> **TLDR**: "Vibe coding" (blind prompting) produces unmaintainable software; disciplined agentic engineering surrounds probabilistic AI with deterministic test contracts, complexity ceilings, and automated verification loops.
+>
+> **ELI:7b**: Asking an AI to code without tests and rules is like letting a toddler drive a car. You need guardrails, speed limits, and automated emergency brakes so the computer checks itself at every single turn.
+>
+> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
 
 ---
 
