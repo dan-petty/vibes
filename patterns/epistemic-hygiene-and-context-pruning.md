@@ -3,6 +3,8 @@
 > **Pattern Class**: Context Engineering & Cognitive Economics
 > **Problem**: Context windows are large but attention is finite: ingesting whole files and verbose output dilutes the instructions that matter
 > **Solution**: Deliberate pruning and summarisation at ingestion, treating context as a budget spent rather than a container filled
+> **TLDR**: Prune transient tool outputs, intermediate scratchpads, and dead reasoning branches to maintain high attention fidelity across long sessions.
+> **ELI:7b**: Clean out the chat history by deleting giant logs and dead ends so the AI's brain doesn't get cluttered with useless noise.
 
 ---
 

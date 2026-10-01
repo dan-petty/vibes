@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`  
 > **Topic**: Eliminating Homelab Leaks, Private IP Disclosure, and Standardizing Mock Data  
 > **Key Metric**: Zero leaked secrets/IPs across 200+ issues and public repositories  
+> **TLDR**: Eliminate homelab IP leaks and credentials by standardizing mock test data to example.com and RFC 5737 blocks with automated pre-commit scanners.
+> **ELI:7b**: Never let the AI see or commit real passwords or your home Wi-Fi address. Use fake example.com websites and dummy IP addresses instead.
 
 ---
 

@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`
 > **Topic**: Concurrency Hazards, Working Tree Isolation, SQLite Cache Contention, and Swarm Merge Serialization
 > **Key Metric**: Zero working tree collisions; 100% elimination of SQLite coverage file unlinking corruption; zero live-lock rebase storms; sub-second shared L2 cache coordination
+> **TLDR**: Eliminate working tree clobbering and database corruption in multi-agent swarms using isolated git worktrees, scoped data tiers, and FIFO PR queues.
+> **ELI:7b**: Give each AI helper its own copy of the project folder so they don't overwrite each other's files while working at the same time.
 
 ---
 

@@ -4,6 +4,8 @@
 > **Environment**: Dual-consumer software interfaces (Human UX + Agent AX), automated AST invariant sentinels, closed-loop cybernetic feedback
 > **Classification**: Agent Experience (AX), Bi-Directional Scoring, Cybernetic Improvement Loops, CEGIS Convergence, Cognitive Impedance
 > **Related**: [Observation 08](./08-convention-to-mechanical-enforcement-inversion.md), [Observation 10](../devops-cli/10-negative-tool-contract-assertions-and-prescriptive-prompt-synthesis.md), [Observation 22](./22-self-correction-loops-vs-cegis-constraint-accumulation.md), [Observation 30](./30-kinetic-falsification-and-the-ephemeral-exploit-harness.md), [Observation 31](./31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md)
+> **TLDR**: Design software substrates for dual first-class consumers: human teleology and UX alongside machine-verifiable negative schemas and structured AX.
+> **ELI:7b**: Build tools that are friendly for humans to read on screen, while also returning clean, strict JSON errors that AI agents can parse easily.
 
 ---
 

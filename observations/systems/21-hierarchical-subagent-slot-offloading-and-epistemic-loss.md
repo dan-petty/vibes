@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Multi-Agent Orchestration & Economic Optimization
 > **Topic**: Solving the "Big Decides, Small Types, Big Checks" Trilemma: Preventing Epistemic Loss Across Subagent Delegation Boundaries and Quantifying 60%+ Token Cost Reductions
 > **Key Metric**: 59.6% reduction in frontier token expenditure via local/open-weights slot offloading; 0% constraint stripping achieved via structural Invariant Envelopes (`InvariantConstraint`); 100% detection of silent failure absorption via deterministic AST verification.
+> **TLDR**: Quantify and bound information loss across hierarchical subagent offloading pipelines by enforcing structured typed schema contracts.
+> **ELI:7b**: When big planning agents hand work down to small typing agents, use strict data schemas so critical constraints aren't lost in translation.
 
 ---
 

@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`  
 > **Topic**: Mechanical Enforcement of Cyclomatic Complexity ($\le 10$) and Indentation Depth ($\le 5$)  
 > **Key Metric**: 100% compliance across all functions, automated AST invariant gates  
+> **TLDR**: Strictly enforce cyclomatic complexity <= 10 and nesting depth <= 5 via automated AST gates to prevent LLM code generation from collapsing into spaghetti loops.
+> **ELI:7b**: Don't let the AI write giant, messy functions with tons of nested if-statements. Limit functions to 10 decisions and 4 indents so the code stays clean and easy to read.
 
 ---
 

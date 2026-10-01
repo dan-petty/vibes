@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`
 > **Topic**: Agentic IDE Architecture, LSP-to-Agent Diagnostic Oracles, and Zero-Trust Lifecycle Hooks
 > **Key Metric**: Sub-millisecond pre-tool lifecycle interception; 100% containment of orphaned grandchild processes; zero leakage of private RFC 1918 IPs or credential files
+> **TLDR**: Converge Language Server Protocol diagnostics with Model Context Protocol tools to provide agents with real-time in-editor compiler feedback.
+> **ELI:7b**: Give the AI the same red error squiggles and quick-fix buttons that human developers see inside their code editor.
 
 ---
 

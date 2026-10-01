@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Multi-Tier AST Repomap Caching (L1 Fast Memory + L2 Valkey Distributed Cache) & Structural Embedding Drift Auditing  
 > **Key Metric**: Sub-millisecond L1 cache resolution (< 0.1ms); content-addressed SHA-256 cache invalidation; Cosine Distance ($D_C \le 0.05$) semantic drift verification during AST refactoring  
+> **TLDR**: Implement two-tier content-addressed caching (L1 memory + L2 Valkey) with cosine distance audits to detect and prevent semantic embedding drift.
+> **ELI:7b**: Cache repeated search results by content hash, and check embedding scores so the AI's search index doesn't drift out of date.
 
 ---
 

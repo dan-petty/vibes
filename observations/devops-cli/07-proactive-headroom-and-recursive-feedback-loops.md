@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Proactive Refactoring Headroom ($M \in [7, 10]$, Depth $\ge 4$) & Autonomous SDLC Backlog Recursion  
 > **Key Metric**: Zero invariant violations reached; 100% of brittle ceilings pre-emptively decomposed via autonomous backlog dispatch  
+> **TLDR**: Pre-emptively refactor code approaching complexity limits (M in [7, 10]) via autonomous SDLC backlog feedback before hitting hard invariant ceilings.
+> **ELI:7b**: Don't wait until a function hits the maximum complexity limit. Clean it up while it's getting warm so it never breaks the build.
 
 ---
 

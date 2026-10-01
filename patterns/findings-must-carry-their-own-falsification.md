@@ -3,6 +3,8 @@
 > **Pattern Class**: Review Pipelines & Feedback Quality
 > **Problem**: A review that writes verification criteria and then judges them by reading produces confident findings nobody tested
 > **Solution**: Findings carry shell commands with deterministic output, the pipeline executes them, and a withdrawn finding is not reportable
+> **TLDR**: Require every static analysis or review finding to bundle executable falsification criteria so reviewers can verify whether a defect is real.
+> **ELI:7b**: If a code review says something is broken, it must include a test that proves it. If the test passes, the complaint was false.
 > **Reference Implementation**: [`artifacts/prompts/multi-persona-code-reviewer.md`](../artifacts/prompts/multi-persona-code-reviewer.md)
 
 ---

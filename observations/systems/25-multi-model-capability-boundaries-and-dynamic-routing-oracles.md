@@ -1,5 +1,8 @@
 # Observation 25: Multi-Model Capability Boundaries & Dynamic Routing Oracles
 
+> **TLDR**: Route agent tasks dynamically to optimal model tiers based on task complexity, context requirements, and empirical capability benchmarks.
+> **ELI:7b**: Send simple file searches to fast cheap models and hard architectural dilemmas to big reasoning models automatically.
+
 **Category**: Distributed Systems & Multi-Model Inference Economics  
 **Status**: Field-Verified  
 **Canonical Implementation**: [`tools/model_router.py`](../../tools/model_router.py)  

@@ -1,5 +1,8 @@
 # MCP Protocol Boundaries & Stateless Transport Constraints
 
+> **TLDR**: Design Model Context Protocol tools around stateless transport invariants, bounded payload buffers, and explicit error recovery envelopes.
+> **ELI:7b**: Build AI tool servers so each call stands completely on its own without assuming previous calls left hidden state behind.
+
 ## 1. Executive Context & Baseline
 
 The Model Context Protocol (MCP) has become the dominant interface between AI coding assistants and developer tools. `devops-cli` exposes over 100 FastMCP tools across 15+ namespaces, served via `stdio` transport for local IDE connections. The protocol defines three primitive types — **Tools** (callable functions with JSON Schema parameters), **Resources** (URI-addressable static data), and **Prompts** (templated instruction fragments) — providing a structured alternative to raw subprocess invocation.

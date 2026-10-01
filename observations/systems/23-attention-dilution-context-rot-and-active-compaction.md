@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Cognitive Invariants & Long-Horizon Agent Reliability
 > **Topic**: Overcoming the "Lost-in-the-Middle" Ceiling: Auditing Attention Dilution, Mitigating Context Rot, and Enforcing Active Invariant Re-Pinning Across Long-Horizon Sessions
 > **Key Metric**: 82.4% token volume reclamation via Observation Masking; 100% preservation of invariant constraints trapped in the 20%–80% depth valley via Anchor Re-Pinning; 4.6x reduction in Attention Dilution Index (ADI).
+> **TLDR**: Combat attention dilution and context rot in long multi-turn sessions by actively compacting history to maintain an Attention Dilution Index <= 1.5.
+> **ELI:7b**: Summarize and compress long chat logs as you go so the AI doesn't get brain fog from carrying 50,000 words of chat history.
 
 ---
 

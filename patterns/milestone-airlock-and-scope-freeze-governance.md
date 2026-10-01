@@ -3,6 +3,8 @@
 > **Pattern Class**: Project Governance / Release Engineering
 > **Problem**: Autonomous AI agent workflows continually discover and inject new tasks, refactor targets, and secondary defects into active release milestones, causing milestone horizon inflation, release live-lock, and unmanageable mega-milestones.
 > **Solution**: A 3-phase lifecycle ratchet (`INTAKE` → `AIR_LOCKED` → `FROZEN`) governed by mathematical convergence ratio thresholds ($C_R \ge 1.2$) and automated issue partitioning that rolls non-blockers into `vNext`.
+> **TLDR**: Prevent milestone horizon expansion with a 3-phase ratchet (INTAKE -> AIR_LOCKED -> FROZEN), convergence metrics, and rollover partitioning.
+> **ELI:7b**: Stop releases from taking forever by locking the door to new features before release day and moving non-critical tasks to the next version.
 > **Reference Implementation**: [`tools/milestone_governor.py`](../tools/milestone_governor.py) + [`tests/test_milestone_governor.py`](../tests/test_milestone_governor.py)
 
 ---

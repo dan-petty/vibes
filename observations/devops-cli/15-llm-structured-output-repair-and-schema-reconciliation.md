@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Structured Output Generation, JSON Grammar Healing, and Prescriptive Schema Retry  
 > **Key Metric**: $> 92\%$ auto-repair rate without model roundtrips; 100% single-turn recovery on schema violations; zero infinite retry loops  
+> **TLDR**: Repair malformed LLM JSON outputs with zero-overhead regex and grammar healers, recovering over 92% of syntax errors without model round-trips.
+> **ELI:7b**: Fix trailing commas and unclosed brackets in AI-generated JSON with a fast local script instead of paying for another expensive API call.
 
 ---
 

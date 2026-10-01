@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`
 > **Topic**: Milestone Horizon Inflation Trap, Scope Live-Locks, Autonomous Agent Triage Cascades, and Release Air-Lock Governance
 > **Key Metric**: Milestone 36 (`v0.2.23`) expanded to 196 total issues (167 closed, 29 open) across 9 days with peak scope velocity $V_{\text{scope}} = 81$ issues/day, trapping completion rate at $85.2\%$ despite 167 completed deliverables; resolved through mathematical convergence tracking ($C_R = V_{\text{burn}} / V_{\text{scope}}$) and three-phase release air-lock partitioning.
+> **TLDR**: Halt runaway milestone creep using convergence velocity metrics (C_R >= 1.2) and a 3-phase air-lock ratchet that rolls secondary tasks to vNext.
+> **ELI:7b**: Stop release dates from slipping forever by locking the door to non-critical feature ideas and moving extra tasks to the next version.
 
 ---
 

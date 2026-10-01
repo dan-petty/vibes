@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Mechanical Enforcement Infrastructure
 > **Topic**: Who a New Gate Actually Fires On; Why a Clean First Run Is Evidence Against the Gate
 > **Key Metric**: 6 gates added in one session; 5 caught their own author's work within 2 commits of being written; the 1 that found nothing on its first run was not wired up
+> **TLDR**: Recognize that newly authored quality gates immediately catch preexisting defects in the author's own code before catching external regressions.
+> **ELI:7b**: When you build a new linter rule, it will almost certainly flag flaws in your own project first—which proves the rule is working.
 
 ---
 

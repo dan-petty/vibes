@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Feedback Loop & Instrumentation
 > **Topic**: Every Gate Guards the Product; Nothing Guards the Instrument That Chooses the Work
 > **Key Metric**: Installing a documentation dependency moved the repository's self-reported health from 100.0/100 to 91.2 CRITICAL and put a vendored package's README at the top of the backlog — a defect no CI gate could have detected, because no gate runs the tool that produced it
+> **TLDR**: Maintain independent verification of prioritization algorithms to prevent autonomous backlogs from gaming their own internal scoring metrics.
+> **ELI:7b**: Test your task sorting tool separately so it doesn't artificially prioritize easy cosmetic tasks over critical system bugs.
 
 ---
 

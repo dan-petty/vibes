@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`  
 > **Topic**: Test-Driven Development (TDD) as an Executable Boundary Oracle  
 > **Key Metric**: 900+ tests passing, 0 test failures, $\ge 90.0\%$ strict coverage gate  
+> **TLDR**: Writing executable tests before implementation code converts stochastic LLM token generation into deterministic engineering progress with zero test failures.
+> **ELI:7b**: If you ask an AI to code without tests, it will guess and pretend it works. If you make it write the test first, it can check its own homework until it gets an A+.
 
 ---
 

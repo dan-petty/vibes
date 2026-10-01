@@ -3,6 +3,8 @@
 > **Pattern Class**: Release Engineering & Change Management
 > **Problem**: After 1.0, both "delete on sight" and "never delete" are wrong, and agents apply whichever the instructions last emphasized
 > **Solution**: Every deprecation is a dated contract — `since`, `remove_in`, `replacement` — enforced mechanically at release time
+> **TLDR**: Enforce structured deprecation contracts (since, remove_in, replacement) with runtime warnings and automated CI removal gates post-v1.0.
+> **ELI:7b**: Once your software is mature, don't delete old features without warning. Tell users what to switch to and only remove it in the next major version.
 > **Reference Implementation**: [`examples/deprecation-lifecycle-sentinel/`](../examples/deprecation-lifecycle-sentinel/)
 
 ---

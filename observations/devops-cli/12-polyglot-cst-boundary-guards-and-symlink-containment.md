@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Tree-Sitter & Polyglot AST Ingestion, Pre-Flight File Size Caps, and Defensive Symlink Confinement  
 > **Key Metric**: Zero out-of-memory (OOM) crashes on minified/generated polyglot bundles; 100% containment of circular symlink loops (`ELOOP`) and workspace traversal escapes; sub-second skip telemetry  
+> **TLDR**: Enforce pre-flight file size caps (<= 5MB) and workspace symlink verification to eliminate OOM crashes and circular ELOOP traversal escapes during AST crawling.
+> **ELI:7b**: Check file sizes before opening them so the AI doesn't crash on huge generated bundles, and verify links don't escape outside the project folder.
 
 ---
 

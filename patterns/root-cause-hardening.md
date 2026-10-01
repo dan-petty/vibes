@@ -3,6 +3,8 @@
 > **Pattern Class**: Meta-Cognitive Self-Improvement & Harness Resilience
 > **Problem**: An agent that fixes a defect learns nothing: the next session starts blank and reintroduces it
 > **Solution**: Codify the preventative rule into the instruction file on every defect fix, so the lesson survives the session that learned it
+> **TLDR**: Codify preventative rules into instruction files (AGENTS.md) upon fixing any bug, ensuring lessons survive across stateless agent sessions.
+> **ELI:7b**: Every time an AI makes a mistake and fixes it, write a new rule in the instructions so future AIs never repeat that mistake.
 
 ---
 

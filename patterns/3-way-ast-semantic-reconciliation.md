@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Agent Concurrency & AST Engineering  
 > **Problem**: Line-oriented git merge engines (`diff3`, `ort`) produce severe false merge conflicts when concurrent subagents add independent functions, methods, or imports to the same files  
 > **Solution**: Decompose source files into AST symbol trees, arbitrate commutative symbol additions, unify import sets, and emit valid Python code or structured CEGIS diagnostics  
+> **TLDR**: Arbitrate concurrent subagent git merge conflicts using commutative AST symbol graphs and 3-way import unions rather than line-based text diffs.
+> **ELI:7b**: When two AIs edit the same file, don't look at line numbers. Look at the actual functions and combine them cleanly without false merge conflicts.
 > **Reference Implementation**: [`examples/ast-semantic-reconciler/`](../examples/ast-semantic-reconciler/)
 
 ---

@@ -3,6 +3,8 @@
 > **Pattern Class**: Context Engineering & Information Foraging  
 > **Problem**: Naive file-level or line-based prompt context packing causes token budget exhaustion, prompt pollution, and mid-block syntax fractures (18.2% invalidation)  
 > **Solution**: Extract repository symbol dependency graphs, compute Personalized PageRank rooted at task focal symbols, and pack whole AST nodes with fidelity degradation (`FULL` $\to$ `SIGNATURES` $\to$ `OUTLINE`)  
+> **TLDR**: Construct directed AST symbol dependency graphs and rank context relevance with Personalized PageRank rooted at task focal symbols.
+> **ELI:7b**: Instead of feeding the whole repo to the AI, use a graph search to find and send only the exact functions related to the task.
 > **Reference Implementation**: [`examples/ast-relevance-context-ranker/`](../examples/ast-relevance-context-ranker/)  
 > **Related**: [Observation 38](../observations/systems/38-graph-ranked-ast-context-optimization-and-personalized-pagerank.md)
 

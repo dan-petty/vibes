@@ -1,5 +1,8 @@
 # Tool Cardinality Saturation & Schema Context Taxation
 
+> **TLDR**: Mitigate tool selection collapse and context tax by organizing large tool catalogs into lazy-loaded, domain-specific namespaces.
+> **ELI:7b**: When an AI has 40+ tools, it gets confused. Group tools into folders and only show the ones needed for the task at hand.
+
 ## 1. Executive Context & Baseline
 
 `devops-cli` exposes a rich MCP tool surface — over 100 FastMCP tools spanning `k8s_*`, `argo_*`, `docker_*`, `scan_*`, `gh_*`, `ai_*`, `vault_*`, `tf_*`, and `sandbox_*` namespaces — plus an internal `ToolSlot` registry (`src/devops_cli/ai/harness/slots.py:235-300`) and a `SkillSlot` capped at 20 dynamically loaded capability packages (`slots.py:150`). Each tool carries a full JSON Schema definition serialized into the system prompt or tool manifest.

@@ -3,6 +3,8 @@
 > **Pattern Class**: Documentation & Schema Validation
 > **Problem**: Keyword matching against required section content fails on organically-varied vocabulary
 > **Solution**: Validate required structural slots by position or key index, never by inferring identity from value content
+> **TLDR**: Validate document and schema sections by structural position or index rather than brittle keyword matching against varied prose.
+> **ELI:7b**: Check that documents have the right sections by looking at their outline positions (e.g. section 1, 2, 3) rather than guessing from exact words.
 > **Reference Implementation**: [`tools/docs_validator.py`](../tools/docs_validator.py) — `check_observation_structure`
 
 ---

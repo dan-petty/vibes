@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Ephemeral Rootless Container Sandboxing (`docker` / `podman`), Process Group Isolation, and CIS Benchmark Control Auditing  
 > **Key Metric**: 100% CIS Rootless Container Security Benchmark compliance; sub-millisecond process tree termination; zero-trust network egress deny-all; strictly bounded stream buffers ($\le 64\text{KB}$) mitigating CWE-400  
+> **TLDR**: Isolate agent command execution in rootless containers with POSIX process groups (os.killpg) to prevent privilege escalation and zombie leaks.
+> **ELI:7b**: Run AI commands inside locked-down containers without root permissions, and terminate whole process trees so runaway scripts don't hang.
 
 ---
 

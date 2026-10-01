@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Self-Improvement Loop & Backlog Generation
 > **Topic**: Why an Autonomous Loop Converges to Zero Work While the Project Is Unfinished; Prioritizing Intent Against Measurement
 > **Key Metric**: Repository certified at 100.0/100 with **0 backlog items** against **11 open roadmap deliverables**; 6 of 6 work generators defect-shaped; 83% of one backlog was measurement error
+> **TLDR**: Counteract defect-shaped feedback loops that endlessly tighten linters by pairing inward quality gates with outward roadmap and capability ingestion.
+> **ELI:7b**: Don't spend all your time polishing linters and gates while forgetting to build new features. Balance code inspection with real capability building.
 
 ---
 

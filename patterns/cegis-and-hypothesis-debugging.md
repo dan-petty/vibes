@@ -3,6 +3,8 @@
 > **Pattern Class**: Operational Debugging & Defect Remediation
 > **Problem**: Faced with a defect, agents guess: they patch symptoms, mask errors, and cycle between fixes that each break the other
 > **Solution**: Counterexample-guided synthesis with an accumulating constraint set, so a later patch cannot silently reintroduce an earlier bug
+> **TLDR**: Convert bug remediation into an accumulating counterexample constraint loop: write a failing test first, synthesize a fix, and verify zero regressions.
+> **ELI:7b**: When fixing a bug, write a test that proves the failure first. Fix it, and make sure none of the previous bug tests break.
 > **Reference Implementation**: [`examples/cegis-debugging-workbench/`](../examples/cegis-debugging-workbench/)
 
 ---

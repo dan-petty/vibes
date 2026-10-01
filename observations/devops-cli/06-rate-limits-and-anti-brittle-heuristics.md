@@ -3,6 +3,8 @@
 > **Project**: `devops-cli`  
 > **Topic**: Surviving External API Quotas & Eliminating Ad-Hoc Pattern Guessing  
 > **Key Metric**: Zero 429 quota exhaustion errors, zero regressions from brittle string slicing  
+> **TLDR**: Survive external API quotas using client-side token buckets and eliminate brittle string pattern matching in favor of deterministic symbol parsers.
+> **ELI:7b**: Pace API calls so external servers don't lock you out, and use real code parsers instead of sloppy regex guesswork to find functions.
 
 ---
 

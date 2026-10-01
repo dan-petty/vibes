@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Prompt Context Assembly, Algorithmic Token Budget Allocation, and Binary Search Truncation  
 > **Key Metric**: 99.4% token budget utilization with zero AST syntax breakage; $12\times$ faster than iterative trial packing; $O(\log N)$ convergence  
+> **TLDR**: Pack maximal AST syntax trees into token budgets using logarithmic binary search, achieving 99.4% budget utilization with zero mid-statement truncation.
+> **ELI:7b**: Use binary search to quickly calculate the exact amount of code that fits in an AI prompt without chopping off statements mid-sentence.
 
 ---
 

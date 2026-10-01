@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Agent Concurrency & Distributed Systems  
 > **Problem**: Real-time concurrent code authoring by multiple autonomous agents causes token splitting and character-level syntax corruption (34.2%) under standard text CRDTs  
 > **Solution**: Replicate Abstract Syntax Tree (AST) nodes as first-class distributed entities governed by Lamport timestamps, fractional sibling positioning, and commutative mutation primitives  
+> **TLDR**: Replicated Tree-CRDT collaborative editor treating AST nodes as first-class distributed entities with Lamport clocks, eliminating syntax merge errors.
+> **ELI:7b**: Let multiple AI helpers type in the same file simultaneously without scrambling each other's code or messing up the grammar.
 > **Reference Implementation**: [`examples/ast-crdt-collaborative-editor/`](../examples/ast-crdt-collaborative-editor/)
 
 ---

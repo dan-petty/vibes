@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Pre-Commit Hook Infrastructure
 > **Topic**: The Compliance Gap Between Documented Mandates and Mechanical Enforcement; Converting Social Convention into Invariant Gates
 > **Key Metric**: Zero prior mechanical enforcement of pre-push quality standards despite explicit `AGENTS.md §8` mandate; `.pre-commit-config.yaml` closes gap with 4 automated gates, zero human compliance overhead
+> **TLDR**: Convert human-written documentation guidelines and prompt conventions into automated AST linters and fail-closed CI gates.
+> **ELI:7b**: Don't just write rules in an instruction file and hope the AI reads them. Write an automated checker script that blocks rule-breaking commits.
 
 ---
 

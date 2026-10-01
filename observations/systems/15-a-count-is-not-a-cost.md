@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Feedback Loop & Instrumentation
 > **Topic**: Why Two Successive Measurements Both Misidentified the Same Bottleneck
 > **Key Metric**: A profiler attributed 11.4s to a function that ran for well under one; the syscall count that corrected it was then read as exonerating the true cause, which was 60% of the runtime
+> **TLDR**: Distinguish raw item counts from operational resource costs; measure latency, token volume, and execution tax rather than naive file numbers.
+> **ELI:7b**: Ten tiny, fast tests are much cheaper than one slow, tangled test. Measure actual runtime and token costs rather than just counting items.
 
 ---
 

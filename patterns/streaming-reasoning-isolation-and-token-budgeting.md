@@ -3,6 +3,8 @@
 > **Pattern Class**: Operational Execution & Cognitive Stream Governance
 > **Problem**: Reasoning tokens streamed into dispatchers and terminals leak chain-of-thought into tool parameters and user output
 > **Solution**: A streaming finite-state sanitizer isolating reasoning channels, with an explicit budget for what reasoning may cost
+> **TLDR**: Sanitize model reasoning streams via finite-state filters, preventing internal thoughts from leaking into tool arguments and terminal pipelines.
+> **ELI:7b**: Separate the AI's internal 'thinking aloud' from its actual tool commands so private thoughts don't leak into terminal prompts.
 > **Reference Implementation**: [`examples/streaming-reasoning-sanitizer/`](../examples/streaming-reasoning-sanitizer/)
 
 ---

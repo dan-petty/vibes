@@ -3,6 +3,8 @@
 > **Pattern Class**: Continuous Verification & Self-Improvement
 > **Problem**: Open-loop single-shot execution produces changes nobody measured against the repository they landed in
 > **Solution**: A closed Scan-Run-Review-Feedback-Iterate cycle emitting prescriptive, ranked next actions
+> **TLDR**: Execute closed Scan-Run-Review-Feedback-Iterate loops emitting ranked, machine-actionable remediations rather than open-loop guesswork.
+> **ELI:7b**: The 5-step loop for building software: check what you have, run the code, review the results, send feedback to the AI, and repeat.
 > **Reference Implementation**: [`tools/resource_iteration_workbench.py`](../tools/resource_iteration_workbench.py)
 
 A continuous, metric-driven engineering loop enabling AI agents to iteratively inspect, execute, evaluate, and refine repository resources before committing changes.

@@ -3,6 +3,8 @@
 > **Pattern Class**: Autonomous Resilience & Self-Healing Architecture
 > **Problem**: Sterile benchmarks mask agent vulnerability to real-world complexity creep, assertion drift, and transient failures
 > **Solution**: Deterministic chaos injection perturbing mechanical invariants with rollback safety and automated repair ratio telemetry
+> **TLDR**: Inject synthetic chaos (complexity spikes, broken invariants, mock egress) into agent testbeds to measure repair velocity and resilience.
+> **ELI:7b**: Test your AI assistant like a fire drill: inject random errors into the code and see if the AI can detect and repair them automatically.
 > **Reference Implementation**: [`examples/chaos-invariant-monkey/`](../examples/chaos-invariant-monkey/)
 
 ---

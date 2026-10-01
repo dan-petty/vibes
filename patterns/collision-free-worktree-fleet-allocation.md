@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Agent Concurrency & Workspace Arbitration
 > **Problem**: Parallel subagents collide on .git/index.lock, dirty shared trees, and leave orphaned checkouts on disk
 > **Solution**: Ephemeral leased worktrees with bounded TTL, jittered lock polling, POSIX process group containment, and automated stale pruning
+> **TLDR**: Allocate isolated git worktrees with content-addressed hashes and scoped database tiers to prevent concurrent subagents from clobbering state.
+> **ELI:7b**: Give every AI worker its own private copy of the code folder so they don't overwrite each other's work while running in parallel.
 > **Reference Implementation**: [`examples/worktree-swarm-arbiter/`](../examples/worktree-swarm-arbiter/)  
 
 ---

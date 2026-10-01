@@ -3,6 +3,8 @@
 > **Pattern Class**: Application Architecture & Lifecycle Scaffolding  
 > **Problem**: Scaffolding generators treat applications as fire-and-forget outputs, clobbering hand-written code upon regeneration and allowing schemas, dispatch tables, and tests to drift out of sync over time  
 > **Solution**: Maintain a published library of standard architectural contracts paired with an AST-reconciled in-place update engine that refreshes the contract layer, replays recorded variable answers, preserves domain logic, and appends typed stubs for newly declared operations  
+> **TLDR**: Decouple contract boundary definitions from hand-written business logic via AST reconciliation, enabling in-place application updates without destruction.
+> **ELI:7b**: Update generated project scaffolding and API templates without overwriting the custom code you or the AI already wrote.
 > **Reference Implementation**: [`tools/app_factory.py`](../tools/app_factory.py)
 
 ---

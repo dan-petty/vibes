@@ -4,6 +4,8 @@
 > **Environment**: Python 3.12+ AST, Contract YAML Schemas, `cookiecutter`, `copier-org/copier`, `yeoman/generator`  
 > **Classification**: Application Scaffolding, Template Ecosystems, AST Reconciliation, In-Place Upgrades  
 > **Related**: [Observation 42 (Systems)](./42-language-server-protocol-and-automated-ast-invariant-repair.md), [Pattern: Contract Template Ecosystem and In-Place Updates](../../patterns/contract-template-ecosystem-and-in-place-updates.md), [Exhibit: Application Factory](../../tools/app_factory.py), [Artifacts: Contracts](../../artifacts/contracts/)
+> **TLDR**: Scaffold and update applications from contract templates without destroying hand-written domain logic using AST-reconciled in-place patching.
+> **ELI:7b**: Update generated project templates safely: regenerate interface contracts while leaving your custom business logic completely untouched.
 
 ---
 

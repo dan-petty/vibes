@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Agent Verification & Prompt Engineering
 > **Problem**: Monotonic accumulation of prompt rules (Instruction Ratchet Bloat) causes context exhaustion, attention dilution (lost-in-the-middle), and reduced compliance on core invariants
 > **Solution**: A two-tier Just-In-Time (JIT) instruction governor that couples a minimal universal invariant envelope ($\le 2$k tokens) with dynamically hydrated domain overlays and empirical counterfactual ablation
+> **TLDR**: Prevent prompt bloat by pairing a compact universal invariant envelope with dynamically hydrated domain overlays and empirical ablation.
+> **ELI:7b**: Don't give the AI a 50-page instruction book on day one. Give it a tiny 2-page core guide and only hand it specific rules when it enters that room.
 > **Reference Implementation**: [`tools/instruction_governor.py`](../tools/instruction_governor.py)
 
 ---

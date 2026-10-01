@@ -4,6 +4,8 @@
 > **Environment**: Autonomous persona review pipelines, deterministic verification oracles, continuous learning catalogs
 > **Classification**: Epistemic Drift, Verification Oracles, Multi-Agent Alignment, Defect Suppression
 > **Related**: [Observation 14](./14-defect-shaped-loops-and-the-feature-blind-spot.md), [Observation 19](./19-self-consistency-is-not-conformance.md), [Observation 27](./27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md), [Observation 28](./28-recursive-self-improvement-and-the-post-harness-mandate.md)
+> **TLDR**: Resolve mitigation-refutation conflation and catalog contamination in autonomous verification via tripartite epistemic separation.
+> **ELI:7b**: Keep the reviewer, the tester, and the fixer completely separate so the AI never mistakes a temporary workaround for a real bug fix.
 
 ---
 

@@ -1,5 +1,8 @@
 # Context Accumulation Drift & Lossy Reflection Truncation
 
+> **TLDR**: Prevent context window degradation by actively pruning stale logs and compacting intermediate scratchpads before attention decay sets in.
+> **ELI:7b**: Clear out old terminal logs and dead-end notes so the AI's memory stays fresh and focused on the current objective.
+
 ## 1. Executive Context & Baseline
 
 `devops-cli`'s multi-agent pipeline (`src/devops_cli/ai/agents/pipeline.py:76-282`) sequences multiple `PydanticAgent` instances through a conversation, passing accumulated context from earlier stages to later ones. The `AgentMemory` subsystem (`src/devops_cli/ai/agents/memory.py:55-196`) manages conversation history with auto-summarization triggered at `_DEFAULT_MAX_ENTRIES = 50` entries or `_DEFAULT_MAX_CHARS = 96,000` characters, preserving the `_DEFAULT_KEEP_RECENT = 10` most recent turns. When structured output validation fails, the retry engine (`src/devops_cli/ai/client/structured.py:78-96`) truncates error details to `CONST_MAX_ERROR_DETAIL_LENGTH = 256` characters before reflecting them back to the model for self-correction.

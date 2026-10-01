@@ -4,6 +4,8 @@
 > **Environment**: Multi-file repository prompting, token budget saturation, AST symbol graph centrality  
 > **Classification**: Context Engineering, Graph Centrality, Token Budgeting, Information Foraging  
 > **Related**: [Observation 14](../devops-cli/14-binary-search-ast-context-packing-and-token-budgeting.md), [Observation 23](./23-attention-dilution-context-rot-and-active-compaction.md), [Pattern: AST Graph Relevance Ranking & Context Packing](../../patterns/ast-graph-relevance-ranking-and-context-packing.md), [Exhibit: AST Relevance Context Ranker](../../examples/ast-relevance-context-ranker/)
+> **TLDR**: Optimize prompt context selection using Personalized PageRank over AST symbol graphs, eliminating syntax fractures and greedy prompt saturation.
+> **ELI:7b**: Use PageRank (like Google search) over your code's dependency tree to pick only the most important helper functions for the AI prompt.
 
 ---
 

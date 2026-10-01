@@ -1,5 +1,8 @@
 # Multi-Agent Epistemic Loss & Delegation Boundary Distortion
 
+> **TLDR**: Preserve architectural context across agent delegation boundaries using structured typed handshakes rather than lossy conversational summaries.
+> **ELI:7b**: When handing off a task to a subagent, pass explicit typed parameters instead of a fuzzy natural language summary where details get lost.
+
 ## 1. Executive Context & Baseline
 
 `devops-cli` implements hierarchical multi-agent orchestration through several mechanisms: the `MultiAgentPipeline` (`src/devops_cli/ai/agents/pipeline.py:39-377`) sequences agents through shared context buffers, the `SubAgents` capability (`src/devops_cli/ai/harness/workflow.py:176-370`) provides `delegate_task` with call budgets and error containment, and the `AgentHarness.execute_tiered` protocol (`src/devops_cli/ai/harness/slots.py:775-831`) implements the "Big decides, small types, big checks" delegation hierarchy.

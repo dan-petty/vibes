@@ -4,6 +4,8 @@
 > **Environment**: Multi-agent delegation seams, subagent offloading, cryptographic invariant envelopes
 > **Classification**: Multi-Agent Epistemics, Context Budgets, Negative Schemas, Attestation
 > **Related**: [Observation 21](./21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md), [Observation 29](./29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md), [Observation 32](./32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md)
+> **TLDR**: Eliminate delegation drift with content-addressed invariant envelopes and negative schema enforcement across hierarchical subagent boundaries.
+> **ELI:7b**: Package subagent tasks with cryptographic fingerprints and strict data types so subagents can't wander off or hallucinate parameters.
 
 ---
 

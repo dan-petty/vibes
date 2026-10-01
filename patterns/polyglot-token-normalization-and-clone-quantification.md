@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Language Static Analysis & Quality Measurement  
 > **Problem**: Monoglot AST analyzers cannot inspect multi-language repositories, missing copy-paste duplication and structural decay across TypeScript, Go, Rust, and Bash modules without heavy foreign runtime dependencies  
 > **Solution**: Standardize on a zero-dependency Type-2 regex token normalizer that strips comments, erases identifiers and literals to generic placeholders, slides statement windows across polyglot source trees, and computes language-agnostic Halstead volume and normalized maintainability indices  
+> **TLDR**: Normalize polyglot code tokens to generic placeholders across TS, Go, Rust, and Bash to detect copy-paste duplication and quantify smells.
+> **ELI:7b**: Find copy-pasted code across different programming languages by wiping variable names to generic tokens and comparing the remaining structure.
 > **Reference Implementation**: [`examples/code-smell-quantifier/smell_quantifier.py`](../examples/code-smell-quantifier/smell_quantifier.py)
 
 ---

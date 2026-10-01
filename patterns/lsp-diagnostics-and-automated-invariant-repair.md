@@ -3,6 +3,8 @@
 > **Pattern Class**: Developer Ergonomics & Real-Time Quality Gates  
 > **Problem**: Batch-mode CLI quality gates introduce high feedback latency and friction, discovering invariant breaches only at commit time and requiring manual context switching to resolve  
 > **Solution**: Implement an in-process, zero-dependency Language Server Protocol (LSP 3.17) server paired with deterministic AST-verified auto-remediation, delivering sub-millisecond in-editor diagnostics and one-click QuickFix code actions  
+> **TLDR**: Implement an in-process Language Server Protocol server with AST-verified auto-remediation, providing sub-millisecond diagnostics and QuickFix actions.
+> **ELI:7b**: Give the code editor instant auto-fix powers so it detects mistakes in real time and fixes them with a single click.
 > **Reference Implementation**: [`examples/ast-invariant-sentinel/`](../examples/ast-invariant-sentinel/)
 
 ---

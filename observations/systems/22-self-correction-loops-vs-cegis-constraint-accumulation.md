@@ -3,6 +3,8 @@
 > **Project**: `vibes` — Autonomous Agent Self-Improvement & Synthesis Oracles
 > **Topic**: Solving the "Try-Again" Degeneracy Trap: Replacing Conversational Prompting Loops with Counterexample-Guided Inductive Synthesis (CEGIS), Negative Constraint Accumulation, and Monotonic Convergence Oracles
 > **Key Metric**: 100% elimination of oscillatory repair cycles ($A \to B \to A$); 0% latent invariant degradation under accumulated negative constraint envelopes ($\Phi_{k+1} = \Phi_k \land \neg c_k$); mathematically bounded $O(\log N)$ or step-bounded convergence verification.
+> **TLDR**: Contrast brittle unconstrained LLM self-correction with formal CEGIS constraint accumulation to prevent patch oscillation and regression loops.
+> **ELI:7b**: Don't just ask the AI to try again when a test fails. Add each failed test to an accumulating list so the AI can't repeat past mistakes.
 
 ---
 

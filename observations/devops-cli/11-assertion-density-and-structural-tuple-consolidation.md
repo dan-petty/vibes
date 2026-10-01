@@ -3,6 +3,8 @@
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Python AST Assert Complexity Semantics, Pytest Assertion Consolidation, and Test Suite Cyclomatic Headroom  
 > **Key Metric**: Cyclomatic complexity reduction from $M = 17$ down to $M = 2$ in test suites; 100% preservation of element-level assertion failure diagnostics; elimination of false complexity alarms in test-driven development (TDD)  
+> **TLDR**: Consolidate linear assertion sprawl in test suites into structural tuple equality checks to slash test complexity from M=17 to M=2 while preserving pytest diffs.
+> **ELI:7b**: Instead of writing ten separate assert lines that inflate complexity scores, bundle them into a single tuple comparison so tests stay simple and clear.
 
 ---
 

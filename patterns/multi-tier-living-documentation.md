@@ -3,6 +3,8 @@
 > **Pattern Class**: Architecture & Autonomous Governance
 > **Problem**: Autonomous agent self-documentation drifts into phantom architectures, self-consistency traps, attention dilution, and format corruption
 > **Solution**: A 4-tier living documentation architecture separating deterministic AST introspection from constrained narrative synthesis, enforced by fail-closed oracles and active compaction
+> **TLDR**: Maintain self-updating documentation via a 4-tier architecture: AST extraction, template synthesis, fail-closed lint gates, and active compaction.
+> **ELI:7b**: Keep docs up to date by having scripts pull real code definitions automatically, keeping descriptions short, and failing CI if a link breaks.
 > **Reference Implementation**: [`tools/docs_validator.py`](../tools/docs_validator.py)
 
 ---

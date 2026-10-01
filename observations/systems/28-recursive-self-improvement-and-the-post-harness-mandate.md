@@ -4,6 +4,8 @@
 > **Environment**: Autonomous multi-agent engineering sessions, invariant-guided CI pipelines  
 > **Classification**: Recursive Self-Improvement, Scaling Laws, Invariant Architecture  
 > **Related**: [Observation 14](./14-defect-shaped-loops-and-the-feature-blind-spot.md), [Observation 19](./19-self-consistency-is-not-conformance.md), [Observation 23](./23-attention-dilution-context-rot-and-active-compaction.md), [Observation 27](./27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md)
+> **TLDR**: Establish formal scaling laws and operational mandates for recursive self-improvement via asymmetric invariant verification and landscape telemetry.
+> **ELI:7b**: Let the AI continuously upgrade its own tooling, as long as every improvement is strictly verified by automated tests and benchmarks.
 
 ---
 

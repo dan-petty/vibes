@@ -4,6 +4,8 @@
 > **Environment**: Markdown, reStructuredText, CommonMark, CI quality gates, automated style enforcement  
 > **Classification**: Documentation Quality, Inclusive Terminology, Linter Architecture, Prose Style  
 > **Related**: [Observation 27 (Systems)](./27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md), [Observation 17 (DevOps CLI)](../devops-cli/17-semantic-validators-vs-structural-position-oracles.md), [Pattern: Configurable Prose Style and Terminology Gates](../../patterns/configurable-prose-style-and-terminology-gates.md), [Exhibit: Docs Validator](../../tools/docs_validator.py)
+> **TLDR**: Enforce canonical documentation style guides and inclusive terminology in CI with CommonMark-aware prose sanitization and zero code-block false positives.
+> **ELI:7b**: Check documentation automatically for style, clarity, and inclusive wording without flagging code identifiers or terminal commands.
 
 ---
 

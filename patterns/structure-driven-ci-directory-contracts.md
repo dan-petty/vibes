@@ -3,6 +3,8 @@
 > **Pattern Class**: CI/CD Quality Assurance
 > **Problem**: Explicit test file enumeration in CI configurations silently excludes new test suites as a repository grows
 > **Solution**: Generic directory/glob contracts bound by the repository's own file system structure
+> **TLDR**: Bind CI test discovery to filesystem directory contracts rather than hardcoded lists, ensuring new test suites run automatically.
+> **ELI:7b**: Tell the test runner to test every file in the tests/ folder automatically so newly added test files never get skipped.
 > **Reference Implementation**: [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py) + [`tools/docs_validator.py`](../tools/docs_validator.py)
 
 ---

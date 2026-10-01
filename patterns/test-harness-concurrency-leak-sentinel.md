@@ -3,6 +3,8 @@
 > **Pattern Class**: Polyglot Systems Invariant Enforcement  
 > **Problem**: Standard test runners (`go test`, `pytest`) silently pass when concurrent worker goroutines outlive tests, accumulating thread table entries and leaking resources until production failure  
 > **Solution**: Integrate deterministic baseline calibration and teardown assertions directly into standard test functions (`defer sentinel.Check(t)()`, `verify_test_run(fail_on_leak=True)`) to fail tests on leaked goroutines  
+> **TLDR**: Embed goroutine and thread baseline tracking directly in test teardowns, failing tests immediately when background workers outlive the suite.
+> **ELI:7b**: Fail the test immediately if a background worker or thread is left running after the test finishes, preventing memory leaks.
 > **Reference Implementation**: [`examples/go-leak-sentinel/`](../examples/go-leak-sentinel/)
 
 ---

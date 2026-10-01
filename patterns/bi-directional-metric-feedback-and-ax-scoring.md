@@ -3,6 +3,8 @@
 > **Pattern Class**: Multi-Agent Systems & Continuous Self-Hardening
 > **Problem**: Unidirectional quality assessment forces agents to silently absorb software interface friction, resulting in retry spirals, token waste, and recurring architectural degradation
 > **Solution**: A bi-directional scoring architecture that pairs deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$), automatically inverting software friction into automated refactoring and schema-hardening deliverables
+> **TLDR**: Quantify developer and agent interaction friction (DAI, IFI, CIM) to guide automated refactoring and elevate software usability for both humans and AI.
+> **ELI:7b**: Measure how often the AI trips over bad error messages or awkward APIs, and rewrite the software so both humans and bots have an easier time using it.
 > **Reference Implementation**: [`examples/agent-experience-evaluator/ax_evaluator.py`](../examples/agent-experience-evaluator/ax_evaluator.py), [`tools/cegis_engine.py`](../tools/cegis_engine.py), [`tools/ast_refactorer.py`](../tools/ast_refactorer.py), [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py)
 
 ---
