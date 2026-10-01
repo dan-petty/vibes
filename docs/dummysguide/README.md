@@ -89,5 +89,5 @@ When you are ready to see how these fundamentals translate into mathematical pro
 
 - [**The Disciplined Agentic Manifesto**](../MANIFESTO.md): The formal engineering thesis behind agentic software development.
 - [**Taxonomy of Agentic Software Engineering**](../TAXONOMY.md): The full architectural classification of agent swarms, memory, and gates.
-- [**Consolidated Field Observations**](../../observations/README.md): 60 deep empirical case studies drawn from real production projects.
+- [**Consolidated Field Observations**](../../observations/README.md): 70 deep empirical case studies drawn from real production projects.
 - [**Architectural Patterns**](../../README.md#reusable-engineering-patterns): Reusable blueprints and operational playbooks for autonomous agents.

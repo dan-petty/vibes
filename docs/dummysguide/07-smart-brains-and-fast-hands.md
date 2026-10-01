@@ -109,4 +109,4 @@ Ready to see how these fundamentals are implemented in real production code?
 - 🏛️ [**Return to Dummy's Guide Home**](./README.md)
 - 📜 [**The Disciplined Agentic Manifesto**](../MANIFESTO.md)
 - 🧭 [**Taxonomy of Agentic Engineering**](../TAXONOMY.md)
-- 🔬 [**60 Real-World Case Studies (Observations)**](../../observations/README.md)
+- 🔬 [**70 Real-World Case Studies (Observations)**](../../observations/README.md)
