@@ -56,7 +56,7 @@ Ours: [`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invaria
 | **config_presets** — Ships selectable rule presets rather than one fixed rule set | ✅ | ? | ? | ✅ | ✅ |
 | **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **editor_lsp** — Provides a language server or first-party editor integration | ✅ | ? | ? | ✅ | ? |
-| **multi_language** — Analyses languages beyond Python | — | — | ✅ | — | ? |
+| **multi_language** — Analyses languages beyond Python | ✅ | — | ✅ | — | ? |
 | **nesting_depth** — Flags block nesting deeper than a configured ceiling | ✅ | ? | ? | ? | ? |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ✅ | ? | ? |
 | **pre_commit_hook** — Ships a documented pre-commit integration | ✅ | ? | ? | ✅ | ? |
@@ -82,7 +82,7 @@ Ours: [`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code
 | **multi_language** — Analyses languages beyond Python | ✅ | ? | ? | ? | ✅ |
 | **per_file_baseline** — Accepts existing violations so a gate can be adopted incrementally | ✅ | ? | ✅ | ? | ? |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ | ? | ? | ? | ✅ |
-| **trend_over_time** — Tracks metric movement across git history rather than one snapshot | — | ? | ? | ✅ | ? |
+| **trend_over_time** — Tracks metric movement across git history rather than one snapshot | ✅ | ? | ? | ✅ | ? |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -136,9 +136,9 @@ Ours: [`examples/polyglot-cst-parser/`](../../examples/polyglot-cst-parser/)
 | Feature | vibes | `tree-sitter` | `ast-grep` |
 |---|---|---|---|
 | **cyclomatic_complexity** — Flags functions exceeding a cyclomatic complexity ceiling | ✅ | ? | ? |
-| **incremental_parsing** — Reparses only the edited region rather than the whole file | — | ✅ | ? |
+| **incremental_parsing** — Reparses only the edited region rather than the whole file | ✅ | ✅ | ? |
 | **multi_language** — Analyses languages beyond Python | ✅ | ✅ | ✅ |
-| **structural_query** — Matches code by syntax structure rather than by text | — | ✅ | ✅ |
+| **structural_query** — Matches code by syntax structure rather than by text | ✅ | ✅ | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -304,22 +304,4 @@ Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
 ## Capability gaps
 
-4 feature(s) that a cited alternative has and the matching capability here does not. Each carries its evidence so it can be checked rather than believed, and a disposition saying what to do about it: **4 adopt**. `integrate` means the library is already a declared dependency of this repository — the cheapest gap there is, and the one most often missed.
-
-- **CST parser: evaluate adopting tree-sitter/tree-sitter for structural_query**
-  - Disposition: `adopt` — MIT, official Python bindings on PyPI
-  - Held by: `tree-sitter/tree-sitter`, `ast-grep/ast-grep`
-  - Evidence: tree-sitter/tree-sitter: S-expression query language matches syntax nodes by pattern
-  - Evidence: ast-grep/ast-grep: Patterns are written as code and matched structurally, not textually
-- **Complexity gate: evaluate adopting terryyin/lizard for multi_language**
-  - Disposition: `adopt` — MIT, pure Python, multi-language complexity
-  - Held by: `terryyin/lizard`
-  - Evidence: terryyin/lizard: Documents C/C++, Java, JavaScript, Go, Rust, Swift and more
-- **CST parser: evaluate adopting tree-sitter/tree-sitter for incremental_parsing**
-  - Disposition: `adopt` — MIT, official Python bindings on PyPI
-  - Held by: `tree-sitter/tree-sitter`
-  - Evidence: tree-sitter/tree-sitter: Reparses an edited buffer without reparsing the file
-- **Smell quantifier: evaluate adopting tonybaloney/wily for trend_over_time**
-  - Disposition: `adopt` — Apache-2.0, tracks metrics across git history
-  - Held by: `tonybaloney/wily`
-  - Evidence: tonybaloney/wily: wily build indexes metrics across git revisions; wily graph and wily diff report movement
+No cited capability is missing from this repository.
