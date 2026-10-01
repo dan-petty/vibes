@@ -57,9 +57,7 @@ def gh_json(endpoint: str, jq: str | None = None) -> Any:
     user already authenticated, and this module never reads, stores or logs one.
     """
     command = ["gh", "api", endpoint] + (["-q", jq] if jq else [])
-    result = subprocess.run(
-        command, capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS, check=False
-    )
+    result = subprocess.run(command, capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS, check=False)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip()[:200] or f"gh api {endpoint} failed")
     output = result.stdout.strip()
@@ -116,9 +114,7 @@ def load_snapshot(path: Path) -> dict[str, RepoFacts]:
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
     return {
-        str(entry["requested"]): RepoFacts(
-            **{**entry, "topics": tuple(entry.get("topics", []))}
-        )
+        str(entry["requested"]): RepoFacts(**{**entry, "topics": tuple(entry.get("topics", []))})
         for entry in payload.get("repositories", [])
     }
 
@@ -185,6 +181,27 @@ def _release_signal(facts: RepoFacts, reference: datetime) -> float:
     return 0.4 + 0.6 * _decay(facts.latest_release_at, reference, RELEASE_STALE_AFTER_DAYS)
 
 
+def _resolve_evaluation_moment(facts: RepoFacts, reference: datetime | None) -> datetime:
+    """Resolve the reference timestamp for temporal decay calculations."""
+    if reference is not None:
+        return reference
+    parsed = _parse_time(facts.fetched_at)
+    if parsed is not None:
+        return parsed
+    return datetime.now(UTC)
+
+
+def _compute_maturity_signals(facts: RepoFacts, moment: datetime) -> dict[str, float]:
+    """Calculate normalized signals for repository maturity evaluation."""
+    return {
+        "recent_activity": _decay(facts.pushed_at, moment, STALE_AFTER_DAYS),
+        "release_discipline": _release_signal(facts, moment),
+        "governance": _governance_signal(facts),
+        "longevity": _longevity_signal(facts, moment),
+        "adoption": _adoption_signal(facts),
+    }
+
+
 def assess_maturity(facts: RepoFacts, reference: datetime | None = None) -> Maturity:
     """Score one repository from mechanical signals, relative to when the facts were fetched.
 
@@ -192,22 +209,18 @@ def assess_maturity(facts: RepoFacts, reference: datetime | None = None) -> Matu
     reproducible: the same snapshot yields the same numbers tomorrow, so a changed report
     means the world moved rather than the calendar.
     """
-    moment = reference or _parse_time(facts.fetched_at) or datetime.now(UTC)
+    moment = _resolve_evaluation_moment(facts, reference)
     if facts.error:
         return Maturity(repo=facts.requested, score=0.0, band="Unknown", signals={})
-    signals = {
-        "recent_activity": _decay(facts.pushed_at, moment, STALE_AFTER_DAYS),
-        "release_discipline": _release_signal(facts, moment),
-        "governance": _governance_signal(facts),
-        "longevity": _longevity_signal(facts, moment),
-        "adoption": _adoption_signal(facts),
-    }
+    signals = _compute_maturity_signals(facts, moment)
     score = sum(SIGNAL_WEIGHTS[name] * value for name, value in signals.items()) * 100.0
+    repo_name = facts.full_name if facts.full_name else facts.requested
+    rounded_signals = {name: round(value, 3) for name, value in signals.items()}
     return Maturity(
-        repo=facts.full_name or facts.requested,
+        repo=repo_name,
         score=round(score, 1),
         band=_band_for(score),
-        signals={name: round(value, 3) for name, value in signals.items()},
+        signals=rounded_signals,
     )
 
 
