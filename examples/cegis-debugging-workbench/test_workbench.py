@@ -84,7 +84,17 @@ def test_correct_patch_converges_and_passes_all_constraints() -> None:
 
     hypo = Hypothesis("strip quotes", "clean before parse")
     converged = runner.verify_and_converge(candidate_patch_cegis_converged, hypo)
-    assert (converged, runner.state.converged, runner.state.verified_patches) == (True, True, 1)
+    assert (
+        converged,
+        runner.state.converged,
+        runner.state.verified_patches,
+        runner.state.active_hypothesis,
+    ) == (
+        True,
+        True,
+        1,
+        hypo,
+    )
 
 
 def test_sandboxed_patch_evaluator_success() -> None:

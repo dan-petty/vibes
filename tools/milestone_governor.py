@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -287,9 +287,7 @@ def audit_milestone(
     return findings
 
 
-def _check_sizing_rules(
-    metrics: MilestoneMetrics, max_issues: int, findings: list[GovernorFinding]
-) -> None:
+def _check_sizing_rules(metrics: MilestoneMetrics, max_issues: int, findings: list[GovernorFinding]) -> None:
     """Enforce milestone sizing bounds to prevent unmanageable releases."""
     if metrics.total_issues > CRITICAL_MEGA_MILESTONE_ISSUES:
         findings.append(
@@ -435,7 +433,7 @@ def partition_milestone_rollover(
         if is_retained:
             keep.append(issue)
         else:
-            rollover.append(issue)
+            rollover.append(replace(issue, milestone=target_milestone) if target_milestone else issue)
 
     return keep, rollover
 
@@ -456,7 +454,9 @@ def _format_header_lines(metrics: MilestoneMetrics, phase: MilestonePhase) -> li
 
     if metrics.estimated_days_to_convergence is not None:
         if metrics.estimated_days_to_convergence > 0:
-            lines.append(f"Est. Completion: {metrics.estimated_days_to_convergence:.1f} days at current net velocity")
+            lines.append(
+                f"Est. Completion: {metrics.estimated_days_to_convergence:.1f} days at current net velocity"
+            )
         else:
             lines.append("Est. Completion: 0.0 days (Complete)")
     else:
@@ -616,8 +616,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Target milestone lifecycle phase",
     )
     parser.add_argument("--title", type=str, default="Release Milestone", help="Milestone title")
-    parser.add_argument("--max-issues", type=int, default=DEFAULT_MAX_MILESTONE_ISSUES, help="Max issue ceiling")
-    parser.add_argument("--window-days", type=float, default=WINDOW_DAYS_DEFAULT, help="Rolling evaluation window")
+    parser.add_argument(
+        "--max-issues", type=int, default=DEFAULT_MAX_MILESTONE_ISSUES, help="Max issue ceiling"
+    )
+    parser.add_argument(
+        "--window-days", type=float, default=WINDOW_DAYS_DEFAULT, help="Rolling evaluation window"
+    )
     parser.add_argument("--rollover-to", type=str, default="vNext", help="Target milestone for rollover plan")
     parser.add_argument("--sarif", type=Path, help="Path to export OASIS SARIF 2.1.0 output")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")

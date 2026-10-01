@@ -70,14 +70,17 @@ def test_clean_content_extractor_markdown() -> None:
     document = extract(sample_html, "https://example.com/")
     title, content, links = document.title, document.markdown, document.links
 
-    assert title == "Documentation Guide"
-    assert "http://example.com/guide" in links
-    assert "/home" not in " ".join(links)
-
     expected_present = ["Getting Started", "Installation", "- Run pip install framework"]
     expected_absent = ["Header Title", "Copyright 2026", "analytics", "Docs"]
-    assert all(item in content for item in expected_present)
-    assert not any(item in content for item in expected_absent)
+
+    actual_checks = (
+        title,
+        "http://example.com/guide" in links,
+        "/home" not in " ".join(links),
+        all(item in content for item in expected_present),
+        not any(item in content for item in expected_absent),
+    )
+    assert actual_checks == ("Documentation Guide", True, True, True, True)
 
 
 def test_spa_detector_identifies_empty_shell() -> None:
@@ -99,23 +102,31 @@ def test_spa_detector_identifies_empty_shell() -> None:
 
 def test_spa_detector_identifies_rich_content() -> None:
     """Ensure SPADetector flags rich text documents as HIGH quality."""
-    rich_html = "<html><body><article><h1>Architecture</h1><p>" + ("Solid documentation text. " * 30) + "</p></article></body></html>"
+    rich_html = (
+        "<html><body><article><h1>Architecture</h1><p>"
+        + ("Solid documentation text. " * 30)
+        + "</p></article></body></html>"
+    )
     quality = SPADetector.analyze(rich_html, "Solid documentation text. " * 30)
     assert quality == PageQuality.HIGH
 
 
 def test_crawler_static_http_success() -> None:
     """Ensure crawler successfully extracts static page in Tier 1 without headless escalation."""
-    static_html = """
+    static_html = (
+        """
     <html><head><title>Static Docs</title></head>
-    <body><main><h1>Static Page</h1><p>""" + ("Rich text for static rendering. " * 20) + """</p></main></body></html>
+    <body><main><h1>Static Page</h1><p>"""
+        + ("Rich text for static rendering. " * 20)
+        + """</p></main></body></html>
     """
+    )
     headless_called = False
 
     def mock_http(url: str, headers: dict[str, str]) -> tuple[int, str]:
         return 200, static_html
 
-    def mock_headless(url: str, selector: str) -> tuple[int, str]:
+    def mock_headless(url: str, _selector: str) -> tuple[int, str]:
         nonlocal headless_called
         headless_called = True
         return 200, "<html><body>Hydrated</body></html>"
@@ -135,16 +146,20 @@ def test_crawler_escalates_to_headless_on_spa_shell() -> None:
     <html><head><title>Client App</title></head>
     <body><div id="app"></div><script src="/a.js"></script><script src="/b.js"></script><script src="/c.js"></script><script src="/d.js"></script></body></html>
     """
-    hydrated_html = """
+    hydrated_html = (
+        """
     <html><head><title>Client App</title></head>
-    <body><main><h1>Hydrated Dashboard</h1><p>""" + ("Fully hydrated dynamic content from API. " * 15) + """</p></main></body></html>
+    <body><main><h1>Hydrated Dashboard</h1><p>"""
+        + ("Fully hydrated dynamic content from API. " * 15)
+        + """</p></main></body></html>
     """
+    )
     headless_invoked = False
 
     def mock_http(url: str, headers: dict[str, str]) -> tuple[int, str]:
         return 200, empty_spa_html
 
-    def mock_headless(url: str, selector: str) -> tuple[int, str]:
+    def mock_headless(url: str, _selector: str) -> tuple[int, str]:
         nonlocal headless_invoked
         headless_invoked = True
         return 200, hydrated_html
@@ -169,10 +184,14 @@ def test_crawler_escalates_to_headless_on_spa_shell() -> None:
 
 def test_crawler_reuses_learned_headless_strategy() -> None:
     """Ensure subsequent crawls to a learned domain immediately start on headless tier."""
-    hydrated_html = """
+    hydrated_html = (
+        """
     <html><head><title>Second Page</title></head>
-    <body><main><h1>Page Two</h1><p>""" + ("Rich text for page two. " * 20) + """</p></main></body></html>
+    <body><main><h1>Page Two</h1><p>"""
+        + ("Rich text for page two. " * 20)
+        + """</p></main></body></html>
     """
+    )
     http_called = False
 
     def mock_http(url: str, headers: dict[str, str]) -> tuple[int, str]:
@@ -180,7 +199,7 @@ def test_crawler_reuses_learned_headless_strategy() -> None:
         http_called = True
         return 200, "<html><body>empty</body></html>"
 
-    def mock_headless(url: str, selector: str) -> tuple[int, str]:
+    def mock_headless(url: str, _selector: str) -> tuple[int, str]:
         return 200, hydrated_html
 
     store = DomainStrategyStore()
@@ -198,6 +217,7 @@ def test_crawler_reuses_learned_headless_strategy() -> None:
 
 def test_crawler_rate_limiting_backoff() -> None:
     """Ensure HTTP 429 increases rate limit delay for the domain."""
+
     def mock_http_429(url: str, headers: dict[str, str]) -> tuple[int, str]:
         return 429, "Too Many Requests"
 
@@ -329,6 +349,7 @@ def test_a_redirect_to_a_private_address_is_refused(monkeypatch: pytest.MonkeyPa
 @requires_httpx
 def test_an_ordinary_redirect_is_still_followed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Revalidating every hop must not stop the crawler following legitimate redirects."""
+
     def handler(request: object) -> object:
         if str(request.url).endswith("/moved"):
             return httpx.Response(301, headers={"Location": "http://example.com/final"})
@@ -342,6 +363,7 @@ def test_an_ordinary_redirect_is_still_followed(monkeypatch: pytest.MonkeyPatch)
 @requires_httpx
 def test_a_redirect_loop_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """Following hops by hand means the ceiling is ours to impose; RFC 9110 sets none."""
+
     def handler(request: object) -> object:
         return httpx.Response(302, headers={"Location": "http://example.com/again"})
 
@@ -384,10 +406,12 @@ def test_the_redirect_walk_validates_each_hop_without_an_http_library() -> None:
     interpreter — a security regression that can skip is a security regression that will.
     """
     meta = "http://169.254.169.254/latest/meta-data/"
-    client = _FakeClient({
-        "http://example.com/a": _FakeResponse(302, location=meta),
-        meta: _FakeResponse(200, text="SECRET"),
-    })
+    client = _FakeClient(
+        {
+            "http://example.com/a": _FakeResponse(302, location=meta),
+            meta: _FakeResponse(200, text="SECRET"),
+        }
+    )
     with pytest.raises(ValueError, match="SSRF violation"):
         crawler.AdaptiveWebCrawler()._follow_redirects(client, "http://example.com/a", {})
     assert client.requested == ["http://example.com/a"]
@@ -395,10 +419,12 @@ def test_the_redirect_walk_validates_each_hop_without_an_http_library() -> None:
 
 def test_a_relative_location_is_resolved_before_it_is_validated() -> None:
     """RFC 9110 §10.2.2 permits a relative Location, and a bare path validates against nothing."""
-    client = _FakeClient({
-        "http://example.com/a": _FakeResponse(302, location="/b"),
-        "http://example.com/b": _FakeResponse(200, text="ok"),
-    })
+    client = _FakeClient(
+        {
+            "http://example.com/a": _FakeResponse(302, location="/b"),
+            "http://example.com/b": _FakeResponse(200, text="ok"),
+        }
+    )
     status, text = crawler.AdaptiveWebCrawler()._follow_redirects(client, "http://example.com/a", {})
     assert (status, text, client.requested[-1]) == (200, "ok", "http://example.com/b")
 
@@ -406,8 +432,9 @@ def test_a_relative_location_is_resolved_before_it_is_validated() -> None:
 # --- A body is not a page --------------------------------------------------------------------
 
 
-def _mock_crawl(monkeypatch: pytest.MonkeyPatch, status: int, body: bytes,
-                headers: dict[str, str] | None = None) -> tuple[object, object]:
+def _mock_crawl(
+    monkeypatch: pytest.MonkeyPatch, status: int, body: bytes, headers: dict[str, str] | None = None
+) -> tuple[object, object]:
     """Crawl one page from a mock transport, returning the page and the domain strategy."""
     import httpx
 
@@ -421,9 +448,7 @@ def _mock_crawl(monkeypatch: pytest.MonkeyPatch, status: int, body: bytes,
 
 
 @pytest.mark.parametrize("status", [403, 404, 500, 503])
-def test_an_error_status_is_not_a_successful_crawl(
-    monkeypatch: pytest.MonkeyPatch, status: int
-) -> None:
+def test_an_error_status_is_not_a_successful_crawl(monkeypatch: pytest.MonkeyPatch, status: int) -> None:
     """429 was the only status ever compared.
 
     Every other error had its error page extracted as ordinary content, returned with no
@@ -452,11 +477,18 @@ def test_a_successful_status_is_still_a_successful_crawl(monkeypatch: pytest.Mon
 @pytest.mark.parametrize(
     ("body", "headers", "expected"),
     [
-        ("<html><head><meta charset='windows-1252'></head><body><main><p>Résumé café</p>"
-         "</main></body></html>".encode("windows-1252"), None, "Résumé café"),
+        (
+            "<html><head><meta charset='windows-1252'></head><body><main><p>Résumé café</p>"
+            "</main></body></html>".encode("windows-1252"),
+            None,
+            "Résumé café",
+        ),
         (b"\xef\xbb\xbf<html><body><main><p>Hello</p></main></body></html>", None, "Hello"),
-        ("<html><body><main><p>Résumé</p></main></body></html>".encode("windows-1252"),
-         {"content-type": "text/html; charset=windows-1252"}, "Résumé"),
+        (
+            "<html><body><main><p>Résumé</p></main></body></html>".encode("windows-1252"),
+            {"content-type": "text/html; charset=windows-1252"},
+            "Résumé",
+        ),
         ("<html><body><main><p>Café</p></main></body></html>".encode(), None, "Café"),
     ],
     ids=["meta-charset", "utf8-bom", "transport-charset", "plain-utf8"],
