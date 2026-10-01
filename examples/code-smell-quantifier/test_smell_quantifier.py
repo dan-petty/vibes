@@ -8,10 +8,14 @@ import pytest
 from smell_quantifier import (
     ADVISORY_SMELLS,
     LOW_MAINTAINABILITY_INDEX,
+    RevisionScore,
     Smell,
+    TrendReport,
+    _compute_rev_deltas,
     _count_disjoint_clusters,
     _normalize_polyglot_line,
     analyze,
+    compute_trend,
     detect_cyclomatic_complexity,
     detect_duplicated_blocks,
     detect_god_classes,
@@ -24,6 +28,7 @@ from smell_quantifier import (
     main,
     module_metrics,
     polyglot_module_metrics,
+    render_trend,
 )
 
 
@@ -155,9 +160,13 @@ def test_unreferenced_symbol_confidence_floor_filters(tmp_path: Path) -> None:
 
 def test_advisory_smells_never_gate(tmp_path: Path) -> None:
     """Measurement soundness and action confidence are different properties."""
-    _write(tmp_path, "m.py", "class C:\n    def a(self):\n        self.x = 1\n"
-           "    def b(self):\n        return self.x\n"
-           "    def c(self):\n        self.y = 2\n    def d(self):\n        return self.y\n")
+    _write(
+        tmp_path,
+        "m.py",
+        "class C:\n    def a(self):\n        self.x = 1\n"
+        "    def b(self):\n        return self.x\n"
+        "    def c(self):\n        self.y = 2\n    def d(self):\n        return self.y\n",
+    )
     report = analyze([tmp_path])
     assert any(f.smell is Smell.LOW_COHESION for f in report.advisory)
     assert all(f.smell in ADVISORY_SMELLS for f in report.advisory)
@@ -217,11 +226,13 @@ def test_god_class_ceiling_counts_only_assigned_state() -> None:
     """A class with many collaborators is not a class with many attributes."""
     calls = "\n".join(f"        self.step{i}()" for i in range(12))
     defs = "\n".join(f"    def step{i}(self):\n        return {i}" for i in range(12))
-    source = f"class C:\n    def __init__(self):\n        self.only = 1\n    def run(self):\n{calls}\n{defs}\n"
+    source = (
+        f"class C:\n    def __init__(self):\n        self.only = 1\n    def run(self):\n{calls}\n{defs}\n"
+    )
     assert detect_god_classes(_tree(source), Path("m.py")) == []
 
 
-MUTUAL_CALL_CLASS = '''
+MUTUAL_CALL_CLASS = """
 class Service:
     def __init__(self) -> None:
         self.store = {}
@@ -234,7 +245,7 @@ class Service:
 
     def gamma(self) -> None:
         self.store["j"] = 2
-'''
+"""
 
 
 def test_a_calling_method_joins_the_cluster_of_the_method_it_calls() -> None:
@@ -345,8 +356,9 @@ def test_a_package_relative_submodule_import_draws_an_edge(tmp_path: Path) -> No
     (package / "__init__.py").write_text("", encoding="utf-8")
     (package / "a.py").write_text("from pkg import b\n\n\ndef fa():\n    return b\n", encoding="utf-8")
     (package / "b.py").write_text("from pkg import a\n\n\ndef fb():\n    return a\n", encoding="utf-8")
-    cycles = [f for f in analyze([package], include_advisory=False).findings
-              if f.smell.name == "IMPORT_CYCLE"]
+    cycles = [
+        f for f in analyze([package], include_advisory=False).findings if f.smell.name == "IMPORT_CYCLE"
+    ]
     assert len(cycles) == 1
 
 
@@ -450,11 +462,7 @@ def test_polyglot_clone_detection_ignores_distinct_code(tmp_path: Path) -> None:
 
 def test_polyglot_module_metrics_normalized_scale() -> None:
     """Polyglot metrics calculate LOC, Halstead volume, and normalized MI on 0-100 scale."""
-    clean_ts = (
-        "function add(a: number, b: number): number {\n"
-        "    return a + b;\n"
-        "}\n"
-    )
+    clean_ts = "function add(a: number, b: number): number {\n    return a + b;\n}\n"
     tangled_ts = "\n".join(
         f"function fn{i}(x: number): number {{ if (x > {i}) {{ return x * 2; }} else {{ return 0; }} }}"
         for i in range(50)
@@ -536,3 +544,65 @@ def test_cli_languages_argument_parsing(tmp_path: Path, capsys: pytest.CaptureFi
         "mean_maintainability" in out,
     ) == (0, True, True)
 
+
+def test_compute_rev_deltas() -> None:
+    """_compute_rev_deltas calculates Maintainability Index, LOC, and finding count deltas."""
+    prev = RevisionScore(
+        commit="1111111",
+        short_sha="1111111",
+        subject="Initial commit",
+        mean_maintainability=80.0,
+        total_loc=100,
+        module_count=2,
+        gating_findings=1,
+        advisory_findings=2,
+    )
+    delta_none = _compute_rev_deltas(85.0, 120, 5, prev=None)
+    delta_prev = _compute_rev_deltas(85.0, 120, 5, prev=prev)
+
+    assert (delta_none, delta_prev) == ((0.0, 0, 0), (5.0, 20, 2))
+
+
+def test_compute_trend_returns_trajectory() -> None:
+    """compute_trend calculates trajectory metrics across historical git revisions."""
+    target = Path("examples/code-smell-quantifier/smell_quantifier.py")
+    report = compute_trend([target], revisions_count=3)
+
+    assert (
+        len(report.revisions) > 0,
+        all(isinstance(r.short_sha, str) and len(r.short_sha) > 0 for r in report.revisions),
+        all(r.mean_maintainability > 0.0 for r in report.revisions),
+        all(r.module_count >= 1 for r in report.revisions),
+    ) == (True, True, True, True)
+
+
+def test_render_trend_outputs_table_and_summary() -> None:
+    """render_trend outputs formatted ASCII trajectory table and summary lines."""
+    revs = [
+        RevisionScore("1111111", "1111111", "First commit", 80.0, 100, 1, 0, 1, 0.0, 0, 0),
+        RevisionScore("2222222", "2222222", "Second commit", 85.0, 120, 1, 0, 1, 5.0, 20, 0),
+    ]
+    lines = render_trend(TrendReport(revisions=revs))
+    output = "\n".join(lines)
+
+    assert (
+        "CODE HEALTH TREND TRAJECTORY" in output,
+        "1111111" in output,
+        "2222222" in output,
+        "Trajectory (2 revs):" in output,
+    ) == (True, True, True, True)
+
+
+def test_cli_trend_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """CLI --trend with --json emits machine-readable trajectory payload."""
+    exit_code = main(
+        ["quantify", "--trend", "2", "--json", "examples/code-smell-quantifier/smell_quantifier.py"]
+    )
+    out = capsys.readouterr().out
+
+    assert (
+        exit_code,
+        '"trend":' in out,
+        '"mean_maintainability":' in out,
+        '"delta_maintainability":' in out,
+    ) == (0, True, True, True)

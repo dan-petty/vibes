@@ -390,7 +390,10 @@ def test_the_gate_is_never_laxer_than_its_reference(tmp_path: Path) -> None:
 def test_render_presets_table_contains_all_presets() -> None:
     """The preset table lists every available preset name and description."""
     table = render_presets_table()
-    present = tuple(name in table for name in ("standard", "strict", "relaxed", "pedantic", "security_only", "structural_only"))
+    present = tuple(
+        name in table
+        for name in ("standard", "strict", "relaxed", "pedantic", "security_only", "structural_only")
+    )
     assert (len(PRESETS), all(present)) == (6, True)
 
 
@@ -506,7 +509,11 @@ def test_pedantic_preset_flags_low_complexity(tmp_path: Path) -> None:
 def test_relaxed_preset_allows_higher_complexity(tmp_path: Path) -> None:
     """The relaxed preset permits legacy functions with M=12 that breach standard M<=10."""
     source = tmp_path / "legacy.py"
-    code = "def legacy(x: int) -> int:\n" + "".join(f"    if x == {i}: return {i}\n" for i in range(1, 12)) + "    return 0\n"
+    code = (
+        "def legacy(x: int) -> int:\n"
+        + "".join(f"    if x == {i}: return {i}\n" for i in range(1, 12))
+        + "    return 0\n"
+    )
     source.write_text(code, encoding="utf-8")
     std_v = audit_file(source, config=resolve_config(ConfigOverrides(preset_name="standard")))
     relaxed_v = audit_file(source, config=resolve_config(ConfigOverrides(preset_name="relaxed")))
@@ -530,10 +537,7 @@ def test_security_only_preset_ignores_complexity(tmp_path: Path) -> None:
 def test_structural_only_preset_ignores_sanitization(tmp_path: Path) -> None:
     """The structural_only preset ignores IP leaks but flags complexity/nesting violations."""
     source = tmp_path / "struct_check.py"
-    code = (
-        "def simple_with_ip() -> str:\n"
-        "    return 'https://api.example.com/resource'\n"
-    )
+    code = "def simple_with_ip() -> str:\n    return 'https://api.example.com/resource'\n"
     source.write_text(code, encoding="utf-8")
     struct_cfg = resolve_config(ConfigOverrides(preset_name="structural_only"))
     violations = audit_file(source, config=struct_cfg)
@@ -542,15 +546,22 @@ def test_structural_only_preset_ignores_sanitization(tmp_path: Path) -> None:
 
 def test_cli_parsing_presets_and_rule_selection(tmp_path: Path) -> None:
     """CLI flag parsing wires presets, explicit selection, and ignore lists correctly."""
-    targets, config, is_list = parse_cli_args([
-        "sentinel.py",
-        str(tmp_path),
-        "--preset", "strict",
-        "--select", "CC001,ZT001",
-        "--ignore", "sanitization",
-        "--max-complexity", "5",
-        "--max-depth", "2",
-    ])
+    targets, config, is_list = parse_cli_args(
+        [
+            "sentinel.py",
+            str(tmp_path),
+            "--preset",
+            "strict",
+            "--select",
+            "CC001,ZT001",
+            "--ignore",
+            "sanitization",
+            "--max-complexity",
+            "5",
+            "--max-depth",
+            "2",
+        ]
+    )
     assert (
         is_list,
         targets[0],
@@ -572,10 +583,10 @@ def test_toml_config_loading_and_override(tmp_path: Path) -> None:
     """TOML configuration in pyproject.toml is loaded and overridden by CLI flags."""
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text(
-        '[tool.sentinel]\n'
+        "[tool.sentinel]\n"
         'preset = "strict"\n'
-        'max_complexity = 7\n'
-        'max_depth = 3\n'
+        "max_complexity = 7\n"
+        "max_depth = 3\n"
         'select = ["complexity", "nesting"]\n',
         encoding="utf-8",
     )
@@ -743,10 +754,120 @@ def test_lsp_server_lifecycle_and_diagnostics() -> None:
 
 def test_cli_run_options_with_fix_and_lsp() -> None:
     """CLI run options parser correctly extracts --fix and --lsp flags."""
-    targets, _config, is_list, is_fix, is_lsp = parse_cli_run_options([
-        "sentinel.py",
-        "some_path.py",
-        "--fix",
-        "--lsp",
-    ])
+    targets, _config, is_list, is_fix, is_lsp = parse_cli_run_options(
+        [
+            "sentinel.py",
+            "some_path.py",
+            "--fix",
+            "--lsp",
+        ]
+    )
     assert (is_list, is_fix, is_lsp, str(targets[0])) == (False, True, True, "some_path.py")
+
+
+def test_polyglot_audit_clean_go_and_rust() -> None:
+    """audit_source validates clean Go and Rust code with zero violations."""
+    go_code = (
+        "package main\n\n"
+        "func Add(a int, b int) int {\n"
+        "    if a > 0 {\n"
+        "        return a + b\n"
+        "    }\n"
+        "    return b\n"
+        "}\n"
+    )
+    rs_code = (
+        "pub fn compute(val: i32) -> i32 {\n"
+        "    if val > 10 {\n"
+        "        val * 2\n"
+        "    } else {\n"
+        "        val\n"
+        "    }\n"
+        "}\n"
+    )
+    v_go = audit_source(go_code, file_path="main.go")
+    v_rs = audit_source(rs_code, file_path="lib.rs")
+
+    assert (len(v_go), len(v_rs)) == (0, 0)
+
+
+def test_polyglot_audit_flags_cyclomatic_complexity() -> None:
+    """audit_source detects high cyclomatic complexity in polyglot functions."""
+    branches = "\n".join(f"    if x == {i} {{ return {i} }}" for i in range(12))
+    go_code = f"func Evaluate(x int) int {{\n{branches}\n    return -1\n}}\n"
+    violations = audit_source(go_code, file_path="eval.go")
+
+    assert (
+        len(violations),
+        violations[0].invariant,
+        violations[0].metric_value,
+        violations[0].threshold,
+    ) == (1, "CyclomaticComplexity", 13, 10)
+
+
+def test_polyglot_audit_flags_nesting_depth() -> None:
+    """audit_source detects excessive brace nesting in TypeScript functions."""
+    ts_code = (
+        "function deep() {\n"
+        "    if (true) {\n"
+        "        if (true) {\n"
+        "            if (true) {\n"
+        "                if (true) {\n"
+        "                    if (true) {\n"
+        "                        if (true) {\n"
+        "                            return 1;\n"
+        "                        }\n"
+        "                    }\n"
+        "                }\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "}\n"
+    )
+    violations = audit_source(ts_code, file_path="deep.ts")
+
+    assert (
+        len(violations),
+        violations[0].invariant,
+        violations[0].metric_value,
+        violations[0].threshold,
+    ) == (1, "NestingDepth", 6, 5)
+
+
+def test_polyglot_audit_flags_ip_leakage_and_subdomain() -> None:
+    """audit_source catches private IPs and example.com subdomains in polyglot files."""
+    rs_code = 'pub const ADDR: &str = "192.168.1.50";\npub const URL: &str = "https://api.example.com/v1";\n'
+    violations = audit_source(rs_code, file_path="config.rs")
+    invariants = [v.invariant for v in violations]
+
+    assert (
+        len(violations),
+        invariants,
+    ) == (2, ["ZeroTrustSanitization", "ZeroTrustSanitization"])
+
+
+def test_polyglot_waiver_in_header_suppresses_violation() -> None:
+    """Header comments with sentinel waiver suppress ZeroTrustSanitization in polyglot files."""
+    rs_code = (
+        "// sentinel: allow[ZeroTrustSanitization] Test mock private address verification\n"
+        'pub const TEST_IP: &str = "10.0.0.1";\n'
+    )
+    violations = audit_source(rs_code, file_path="network_test.rs")
+
+    assert len(violations) == 0
+
+
+def test_polyglot_targets_expansion_in_audit_targets(tmp_path: Path) -> None:
+    """audit_targets discovers and audits polyglot files alongside Python files."""
+    (tmp_path / "main.py").write_text("def ok(): return 1\n", encoding="utf-8")
+    (tmp_path / "worker.go").write_text("func Work() int { return 1 }\n", encoding="utf-8")
+    (tmp_path / "lib.rs").write_text("pub fn lib() -> i32 { 1 }\n", encoding="utf-8")
+
+    report = audit_targets([tmp_path])
+
+    assert (
+        report.files_checked,
+        report.py_files_checked,
+        report.polyglot_files_checked,
+        report.is_clean,
+    ) == (3, 1, 2, True)

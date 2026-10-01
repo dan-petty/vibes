@@ -320,6 +320,11 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
    - Introduces native in-test teardown assertions in Go (`defer sentinel.Check(t)()`, `sentinel.VerifyNone(t)`, `sentinel.VerifyTestMain(m)`) failing ordinary `go test` runs when concurrent worker goroutines outlive tests.
    - Implements Python test runner integration (`verify_test_run(fail_on_leak=True)`, `assert_no_goroutine_leaks`) raising structured `AssertionError` failures with complete remediation diagnostics, alongside CLI `--fail-on-leak` gating.
    - Accompanied by Observation 39 (`observations/systems/39-test-harness-integration-and-zero-overhead-goroutine-leak-sentinels.md`), Pattern (`patterns/test-harness-concurrency-leak-sentinel.md`), and expanded 15-test unit suite in `examples/go-leak-sentinel/test_go_leak_sentinel.py` certified compliant with AST Invariant Sentinel ($M \le 4$, depth $\le 2$).
+- [x] **Deliverable #2035: Polyglot Complexity Boundary Gating & Historical Metric Trajectory Engine** (`examples/ast-invariant-sentinel/`, `examples/code-smell-quantifier/`):
+   - Closes the landscape survey capability gaps for `multi_language` under `complexity-gating` (previously held by `terryyin/lizard`) and `trend_over_time` under `smell-quantification` (previously held by `tonybaloney/wily`), reducing total repository survey gaps from 4 to 2 (0 build gaps remaining).
+   - Extends `examples/ast-invariant-sentinel/sentinel.py` to audit polyglot files (`.rs`, `.go`, `.ts`, `.js`, `.sh`, `.c`, `.cpp`) for cyclomatic complexity ($M \le 10$), nesting depth ($\le 5$), and zero-trust sanitization.
+   - Introduces `--trend [REVISIONS]` to `examples/code-smell-quantifier/smell_quantifier.py` to step back through $N$ git revisions, calculating maintainability index ($MI$) trajectories, lines of code, and smell findings with delta tracking and ASCII/JSON rendering.
+   - Accompanied by Chapter 9 of The Dummy's Guide to Agentic Software Engineering (`docs/dummysguide/09-the-cheat-sheet-and-survival-kit.md`) and expanded unit test suites in `examples/ast-invariant-sentinel/test_sentinel.py` (67 passed) and `examples/code-smell-quantifier/test_smell_quantifier.py` (43 passed) certified compliant with AST Invariant Sentinel ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 
 ---
 

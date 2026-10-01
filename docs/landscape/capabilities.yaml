@@ -91,6 +91,7 @@ capabilities:
       - config_presets
       - auto_fix
       - editor_lsp
+      - multi_language
     alternatives:
       - repo: rubik/xenon
         has:
@@ -144,6 +145,7 @@ capabilities:
       - baseline_diff
       - cyclomatic_complexity
       - multi_language
+      - trend_over_time
     alternatives:
       - repo: rubik/radon
         package: radon

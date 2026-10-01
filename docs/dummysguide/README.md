@@ -84,6 +84,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 8. [**Chapter 8: Fast Checks Beat Slow Tests**](./08-fast-checks-beat-slow-tests.md)  
    *The Verification Speed Trap* — Why waiting two minutes for tests paralyzes AI coders, and how layered sub-second checks keep them sharp.
 
+9. [**Chapter 9: The Cheat Sheet & Survival Kit**](./09-the-cheat-sheet-and-survival-kit.md)  
+   *Rules, Trees & Checklists* — 10 plain-English golden rules, emergency decision trees for stuck agents, and pre-merge validity checks.
+
 ---
 
 ## 🚀 Want to Dive Deeper?
