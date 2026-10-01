@@ -152,4 +152,6 @@ Ready to explore the foundational chapters in detail?
 - 🧠 [**Chapter 6: Stopping AI Amnesia (Checklists)**](./06-stopping-ai-amnesia.md)
 - 🤖 [**Chapter 7: Big Brains & Fast Hands (Model Routing)**](./07-smart-brains-and-fast-hands.md)
 - ⚡ [**Chapter 8: Fast Checks Beat Slow Tests (Verification Speed)**](./08-fast-checks-beat-slow-tests.md)
+- 🧰 [**Chapter 9: The Cheat Sheet & Survival Kit (Daily Decision Trees)**](./09-the-cheat-sheet-and-survival-kit.md)
+- 👑 [**Chapter 10: The Sovereign Human Core (Pilot & Autopilot)**](./10-the-human-in-the-loop.md)
 - 🔬 [**71 Real-World Case Studies (Field Observations)**](../../observations/README.md)
