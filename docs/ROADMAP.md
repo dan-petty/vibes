@@ -79,6 +79,7 @@ Three milestones are complete and archived verbatim in [`docs/archive/delivered-
   - Unified Concrete Syntax Tree (CST) and AST parser supporting Python, Rust, Go, TypeScript/JavaScript, and Bash.
   - Language-agnostic cyclomatic complexity ($M$) and block nesting depth calculation.
   - Hardened pre-flight file size boundary guards (`MAX_FILE_SIZE_BYTES = 5MB`) mitigating OOM/DoS (CWE-400) and defensive symlink resolution preventing circular loops (`ELOOP`) and workspace traversal escapes.
+  - **Structural Query Engine & Incremental Reparsing (Zero Open Landscape Gaps)**: Delivers `StructuralQuery` and `parse_structural_query` enabling syntax-aware symbol filtering by kind, pattern, scope, and line bounds (`--query`), alongside `EditSpan` and `incremental_reparse` preserving unedited AST nodes and recalculating metrics over modified regions without full buffer reparsing. Closes all remaining capability gaps in `docs/landscape/capabilities.yaml` (`structural_query` and `incremental_parsing`), bringing total open capability gaps across the entire repository to 0.
 - [x] **Automated Assertion Consolidation Engine (`tools/ast_refactorer.py`)**:
   - Mechanical AST rewriting transform identifying linear sequences of `ast.Assert` statements in test suites and compiling them into structural tuple equality checks (`assert actual == expected`) and collection predicates (`all(...)`).
   - Automatically mitigates test suite cyclomatic complexity traps ($M > 10$) without loss of pytest element-level diff diagnostics.

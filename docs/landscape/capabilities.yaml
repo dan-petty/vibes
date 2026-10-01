@@ -280,6 +280,8 @@ capabilities:
     ours:
       - multi_language
       - cyclomatic_complexity
+      - structural_query
+      - incremental_parsing
     alternatives:
       - repo: tree-sitter/tree-sitter
         package: tree-sitter
