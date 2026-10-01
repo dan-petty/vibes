@@ -87,6 +87,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 9. [**Chapter 9: The Cheat Sheet & Survival Kit**](./09-the-cheat-sheet-and-survival-kit.md)  
    *Rules, Trees & Checklists* — 10 plain-English golden rules, emergency decision trees for stuck agents, and pre-merge validity checks.
 
+10. [**Chapter 10: The Sovereign Human Core**](./10-the-human-in-the-loop.md)  
+    *The Pilot and the Autopilot* — The three things AI can never do (Purpose, Boundaries, Accountability), the air-lock principle, and the 3-strike rule.
+
 ---
 
 ## 🚀 Want to Dive Deeper?
