@@ -1311,14 +1311,13 @@ def _compute_rev_deltas(
 
 
 def _analyze_git_revision(
-    commit_sha: str,
-    short_sha: str,
-    subject: str,
+    commit_info: tuple[str, str, str],
     target_files: Sequence[str],
     languages: Sequence[str] | None,
     prev_rev: RevisionScore | None,
 ) -> RevisionScore:
     """Analyze all matching files at a single git revision and compute metric deltas."""
+    commit_sha, short_sha, subject = commit_info
     modules, findings = _collect_rev_modules_and_findings(commit_sha, target_files, languages)
     scores = [m.maintainability for m in modules]
     mean_mi = round(sum(scores) / len(scores), 1) if scores else 0.0
@@ -1361,7 +1360,7 @@ def compute_trend(
     prev: RevisionScore | None = None
     for full_sha, short_sha, subj in commits:
         candidates = _resolve_git_candidates(full_sha, paths, root, languages)
-        rev_score = _analyze_git_revision(full_sha, short_sha, subj, candidates, languages, prev)
+        rev_score = _analyze_git_revision((full_sha, short_sha, subj), candidates, languages, prev)
         scores.append(rev_score)
         prev = rev_score
 

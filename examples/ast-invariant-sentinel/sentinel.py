@@ -879,11 +879,11 @@ def _audit_polyglot_function(
     file_path: str,
     fn_name: str,
     fn_body: str,
-    lineno: int,
-    max_nesting: int,
+    nesting_meta: tuple[int, int],
     config: SentinelConfig,
 ) -> list[Violation]:
     """Audit single polyglot function block for cyclomatic complexity and nesting depth."""
+    lineno, max_nesting = nesting_meta
     violations: list[Violation] = []
     decisions = len(_POLYGLOT_DECISION_RE.findall(fn_body))
     complexity = 1 + decisions
@@ -930,7 +930,7 @@ def _audit_polyglot_functions(
         brace_start = match.end() - 1
         fn_body, end_pos, max_nesting = _extract_brace_body(source, brace_start)
         lineno = source[: match.start()].count("\n") + 1
-        violations.extend(_audit_polyglot_function(file_path, fn_name, fn_body, lineno, max_nesting, config))
+        violations.extend(_audit_polyglot_function(file_path, fn_name, fn_body, (lineno, max_nesting), config))
         pos = end_pos
     return violations, fn_found
 

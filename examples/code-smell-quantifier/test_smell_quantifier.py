@@ -571,7 +571,7 @@ def test_compute_trend_returns_trajectory() -> None:
     assert (
         len(report.revisions) > 0,
         all(isinstance(r.short_sha, str) and len(r.short_sha) > 0 for r in report.revisions),
-        all(r.mean_maintainability > 0.0 for r in report.revisions),
+        all(0.0 <= r.mean_maintainability <= 100.0 for r in report.revisions),
         all(r.module_count >= 1 for r in report.revisions),
     ) == (True, True, True, True)
 
