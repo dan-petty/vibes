@@ -365,7 +365,9 @@ def _has_permissive_schema(findings: Sequence[AXFinding]) -> bool:
     return any(f.rule_id == "AX001" for f in findings)
 
 
-def compute_aggregate_scores(telemetry_list: Sequence[ModuleTelemetry], threshold: float = DEFAULT_AX_THRESHOLD) -> AXScoreReport:
+def compute_aggregate_scores(
+    telemetry_list: Sequence[ModuleTelemetry], threshold: float = DEFAULT_AX_THRESHOLD
+) -> AXScoreReport:
     """Aggregate telemetry across multiple files and compute the composite S_AX score."""
     agg = _accumulate_telemetry(telemetry_list)
     dai = _safe_ratio(agg.struct_diag, agg.total_diag, 1.0)
@@ -455,14 +457,18 @@ def render_markdown_summary(report: AXScoreReport) -> str:
     ]
 
     if report.findings:
-        lines.extend([
-            "## Discovered Friction Hotspots",
-            "",
-            "| Rule | File | Line | Symbol | Message & Remediation |",
-            "|---|---|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "## Discovered Friction Hotspots",
+                "",
+                "| Rule | File | Line | Symbol | Message & Remediation |",
+                "|---|---|---|---|---|",
+            ]
+        )
         for f in report.findings[:30]:
-            lines.append(f"| `{f.rule_id}` | `{f.file_path}` | `{f.line_number}` | `{f.symbol_name}` | {f.message} |")
+            lines.append(
+                f"| `{f.rule_id}` | `{f.file_path}` | `{f.line_number}` | `{f.symbol_name}` | {f.message} |"
+            )
 
         if len(report.findings) > 30:
             lines.append(f"\n*(Truncated {len(report.findings) - 30} additional findings)*")
@@ -507,15 +513,18 @@ def _is_ignored_path(path: Path) -> bool:
     return any(part.startswith(".") or part in _IGNORED_PARTS for part in path.parts)
 
 
+def _expand_path_target(path: Path) -> list[Path]:
+    """Expands a single file or directory path into Python file targets."""
+    if path.is_file() and path.suffix == ".py":
+        return [path]
+    if path.is_dir():
+        return [p for p in path.rglob("*.py") if not _is_ignored_path(p)]
+    return []
+
+
 def collect_target_files(paths: Sequence[str]) -> list[Path]:
     """Collect all Python source files from arguments, ignoring hidden directories."""
-    targets: list[Path] = []
-    for item in paths:
-        path = Path(item)
-        if path.is_file() and path.suffix == ".py":
-            targets.append(path)
-        elif path.is_dir():
-            targets.extend(p for p in path.rglob("*.py") if not _is_ignored_path(p))
+    targets = [p for item in paths for p in _expand_path_target(Path(item))]
     return sorted(set(targets))
 
 

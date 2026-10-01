@@ -127,29 +127,50 @@ def check_negative_schema_bounds(
     return violations
 
 
+def _collect_integrity_violations(
+    envelope: ContextEnvelope,
+    response: SubagentResponse,
+) -> list[str]:
+    """Detect envelope ID mismatches and context tampering."""
+    violations: list[str] = []
+    if envelope.envelope_id != response.envelope_id:
+        violations.append("ENVELOPE_ID_MISMATCH")
+    if not verify_envelope_integrity(envelope):
+        violations.append("CONTEXT_TAMPERING_DETECTED")
+    return violations
+
+
+def _collect_precondition_violations(
+    envelope: ContextEnvelope,
+    satisfied: list[str],
+) -> list[str]:
+    """Identify required preconditions not satisfied by the subagent."""
+    satisfied_set = set(satisfied)
+    return [p for p in envelope.preconditions if p not in satisfied_set]
+
+
+def _calculate_epistemic_loss(
+    envelope: ContextEnvelope,
+    dropped_count: int,
+    schema_violation_count: int,
+) -> float:
+    """Compute normalized epistemic loss metric."""
+    total_checks = max(1, len(envelope.preconditions) + len(envelope.allowed_parameters))
+    loss_weight = dropped_count + schema_violation_count
+    return min(1.0, round(loss_weight / total_checks, 4))
+
+
 def audit_epistemic_loss(
     envelope: ContextEnvelope,
     response: SubagentResponse,
 ) -> HandshakeAuditReport:
     """Audit subagent response and calculate epistemic loss metric."""
-    violations: list[str] = []
-    if envelope.envelope_id != response.envelope_id:
-        violations.append("ENVELOPE_ID_MISMATCH")
-
-    if not verify_envelope_integrity(envelope):
-        violations.append("CONTEXT_TAMPERING_DETECTED")
-
     schema_violations = check_negative_schema_bounds(envelope, response.provided_arguments)
-    violations.extend(schema_violations)
+    dropped = _collect_precondition_violations(envelope, response.satisfied_preconditions)
+    dropped_violations = [f"DROPPED_PRECONDITION: '{dp}'" for dp in dropped]
+    violations = _collect_integrity_violations(envelope, response) + schema_violations + dropped_violations
 
-    dropped_preconditions = [p for p in envelope.preconditions if p not in response.satisfied_preconditions]
-    for dp in dropped_preconditions:
-        violations.append(f"DROPPED_PRECONDITION: '{dp}'")
-
-    total_checks = max(1, len(envelope.preconditions) + len(envelope.allowed_parameters))
-    loss_weight = len(dropped_preconditions) + len(schema_violations)
-    epistemic_loss = min(1.0, round(loss_weight / total_checks, 4))
-
+    epistemic_loss = _calculate_epistemic_loss(envelope, len(dropped), len(schema_violations))
     is_valid = len(violations) == 0
     cert = generate_handshake_certificate(envelope, response, epistemic_loss) if is_valid else {}
 
@@ -262,19 +283,38 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def _run_envelope_command(opts: argparse.Namespace) -> int:
+    """Generate and display sample context envelope."""
+    env = create_context_envelope(
+        opts.parent,
+        opts.target,
+        ["parse_ast", "format_output"],
+        ["git_clean", "coverage_floor_met"],
+        ["file_path", "line_limit"],
+    )
+    print(json.dumps(asdict(env), indent=2))
+    return 0
+
+
+def _render_handshake_report(report: HandshakeAuditReport, output_format: str) -> str:
+    """Render audit report according to requested format."""
+    renderers = {
+        "json": lambda r: json.dumps(asdict(r), indent=2),
+        "sarif": lambda r: json.dumps(to_sarif(r), indent=2),
+        "markdown": to_markdown,
+    }
+    renderer = renderers.get(output_format)
+    if renderer is not None:
+        return renderer(report)
+    status = "VALID" if report.is_valid else "INVALID"
+    return f"Handshake: {status} (Loss: {report.epistemic_loss})"
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for standalone execution."""
     opts = parse_args(argv or sys.argv[1:])
     if opts.command == "envelope":
-        env = create_context_envelope(
-            opts.parent,
-            opts.target,
-            ["parse_ast", "format_output"],
-            ["git_clean", "coverage_floor_met"],
-            ["file_path", "line_limit"],
-        )
-        print(json.dumps(asdict(env), indent=2))
-        return 0
+        return _run_envelope_command(opts)
 
     sample_env = create_context_envelope(
         "lead-agent",
@@ -292,15 +332,7 @@ def main(argv: list[str] | None = None) -> int:
         execution_status="SUCCESS",
     )
     report = audit_epistemic_loss(sample_env, sample_res)
-
-    if opts.format == "json":
-        print(json.dumps(asdict(report), indent=2))
-    elif opts.format == "sarif":
-        print(json.dumps(to_sarif(report), indent=2))
-    elif opts.format == "markdown":
-        print(to_markdown(report))
-    else:
-        print(f"Handshake: {'VALID' if report.is_valid else 'INVALID'} (Loss: {report.epistemic_loss})")
+    print(_render_handshake_report(report, opts.format))
     return 0 if report.is_valid else 1
 
 

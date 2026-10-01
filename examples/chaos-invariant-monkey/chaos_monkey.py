@@ -56,6 +56,15 @@ class ChaosBenchmarkReport:
     findings: list[dict[str, Any]] = field(default_factory=list)
 
 
+def _insert_after_first_def(lines: list[str], block: str) -> str | None:
+    """Inserts code block after first function definition."""
+    for idx, line in enumerate(lines):
+        if line.strip().startswith("def "):
+            lines.insert(idx + 1, block)
+            return "".join(lines)
+    return None
+
+
 def inject_complexity_spike(source: str) -> str:
     """Inject branching ladder forcing cyclomatic complexity M > 10."""
     ladder = (
@@ -72,11 +81,9 @@ def inject_complexity_spike(source: str) -> str:
         "    elif x == 10: pass\n"
     )
     if "def " in source:
-        lines = source.splitlines(keepends=True)
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("def "):
-                lines.insert(idx + 1, ladder)
-                return "".join(lines)
+        res = _insert_after_first_def(source.splitlines(keepends=True), ladder)
+        if res is not None:
+            return res
     return source + "\ndef _chaos_spike(x: int) -> None:" + ladder
 
 
@@ -152,14 +159,18 @@ def apply_chaos_mutation(
     )
 
 
+def _restore_file_content(target: Path, content: str) -> None:
+    """Restores content or unlinks target path."""
+    if content:
+        target.write_text(content, encoding="utf-8")
+    elif target.exists():
+        target.unlink()
+
+
 def rollback_chaos_mutation(mutation: ChaosMutation) -> bool:
     """Revert mutated file back to its original pre-chaos state."""
-    target = Path(mutation.target_path)
     try:
-        if mutation.original_content:
-            target.write_text(mutation.original_content, encoding="utf-8")
-        elif target.exists():
-            target.unlink()
+        _restore_file_content(Path(mutation.target_path), mutation.original_content)
         return True
     except OSError:
         return False
@@ -277,6 +288,18 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def _render_benchmark_output(report: ChaosBenchmarkReport, fmt: str) -> str:
+    """Renders benchmark report in the requested serialization format."""
+    formatters = {
+        "json": lambda r: json.dumps(asdict(r), indent=2),
+        "sarif": lambda r: json.dumps(to_sarif(r), indent=2),
+        "markdown": to_markdown,
+    }
+    if fmt in formatters:
+        return formatters[fmt](report)
+    return f"Chaos Benchmark: Repair Ratio = {report.repair_ratio * 100:.1f}%"
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for standalone execution."""
     opts = parse_args(argv or sys.argv[1:])
@@ -285,17 +308,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Injected {mut.mutation_type} -> {opts.target} (ID: {mut.mutation_id})")
         return 0
 
-    dummy_mut = ChaosMutation("mut-demo", "COMPLEXITY_SPIKE", "demo.py", "x=1", "x=1\nif x==1:pass", time.time())
+    dummy_mut = ChaosMutation(
+        "mut-demo", "COMPLEXITY_SPIKE", "demo.py", "x=1", "x=1\nif x==1:pass", time.time()
+    )
     report = evaluate_resilience([dummy_mut], 1, 1)
-
-    if opts.format == "json":
-        print(json.dumps(asdict(report), indent=2))
-    elif opts.format == "sarif":
-        print(json.dumps(to_sarif(report), indent=2))
-    elif opts.format == "markdown":
-        print(to_markdown(report))
-    else:
-        print(f"Chaos Benchmark: Repair Ratio = {report.repair_ratio * 100:.1f}%")
+    print(_render_benchmark_output(report, opts.format))
     return 0
 
 

@@ -207,9 +207,7 @@ class GoroutineStackParser:
         return (head if opener else line).strip()
 
     @classmethod
-    def _handle_trace_line(
-        cls, line: str, current_fn: str | None, frames: list[StackFrame]
-    ) -> str | None:
+    def _handle_trace_line(cls, line: str, current_fn: str | None, frames: list[StackFrame]) -> str | None:
         if cls._is_function_line(line):
             return cls._function_name(line)
         if current_fn:
@@ -226,9 +224,7 @@ class GoroutineStackParser:
         return not line.startswith(("\t", "    ", "  ")) and "(" in line
 
     @classmethod
-    def _append_frame_if_match(
-        cls, line: str, current_fn: str, frames: list[StackFrame]
-    ) -> str | None:
+    def _append_frame_if_match(cls, line: str, current_fn: str, frames: list[StackFrame]) -> str | None:
         match = cls._FRAME_RE.match(line)
         if match:
             frames.append(
@@ -252,14 +248,25 @@ class GoroutineLeakSentinel:
     """Audits Goroutine profiles and diagnoses concurrency defects."""
 
     @classmethod
+    def _filter_leaks(cls, profiles: list[GoroutineProfile]) -> tuple[int, int, list[GoroutineProfile]]:
+        """Partition profiles into system/user counts and identify leaked goroutines."""
+        system_count = 0
+        user_count = 0
+        leaks: list[GoroutineProfile] = []
+        for p in profiles:
+            if p.is_system:
+                system_count += 1
+                continue
+            user_count += 1
+            if cls._is_leaked(p):
+                leaks.append(p)
+        return system_count, user_count, leaks
+
+    @classmethod
     def audit(cls, profiles: list[GoroutineProfile]) -> ConcurrencyAuditReport:
         """Evaluate profiles and compute concurrency safety scorecard."""
         total = len(profiles)
-        system_count = sum(1 for p in profiles if p.is_system)
-        user_profiles = [p for p in profiles if not p.is_system]
-        user_count = len(user_profiles)
-
-        leaks = [p for p in user_profiles if cls._is_leaked(p)]
+        system_count, user_count, leaks = cls._filter_leaks(profiles)
         leak_count = len(leaks)
 
         severity = cls._determine_severity(leaks)
@@ -319,9 +326,7 @@ def verify_test_run(
     latent background concurrency leaks into deterministic test failures.
     """
     raw_trace = (
-        trace_or_path.read_text(encoding="utf-8")
-        if isinstance(trace_or_path, Path)
-        else trace_or_path
+        trace_or_path.read_text(encoding="utf-8") if isinstance(trace_or_path, Path) else trace_or_path
     )
     profiles = GoroutineStackParser.parse_trace(raw_trace)
     report = GoroutineLeakSentinel.audit(profiles)
@@ -335,9 +340,7 @@ def verify_test_run(
     return report
 
 
-def assert_no_goroutine_leaks(
-    trace: str, tolerated_delta: int = 0
-) -> ConcurrencyAuditReport:
+def assert_no_goroutine_leaks(trace: str, tolerated_delta: int = 0) -> ConcurrencyAuditReport:
     """Assertion helper for test runners to fail ordinary test runs on goroutine leaks."""
     return verify_test_run(trace, fail_on_leak=True, tolerated_delta=tolerated_delta)
 
@@ -407,34 +410,49 @@ def run_demo() -> int:
     return 0
 
 
+def _emit_scan_report(report: ConcurrencyAuditReport, as_json: bool) -> None:
+    """Print the audit report either as JSON or formatted text."""
+    if as_json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        _print_report(report)
+
+
+def _handle_scan_command(scan_path: Path, as_json: bool, fail_on_leak: bool) -> int:
+    """Process and audit a raw stack dump file."""
+    if not scan_path.is_file():
+        print(f"Error: File not found: {scan_path}", file=sys.stderr)
+        return 1
+    content = scan_path.read_text(encoding="utf-8")
+    profiles = GoroutineStackParser.parse_trace(content)
+    report = GoroutineLeakSentinel.audit(profiles)
+    _emit_scan_report(report, as_json)
+    if fail_on_leak and report.leaked_goroutines > 0:
+        print(
+            f"TEST HARNESS FAILURE: {report.leaked_goroutines} leaked goroutines detected!", file=sys.stderr
+        )
+        return 1
+    return 0 if report.leaked_goroutines == 0 else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Go Goroutine Leak Sentinel."""
     parser = argparse.ArgumentParser(description="Go Concurrency & Goroutine Leak Sentinel")
     parser.add_argument("--demo", action="store_true", help="Run simulated leak detection demo")
     parser.add_argument("--scan", type=Path, help="Path to raw stack dump file to analyze")
     parser.add_argument("--json", action="store_true", help="Emit report in structured JSON format")
-    parser.add_argument("--fail-on-leak", action="store_true", help="Fail ordinary test run with exit code 1 when leaks are present")
+    parser.add_argument(
+        "--fail-on-leak",
+        action="store_true",
+        help="Fail ordinary test run with exit code 1 when leaks are present",
+    )
 
     args = parser.parse_args(argv)
 
     if args.demo:
         return run_demo()
-
     if args.scan:
-        if not args.scan.is_file():
-            print(f"Error: File not found: {args.scan}", file=sys.stderr)
-            return 1
-        content = args.scan.read_text(encoding="utf-8")
-        profiles = GoroutineStackParser.parse_trace(content)
-        report = GoroutineLeakSentinel.audit(profiles)
-        if args.json:
-            print(json.dumps(report.to_dict(), indent=2))
-        else:
-            _print_report(report)
-        if args.fail_on_leak and report.leaked_goroutines > 0:
-            print(f"TEST HARNESS FAILURE: {report.leaked_goroutines} leaked goroutines detected!", file=sys.stderr)
-            return 1
-        return 0 if report.leaked_goroutines == 0 else 1
+        return _handle_scan_command(args.scan, args.json, args.fail_on_leak)
 
     parser.print_help()
     return 0
