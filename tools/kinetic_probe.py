@@ -57,6 +57,15 @@ class KineticProbeResult:
         }
 
 
+@dataclass(frozen=True)
+class _ProcessOutcome:
+    """Raw process outcome from isolated probe subprocess execution."""
+
+    verdict: ProbeVerdict
+    exit_code: int
+    output: str
+
+
 class KineticProbeEngine:
     """Executes synthesized counterexample probes within isolated subprocess boundaries."""
 
@@ -77,21 +86,21 @@ class KineticProbeEngine:
 
         start_time = time.perf_counter()
         try:
-            return self._run_isolated_process(
-                tmp_path, timeout, claim_id, mitigating_wrapper, start_time
+            outcome = self._execute_subprocess(tmp_path, timeout)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            return KineticProbeResult(
+                verdict=outcome.verdict,
+                exit_code=outcome.exit_code,
+                output=outcome.output,
+                duration_ms=elapsed_ms,
+                claim_id=claim_id,
+                mitigating_wrapper=mitigating_wrapper,
             )
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
 
-    def _run_isolated_process(
-        self,
-        script_path: Path,
-        timeout: float,
-        claim_id: str,
-        mitigating_wrapper: str | None,
-        start_time: float,
-    ) -> KineticProbeResult:
+    def _execute_subprocess(self, script_path: Path, timeout: float) -> _ProcessOutcome:
         """Run the script in an isolated subprocess with bounded execution limits."""
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.workspace_root)
@@ -105,39 +114,25 @@ class KineticProbeEngine:
                 env=env,
                 check=False,
             )
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             verdict = (
-                ProbeVerdict.EXPLOIT_CONFIRMED
-                if proc.returncode == 0
-                else ProbeVerdict.KINETICALLY_REFUTED
+                ProbeVerdict.EXPLOIT_CONFIRMED if proc.returncode == 0 else ProbeVerdict.KINETICALLY_REFUTED
             )
-            return KineticProbeResult(
+            return _ProcessOutcome(
                 verdict=verdict,
                 exit_code=proc.returncode,
                 output=(proc.stdout + proc.stderr).strip(),
-                duration_ms=elapsed_ms,
-                claim_id=claim_id,
-                mitigating_wrapper=mitigating_wrapper,
             )
         except subprocess.TimeoutExpired:
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            return KineticProbeResult(
+            return _ProcessOutcome(
                 verdict=ProbeVerdict.RESOURCE_EXHAUSTION,
                 exit_code=-1,
                 output="Probe timed out: resource exhaustion detected",
-                duration_ms=elapsed_ms,
-                claim_id=claim_id,
-                mitigating_wrapper=mitigating_wrapper,
             )
         except Exception as exc:
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            return KineticProbeResult(
+            return _ProcessOutcome(
                 verdict=ProbeVerdict.PROBE_ERROR,
                 exit_code=-2,
                 output=f"Execution error: {exc}",
-                duration_ms=elapsed_ms,
-                claim_id=claim_id,
-                mitigating_wrapper=mitigating_wrapper,
             )
 
 
@@ -186,12 +181,8 @@ def _build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--claim-id", type=str, default="")
 
     leash_cmd = subparsers.add_parser("leash", help="Check invariant leash invalidations")
-    leash_cmd.add_argument(
-        "--registry", type=Path, required=True, help="Path to serialized leash JSON"
-    )
-    leash_cmd.add_argument(
-        "--changed", nargs="+", required=True, help="List of changed file paths"
-    )
+    leash_cmd.add_argument("--registry", type=Path, required=True, help="Path to serialized leash JSON")
+    leash_cmd.add_argument("--changed", nargs="+", required=True, help="List of changed file paths")
 
     return parser
 

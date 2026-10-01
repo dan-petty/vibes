@@ -628,30 +628,41 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _export_outputs(
-    args: argparse.Namespace,
-    metrics: MilestoneMetrics,
-    phase: MilestonePhase,
-    findings: Sequence[GovernorFinding],
-    rollover: Sequence[MilestoneIssue],
-) -> None:
-    """Handle CLI terminal or file output formatting."""
-    if args.sarif:
-        sarif_data = export_sarif(findings, milestone_title=args.title)
-        with args.sarif.open("w", encoding="utf-8") as f:
-            json.dump(sarif_data, f, indent=2)
+@dataclass(frozen=True)
+class GovernorAuditResult:
+    """Consolidated milestone governance audit and rollover result."""
 
+    metrics: MilestoneMetrics
+    phase: MilestonePhase
+    findings: Sequence[GovernorFinding]
+    rollover: Sequence[MilestoneIssue]
+
+
+def _export_sarif_file(
+    sarif_path: Path | None, findings: Sequence[GovernorFinding], milestone_title: str
+) -> None:
+    """Write SARIF findings report if path requested."""
+    if not sarif_path:
+        return
+    sarif_data = export_sarif(findings, milestone_title=milestone_title)
+    with sarif_path.open("w", encoding="utf-8") as f:
+        json.dump(sarif_data, f, indent=2)
+
+
+def _export_outputs(args: argparse.Namespace, result: GovernorAuditResult) -> None:
+    """Handle CLI terminal or file output formatting."""
+    _export_sarif_file(args.sarif, result.findings, args.title)
     if args.json:
         payload = {
-            "metrics": metrics.to_dict(),
-            "phase": phase.value,
-            "findings": [f.to_dict() for f in findings],
-            "rollover_count": len(rollover),
-            "rollover_candidate_numbers": [r.number for r in rollover],
+            "metrics": result.metrics.to_dict(),
+            "phase": result.phase.value,
+            "findings": [f.to_dict() for f in result.findings],
+            "rollover_count": len(result.rollover),
+            "rollover_candidate_numbers": [r.number for r in result.rollover],
         }
         print(json.dumps(payload, indent=2))
     else:
-        report_str = format_cli_report(metrics, phase, findings, rollover)
+        report_str = format_cli_report(result.metrics, result.phase, result.findings, result.rollover)
         print(report_str)
 
 
@@ -675,8 +686,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     metrics = calculate_milestone_metrics(issues, title=args.title, window_days=args.window_days)
     findings = audit_milestone(issues, phase=phase, metrics=metrics, max_issues=args.max_issues)
     _, rollover = partition_milestone_rollover(issues, target_milestone=args.rollover_to)
+    result = GovernorAuditResult(metrics=metrics, phase=phase, findings=findings, rollover=rollover)
 
-    _export_outputs(args, metrics, phase, findings, rollover)
+    _export_outputs(args, result)
     return 1 if _has_critical_errors(findings) else 0
 
 

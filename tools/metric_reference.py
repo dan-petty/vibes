@@ -137,9 +137,9 @@ METRICS: Final[dict[str, Metric]] = {
                 "reference laxer than the gate cannot replace the gate."
             ),
             witness=Witness(
-                source='def h(items, x):\n    for it in items:\n        match it:\n'
-                       '            case {"k": v}:\n                for e in v:\n'
-                       "                    print(e)\n",
+                source="def h(items, x):\n    for it in items:\n        match it:\n"
+                '            case {"k": v}:\n                for e in v:\n'
+                "                    print(e)\n",
                 reference_says="ruff PLR1702 at max-nested-blocks=2: All checks passed",
                 ours_says="depth 5, over the ceiling of 5's successor",
             ),
@@ -174,6 +174,7 @@ def nesting_depth(node: ast.AST, nesting_types: tuple[type[ast.AST], ...]) -> in
 
     Extended rather than delegated; see the registry row for the witness.
     """
+
     def walk(current: ast.AST, depth: int) -> int:
         deeper = depth + 1 if isinstance(current, nesting_types) else depth
         return max((walk(child, deeper) for child in ast.iter_child_nodes(current)), default=deeper)
@@ -181,28 +182,54 @@ def nesting_depth(node: ast.AST, nesting_types: tuple[type[ast.AST], ...]) -> in
     return max((walk(statement, 1) for statement in getattr(node, "body", [])), default=0)
 
 
-def lint_findings(paths: Sequence[Path], rules: Sequence[str], settings: dict[str, Any]) -> list[dict[str, Any]]:
-    """Run ruff over `paths` for `rules`, refusing to report a clean run it did not perform.
-
-    `--output-format json` exits 0 and prints `[]` for a path it could not read, warning only
-    on stderr. Reading the findings alone turns "not linted" into "clean", which is exactly
-    the failure this repository's `TargetIntegrity` invariant exists to prevent.
-    """
-    missing = [str(path) for path in paths if not path.exists()]
+def _ensure_paths_exist(paths: Sequence[Path]) -> None:
+    """Validate that every target path exists on disk prior to invoking linter."""
+    missing = [str(p) for p in paths if not p.exists()]
     if missing:
         raise MetricsUnavailable(f"ruff was asked to lint paths that do not exist: {missing}")
+
+
+def _build_ruff_command(paths: Sequence[Path], rules: Sequence[str], settings: dict[str, Any]) -> list[str]:
+    """Assemble argv for isolated, non-cached ruff execution."""
     command = [
-        sys.executable, "-m", "ruff", "check", "--isolated", "--no-cache", "--preview",
-        "--output-format", "json", "--select", ",".join(rules),
+        sys.executable,
+        "-m",
+        "ruff",
+        "check",
+        "--isolated",
+        "--no-cache",
+        "--preview",
+        "--output-format",
+        "json",
+        "--select",
+        ",".join(rules),
     ]
     for key, value in sorted(settings.items()):
-        command += ["--config", f"{key} = {value}"]
-    command += [str(path) for path in paths]
-    # Fixed argv, no shell; every path is one the caller already resolved.
-    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=300)
+        command.extend(["--config", f"{key} = {value}"])
+    command.extend(str(p) for p in paths)
+    return command
+
+
+def _parse_lint_result(result: subprocess.CompletedProcess[str]) -> list[dict[str, Any]]:
+    """Validate subprocess completion and parse json findings output."""
     if "Failed to lint" in result.stderr:
         raise MetricsUnavailable(f"ruff could not lint every requested path: {result.stderr.strip()[:300]}")
     if result.returncode not in (0, 1):
         raise MetricsUnavailable(f"ruff exited {result.returncode}: {result.stderr.strip()[:300]}")
     parsed: list[dict[str, Any]] = json.loads(result.stdout or "[]")
     return parsed
+
+
+def lint_findings(
+    paths: Sequence[Path], rules: Sequence[str], settings: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Run ruff over `paths` for `rules`, refusing to report a clean run it did not perform.
+
+    `--output-format json` exits 0 and prints `[]` for a path it could not read, warning only
+    on stderr. Reading the findings alone turns "not linted" into "clean", which is exactly
+    the failure this repository's `TargetIntegrity` invariant exists to prevent.
+    """
+    _ensure_paths_exist(paths)
+    command = _build_ruff_command(paths, rules, settings)
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=300)
+    return _parse_lint_result(result)
