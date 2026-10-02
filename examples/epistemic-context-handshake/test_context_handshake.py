@@ -30,7 +30,7 @@ def test_compute_context_hash_deterministic() -> None:
 
 def test_create_envelope_and_verify_integrity() -> None:
     """Verify envelope synthesis and cryptographic integrity checking."""
-    env = create_context_envelope("p1", "s1", ["symA"], ["preA"], ["pA"])
+    env = create_context_envelope(("p1", "s1"), ["symA"], ["preA"], ["pA"])
     ok = verify_envelope_integrity(env)
     assert (ok, env.parent_agent, env.target_subagent) == (True, "p1", "s1")
 
@@ -49,7 +49,7 @@ def test_create_envelope_and_verify_integrity() -> None:
 
 def test_check_negative_schema_bounds() -> None:
     """Verify negative schema violation detection."""
-    env = create_context_envelope("p1", "s1", ["symA"], ["preA"], ["valid_arg"])
+    env = create_context_envelope(("p1", "s1"), ["symA"], ["preA"], ["valid_arg"])
     clean_args = {"valid_arg": 123}
     hallucinated_args = {"valid_arg": 123, "hallucinated_param": True}
 
@@ -61,7 +61,7 @@ def test_check_negative_schema_bounds() -> None:
 
 def test_audit_epistemic_loss_clean_handshake() -> None:
     """Verify clean handshake execution with zero epistemic loss."""
-    env = create_context_envelope("p1", "s1", ["symA"], ["pre1"], ["arg1"])
+    env = create_context_envelope(("p1", "s1"), ["symA"], ["pre1"], ["arg1"])
     res = SubagentResponse(
         envelope_id=env.envelope_id,
         subagent_id="s1",
@@ -77,7 +77,7 @@ def test_audit_epistemic_loss_clean_handshake() -> None:
 
 def test_audit_epistemic_loss_dropped_preconditions() -> None:
     """Verify detection of dropped preconditions and epistemic loss calculation."""
-    env = create_context_envelope("p1", "s1", ["symA"], ["pre1", "pre2"], ["arg1"])
+    env = create_context_envelope(("p1", "s1"), ["symA"], ["pre1", "pre2"], ["arg1"])
     res = SubagentResponse(
         envelope_id=env.envelope_id,
         subagent_id="s1",
@@ -92,7 +92,7 @@ def test_audit_epistemic_loss_dropped_preconditions() -> None:
 
 def test_generate_handshake_certificate() -> None:
     """Verify certificate generation and signature format."""
-    env = create_context_envelope("p1", "s1", ["symA"], ["pre1"], ["arg1"])
+    env = create_context_envelope(("p1", "s1"), ["symA"], ["pre1"], ["arg1"])
     res = SubagentResponse(env.envelope_id, "s1", ["symA"], {}, ["pre1"], "OK")
     cert = generate_handshake_certificate(env, res, 0.0)
     assert (cert["status"], len(cert["signature"]) == 64) == ("ATTESTED", True)
@@ -136,4 +136,3 @@ def test_main_cli_audit_formats(capsys: Any) -> None:
     rc_md = main(["audit", "--format", "markdown"])
     captured_md = capsys.readouterr()
     assert (rc_md, "# Epistemic Context Handshake Report" in captured_md.out) == (0, True)
-
