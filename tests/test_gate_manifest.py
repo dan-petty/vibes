@@ -18,14 +18,32 @@ _TOOL_CELL_RE = re.compile(r"^\|\s*\*\*[^|]+\*\*\s*\|\s*([^|]+)\|")
 _CODE_SPAN_RE = re.compile(r"`([^`]+)`")
 
 
+def _section_lines(lines: list[str], header: str) -> list[str]:
+    """Extract slice of lines under a specified markdown section header."""
+    start = next((i for i, line in enumerate(lines) if line.startswith(header)), -1)
+    if start == -1:
+        return []
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return lines[start:end]
+
+
+def _extract_tool_spans(section_lines: list[str]) -> list[str]:
+    """Parse tool command code spans from gate table rows."""
+    spans: list[str] = []
+    for line in section_lines:
+        match = _TOOL_CELL_RE.match(line)
+        if not match:
+            continue
+        code_match = _CODE_SPAN_RE.search(match.group(1).strip())
+        if code_match:
+            spans.append(code_match.group(1))
+    return spans
+
+
 def _documented_gate_tools() -> list[str]:
     """Extract the tool invocation named by each row of the quality gate table."""
     lines = CONTRIBUTING.read_text(encoding="utf-8").splitlines()
-    start = next(i for i, line in enumerate(lines) if line.startswith("## Quality Gates"))
-    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
-    rows = (_TOOL_CELL_RE.match(line) for line in lines[start:end])
-    cells = [match.group(1).strip() for match in rows if match]
-    return [span.group(1) for cell in cells if (span := _CODE_SPAN_RE.search(cell))]
+    return _extract_tool_spans(_section_lines(lines, "## Quality Gates"))
 
 
 def _executable_token(invocation: str) -> str:
@@ -40,11 +58,12 @@ def test_every_documented_gate_is_invoked_by_ci() -> None:
     documented = _documented_gate_tools()
     missing = [tool for tool in documented if _executable_token(tool) not in workflow]
 
-    assert documented, "Gate table parsed as empty; the table format changed."
-    assert missing == [], f"Documented in CONTRIBUTING.md but absent from ci.yml: {missing}"
+    assert (bool(documented), missing) == (True, [])
 
 
 def test_gate_table_covers_the_reliability_objectives_gate() -> None:
     """Regression guard for the specific gate that was documented and never wired."""
-    assert any("reliability_slo.py" in tool for tool in _documented_gate_tools())
-    assert "reliability_slo.py status" in CI_WORKFLOW.read_text(encoding="utf-8")
+    assert (
+        any("reliability_slo.py" in tool for tool in _documented_gate_tools()),
+        "reliability_slo.py status" in CI_WORKFLOW.read_text(encoding="utf-8"),
+    ) == (True, True)
