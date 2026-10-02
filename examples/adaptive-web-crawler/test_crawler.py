@@ -134,10 +134,17 @@ def test_crawler_static_http_success() -> None:
     crawler = AdaptiveWebCrawler(http_fetcher=mock_http, headless_fetcher=mock_headless)
     page = crawler.crawl_page("http://example.com/docs")
 
-    assert page.tier_used == ExtractionTier.STATIC_HTTP
-    assert page.quality == PageQuality.HIGH
-    assert not headless_called
-    assert "Static Page" in page.markdown_content
+    assert (
+        page.tier_used,
+        page.quality,
+        headless_called,
+        "Static Page" in page.markdown_content,
+    ) == (
+        ExtractionTier.STATIC_HTTP,
+        PageQuality.HIGH,
+        False,
+        True,
+    )
 
 
 def test_crawler_escalates_to_headless_on_spa_shell() -> None:
@@ -209,10 +216,15 @@ def test_crawler_reuses_learned_headless_strategy() -> None:
     crawler = AdaptiveWebCrawler(strategy_store=store, http_fetcher=mock_http, headless_fetcher=mock_headless)
     page = crawler.crawl_page("http://example.com/page-two")
 
-    # Static HTTP fetcher should have been completely bypassed!
-    assert http_called is False
-    assert page.tier_used == ExtractionTier.HEADLESS_BROWSER
-    assert "Page Two" in page.markdown_content
+    assert (
+        http_called,
+        page.tier_used,
+        "Page Two" in page.markdown_content,
+    ) == (
+        False,
+        ExtractionTier.HEADLESS_BROWSER,
+        True,
+    )
 
 
 def test_crawler_rate_limiting_backoff() -> None:
@@ -258,9 +270,15 @@ def test_domain_strategy_persistence(tmp_path: Path) -> None:
     # Re-instantiate from disk
     store2 = DomainStrategyStore(persistence_path=json_file)
     strat = store2.get_strategy("example.com")
-    assert strat.preferred_tier == ExtractionTier.HEADLESS_BROWSER
-    assert strat.requires_js is True
-    assert strat.rate_limit_delay > 0.5
+    assert (
+        strat.preferred_tier,
+        strat.requires_js,
+        strat.rate_limit_delay > 0.5,
+    ) == (
+        ExtractionTier.HEADLESS_BROWSER,
+        True,
+        True,
+    )
 
 
 def test_hostname_resolving_to_private_address_is_denied(monkeypatch):
@@ -459,9 +477,15 @@ def test_an_error_status_is_not_a_successful_crawl(monkeypatch: pytest.MonkeyPat
     """
     body = b"<html><body><main><p>Not found here</p></main></body></html>"
     page, strategy = _mock_crawl(monkeypatch, status, body)
-    assert page.quality == crawler.PageQuality.BLOCKED
-    assert strategy.consecutive_successes == 0
-    assert page.extraction_warnings and str(status) in page.extraction_warnings[0]
+    assert (
+        page.quality,
+        strategy.consecutive_successes,
+        bool(page.extraction_warnings and str(status) in page.extraction_warnings[0]),
+    ) == (
+        crawler.PageQuality.BLOCKED,
+        0,
+        True,
+    )
 
 
 def test_a_successful_status_is_still_a_successful_crawl(monkeypatch: pytest.MonkeyPatch) -> None:
