@@ -84,15 +84,15 @@ def test_code_keeps_its_fence_indentation_and_language() -> None:
 
 def test_a_link_keeps_its_text_and_its_url_together() -> None:
     """Collecting hrefs into a separate list leaves the text saying "see the guide"."""
-    assert _markdown('<p>See <a href="/api">the API</a>.</p>') == (
-        "See [the API](https://example.com/api)."
-    )
+    assert _markdown('<p>See <a href="/api">the API</a>.</p>') == ("See [the API](https://example.com/api).")
 
 
 def test_a_relative_url_is_resolved_against_the_base_element() -> None:
     """A relative href is a dead link the moment the text leaves its origin."""
-    html = '<html><head><base href="https://example.com/v2/"></head><body><main>' \
-           '<p><a href="x.html">x</a></p></main></body></html>'
+    html = (
+        '<html><head><base href="https://example.com/v2/"></head><body><main>'
+        '<p><a href="x.html">x</a></p></main></body></html>'
+    )
     assert "https://example.com/v2/x.html" in extract(html, BASE).markdown
 
 
@@ -117,9 +117,7 @@ def test_chrome_is_dropped_with_everything_inside_it() -> None:
     boilerplate removal that is hardest to notice — the page still reads correctly, and
     every document on the site carries the same menu into the model's context.
     """
-    markdown = _markdown(
-        '<nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav><p>Body.</p>'
-    )
+    markdown = _markdown('<nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav><p>Body.</p>')
     assert markdown == "Body."
 
 
@@ -149,16 +147,19 @@ def test_a_page_with_nothing_left_says_so_rather_than_returning_an_empty_string(
     """
     document = extract("<html><body><nav>Menu</nav></body></html>", BASE)
     assert (document.markdown, [w.split(":")[0] for w in document.warnings]) == (
-        "", ["no_content", "no_main_region"]
+        "",
+        ["no_content", "no_main_region"],
     )
 
 
 def test_the_region_that_was_taken_is_reported() -> None:
-    """"The whole body" and "the article element" are different documents."""
+    """ "The whole body" and "the article element" are different documents."""
     with_main = extract("<html><body><main><p>a</p></main></body></html>", BASE)
     without = extract("<html><body><p>a</p></body></html>", BASE)
     assert (with_main.region, without.region, without.warnings[0].split(":")[0]) == (
-        "main", "body", "no_main_region"
+        "main",
+        "body",
+        "no_main_region",
     )
 
 
@@ -167,14 +168,17 @@ def test_truncation_is_visible_in_the_text_and_in_the_flags() -> None:
     html = "<main>" + "".join(f"<p>{'word ' * 20}</p>" for _ in range(20)) + "</main>"
     document = extract(html, BASE, max_chars=300)
     assert (document.truncated, "[truncated" in document.markdown, len(document.markdown) < 500) == (
-        True, True, True
+        True,
+        True,
+        True,
     )
 
 
 def test_provenance_names_the_source() -> None:
     """A page in a prompt with no attribution is a claim the model cannot qualify."""
-    rendered = extract("<html><head><title>T</title></head><body><main><p>a</p></main></body></html>",
-                       BASE).with_provenance()
+    rendered = extract(
+        "<html><head><title>T</title></head><body><main><p>a</p></main></body></html>", BASE
+    ).with_provenance()
     assert rendered.startswith("# T\n\nSource: <https://example.com/guide/page>")
 
 
@@ -252,8 +256,10 @@ def test_a_page_cannot_dictate_its_own_provenance() -> None:
     A page setting a base on another origin produced `Source: <that origin>` on a document
     served from somewhere else. Links follow the page; the citation follows the fetch.
     """
-    html = ('<html><head><title>T</title><base href="https://example.com/other/"></head>'
-            "<body><main><p>a</p></main></body></html>")
+    html = (
+        '<html><head><title>T</title><base href="https://example.com/other/"></head>'
+        "<body><main><p>a</p></main></body></html>"
+    )
     document = extract(html, BASE)
     assert document.url == BASE
     assert "[a](https://example.com/other/x)" not in document.markdown
