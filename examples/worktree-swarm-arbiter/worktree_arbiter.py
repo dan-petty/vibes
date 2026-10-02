@@ -204,6 +204,12 @@ def audit_fleet_health(
     return status
 
 
+def _prune_expired_lease(repo_root: Path, lease: WorktreeLease) -> int:
+    """Release an expired worktree lease and return 1 if successful, 0 otherwise."""
+    ok, _ = release_worktree(repo_root, lease)
+    return 1 if ok else 0
+
+
 def prune_stale_leases(
     repo_root: Path,
     leases: list[WorktreeLease],
@@ -215,9 +221,7 @@ def prune_stale_leases(
     pruned_count = 0
     for lease in leases:
         if is_lease_expired(lease, current_time):
-            ok, _ = release_worktree(repo_root, lease)
-            if ok:
-                pruned_count += 1
+            pruned_count += _prune_expired_lease(repo_root, lease)
         else:
             retained.append(lease)
     return retained, pruned_count
@@ -290,7 +294,9 @@ def to_markdown(status: SwarmFleetStatus) -> str:
     now = time.time()
     for lease in status.active_leases:
         rem = max(0.0, round(lease.expires_at - now, 1))
-        lines.append(f"| {lease.lease_id} | {lease.agent_id} | {lease.branch_name} | {lease.worktree_path} | {rem} |")
+        lines.append(
+            f"| {lease.lease_id} | {lease.agent_id} | {lease.branch_name} | {lease.worktree_path} | {rem} |"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -304,7 +310,9 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     alloc = sub.add_parser("allocate", help="Allocate a new worktree lease")
     alloc.add_argument("--agent", required=True, help="Agent identifier")
     alloc.add_argument("--ttl", type=float, default=DEFAULT_LEASE_TTL_SECONDS, help="Lease TTL in seconds")
-    alloc.add_argument("--dir", type=Path, default=Path(".data/agent/worktrees"), help="Base worktree directory")
+    alloc.add_argument(
+        "--dir", type=Path, default=Path(".data/agent/worktrees"), help="Base worktree directory"
+    )
 
     stat = sub.add_parser("status", help="Display fleet status")
     stat.add_argument("--format", choices=["text", "json", "markdown", "sarif"], default="text")
@@ -312,26 +320,36 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def _format_status_report(status: SwarmFleetStatus, fmt: str) -> str:
+    """Format swarm fleet status into the requested output format."""
+    formatters = {
+        "json": lambda s: json.dumps(asdict(s), indent=2),
+        "sarif": lambda s: json.dumps(to_sarif(s), indent=2),
+        "markdown": to_markdown,
+    }
+    formatter = formatters.get(fmt)
+    if formatter is not None:
+        return formatter(status)
+    return f"Fleet Status: {len(status.active_leases)} active, {len(status.stale_leases)} stale"
+
+
+def _run_allocate_command(opts: argparse.Namespace, repo_root: Path) -> int:
+    """Execute the worktree allocate subcommand."""
+    lease = build_worktree_lease(opts.agent, opts.dir, opts.ttl)
+    ok, msg = allocate_worktree(repo_root, lease)
+    print(f"Allocated: {lease.lease_id}" if ok else f"Failed: {msg}")
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for standalone execution."""
     opts = parse_args(argv or sys.argv[1:])
     repo_root = Path.cwd()
-
     if opts.command == "allocate":
-        lease = build_worktree_lease(opts.agent, opts.dir, opts.ttl)
-        ok, msg = allocate_worktree(repo_root, lease)
-        print(f"Allocated: {lease.lease_id}" if ok else f"Failed: {msg}")
-        return 0 if ok else 1
+        return _run_allocate_command(opts, repo_root)
 
     status = SwarmFleetStatus()
-    if opts.format == "json":
-        print(json.dumps(asdict(status), indent=2))
-    elif opts.format == "sarif":
-        print(json.dumps(to_sarif(status), indent=2))
-    elif opts.format == "markdown":
-        print(to_markdown(status))
-    else:
-        print(f"Fleet Status: {len(status.active_leases)} active, {len(status.stale_leases)} stale")
+    print(_format_status_report(status, opts.format))
     return 0
 
 
