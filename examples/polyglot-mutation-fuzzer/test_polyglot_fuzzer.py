@@ -121,6 +121,7 @@ def test_main_cli_execution(tmp_path: Path) -> None:
     rc = main(["--format", "json", "--out", str(out_file)])
     assert (rc, out_file.exists()) == (0, True)
 
+
 def test_bracket_desync_no_match() -> None:
     """Verify bracket desync when target delimiter is absent."""
     sample = "pure text without symbols"
@@ -158,4 +159,3 @@ def test_main_cli_all_formats(tmp_path: Path, capsys: Any) -> None:
     rc_text = main(["--format", "text"])
     captured = capsys.readouterr()
     assert (rc_text, "Polyglot Fuzzer:" in captured.out) == (0, True)
-

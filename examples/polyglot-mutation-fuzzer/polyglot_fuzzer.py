@@ -15,6 +15,7 @@ import shutil
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Final
@@ -90,20 +91,35 @@ def mutate_token_smuggle(content: str, language: str) -> str:
     return content[:midpoint] + payload + content[midpoint:]
 
 
+def _wrap_python_depth(content: str) -> str:
+    """Wrap python content in 25 levels of if True."""
+    prefix = "".join("    " * idx + "if True:\n" for idx in range(25))
+    indent = "    " * 25
+    indented = "\n".join(indent + line for line in content.splitlines())
+    return prefix + indented
+
+
+def _wrap_c_style_depth(content: str) -> str:
+    """Wrap C-style block content in 25 levels of if (true)."""
+    prefix = "if (true) {\n" * 25
+    suffix = "\n" + "}" * 25
+    return prefix + content + suffix
+
+
+def _wrap_shell_depth(content: str) -> str:
+    """Wrap shell content in 25 levels of if true; then."""
+    prefix = "if true; then\n" * 25
+    suffix = "\n" + "fi\n" * 25
+    return prefix + content + suffix
+
+
 def mutate_structural_depth(content: str, language: str) -> str:
     """Wrap content in deeply nested conditional blocks."""
     if language == "python":
-        prefix = "".join("    " * idx + "if True:\n" for idx in range(25))
-        indent = "    " * 25
-        indented = "\n".join(indent + line for line in content.splitlines())
-        return prefix + indented
-    if language in ("rust", "go", "typescript"):
-        prefix = "".join("if (true) {\n" for _ in range(25))
-        suffix = "\n" + "".join("}" for _ in range(25))
-        return prefix + content + suffix
-    prefix_sh = "".join("if true; then\n" for _ in range(25))
-    suffix_sh = "\n" + "".join("fi\n" for _ in range(25))
-    return prefix_sh + content + suffix_sh
+        return _wrap_python_depth(content)
+    if language in {"rust", "go", "typescript"}:
+        return _wrap_c_style_depth(content)
+    return _wrap_shell_depth(content)
 
 
 def mutate_truncated_stream(content: str, language: str) -> str:
@@ -190,29 +206,28 @@ def _cleanup_symlink_tree(base_dir: Path, loop_link: Path) -> None:
             shutil.rmtree(child, ignore_errors=True)
 
 
+def _traverse_symlink_loop(loop_link: Path) -> tuple[bool, str]:
+    """Traverse symlinks up to iteration bound to detect cycle containment."""
+    visited: set[Path] = set()
+    curr = loop_link
+    for _ in range(50):
+        try:
+            resolved = curr.resolve()
+        except (OSError, RuntimeError) as exc:
+            return True, f"HANDLED_FS_ERROR: {exc}"
+        if resolved in visited:
+            return True, "LOOP_CONTAINED"
+        visited.add(resolved)
+        curr = resolved / "cycle_child" / "loop_back"
+    return False, "SYMLINK_ESCAPE_INFINITE_LOOP"
+
+
 def evaluate_symlink_containment(base_dir: Path) -> MutationResult:
     """Verify that file traversal terminates on circular symlinks."""
     start_time = time.perf_counter()
     loop_link = build_cyclical_symlink_tree(base_dir)
-    visited: set[Path] = set()
-    survived = True
-    status = "LOOP_CONTAINED"
-
     try:
-        curr = loop_link
-        for _ in range(50):
-            try:
-                resolved = curr.resolve()
-                if resolved in visited:
-                    break
-                visited.add(resolved)
-                curr = resolved / "cycle_child" / "loop_back"
-            except (OSError, RuntimeError) as exc:
-                status = f"HANDLED_FS_ERROR: {exc}"
-                break
-        else:
-            survived = False
-            status = "SYMLINK_ESCAPE_INFINITE_LOOP"
+        survived, status = _traverse_symlink_loop(loop_link)
     finally:
         _cleanup_symlink_tree(base_dir, loop_link)
 
@@ -228,6 +243,29 @@ def evaluate_symlink_containment(base_dir: Path) -> MutationResult:
     )
 
 
+def _record_fuzz_result(report: FuzzBatchReport, res: MutationResult) -> None:
+    """Record a single mutation test result into batch report."""
+    report.total_mutations += 1
+    if res.survived:
+        report.passed += 1
+    else:
+        report.failed += 1
+        report.findings.append(build_finding_dict(res))
+    report.results.append(res)
+
+
+def _run_seed_mutations(
+    report: FuzzBatchReport,
+    seeds: dict[str, str],
+    mutators: Sequence[tuple[str, Callable[[str, str], str]]],
+) -> None:
+    """Execute all mutators across language seeds."""
+    for lang, content in seeds.items():
+        for name, fn in mutators:
+            res = execute_mutation_check(name, fn, content, lang)
+            _record_fuzz_result(report, res)
+
+
 def run_fuzz_campaign(
     seeds: dict[str, str],
     temp_dir: Path | None = None,
@@ -240,28 +278,9 @@ def run_fuzz_campaign(
         ("StructuralDepthSpikeMutator", mutate_structural_depth),
         ("TruncatedPayloadMutator", mutate_truncated_stream),
     ]
-
-    for lang, content in seeds.items():
-        for name, fn in mutators:
-            res = execute_mutation_check(name, fn, content, lang)
-            report.total_mutations += 1
-            if res.survived:
-                report.passed += 1
-            else:
-                report.failed += 1
-                report.findings.append(build_finding_dict(res))
-            report.results.append(res)
-
+    _run_seed_mutations(report, seeds, mutators)
     if temp_dir is not None:
-        sym_res = evaluate_symlink_containment(temp_dir)
-        report.total_mutations += 1
-        if sym_res.survived:
-            report.passed += 1
-        else:
-            report.failed += 1
-            report.findings.append(build_finding_dict(sym_res))
-        report.results.append(sym_res)
-
+        _record_fuzz_result(report, evaluate_symlink_containment(temp_dir))
     return report
 
 
@@ -292,10 +311,7 @@ def to_sarif(report: FuzzBatchReport) -> dict[str, Any]:
             "ruleId": item["rule_id"],
             "level": "error",
             "message": {
-                "text": (
-                    f"Fuzzer violation in {item['mutator']} ({item['language']}): "
-                    f"{item['message']}"
-                )
+                "text": (f"Fuzzer violation in {item['mutator']} ({item['language']}): {item['message']}")
             },
             "locations": [
                 {
@@ -368,6 +384,30 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def _format_fuzz_report(report: FuzzBatchReport, fmt: str) -> str:
+    """Format report into requested output format."""
+    formatters = {
+        "json": lambda: json.dumps(asdict(report), indent=2),
+        "sarif": lambda: json.dumps(to_sarif(report), indent=2),
+        "markdown": lambda: to_markdown(report),
+    }
+    formatter = formatters.get(fmt)
+    if formatter is not None:
+        return formatter()
+    return (
+        f"Polyglot Fuzzer: {report.passed}/{report.total_mutations} survived ({report.pass_rate * 100:.1f}%)"
+    )
+
+
+def _emit_output(body: str, out_path: Path | None) -> None:
+    """Write output to file or stdout."""
+    if out_path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(body, encoding="utf-8")
+        return
+    print(body)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for standalone execution."""
     opts = parse_args(argv or sys.argv[1:])
@@ -381,21 +421,8 @@ def main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory(prefix="vibes_fuzz_") as tmp_d:
         report = run_fuzz_campaign(seeds, Path(tmp_d))
 
-    if opts.format == "json":
-        body = json.dumps(asdict(report), indent=2)
-    elif opts.format == "sarif":
-        body = json.dumps(to_sarif(report), indent=2)
-    elif opts.format == "markdown":
-        body = to_markdown(report)
-    else:
-        body = f"Polyglot Fuzzer: {report.passed}/{report.total_mutations} survived ({report.pass_rate * 100:.1f}%)"
-
-    if opts.out:
-        opts.out.parent.mkdir(parents=True, exist_ok=True)
-        opts.out.write_text(body, encoding="utf-8")
-    else:
-        print(body)
-
+    body = _format_fuzz_report(report, opts.format)
+    _emit_output(body, opts.out)
     return 0 if report.failed == 0 else 1
 
 
