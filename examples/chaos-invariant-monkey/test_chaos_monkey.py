@@ -46,7 +46,10 @@ def test_inject_assertion_desync() -> None:
     """Verify assertion sprawl injection."""
     code = "assert (a, b) == (1, 2)\n"
     res = inject_assertion_desync(code)
-    assert ("# Chaos Mutation: Assertion Desynchronization" in res, "assert val_f == 6" in res) == (True, True)
+    assert ("# Chaos Mutation: Assertion Desynchronization" in res, "assert val_f == 6" in res) == (
+        True,
+        True,
+    )
 
 
 def test_inject_egress_poison() -> None:
@@ -94,9 +97,14 @@ def test_evaluate_resilience_and_telemetry() -> None:
     sarif = to_sarif(report)
     md = to_markdown(report)
 
-    assert (report.total_injected, report.repair_ratio) == (1, 1.0)
-    assert (sarif["version"], len(sarif["runs"][0]["results"])) == ("2.1.0", 1)
-    assert ("# Chaos Invariant Resilience Benchmark Report" in md, "100.0%" in md) == (True, True)
+    assert (
+        report.total_injected,
+        report.repair_ratio,
+        sarif["version"],
+        len(sarif["runs"][0]["results"]),
+        "# Chaos Invariant Resilience Benchmark Report" in md,
+        "100.0%" in md,
+    ) == (1, 1.0, "2.1.0", 1, True, True)
 
 
 def test_main_cli_inject_and_benchmark(tmp_path: Path, capsys: Any) -> None:
