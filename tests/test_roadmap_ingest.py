@@ -66,13 +66,15 @@ def test_value_and_effort_come_from_the_matrix(tmp_path: Path) -> None:
     doc = _roadmap(tmp_path, "### Milestone A (v0.5.0 - Scheduled)\n"
                    "- [ ] **Widget Synthesizer**:\n- [ ] **Sprawling Platform**:\n" + _MATRIX)
     items = {i.title: i for i in parse_roadmap(doc)}
-    assert (items["Widget Synthesizer"].business_value, items["Widget Synthesizer"].effort_points) == (
-        VALUE_POINTS["High"], EFFORT_POINTS["Low"]
+    assert (
+        (items["Widget Synthesizer"].business_value, items["Widget Synthesizer"].effort_points),
+        (items["Sprawling Platform"].business_value, items["Sprawling Platform"].effort_points),
+        all(i.sized_from_matrix for i in items.values()),
+    ) == (
+        (VALUE_POINTS["High"], EFFORT_POINTS["Low"]),
+        (VALUE_POINTS["Low"], EFFORT_POINTS["High"]),
+        True,
     )
-    assert (items["Sprawling Platform"].business_value, items["Sprawling Platform"].effort_points) == (
-        VALUE_POINTS["Low"], EFFORT_POINTS["High"]
-    )
-    assert all(i.sized_from_matrix for i in items.values())
 
 
 def test_unmatched_items_are_marked_as_assumption_ranked(tmp_path: Path) -> None:
@@ -108,9 +110,11 @@ def test_merge_preserves_defects_and_replaces_prior_roadmap_entries(tmp_path: Pa
 
     tasks = merge_into_backlog(parse_roadmap(doc), backlog)
     titles = [t["title"] for t in tasks]
-    assert "[STRUCTURAL_DECAY] real defect" in titles
-    assert "[ROADMAP] stale, since completed" not in titles
-    assert "[ROADMAP] Current Work" in titles
+    assert (
+        "[STRUCTURAL_DECAY] real defect" in titles,
+        "[ROADMAP] stale, since completed" not in titles,
+        "[ROADMAP] Current Work" in titles,
+    ) == (True, True, True)
 
 
 def test_merge_survives_a_corrupt_backlog(tmp_path: Path) -> None:
@@ -137,9 +141,12 @@ def test_main_dry_run_writes_nothing(tmp_path: Path, capsys: pytest.CaptureFixtu
     """Dry run is for inspection; it must leave the backlog untouched."""
     doc = _roadmap(tmp_path, "### Milestone A (v0.5.0 - Scheduled)\n- [ ] **Work**:\n")
     backlog = tmp_path / "backlog.json"
-    assert main(["ingest", "--roadmap", str(doc), "--backlog", str(backlog), "--dry-run"]) == 0
-    assert not backlog.exists()
-    assert "nothing written" in capsys.readouterr().out
+    exit_code = main(["ingest", "--roadmap", str(doc), "--backlog", str(backlog), "--dry-run"])
+    assert (
+        exit_code,
+        backlog.exists(),
+        "nothing written" in capsys.readouterr().out,
+    ) == (0, False, True)
 
 
 def test_blocked_annotation_is_parsed_with_its_reason(tmp_path: Path) -> None:
