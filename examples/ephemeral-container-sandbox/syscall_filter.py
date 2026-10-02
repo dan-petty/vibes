@@ -88,20 +88,59 @@ SUPPORTED_ARCH: Final[str] = "x86_64"
 # Verified against the kernel's own `asm/unistd_64.h` by `test_syscall_filter.py`, which is
 # the only thing standing between this table and a transcription error nothing would catch.
 SYSCALLS: Final[dict[str, int]] = {
-    "accept": 43, "accept4": 288, "bind": 49, "connect": 42, "listen": 50,
-    "recvfrom": 45, "recvmsg": 47, "sendmsg": 46, "sendto": 44,
-    "socket": 41, "socketpair": 53,
-    "capset": 126, "ioperm": 173, "iopl": 172,
-    "setgid": 106, "setregid": 114, "setresgid": 119, "setresuid": 117,
-    "setreuid": 113, "setuid": 105,
-    "perf_event_open": 298, "process_vm_readv": 310, "process_vm_writev": 311, "ptrace": 101,
-    "chroot": 161, "mount": 165, "pivot_root": 155, "setns": 308, "umount2": 166, "unshare": 272,
-    "adjtimex": 159, "bpf": 321, "clock_settime": 227, "delete_module": 176,
-    "finit_module": 313, "init_module": 175, "kexec_file_load": 320, "kexec_load": 246,
-    "reboot": 169, "settimeofday": 164, "swapoff": 168, "swapon": 167, "userfaultfd": 323,
-    "add_key": 248, "keyctl": 250, "request_key": 249,
-    "clone": 56, "clone3": 435, "fork": 57, "vfork": 58,
-    "io_uring_setup": 425, "io_uring_enter": 426, "io_uring_register": 427,
+    "accept": 43,
+    "accept4": 288,
+    "bind": 49,
+    "connect": 42,
+    "listen": 50,
+    "recvfrom": 45,
+    "recvmsg": 47,
+    "sendmsg": 46,
+    "sendto": 44,
+    "socket": 41,
+    "socketpair": 53,
+    "capset": 126,
+    "ioperm": 173,
+    "iopl": 172,
+    "setgid": 106,
+    "setregid": 114,
+    "setresgid": 119,
+    "setresuid": 117,
+    "setreuid": 113,
+    "setuid": 105,
+    "perf_event_open": 298,
+    "process_vm_readv": 310,
+    "process_vm_writev": 311,
+    "ptrace": 101,
+    "chroot": 161,
+    "mount": 165,
+    "pivot_root": 155,
+    "setns": 308,
+    "umount2": 166,
+    "unshare": 272,
+    "adjtimex": 159,
+    "bpf": 321,
+    "clock_settime": 227,
+    "delete_module": 176,
+    "finit_module": 313,
+    "init_module": 175,
+    "kexec_file_load": 320,
+    "kexec_load": 246,
+    "reboot": 169,
+    "settimeofday": 164,
+    "swapoff": 168,
+    "swapon": 167,
+    "userfaultfd": 323,
+    "add_key": 248,
+    "keyctl": 250,
+    "request_key": 249,
+    "clone": 56,
+    "clone3": 435,
+    "fork": 57,
+    "vfork": 58,
+    "io_uring_setup": 425,
+    "io_uring_enter": 426,
+    "io_uring_register": 427,
 }
 
 DENY_GROUPS: Final[dict[str, tuple[str, ...]]] = {
@@ -112,16 +151,50 @@ DENY_GROUPS: Final[dict[str, tuple[str, ...]]] = {
     # nothing while reporting network isolation as ENFORCED. Container runtimes disable
     # io_uring for exactly this reason. Verified here: under the default policy `socket()`
     # raised EPERM while `io_uring_setup(2)` still reached the kernel.
-    "network": ("socket", "socketpair", "bind", "connect", "listen", "accept", "accept4",
-                "sendto", "recvfrom", "sendmsg", "recvmsg",
-                "io_uring_setup", "io_uring_enter", "io_uring_register"),
-    "privilege": ("setuid", "setgid", "setreuid", "setregid", "setresuid", "setresgid",
-                  "capset", "ioperm", "iopl"),
+    "network": (
+        "socket",
+        "socketpair",
+        "bind",
+        "connect",
+        "listen",
+        "accept",
+        "accept4",
+        "sendto",
+        "recvfrom",
+        "sendmsg",
+        "recvmsg",
+        "io_uring_setup",
+        "io_uring_enter",
+        "io_uring_register",
+    ),
+    "privilege": (
+        "setuid",
+        "setgid",
+        "setreuid",
+        "setregid",
+        "setresuid",
+        "setresgid",
+        "capset",
+        "ioperm",
+        "iopl",
+    ),
     "tracing": ("ptrace", "process_vm_readv", "process_vm_writev", "perf_event_open"),
     "mount": ("mount", "umount2", "pivot_root", "chroot", "unshare", "setns"),
-    "kernel": ("init_module", "delete_module", "finit_module", "kexec_load", "kexec_file_load",
-               "reboot", "settimeofday", "clock_settime", "adjtimex", "swapon", "swapoff",
-               "bpf", "userfaultfd"),
+    "kernel": (
+        "init_module",
+        "delete_module",
+        "finit_module",
+        "kexec_load",
+        "kexec_file_load",
+        "reboot",
+        "settimeofday",
+        "clock_settime",
+        "adjtimex",
+        "swapon",
+        "swapoff",
+        "bpf",
+        "userfaultfd",
+    ),
     "keyring": ("add_key", "keyctl", "request_key"),
     # Absolute rather than numeric: the workload may not create a process at all. Off by
     # default because a payload that legitimately spawns one would die with SIGSYS, and a
@@ -153,7 +226,12 @@ GROUP_ACTIONS: Final[dict[str, int]] = {
 }
 
 DEFAULT_GROUPS: Final[tuple[str, ...]] = (
-    "network", "privilege", "tracing", "mount", "kernel", "keyring",
+    "network",
+    "privilege",
+    "tracing",
+    "mount",
+    "kernel",
+    "keyring",
 )
 
 
@@ -185,6 +263,15 @@ class _SockFprog(ctypes.Structure):
     )
 
 
+def _collect_group_actions(groups: Iterable[str]) -> dict[str, int]:
+    """Collect syscall actions across requested groups."""
+    actions: dict[str, int] = {}
+    for group in groups:
+        for name in DENY_GROUPS[group]:
+            actions[name] = max(actions.get(name, 0), GROUP_ACTIONS[group])
+    return actions
+
+
 def resolve(groups: Iterable[str]) -> dict[str, int]:
     """Expand group names to `{syscall name: action}`, refusing anything unrecognised.
 
@@ -195,10 +282,7 @@ def resolve(groups: Iterable[str]) -> dict[str, int]:
     unknown = sorted(set(wanted) - set(DENY_GROUPS))
     if unknown:
         raise SeccompUnavailable(f"unknown deny group(s) {unknown}; known: {sorted(DENY_GROUPS)}")
-    actions: dict[str, int] = {}
-    for group in wanted:
-        for name in DENY_GROUPS[group]:
-            actions[name] = max(actions.get(name, 0), GROUP_ACTIONS[group])
+    actions = _collect_group_actions(wanted)
     missing = sorted(name for name in actions if name not in SYSCALLS)
     if missing:
         raise SeccompUnavailable(f"no syscall number for {missing} on {SUPPORTED_ARCH}")
@@ -324,6 +408,7 @@ def limiter(memory_mb: int, cpu_seconds: int, max_processes: int) -> Callable[[]
     `RLIMIT_CORE` is zeroed because every denied call kills the process with `SIGSYS`, and
     a confinement control that fills the disk with core dumps gets turned off.
     """
+
     def apply() -> None:
         """Apply every cap, hard and soft together so the workload cannot raise them."""
         resource.setrlimit(resource.RLIMIT_AS, (memory_mb * 1024 * 1024,) * 2)
