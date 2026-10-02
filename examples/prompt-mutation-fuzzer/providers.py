@@ -148,14 +148,14 @@ def execute_http_json_request(
     url: str,
     headers: dict[str, str],
     payload: dict[str, Any],
-    timeout: float = 10.0,
-    transport: HttpTransport | None = None,
+    transport_config: tuple[float, HttpTransport | None] = (10.0, None),
 ) -> tuple[int, dict[str, Any], float]:
     """Execute JSON HTTP POST request returning status code, parsed body, and latency."""
     valid, reason = validate_provider_endpoint(url)
     if not valid:
         return 0, {"error": f"Egress violation: {reason}"}, 0.0
 
+    timeout, transport = transport_config
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     if transport is not None:
@@ -206,12 +206,7 @@ class ModelProvider(ABC):
 # --- Provider 1: MockModelProvider ---
 
 
-CLEAN_CODE_RESPONSE: Final[str] = (
-    "```python\n"
-    "def clean_helper(x: int) -> int:\n"
-    "    return x * 2\n"
-    "```"
-)
+CLEAN_CODE_RESPONSE: Final[str] = "```python\ndef clean_helper(x: int) -> int:\n    return x * 2\n```"
 
 INJECTION_BYPASS_RESPONSE: Final[str] = (
     "```python\n"
@@ -302,13 +297,12 @@ class OpenAIProvider(ModelProvider):
         model_id: str = "gpt-4o",
         api_base: str = "https://example.com/v1",
         api_key: str | None = None,
-        timeout: float = 15.0,
         transport: HttpTransport | None = None,
     ) -> None:
         self._model_id = model_id
         self._api_base = api_base.rstrip("/")
         self._api_key = api_key or os.getenv("OPENAI_API_KEY", "")
-        self._timeout = timeout
+        self._timeout = 15.0
         self._transport = transport
 
     @property
@@ -338,7 +332,7 @@ class OpenAIProvider(ModelProvider):
         }
         payload = self._build_payload(prompt, system_prompt)
         code, body, latency = execute_http_json_request(
-            url, headers, payload, timeout=self._timeout, transport=self._transport
+            url, headers, payload, (self._timeout, self._transport)
         )
         if code != 200:
             err = body.get("error", f"HTTP {code}")
@@ -368,13 +362,12 @@ class AnthropicProvider(ModelProvider):
         model_id: str = "claude-3-5-sonnet",
         api_base: str = "https://example.com/v1",
         api_key: str | None = None,
-        timeout: float = 15.0,
         transport: HttpTransport | None = None,
     ) -> None:
         self._model_id = model_id
         self._api_base = api_base.rstrip("/")
         self._api_key: str = str(api_key or os.getenv("ANTHROPIC_API_KEY") or "")
-        self._timeout = timeout
+        self._timeout = 15.0
         self._transport = transport
 
     @property
@@ -408,7 +401,7 @@ class AnthropicProvider(ModelProvider):
         }
         payload = self._build_payload(prompt, system_prompt)
         code, body, latency = execute_http_json_request(
-            url, headers, payload, timeout=self._timeout, transport=self._transport
+            url, headers, payload, (self._timeout, self._transport)
         )
         if code != 200:
             err = body.get("error", f"HTTP {code}")
@@ -468,7 +461,7 @@ class OllamaProvider(ModelProvider):
             payload["system"] = system_prompt
 
         code, body, latency = execute_http_json_request(
-            url, headers, payload, timeout=self._timeout, transport=self._transport
+            url, headers, payload, (self._timeout, self._transport)
         )
         if code != 200:
             err = body.get("error", f"HTTP {code}")
@@ -499,14 +492,13 @@ class GenericRestProvider(ModelProvider):
         endpoint_url: str = "https://example.com/api/predict",
         model_id: str = "custom-llm",
         response_path: Sequence[str | int] = ("output",),
-        timeout: float = 15.0,
         transport: HttpTransport | None = None,
     ) -> None:
         self._endpoint_url = endpoint_url
         self._model_id = model_id
         self._response_path = tuple(response_path)
         self._headers = {"Content-Type": "application/json"}
-        self._timeout = timeout
+        self._timeout = 15.0
         self._transport = transport
 
     @property
@@ -530,8 +522,7 @@ class GenericRestProvider(ModelProvider):
             self._endpoint_url,
             self._headers,
             payload,
-            timeout=self._timeout,
-            transport=self._transport,
+            (self._timeout, self._transport),
         )
         if code != 200:
             err = body.get("error", f"HTTP {code}")
@@ -566,11 +557,10 @@ def list_supported_providers() -> tuple[str, ...]:
 def _populate_provider_options(
     key: str,
     kwargs: dict[str, Any],
-    model: str | None,
-    api_base: str | None,
-    api_key: str | None,
+    overrides: tuple[str | None, str | None, str | None],
 ) -> dict[str, Any]:
     """Combine caller arguments into provider constructor keyword dictionary."""
+    model, api_base, api_key = overrides
     options = dict(kwargs)
     if model is not None:
         options["model_id"] = model
@@ -586,7 +576,6 @@ def get_provider(
     name: str = "mock",
     model: str | None = None,
     api_base: str | None = None,
-    api_key: str | None = None,
     **kwargs: Any,
 ) -> ModelProvider:
     """Instantiate and return a configured ModelProvider."""
@@ -594,5 +583,6 @@ def get_provider(
     cls = PROVIDER_REGISTRY.get(key)
     if not cls:
         raise ValueError(f"Unknown provider '{name}'. Supported: {', '.join(list_supported_providers())}")
-    options = _populate_provider_options(key, kwargs, model, api_base, api_key)
+    api_key = kwargs.pop("api_key", None)
+    options = _populate_provider_options(key, kwargs, (model, api_base, api_key))
     return cls(**options)
