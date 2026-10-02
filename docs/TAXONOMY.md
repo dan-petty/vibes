@@ -156,6 +156,9 @@ flowchart TD
 | **The Assertion Density Complexity Trap** | Linear `assert expr` statements compile to `if not (expr): raise`, adding $+1$ to McCabe complexity $M$ per assertion. | Purely linear test functions breach $M \le 10$ complexity invariants despite zero nested branching. | Structural tuple equality consolidation: `assert (a, b) == (x, y)` preserving pytest element diffs with $M=1$. |
 | **The Milestone Horizon Inflation Trap** | Autonomous agents continuously admit discovered defects or edge cases into an active milestone causing $V_{\text{scope}} > V_{\text{burn}}$. | Milestone completion rate stays trapped at $70\%-90\%$ across 100+ commits, resulting in release live-locks. | Three-phase Milestone Scope Air-Lock (`INTAKE` $\to$ `AIR_LOCKED` $\to$ `FROZEN`), rolling convergence ratio gate $C_R \ge 1.2$, and automated rollover partitioning via `milestone_governor.py`. |
 | **Sycophantic Compliance Cascade** | Models trained for agreeableness comply with flawed human suggestions, noisy bug guesses, and adversarial injections without refusal. | Dismantling modular boundaries ($M > 25$), deleting failing test assertions, and rewriting healthy subsystems. | Deterministic Mechanical Refusal Oracles: AST invariant sentinels, negative schemas (`additionalProperties: false`), and immutable TDD coverage floors. |
+| **Apoptosis Resistance (Zombie Subagent Leaks)** | Worker subagents or container sandboxes fail to terminate cleanly on error or timeout, leaking PIDs, memory, and file descriptors. | Ambient container processes starve; PTY allocations fail with `EAGAIN` while zombie processes flood process trees. | POSIX process group isolation (`start_new_session=True`), guarded termination avoiding PID 1, and eBPF LSM sandboxing. |
+| **Afferent Telemetry Blindness** | Emitting telemetry logs, traces, and metrics solely to cold human dashboards without closing the loop into synthesis engines. | Telemetry detects performance decay or test regression, but code remains unpatched until a human manually intervenes. | Closed-loop sensory feedback (`ResourceIterationWorkbench`) feeding latency and test telemetry directly into AST refactoring engines. |
+| **Epistemic Oscillation (Hyper-Metabolic Churn)** | Autonomous agents mutate healthy code in response to transient environmental noise without deadband hysteresis. | Endless micro-refactor PRs oscillate back and forth under fluctuating network latency or VM noisy-neighbor jitter. | Homeostatic deadband damping, rolling SRE error budget windows (`reliability_slo.py`), and CEGIS monotonic constraint accumulation. |
 
 ---
 
@@ -169,5 +172,64 @@ flowchart TD
 | **The Epistemic Seam** | The rigid barrier between non-deterministic token generation and deterministic physical truth, prohibiting stochastic models from mutating their own verification catalogs. | Machine operates within the seam; Human arbitrates ambiguous value cliffs. |
 | **Rule Attribution Mapping** | Bijective mapping between deterministic mechanical gate codes (`CC001`, `DOC012`, `AIBOM001`, `ROT002`) and instruction sections, verifying automated coverage. | Machine computes mechanical coverage and token savings; Human retires redundant prose guidelines. |
 | **JIT Instruction Decomposition** | Modularizing instructions into a universal invariant kernel ($\le 2$k tokens) and dynamically hydrated domain overlays based on active diff target paths. | Machine resolves file types and scopes prompts just in time; Human establishes core invariant kernel. |
+
+---
+
+## 6. The Metabolic & Biological Execution Topology (Autopoietic Systems)
+
+When software systems gain the ability to recursively inspect, evaluate, mutate, verify, and select their own code and runtime states against formal invariants, they transcend mechanical automation and behave as **autopoietic, metabolic digital organisms**.
+
+```mermaid
+flowchart LR
+    subgraph Afferent ["Afferent Sensory Pathways"]
+        direction TB
+        S1["OpenTelemetry Spans & Traces"]
+        S2["AST Headroom Deltas (M, Depth)"]
+        S3["eBPF Runtime Kernel Signals"]
+    end
+
+    subgraph Homeostasis ["Central Autonomic Homeostasis"]
+        direction TB
+        H1["Deadband Hysteresis Filter"]
+        H2["SRE Rolling Error Budget"]
+        H3["Invariant Violation Detector"]
+    end
+
+    subgraph Efferent ["Efferent Motor Pathways"]
+        direction TB
+        E1["CEGIS Inductive AST Repair"]
+        E2["Targeted Cellular Apoptosis"]
+        E3["Regenerative Failover & Quiescing"]
+    end
+
+    Afferent --> Homeostasis
+    Homeostasis --> Efferent
+```
+
+### 6.1 The Genotype-Phenotype Duality in Agentic Systems
+- **The Genotype**: The persistent Abstract Syntax Tree (AST), formal configuration schemas, and mathematical invariant specifications.
+- **The Phenotype**: The transient runtime processes, ephemeral container sandboxes, and active memory buffers.
+- When the phenotype encounters environmental friction (counterexamples, test failures, or resource exhaustion), the system treats the failure as selective evolutionary pressure, mutating its genotype (AST) to express a more resilient phenotype.
+
+### 6.2 Homeostatic Equilibrium & Headroom Metabolism
+- In cybernetics (Ashby's Law of Requisite Variety), homeostatic regulators maintain a steady internal state against fluctuating environments.
+- In metabolic codebases, the system actively consumes compute to preserve structural headroom ($M \le 6$ vs. ceiling $M \le 10$, $D \le 3$ vs. ceiling $D \le 5$, parameter cardinality $P \le 4$).
+- Code bloat is treated as metabolic waste, automatically compacted back to baseline before systemic architectural decay sets in.
+
+### 6.3 Cellular Immunology & Targeted Apoptosis
+- Biological survival requires that infected or corrupted cells undergo programmed cell death (apoptosis) rather than poisoning the host.
+- In agentic swarms, misbehaving subagents, hallucinated reasoning loops, and rogue background processes are strictly sandboxed (eBPF LSM, POSIX process groups).
+- Breaches trigger immediate apoptosis: process groups are killed, corrupted worktrees are discarded, and execution fails over to clean invariant snapshots.
+
+### 6.4 The Synthetic Nervous System: Afferent vs. Efferent Signaling
+- **Afferent Pathways (Sensory Input)**: Telemetry is no longer emitted for passive post-mortem human dashboards. Traces, spans, and metric deltas feed directly into real-time autonomic evaluators.
+- **Efferent Pathways (Motor Synthesis)**: When sensory signals cross homeostatic thresholds, efferent actuators synthesize AST refactors, trigger quiescence, or throttle execution rates.
+
+### 6.5 Epistemic Observability & Invariant-Centric Health Metrics
+- Rather than merely measuring host-level CPU and memory, epistemic observability quantifies cognitive and architectural health:
+  - **Headroom Delta ($\Delta M, \Delta D$)**: Proximity of active functions to complexity and nesting ceilings.
+  - **Convergence Velocity ($C_R$)**: Ratio of resolved counterexamples to admitted issues per iteration.
+  - **Attention Dilution Index ($ADI$)**: Density of active instructions relative to prompt context volume.
+  - **Immune Interception Rate**: Proportion of unauthorized egress attempts or malformed payloads neutralized at sandbox boundaries.
 
 

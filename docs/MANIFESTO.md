@@ -83,11 +83,12 @@ Software bugs are not isolated incidents; they are symptoms of missing constrain
 - The agent must immediately update the agent operating instructions (`AGENTS.md`) with defensive rules, pre-flight checks, and avoidance patterns.
 - Every failure permanently hardens the harness against recurrence.
 
-### Pillar 6: Invariant-Grounded Recursive Self-Improvement
+### Pillar 6: Invariant-Grounded Recursive Self-Improvement & Metabolic Autopoiesis
 In the post-agentic-harness era, code synthesis velocity exceeds human auditing capacity. Static codebases face exponential relative decay.
 - Recursive self-improvement is an operational mandate: codebases must autonomously observe their own telemetry, repair defects, and ingest roadmap deliverables.
+- **The Metabolic Paradigm**: Software ceases to be a static artifact and behaves as an autopoietic living organism. Observability acts as a synthetic nervous system where afferent telemetry (traces, metrics, AST deltas) directly stimulates efferent motor synthesis (CEGIS repair, structural compaction, targeted apoptosis).
 - Unconstrained stochastic self-improvement collapses into the Phantom Architecture Trap and circular self-consistency.
-- Self-evolution must be grounded in asymmetric mechanical invariants ($P$ vs $NP$), monotonic CEGIS constraint accumulation, and outward ecosystem telemetry.
+- Self-evolution must be grounded in asymmetric mechanical invariants ($P$ vs $NP$), deadband homeostatic damping, monotonic CEGIS constraint accumulation, and outward ecosystem telemetry.
 
 ### Pillar 7: The Sovereign Human Core & Autonomous Invariant Discovery
 As the autonomous cybernetic loop accelerates, the human role inverts from micromanaging implementation details to commanding the sovereign boundary:

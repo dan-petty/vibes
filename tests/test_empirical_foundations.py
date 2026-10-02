@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Callable
+from dataclasses import dataclass
 
 # --- 1. Greedy vs Lazy Dictionary Dispatch ---
+
 
 def eager_dispatch_sample(actions: list[str]) -> dict[str, str]:
     """Demonstrates eager evaluation executing side effects at dict instantiation time."""
@@ -58,6 +60,7 @@ def test_greedy_vs_lazy_dispatch_evaluation() -> None:
 
 # --- 2. Branch Smuggling & AST Cyclomatic Metrics ---
 
+
 def naive_ast_branch_counter(code: str) -> int:
     """Computes naive McCabe complexity by counting If, While, For, and ExceptHandler."""
     tree = ast.parse(code)
@@ -101,6 +104,7 @@ def process(items):
 
 # --- 3. Test Suite Overfitting & The Oracle Problem ---
 
+
 def overfitted_agent_implementation(n: int) -> int:
     """Plausible but overfitted implementation passing hardcoded fixture tests."""
     fixtures = {0: 0, 1: 1, 2: 1, 3: 2, 4: 3, 5: 5}
@@ -140,6 +144,7 @@ def test_overfitted_patch_passes_narrow_suite_but_fails_generalization() -> None
 
 # --- 4. Micro-Function Fragmentation vs. Cohesive Logic ---
 
+
 def cohesive_pipeline(data: list[int]) -> int:
     """Cohesive 8-line function with local context."""
     total = 0
@@ -178,3 +183,96 @@ def test_cohesive_vs_fragmented_equivalence_and_structure() -> None:
     fragmented_res = fragmented_pipeline(sample_input)
 
     assert (cohesive_res, fragmented_res) == (16, 16)
+
+
+# --- 5. Biological Homeostasis & Afferent Observability ---
+
+
+@dataclass(frozen=True)
+class AfferentTelemetry:
+    """Afferent sensory data captured from the runtime environment."""
+
+    execution_latency_seconds: float
+    cyclomatic_complexity: int
+    nesting_depth: int
+    test_failure_count: int
+
+
+@dataclass(frozen=True)
+class HomeostaticEnvelope:
+    """Bounded homeostatic set-points defining equilibrium."""
+
+    max_latency_seconds: float = 2.0
+    complexity_headroom_ceiling: int = 6
+    max_nesting_depth: int = 3
+
+
+class AutonomicHomeostasisRegulator:
+    """Regulates the afferent-to-efferent loop with deadband hysteresis damping."""
+
+    def __init__(self, envelope: HomeostaticEnvelope) -> None:
+        self.envelope = envelope
+
+    def evaluate_metabolic_state(self, telemetry: AfferentTelemetry) -> tuple[str, bool]:
+        """Classify equilibrium and determine if efferent motor synthesis is required."""
+        if telemetry.test_failure_count > 0:
+            return ("CRITICAL_DEFECT", True)
+
+        complexity_breached = (
+            telemetry.cyclomatic_complexity > self.envelope.complexity_headroom_ceiling
+            or telemetry.nesting_depth > self.envelope.max_nesting_depth
+        )
+        if complexity_breached:
+            return ("HEADROOM_EROSION", True)
+
+        if telemetry.execution_latency_seconds > (self.envelope.max_latency_seconds * 1.5):
+            return ("METABOLIC_LATENCY_BREACH", True)
+
+        return ("EQUILIBRIUM", False)
+
+
+def test_closed_loop_afferent_telemetry_homeostatic_damping() -> None:
+    """Verifies that transient telemetry is damped while sustained structural drift triggers synthesis."""
+    regulator = AutonomicHomeostasisRegulator(HomeostaticEnvelope())
+
+    healthy = AfferentTelemetry(
+        execution_latency_seconds=0.8,
+        cyclomatic_complexity=4,
+        nesting_depth=2,
+        test_failure_count=0,
+    )
+    jitter = AfferentTelemetry(
+        execution_latency_seconds=2.5,
+        cyclomatic_complexity=4,
+        nesting_depth=2,
+        test_failure_count=0,
+    )
+    headroom_breach = AfferentTelemetry(
+        execution_latency_seconds=0.9,
+        cyclomatic_complexity=8,
+        nesting_depth=2,
+        test_failure_count=0,
+    )
+    latency_breach = AfferentTelemetry(
+        execution_latency_seconds=4.2,
+        cyclomatic_complexity=4,
+        nesting_depth=2,
+        test_failure_count=0,
+    )
+
+    res_healthy = regulator.evaluate_metabolic_state(healthy)
+    res_jitter = regulator.evaluate_metabolic_state(jitter)
+    res_headroom = regulator.evaluate_metabolic_state(headroom_breach)
+    res_latency = regulator.evaluate_metabolic_state(latency_breach)
+
+    assert (
+        res_healthy,
+        res_jitter,
+        res_headroom,
+        res_latency,
+    ) == (
+        ("EQUILIBRIUM", False),
+        ("EQUILIBRIUM", False),
+        ("HEADROOM_EROSION", True),
+        ("METABOLIC_LATENCY_BREACH", True),
+    )

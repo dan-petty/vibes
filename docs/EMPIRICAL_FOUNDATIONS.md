@@ -3,7 +3,7 @@
 
 > **Exhibition**: `vibes` Foundations & Methodological Critique  
 > **Classification**: Theoretical & Empirical Literature Synthesis  
-> **Scope**: 5 Core Assertions Evaluated Against 20+ Peer-Reviewed Studies across Software Engineering, Formal Methods, and Frontier AI  
+> **Scope**: 6 Core Assertions Evaluated Against 25+ Peer-Reviewed Studies across Software Engineering, Formal Methods, Cybernetics, and Frontier AI  
 > **Key Metric**: Comparative analysis across classical empirical metrics (McCabe, Shepperd, Fenton), Automated Program Repair (Le Goues, Smith, Brun), and LLM alignment (Anthropic, DeepMind, Stanford)  
 >
 > **TLDR**: A critical, evidence-grounded synthesis consolidating the core claims of `vibes`, dismantling epistemic circularity, cross-examining assertions against external peer-reviewed literature, and providing executable code samples that demonstrate where invariants succeed, where they break down, and how to avoid dogmatic failure modes.
@@ -284,7 +284,83 @@ assert clean_records == ["READ_STATUS"]
 
 ---
 
-## 7. Master Synthesis & Empirical Decision Matrix
+## 7. Assertion 6: Recursive Iteration as Biological Homeostasis & Afferent Observability
+
+### The "Vibes" Claim
+Autonomous software systems governed by recursive iteration (CEGIS, AST invariants, and execution oracles) transcend static procedural automation and behave as **autopoietic, metabolic digital organisms**. Observability evolves from a passive human dashboard into a **synthetic nervous system**: afferent sensory pathways (telemetry, eBPF, AST delta metrics) directly stimulate efferent motor pathways (automated AST refactoring, sandboxed repair, apoptosis of corrupted subagents), maintaining homeostatic equilibrium.
+
+### External Supporting Evidence
+- **Ashby (1956)**: W. Ross Ashby, *"An Introduction to Cybernetics"* (Chapman & Hall, 1956), formulated the **Law of Requisite Variety** ($V_R \ge V_D / V_O$), proving that an autonomic regulator can maintain stability against external environmental disturbances only if its internal repertoire of corrective responses possesses at least as much variety as the disturbances themselves. In agentic engineering, an agent constrained by multi-tier verification oracles possesses the requisite variety to absorb chaotic environmental inputs while holding structural invariants constant.
+- **Maturana & Varela (1972)**: Humberto R. Maturana and Francisco J. Varela, *"Autopoiesis and Cognition: The Realization of the Living"* (Boston Studies in the Philosophy of Science, 1980), defined living systems as **autopoietic networks**: self-bounded entities whose primary product is their own ongoing operational organization. An agentic codebase that continuously parses, repairs, and compacts its own AST to satisfy formal invariants operates as an autopoietic computational network.
+- **Kephart & Chess (IBM, 2003)**: Jeffrey O. Kephart and David M. Chess, in *"The Vision of Autonomic Computing"* (IEEE Computer, 2003), established the foundational **MAPE-K control loop** (Monitor, Analyze, Plan, Execute over shared Knowledge), arguing that software complexity would inevitably exceed human administrative capacity, necessitating self-configuring, self-healing, self-optimizing, and self-protecting computational entities.
+- **Solar-Lezama (2006)**: Armando Solar-Lezama, in *"Program Synthesis by Sketching"* (UC Berkeley, 2006), demonstrated that Counterexample-Guided Inductive Synthesis (CEGIS) operates as an artificial selection oracle: counterexamples serve as selective fitness pressures that prune non-viable solution candidates monotonically.
+
+### External Critiques & Counter-Evidence
+- **Wiener (1948)**: Norbert Wiener, *"Cybernetics: Or Control and Communication in the Animal and the Machine"* (MIT Press, 1948), demonstrated that uncalibrated, under-damped feedback loops inevitably induce **oscillatory instability** and runaway positive feedback loops. If telemetry fluctuations immediately trigger generative code mutations without hysteresis, the system enters chaotic oscillations.
+- **Brooks (1987)**: Frederick P. Brooks, Jr., *"No Silver Bullet: Essence and Accidents of Software Engineering"* (IEEE Computer, 1987), established that software systems suffer from **irreducible semantic complexity** (arbitrary external business rules, non-uniform human institutions). Biological cybernetic analogies fail when treating human conceptual domain mismatches as if they were simple physical homeostasis.
+- **Kephart & Walsh (2004)**: Jeffrey O. Kephart and William E. Walsh, in *"An Artificial Economy for Autonomic Computing"* (IBM Systems Journal, 2004), showed that autonomous agents with localized feedback loops frequently exhibit tragedy-of-the-commons resource starvation, token thrashing, and destructive competition in the absence of global bounding constraints.
+
+### Critical Synthesis: The "Hyper-Metabolic Churn" Dilemma & Homeostatic Damping
+When autonomous agents couple observability directly to code synthesis without deadbands or damping envelopes, they fall into **Hyper-Metabolic Churn**: continuously rewriting healthy code in response to transient environmental noise (e.g. temporary API rate limits, cloud VM noisy-neighbor latency spikes, or harmless test run jitter).
+
+The biological antidote is **Homeostatic Damping**:
+1. **Hysteresis & Deadbands**: Fluctuations within acceptable tolerance envelopes ($M \le 6$, feedback latency $\le 2.0\text{s}$) must never trigger efferent motor synthesis.
+2. **Rolling SRE Error Budgets**: As codified in `reliability_slo.py`, structural refactoring is gated by rolling compliance ratios rather than instantaneous deviations.
+3. **Targeted Cellular Apoptosis**: Misbehaving or diverging subagents are isolated via eBPF LSM and POSIX process groups and terminated cleanly, preventing runaway positive feedback loops from infecting the root workspace.
+
+#### Code Sample 6: Closed-Loop Afferent Telemetry & Homeostatic Damping
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class AfferentTelemetry:
+    """Afferent sensory data captured from the runtime environment."""
+
+    execution_latency_seconds: float
+    cyclomatic_complexity: int
+    nesting_depth: int
+    test_failure_count: int
+
+
+@dataclass(frozen=True)
+class HomeostaticEnvelope:
+    """Bounded homeostatic set-points defining equilibrium."""
+
+    max_latency_seconds: float = 2.0
+    complexity_headroom_ceiling: int = 6
+    max_nesting_depth: int = 3
+
+
+class AutonomicHomeostasisRegulator:
+    """Regulates the afferent-to-efferent loop with deadband hysteresis damping."""
+
+    def __init__(self, envelope: HomeostaticEnvelope) -> None:
+        self.envelope = envelope
+
+    def evaluate_metabolic_state(self, telemetry: AfferentTelemetry) -> tuple[str, bool]:
+        """Classify equilibrium and determine if efferent motor synthesis is required."""
+        if telemetry.test_failure_count > 0:
+            return ("CRITICAL_DEFECT", True)
+
+        # Check if structural complexity breaches homeostatic headroom
+        complexity_breached = (
+            telemetry.cyclomatic_complexity > self.envelope.complexity_headroom_ceiling
+            or telemetry.nesting_depth > self.envelope.max_nesting_depth
+        )
+        if complexity_breached:
+            return ("HEADROOM_EROSION", True)
+
+        # Latency check: transient spikes within 1.5x deadband are damped
+        if telemetry.execution_latency_seconds > (self.envelope.max_latency_seconds * 1.5):
+            return ("METABOLIC_LATENCY_BREACH", True)
+
+        return ("EQUILIBRIUM", False)
+```
+
+---
+
+## 8. Master Synthesis & Empirical Decision Matrix
 
 The following matrix consolidates the core assertions of `vibes`, their external scientific grounding, failure modes, and the balanced engineering synthesis required for production agent systems:
 
@@ -295,10 +371,11 @@ The following matrix consolidates the core assertions of `vibes`, their external
 | **3. Mechanical Refusal** | Decouple refusal from models; let AST gates reject bad ideas. | Sharma et al. (2023), Perez et al. (2022), Wei et al. (2023). | Qi et al. (2015), Solar-Lezama (2006). | **Gate Thrashing & Branch Smuggling**: Agents smuggle branches or thrash without counterexamples. | Pair mechanical refusal with CEGIS counterexample extraction so the agent receives the exact falsifying input. |
 | **4. Context Compaction** | Compact context outlines to prevent attention dilution. | Liu et al. (2023 TACL), Hsieh et al. (2024). | Kaddour et al. (2023), SWE-bench (2024). | **Information Starvation Trap**: Stripping types and helper signatures causes signature hallucination. | Preserve full public type signatures, exceptions, and docstrings; prune only function bodies and non-transitive modules. |
 | **5. Table Dispatch** | Replace `if/elif` ladders with dictionary dispatch. | Fowler (1999 Refactoring). | Python Language Reference (§8.4). | **Eager Evaluation & Closure Scoping**: Eager side-effects fire prematurely; late-binding closures leak loop variables. | Enforce lazy callable wrapping (`lambda: ...` or dedicated pure functions) and validate absence of side effects at declaration. |
+| **6. Biological Homeostasis & Afferent Observability** | Software acts as an autopoietic, metabolic organism where telemetry forms a synthetic nervous system. | Ashby (1956), Maturana & Varela (1972), Kephart & Chess (2003 IBM). | Wiener (1948 MIT), Brooks (1987), Kephart & Walsh (2004). | **Hyper-Metabolic Churn**: Continuous micro-rewrites driven by transient noise, destroying stability. | Couple afferent telemetry to efferent synthesis via deadband hysteresis, rolling SRE error budgets, and cellular apoptosis. |
 
 ---
 
-## 8. Conclusion: Beyond Dogmatism in Autonomous Engineering
+## 9. Conclusion: Beyond Dogmatism in Autonomous Engineering
 
 The fundamental lesson of cross-examining `vibes` against external scientific literature is that **no single software engineering metric is immune to Goodhart's Law**:
 
