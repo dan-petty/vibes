@@ -21,12 +21,23 @@ from generator import (
 def test_build_synthetic_agent_session() -> None:
     goal = "Fix issue #42 via TDD"
     session = build_synthetic_agent_session(goal)
-
-    root_spans = [s for s in session.spans if s.parent_span_id is None]
-    child_spans = [s for s in session.spans if s.parent_span_id is not None]
-
-    assert (session.session_goal, len(session.trace_id), len(session.spans)) == (goal, 32, 5)
-    assert (len(root_spans), root_spans[0].name, len(child_spans)) == (1, f"invoke_workflow {goal}", 4)
+    root_spans = [s for s in session.spans if not s.parent_span_id]
+    child_count = len(session.spans) - len(root_spans)
+    assert (
+        session.session_goal,
+        len(session.trace_id),
+        len(session.spans),
+        len(root_spans),
+        root_spans[0].name,
+        child_count,
+    ) == (
+        goal,
+        32,
+        5,
+        1,
+        f"invoke_workflow {goal}",
+        4,
+    )
 
 
 def test_session_token_aggregation() -> None:
@@ -61,28 +72,37 @@ def test_render_ascii_waterfall() -> None:
 def test_to_otlp_json_schema_conformance() -> None:
     session = build_synthetic_agent_session("OTLP Schema test")
     otlp = to_otlp_json(session, service_name="test-agent-mesh")
-
-    assert "resourceSpans" in otlp
-    resource_span = otlp["resourceSpans"][0]
-    scope_span = resource_span["scopeSpans"][0]
-    spans = scope_span["spans"]
-
-    assert (len(spans), scope_span["scope"]["name"]) == (5, "vibes.agent.waterfall.generator")
-    first_span = spans[0]
-    assert (first_span["traceId"], first_span["kind"], first_span["status"]["code"]) == (
-        session.trace_id,
-        1,
-        1,
-    )
-
-    # The conventional keys, not a private vocabulary that only this repository can read.
-    attr_keys = {attr["key"] for s in spans for attr in s.get("attributes", [])}
-    assert {
+    resource_span = otlp.get("resourceSpans", [{}])[0]
+    scope_span = resource_span.get("scopeSpans", [{}])[0]
+    spans = scope_span.get("spans", [])
+    first_span = spans[0] if spans else {}
+    attr_keys = {attr["key"] for s in spans for attr in s.get("attributes", ())}
+    has_conventional = {
         "gen_ai.operation.name",
         "gen_ai.provider.name",
         "gen_ai.usage.input_tokens",
     }.issubset(attr_keys)
-    assert not {key for key in attr_keys if key.startswith("ai.")}
+    has_legacy_keys = any(key.startswith("ai.") for key in attr_keys)
+
+    assert (
+        "resourceSpans" in otlp,
+        len(spans),
+        scope_span.get("scope", {}).get("name"),
+        first_span.get("traceId"),
+        first_span.get("kind"),
+        first_span.get("status", {}).get("code"),
+        has_conventional,
+        has_legacy_keys,
+    ) == (
+        True,
+        5,
+        "vibes.agent.waterfall.generator",
+        session.trace_id,
+        1,
+        1,
+        True,
+        False,
+    )
 
 
 def test_export_otlp_http_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
