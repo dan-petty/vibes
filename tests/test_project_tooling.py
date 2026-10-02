@@ -195,11 +195,20 @@ def test_github_client_sends_authenticated_json_request(monkeypatch: pytest.Monk
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     client = GitHubAPIClient(token="secret", base_url="https://example.com/")
-
-    assert client.request("/issues/1", method="POST", data={"body": "hi"}) == {"number": 1}
-    assert captured["url"] == "https://example.com/issues/1"
-    assert (captured["method"], captured["auth"]) == ("POST", "Bearer secret")
-    assert json.loads(captured["body"]) == {"body": "hi"}
+    res = client.request("/issues/1", method="POST", data={"body": "hi"})
+    assert (
+        res,
+        captured["url"],
+        captured["method"],
+        captured["auth"],
+        json.loads(captured["body"]),
+    ) == (
+        {"number": 1},
+        "https://example.com/issues/1",
+        "POST",
+        "Bearer secret",
+        {"body": "hi"},
+    )
 
 
 def test_github_client_bounds_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
