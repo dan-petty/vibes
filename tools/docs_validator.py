@@ -246,16 +246,18 @@ DOC_PRESETS: Final[dict[str, RulePreset]] = {
     "structure_only": RulePreset(
         name="structure_only",
         description="Structural layout, observation sections, tables, fences, and directory maps",
-        active_rules=frozenset({
-            "code_fence",
-            "table",
-            "structure",
-            "pattern_header",
-            "directory_map",
-            "html_tag",
-            "linebreak",
-            "math",
-        }),
+        active_rules=frozenset(
+            {
+                "code_fence",
+                "table",
+                "structure",
+                "pattern_header",
+                "directory_map",
+                "html_tag",
+                "linebreak",
+                "math",
+            }
+        ),
         strict=False,
     ),
     "links_only": RulePreset(
@@ -477,8 +479,11 @@ def render_presets_table() -> str:
             else ", ".join(sorted(preset.active_rules))
         )
         strict_str = "Yes" if preset.strict else "No"
-        lines.append(f"| `{name}` | {len(preset.active_rules)} | {strict_str} | {rules_desc} | {preset.description} |")
+        lines.append(
+            f"| `{name}` | {len(preset.active_rules)} | {strict_str} | {rules_desc} | {preset.description} |"
+        )
     return "\n".join(lines)
+
 
 # Observations must have numbered sections 1–5 (## 1. ... through ## 5. ...)
 
@@ -629,12 +634,12 @@ class _FenceScan:
 
 def _process_fence_line(
     m_fence: re.Match[str],
-    idx: int,
-    file_str: str,
+    target: tuple[str, int],
     scan: _FenceScan,
     findings: list[DocFinding],
 ) -> None:
     """Process a single code fence line against active state."""
+    file_str, idx = target
     chars, info = m_fence.group(1), m_fence.group(2).strip()
     char_type, curr_len = chars[0], len(chars)
     if not scan.in_fence:
@@ -662,7 +667,7 @@ def _check_line_fences(lines: Sequence[str], file_str: str) -> list[DocFinding]:
     for idx, line in enumerate(lines, 1):
         m_fence = _FENCE_RE.match(line.strip())
         if m_fence:
-            _process_fence_line(m_fence, idx, file_str, scan, findings)
+            _process_fence_line(m_fence, (file_str, idx), scan, findings)
     if scan.in_fence:
         findings.append(
             DocFinding(
@@ -724,12 +729,12 @@ def _is_table_delimiter_row(cells: Sequence[str]) -> bool:
 
 def _process_table_line(
     raw_cells: list[str],
-    in_table: bool,
-    header_cols: int,
-    line_no: int,
-    file_str: str,
+    state: tuple[bool, int],
+    target: tuple[str, int],
 ) -> tuple[bool, int, DocFinding | None]:
     """Process a single table line, tracking header column state and reporting mismatches."""
+    in_table, header_cols = state
+    file_str, line_no = target
     if _is_table_delimiter_row(raw_cells):
         return True, len(raw_cells), None
     if in_table and len(raw_cells) != header_cols:
@@ -748,16 +753,15 @@ def _process_table_line(
 
 def _evaluate_table_line(
     stripped: str,
-    in_table: bool,
-    header_cols: int,
-    line_no: int,
-    file_str: str,
+    state: tuple[bool, int],
+    target: tuple[str, int],
 ) -> tuple[bool, int, DocFinding | None]:
     """Evaluate candidate table line and return updated state and optional finding."""
+    _in_table, header_cols = state
     if "|" not in stripped:
         return False, header_cols, None
     raw_cells = _split_table_row(stripped)
-    return _process_table_line(raw_cells, in_table, header_cols, line_no, file_str)
+    return _process_table_line(raw_cells, state, target)
 
 
 def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFinding]:
@@ -773,7 +777,9 @@ def check_markdown_tables(lines: Sequence[str], file_path: Path) -> list[DocFind
         if fenced:
             in_table = False
             continue
-        in_table, header_cols, finding = _evaluate_table_line(stripped, in_table, header_cols, idx, file_str)
+        in_table, header_cols, finding = _evaluate_table_line(
+            stripped, (in_table, header_cols), (file_str, idx)
+        )
         if finding:
             findings.append(finding)
     return findings
@@ -1159,9 +1165,13 @@ def _handle_fence_transition(
 
 
 def _process_snippet_line(
-    line: str, idx: int, file_str: str, scan: _FenceScan, findings: list[DocFinding]
+    line: str,
+    target: tuple[str, int],
+    scan: _FenceScan,
+    findings: list[DocFinding],
 ) -> None:
     """Process a single line for embedded code snippets."""
+    file_str, idx = target
     m_fence = _FENCE_RE.match(line.strip())
     if m_fence:
         finding = _handle_fence_transition(m_fence, scan, idx, file_str)
@@ -1191,24 +1201,28 @@ def check_embedded_snippets(lines: Sequence[str], file_path: Path) -> list[DocFi
         return [
             finding
             for snip in snippets
-            if (finding := _validate_single_snippet(snip.language, snip.code.splitlines(), snip.start_line, file_str))
+            if (
+                finding := _validate_single_snippet(
+                    snip.language, snip.code.splitlines(), snip.start_line, file_str
+                )
+            )
         ]
 
     findings: list[DocFinding] = []
     scan = _FenceScan()
     for idx, line in enumerate(lines, 1):
-        _process_snippet_line(line, idx, file_str, scan, findings)
+        _process_snippet_line(line, (file_str, idx), scan, findings)
     return findings
 
 
 def _process_html_tag(
     is_closing: bool,
     tag: str,
-    line_no: int,
-    file_str: str,
+    target: tuple[str, int],
     stack: list[tuple[str, int]],
 ) -> DocFinding | None:
     """Evaluate structural HTML opening/closing pairing on a stack."""
+    file_str, line_no = target
     if is_closing:
         if stack and stack[-1][0] == tag:
             stack.pop()
@@ -1233,7 +1247,7 @@ def _evaluate_html_match(
     is_closing, tag = bool(match.group(1)), match.group(2).lower()
     if tag in VOID_HTML_TAGS or tag not in PAIRED_HTML_TAGS:
         return None
-    return _process_html_tag(is_closing, tag, line_no, file_str, stack)
+    return _process_html_tag(is_closing, tag, (file_str, line_no), stack)
 
 
 def _extract_line_html_findings(
@@ -1770,9 +1784,15 @@ def parse_cli_args(
     parser.add_argument("--select", help="Comma-separated rules or codes to activate (e.g. DOC001,DOC004)")
     parser.add_argument("--ignore", help="Comma-separated rules or codes to exclude (e.g. DOC008)")
     parser.add_argument("--extend-select", help="Comma-separated additional rules to activate")
-    parser.add_argument("--config", type=Path, help="Path to configuration file (pyproject.toml or .markdownlint.json)")
-    parser.add_argument("--list-presets", action="store_true", help="Display all available presets in markdown table format")
-    parser.add_argument("--extensions", help="Comma-separated file extensions to validate (e.g. .md,.rst,.html)")
+    parser.add_argument(
+        "--config", type=Path, help="Path to configuration file (pyproject.toml or .markdownlint.json)"
+    )
+    parser.add_argument(
+        "--list-presets", action="store_true", help="Display all available presets in markdown table format"
+    )
+    parser.add_argument(
+        "--extensions", help="Comma-separated file extensions to validate (e.g. .md,.rst,.html)"
+    )
     parser.add_argument(
         "--all-formats",
         action="store_true",

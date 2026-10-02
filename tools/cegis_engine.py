@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from radon.visitors import ComplexityVisitor
+from sanitization_policy import is_private_host
 
 ENGINE_VERSION: Final[str] = "v1.0.0"
 IP_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -253,7 +254,7 @@ def _is_private_ip(candidate: str) -> bool:
     """Return True if candidate string represents a private IP address."""
     try:
         ip = ipaddress.ip_address(candidate)
-        return ip.is_private
+        return is_private_host(ip)
     except ValueError:
         return False
 
