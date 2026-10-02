@@ -95,17 +95,25 @@ class StructuralQuery:
     min_line: int | None = None
     max_line: int | None = None
 
+    def _matches_type_and_scope(self, symbol: PolyglotSymbol) -> bool:
+        """Check if kind, language, and parent scope match query constraints."""
+        return (
+            (self.kind is None or symbol.kind == self.kind)
+            and (self.language is None or symbol.language.lower() == self.language.lower())
+            and (self.parent_scope is None or symbol.parent_scope == self.parent_scope)
+        )
+
+    def _matches_lines_and_pattern(self, symbol: PolyglotSymbol) -> bool:
+        """Check if line numbers and name pattern match query constraints."""
+        return (
+            (self.min_line is None or symbol.line_start >= self.min_line)
+            and (self.max_line is None or symbol.line_end <= self.max_line)
+            and (self.name_pattern is None or bool(re.search(self.name_pattern, symbol.name)))
+        )
+
     def matches(self, symbol: PolyglotSymbol) -> bool:
         """Check if symbol satisfies all structural query constraints."""
-        predicates = (
-            self.kind is None or symbol.kind == self.kind,
-            self.language is None or symbol.language.lower() == self.language.lower(),
-            self.parent_scope is None or symbol.parent_scope == self.parent_scope,
-            self.min_line is None or symbol.line_start >= self.min_line,
-            self.max_line is None or symbol.line_end <= self.max_line,
-            self.name_pattern is None or bool(re.search(self.name_pattern, symbol.name)),
-        )
-        return all(predicates)
+        return self._matches_type_and_scope(symbol) and self._matches_lines_and_pattern(symbol)
 
 
 def _handle_kind_filter(target: dict[str, Any], val: str) -> None:
@@ -179,15 +187,10 @@ def _partition_symbols_by_edit(
     line_delta: int,
 ) -> tuple[list[PolyglotSymbol], list[PolyglotSymbol]]:
     """Partition symbols into unchanged pre-edit and shifted post-edit groups."""
-    pre_symbols: list[PolyglotSymbol] = []
-    post_symbols: list[PolyglotSymbol] = []
-
-    for sym in symbols:
-        if sym.line_end < edit.start_line:
-            pre_symbols.append(sym)
-        elif sym.line_start > edit.old_end_line:
-            post_symbols.append(_shift_symbol_lines(sym, line_delta))
-
+    pre_symbols = [sym for sym in symbols if sym.line_end < edit.start_line]
+    post_symbols = [
+        _shift_symbol_lines(sym, line_delta) for sym in symbols if sym.line_start > edit.old_end_line
+    ]
     return pre_symbols, post_symbols
 
 
@@ -562,12 +565,16 @@ class PolyglotCSTParser:
         for match in RUST_TRAIT_RE.finditer(content):
             ln = _match_lineno(content, match.start())
             symbols.append(
-                PolyglotSymbol(match.group(1), SymbolKind.TRAIT, f"trait {match.group(1)}", ln, ln, "", "rust")
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.TRAIT, f"trait {match.group(1)}", ln, ln, "", "rust"
+                )
             )
         for match in RUST_FN_RE.finditer(content):
             ln = _match_lineno(content, match.start())
             symbols.append(
-                PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"fn {match.group(1)}", ln, ln, "", "rust")
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.FUNCTION, f"fn {match.group(1)}", ln, ln, "", "rust"
+                )
             )
         return symbols
 
@@ -591,7 +598,9 @@ class PolyglotCSTParser:
         for match in GO_FUNC_RE.finditer(content):
             ln = _match_lineno(content, match.start())
             symbols.append(
-                PolyglotSymbol(match.group(1), SymbolKind.FUNCTION, f"func {match.group(1)}", ln, ln, "", "go")
+                PolyglotSymbol(
+                    match.group(1), SymbolKind.FUNCTION, f"func {match.group(1)}", ln, ln, "", "go"
+                )
             )
         return symbols
 
@@ -622,7 +631,13 @@ class PolyglotCSTParser:
             ln = _match_lineno(content, match.start())
             symbols.append(
                 PolyglotSymbol(
-                    match.group(1), SymbolKind.FUNCTION, f"function {match.group(1)}", ln, ln, "", "typescript"
+                    match.group(1),
+                    SymbolKind.FUNCTION,
+                    f"function {match.group(1)}",
+                    ln,
+                    ln,
+                    "",
+                    "typescript",
                 )
             )
         return symbols
@@ -681,7 +696,11 @@ class PolyglotCSTParser:
 
         complexity, depth = PolyglotComplexityCalculator.calculate(updated_content, original_node.language)
         loc = len(
-            [ln for ln in updated_content.splitlines() if ln.strip() and not ln.strip().startswith(("#", "//"))]
+            [
+                ln
+                for ln in updated_content.splitlines()
+                if ln.strip() and not ln.strip().startswith(("#", "//"))
+            ]
         )
 
         metrics = FileMetrics(
@@ -750,6 +769,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _print_symbol_item(s: PolyglotSymbol) -> None:
+    """Print formatting for a single symbol."""
+    scope_tag = f" (scope: {s.parent_scope})" if s.parent_scope else ""
+    print(f"    - [{s.kind.value}] {s.name:<24} L{s.line_start}-L{s.line_end} {s.signature}{scope_tag}")
+
+
+def _print_symbols_list(symbols: list[PolyglotSymbol], total_count: int, is_query: bool) -> None:
+    """Print header and item lines for a list of extracted or matched symbols."""
+    header = f"  Symbols Matched ({len(symbols)}):" if is_query else f"  Symbols Extracted ({total_count}):"
+    print(header)
+    for s in symbols:
+        _print_symbol_item(s)
+
+
 def _print_file_node(node: PolyglotFileNode, query: str | None = None) -> None:
     print(f"File: {node.file_path} (Language: {node.language})")
     if node.skipped:
@@ -760,11 +793,7 @@ def _print_file_node(node: PolyglotFileNode, query: str | None = None) -> None:
     print(
         f"  LOC: {node.metrics.lines_of_code} | Complexity (M): {node.metrics.cyclomatic_complexity} | Depth: {node.metrics.max_nesting_depth}{mode_tag}"
     )
-    header = f"  Symbols Matched ({len(matched_symbols)}):" if query else f"  Symbols Extracted ({len(node.symbols)}):"
-    print(header)
-    for s in matched_symbols:
-        scope_tag = f" (scope: {s.parent_scope})" if s.parent_scope else ""
-        print(f"    - [{s.kind.value}] {s.name:<24} L{s.line_start}-L{s.line_end} {s.signature}{scope_tag}")
+    _print_symbols_list(matched_symbols, len(node.symbols), bool(query))
 
 
 def _print_scorecard(matrix: list[tuple[str, str, int, int]]) -> None:
