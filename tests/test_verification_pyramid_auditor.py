@@ -74,11 +74,14 @@ def test_linear_assertion_density_detection(tmp_path: Path) -> None:
     sprawl_funcs, sprawl_asserts, sprawl_struct, sprawl_findings = audit_test_file(sprawl_file)
     clean_funcs, clean_asserts, clean_struct, clean_findings = audit_test_file(clean_file)
 
-    assert (sprawl_funcs, sprawl_asserts, sprawl_struct, len(sprawl_findings)) == (1, 4, 0, 1)
-    assert (clean_funcs, clean_asserts, clean_struct, len(clean_findings)) == (1, 1, 1, 0)
-    assert (sprawl_findings[0].rule_code, sprawl_findings[0].rule_name) == (
-        VerificationRule.ASSERTION_DENSITY_SPRAWL.value,
-        "AssertionDensitySprawl",
+    assert (
+        (sprawl_funcs, sprawl_asserts, sprawl_struct, len(sprawl_findings)),
+        (clean_funcs, clean_asserts, clean_struct, len(clean_findings)),
+        (sprawl_findings[0].rule_code, sprawl_findings[0].rule_name),
+    ) == (
+        (1, 4, 0, 1),
+        (1, 1, 1, 0),
+        (VerificationRule.ASSERTION_DENSITY_SPRAWL.value, "AssertionDensitySprawl"),
     )
 
 
