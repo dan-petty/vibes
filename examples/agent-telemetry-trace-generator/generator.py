@@ -218,18 +218,20 @@ def build_synthetic_agent_session(goal: str) -> AgentTraceSession:
         attributes = dict(entry["attributes"])
         attributes["gen_ai.conversation.id"] = trace_id
         span_type = str(entry["span_type"])
-        spans.append(Span(
-            name=convention.span_name(span_type, attributes) or span_type,
-            trace_id=trace_id,
-            span_id=generate_id(8),
-            parent_span_id=root_span_id,
-            start_time_ms=cursor,
-            end_time_ms=cursor + float(entry["duration_ms"]),
-            attributes=attributes,
-            status_code=STATUS_OK,
-            span_type=span_type,
-            kind=str(convention.spans[span_type]["kind"]),
-        ))
+        spans.append(
+            Span(
+                name=convention.span_name(span_type, attributes) or span_type,
+                trace_id=trace_id,
+                span_id=generate_id(8),
+                parent_span_id=root_span_id,
+                start_time_ms=cursor,
+                end_time_ms=cursor + float(entry["duration_ms"]),
+                attributes=attributes,
+                status_code=STATUS_OK,
+                span_type=span_type,
+                kind=str(convention.spans[span_type]["kind"]),
+            )
+        )
         cursor += float(entry["duration_ms"]) + GAP_MS
 
     root_attributes: dict[str, Any] = {
@@ -264,9 +266,7 @@ def validate_session(session: AgentTraceSession) -> list[tuple[str, semconv.Find
     return [
         (span.name, finding)
         for span in session.spans
-        for finding in semconv.validate(
-            convention, span.span_type, span.name, span.kind, span.attributes
-        )
+        for finding in semconv.validate(convention, (span.span_type, span.name, span.kind), span.attributes)
     ]
 
 
@@ -340,10 +340,7 @@ def _format_otlp_span(span: Span) -> dict[str, Any]:
     start_nano = str(int(span.start_time_ms * 1_000_000))
     end_nano = str(int(span.end_time_ms * 1_000_000))
 
-    attrs = [
-        {"key": k, "value": _format_otlp_attribute_value(v)}
-        for k, v in sorted(span.attributes.items())
-    ]
+    attrs = [{"key": k, "value": _format_otlp_attribute_value(v)} for k, v in sorted(span.attributes.items())]
 
     otlp_span: dict[str, Any] = {
         "traceId": span.trace_id,
@@ -426,9 +423,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Check every span against the GenAI semantic conventions",
     )
-    parser.add_argument(
-        "--otlp", action="store_true", help="Emit trace spans as standard OTLP Protobuf-JSON"
-    )
+    parser.add_argument("--otlp", action="store_true", help="Emit trace spans as standard OTLP Protobuf-JSON")
     parser.add_argument(
         "--export-otlp",
         type=str,

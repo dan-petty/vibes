@@ -32,7 +32,9 @@ def _codes(findings: list[semconv.Finding]) -> list[str]:
 
 def test_the_generated_session_has_no_conformance_errors() -> None:
     """The headline claim, executed rather than asserted."""
-    errors = [f for _, f in validate_session(build_synthetic_agent_session("goal")) if f.level == semconv.ERROR]
+    errors = [
+        f for _, f in validate_session(build_synthetic_agent_session("goal")) if f.level == semconv.ERROR
+    ]
     assert errors == []
 
 
@@ -64,20 +66,28 @@ def test_every_span_carries_the_conventional_name() -> None:
 def test_a_span_in_the_previous_private_vocabulary_is_rejected() -> None:
     """Exactly what this generator used to emit, and exactly why it charted nowhere."""
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "FrontierPlanning", "internal",
+        CONVENTION,
+        (INFERENCE, "FrontierPlanning", "internal"),
         {"ai.model.name": "claude-3-5-sonnet", "gen_ai.usage.prompt_tokens": 3400},
     )
     assert _codes(findings) == [
-        "missing_required", "missing_required", "renamed_attribute", "wrong_kind",
+        "missing_required",
+        "missing_required",
+        "renamed_attribute",
+        "wrong_kind",
     ]
 
 
 def test_a_renamed_attribute_names_its_replacement() -> None:
     """The cost of a rename is paid by whoever reads the data, so the finding must say what to read."""
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "chat m", "client",
-        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai",
-         "gen_ai.usage.completion_tokens": 10},
+        CONVENTION,
+        (INFERENCE, "chat m", "client"),
+        {
+            "gen_ai.operation.name": "chat",
+            "gen_ai.provider.name": "openai",
+            "gen_ai.usage.completion_tokens": 10,
+        },
     )
     assert "gen_ai.usage.output_tokens" in findings[0].message
 
@@ -91,7 +101,8 @@ def test_an_attribute_whose_definition_merely_moved_is_not_deprecated() -> None:
     """
     assert CONVENTION.deprecated["gen_ai.operation.name"]["status"] == "moved"
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "chat m", "client",
+        CONVENTION,
+        (INFERENCE, "chat m", "client"),
         {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai"},
     )
     assert findings == []
@@ -103,9 +114,13 @@ def test_an_attribute_whose_definition_merely_moved_is_not_deprecated() -> None:
 def test_an_attribute_outside_the_namespace_is_left_alone() -> None:
     """The convention permits custom attributes; this repository's agent metadata is that."""
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "chat m", "client",
-        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai",
-         "vibes.agent.persona": "architect"},
+        CONVENTION,
+        (INFERENCE, "chat m", "client"),
+        {
+            "gen_ai.operation.name": "chat",
+            "gen_ai.provider.name": "openai",
+            "vibes.agent.persona": "architect",
+        },
     )
     assert findings == []
 
@@ -113,9 +128,9 @@ def test_an_attribute_outside_the_namespace_is_left_alone() -> None:
 def test_a_misspelled_convention_key_is_an_error() -> None:
     """A typo inside the namespace is indistinguishable from an absent attribute downstream."""
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "chat m", "client",
-        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai",
-         "gen_ai.usage.input_token": 5},
+        CONVENTION,
+        (INFERENCE, "chat m", "client"),
+        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai", "gen_ai.usage.input_token": 5},
     )
     assert _codes(findings) == ["unknown_attribute"]
 
@@ -139,7 +154,8 @@ def test_declared_types_are_checked(attributes: dict[str, object], expected: lis
     different column type and every query written against the array returns nothing.
     """
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "chat m", "client",
+        CONVENTION,
+        (INFERENCE, "chat m", "client"),
         {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai", **attributes},
     )
     assert _codes(findings) == expected
@@ -148,9 +164,9 @@ def test_declared_types_are_checked(attributes: dict[str, object], expected: lis
 def test_an_external_attribute_is_accepted_without_a_registry_entry() -> None:
     """`server.address` is a general OpenTelemetry attribute the GenAI spans reuse."""
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "chat m", "client",
-        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai",
-         "server.address": "example.com"},
+        CONVENTION,
+        (INFERENCE, "chat m", "client"),
+        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai", "server.address": "example.com"},
     )
     assert findings == []
 
@@ -160,16 +176,16 @@ def test_an_external_attribute_is_accepted_without_a_registry_entry() -> None:
 
 def test_an_unknown_span_type_stops_the_check_rather_than_guessing() -> None:
     """Every later rule is relative to the type, so continuing would invent its own answers."""
-    findings = semconv.validate(CONVENTION, "gen_ai.nope", "n", "client", {})
+    findings = semconv.validate(CONVENTION, ("gen_ai.nope", "n", "client"), {})
     assert _codes(findings) == ["unknown_span_type"]
 
 
 def test_the_span_name_rule_is_a_warning_because_the_convention_says_SHOULD() -> None:
     """Reporting a SHOULD as an error is how a validator teaches its reader to ignore it."""
     findings = semconv.validate(
-        CONVENTION, INFERENCE, "FrontierPlanning", "client",
-        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai",
-         "gen_ai.request.model": "gpt-4"},
+        CONVENTION,
+        (INFERENCE, "FrontierPlanning", "client"),
+        {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai", "gen_ai.request.model": "gpt-4"},
     )
     assert [(f.level, f.code) for f in findings] == [(semconv.WARNING, "span_name")]
 

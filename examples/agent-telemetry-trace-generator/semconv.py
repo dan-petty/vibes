@@ -93,15 +93,19 @@ class Convention:
 
 def validate(
     convention: Convention,
-    span_type: str,
-    name: str,
-    kind: str,
+    span: tuple[str, str, str],
     attributes: dict[str, Any],
 ) -> list[Finding]:
     """Report every disagreement between one span and the convention, in one pass."""
+    span_type, name, kind = span
     if span_type not in convention.spans:
-        return [Finding(ERROR, "unknown_span_type",
-                        f"{span_type!r} is not a declared span type; known: {sorted(convention.spans)}")]
+        return [
+            Finding(
+                ERROR,
+                "unknown_span_type",
+                f"{span_type!r} is not a declared span type; known: {sorted(convention.spans)}",
+            )
+        ]
     findings = _kind_findings(convention, span_type, kind)
     findings += _missing_findings(convention, span_type, attributes)
     findings += _name_findings(convention, span_type, name, attributes)
@@ -166,9 +170,12 @@ def _deprecation_finding(convention: Convention, key: str) -> Finding:
     entry = convention.deprecated[key]
     replacement = entry.get("replacement")
     if entry["status"] == "renamed":
-        return Finding(ERROR, "renamed_attribute",
-                       f"{key!r} was renamed to {replacement!r}; a query on the old key returns "
-                       "zero rows, which reads as no traffic")
+        return Finding(
+            ERROR,
+            "renamed_attribute",
+            f"{key!r} was renamed to {replacement!r}; a query on the old key returns "
+            "zero rows, which reads as no traffic",
+        )
     return Finding(ERROR, "deprecated_attribute", f"{key!r} is deprecated ({entry['status']})")
 
 
@@ -181,9 +188,14 @@ def _unknown_findings(convention: Convention, key: str) -> list[Finding]:
     """
     if key in convention.external or not key.startswith("gen_ai."):
         return []
-    return [Finding(ERROR, "unknown_attribute",
-                    f"{key!r} is not in the GenAI registry; a misspelled convention key is "
-                    "indistinguishable from an absent one")]
+    return [
+        Finding(
+            ERROR,
+            "unknown_attribute",
+            f"{key!r} is not in the GenAI registry; a misspelled convention key is "
+            "indistinguishable from an absent one",
+        )
+    ]
 
 
 def _type_findings(spec: dict[str, Any], key: str, value: Any) -> list[Finding]:
@@ -197,8 +209,9 @@ def _type_findings(spec: dict[str, Any], key: str, value: Any) -> list[Finding]:
     if declared == "enum" and isinstance(value, str) and value not in spec.get("values", []):
         # A warning, not an error: OpenTelemetry enums are open unless stated otherwise, so
         # a provider-specific value is allowed and a typo looks exactly like one.
-        findings.append(Finding(WARNING, "undeclared_enum_value",
-                                f"{key}={value!r} is not a well-known value for {key}"))
+        findings.append(
+            Finding(WARNING, "undeclared_enum_value", f"{key}={value!r} is not a well-known value for {key}")
+        )
     return findings
 
 

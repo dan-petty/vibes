@@ -26,9 +26,7 @@ def test_build_synthetic_agent_session() -> None:
     child_spans = [s for s in session.spans if s.parent_span_id is not None]
 
     assert (session.session_goal, len(session.trace_id), len(session.spans)) == (goal, 32, 5)
-    assert (len(root_spans), root_spans[0].name, len(child_spans)) == (
-        1, f"invoke_workflow {goal}", 4
-    )
+    assert (len(root_spans), root_spans[0].name, len(child_spans)) == (1, f"invoke_workflow {goal}", 4)
 
 
 def test_session_token_aggregation() -> None:
@@ -52,7 +50,10 @@ def test_render_ascii_waterfall() -> None:
     output = render_ascii_waterfall(session)
 
     expected_snippets = [
-        "AGENT WATERFALL TRACE", "invoke_workflow", "chat claude-3-5-sonnet", "Tokens: Input=",
+        "AGENT WATERFALL TRACE",
+        "invoke_workflow",
+        "chat claude-3-5-sonnet",
+        "Tokens: Input=",
     ]
     assert all(snippet in output for snippet in expected_snippets)
 
@@ -68,12 +69,18 @@ def test_to_otlp_json_schema_conformance() -> None:
 
     assert (len(spans), scope_span["scope"]["name"]) == (5, "vibes.agent.waterfall.generator")
     first_span = spans[0]
-    assert (first_span["traceId"], first_span["kind"], first_span["status"]["code"]) == (session.trace_id, 1, 1)
+    assert (first_span["traceId"], first_span["kind"], first_span["status"]["code"]) == (
+        session.trace_id,
+        1,
+        1,
+    )
 
     # The conventional keys, not a private vocabulary that only this repository can read.
     attr_keys = {attr["key"] for s in spans for attr in s.get("attributes", [])}
     assert {
-        "gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.usage.input_tokens",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.usage.input_tokens",
     }.issubset(attr_keys)
     assert not {key for key in attr_keys if key.startswith("ai.")}
 
@@ -113,8 +120,12 @@ def test_main_cli_export_otlp(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_span_status_defaults_to_unset_not_ok():
     """UNSET means no judgement was recorded; exporting OK by default asserts a lie."""
     span = Span(
-        name="unjudged", trace_id="t", span_id="s", parent_span_id=None,
-        start_time_ms=0.0, end_time_ms=1.0,
+        name="unjudged",
+        trace_id="t",
+        span_id="s",
+        parent_span_id=None,
+        start_time_ms=0.0,
+        end_time_ms=1.0,
     )
     assert _format_otlp_status(span) == {"code": STATUS_UNSET}
 
@@ -122,9 +133,14 @@ def test_span_status_defaults_to_unset_not_ok():
 def test_error_status_is_exported_with_its_message():
     """A failed span reporting success is the one thing a trace must never do."""
     span = Span(
-        name="failed", trace_id="t", span_id="s", parent_span_id=None,
-        start_time_ms=0.0, end_time_ms=1.0,
-        status_code=STATUS_ERROR, status_message="tool call rejected by contract gate",
+        name="failed",
+        trace_id="t",
+        span_id="s",
+        parent_span_id=None,
+        start_time_ms=0.0,
+        end_time_ms=1.0,
+        status_code=STATUS_ERROR,
+        status_message="tool call rejected by contract gate",
     )
     assert _format_otlp_status(span) == {
         "code": STATUS_ERROR,
