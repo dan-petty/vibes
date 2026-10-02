@@ -60,19 +60,31 @@ def test_thread_data_structures_and_parsing() -> None:
     threads = parse_review_threads(json.dumps(payload))
     t1, t2 = threads[0], threads[1]
 
-    assert (len(threads), t1.thread_id, t1.is_resolved, t1.path, t1.line) == (
+    assert (
+        len(threads),
+        t1.thread_id,
+        t1.is_resolved,
+        t1.path,
+        t1.line,
+        len(t1.comments),
+        t1.comments[0].author,
+        t1.comments[0].body,
+        t2.thread_id,
+        t2.is_resolved,
+        len(t2.comments),
+    ) == (
         2,
         "PRRT_kwDO12345",
         False,
         "src/module.py",
         42,
-    )
-    assert (len(t1.comments), t1.comments[0].author, t1.comments[0].body) == (
         1,
         "ci-bot",
         "Nesting depth is 4 (limit: 3)",
+        "PRRT_kwDO67890",
+        True,
+        0,
     )
-    assert (t2.thread_id, t2.is_resolved, len(t2.comments)) == ("PRRT_kwDO67890", True, 0)
 
 
 def test_classify_comment_rule() -> None:
