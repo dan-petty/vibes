@@ -206,8 +206,7 @@ class StreamingReasoningSanitizer:
 
 def sanitize_reasoning_stream(
     chunks: Sequence[str],
-    open_tag: str = DEFAULT_OPEN_TAG,
-    close_tag: str = DEFAULT_CLOSE_TAG,
+    tags: tuple[str, str] = (DEFAULT_OPEN_TAG, DEFAULT_CLOSE_TAG),
     max_thought_chars: int = DEFAULT_MAX_THOUGHT_CHARS,
     starts_thinking: bool = False,
 ) -> tuple[str, str, SanitizerMetrics]:
@@ -216,6 +215,7 @@ def sanitize_reasoning_stream(
     Pass `starts_thinking=True` for a model whose template opens the thought in the prompt,
     so the completion contains a closing tag and no opening one.
     """
+    open_tag, close_tag = tags
     sanitizer = StreamingReasoningSanitizer(
         open_tag=open_tag,
         close_tag=close_tag,

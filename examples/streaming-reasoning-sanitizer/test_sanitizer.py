@@ -100,9 +100,7 @@ def test_streaming_sanitizer_unclosed_thought_at_eof() -> None:
 def test_streaming_sanitizer_custom_tags() -> None:
     """Ensure custom tag pairs such as [reasoning]...[/reasoning] are supported."""
     chunks = ["Header\n", "[reasoning]Secret logic[/reasoning]\n", "Footer"]
-    visible, thoughts, metrics = sanitize_reasoning_stream(
-        chunks, open_tag="[reasoning]", close_tag="[/reasoning]"
-    )
+    visible, thoughts, metrics = sanitize_reasoning_stream(chunks, tags=("[reasoning]", "[/reasoning]"))
     assert (
         visible,
         thoughts,
