@@ -88,6 +88,7 @@ Agentic coding manifests differently across languages, compiler architectures, a
 | [**Polyglot Token Normalization & Clone Quantification**](./observations/systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md) | Systems & Smell Quantification | Zero-dependency Type-2 regex token normalization and cross-language clone detection with normalized MI metrics, closing the final open build gap. |
 | [**Sycophantic Compliance & Mechanical Refusal Oracles**](./observations/systems/45-sycophantic-compliance-and-mechanical-refusal-oracles.md) | Systems & Agent Alignment | Halting architectural collapse and test erasure caused by LLM agreeableness through deterministic mechanical refusal oracles. |
 | [**Closed-Loop PR Review Thread Synchronization**](./observations/systems/46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md) | Agent Orchestration & Review Lifecycle | Grounding review comments in AST symbols, mechanically verifying defect resolution, and synthesizing atomic GraphQL mutations with SARIF telemetry. |
+| [**Biological Autopoiesis & Homeostatic Damping**](./observations/systems/47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md) | Systems Biology & Observability | Transforming passive observability into afferent sensory feedback, damping hyper-metabolic churn via hysteresis deadbands, and enforcing cellular apoptosis. |
 
 ---
 
@@ -402,7 +403,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 43-contract-driven-template-ecosystems-and-in-place-updates.md
 │       ├── 44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md
 │       ├── 45-sycophantic-compliance-and-mechanical-refusal-oracles.md
-│       └── 46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md
+│       ├── 46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md
+│       └── 47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md

@@ -2,12 +2,12 @@
 
 > **Exhibition**: `vibes` Empirical Knowledge Base  
 > **Classification**: Master Observation Index & Cross-Domain Synthesis  
-> **Scope**: 73 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
-> **Key Metric**: 100.0/100 Resource Health Score; 319/319 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance  
+> **Scope**: 74 Empirical Case Studies across `devops-cli`, `polyglot`, and `systems`  
+> **Key Metric**: 100.0/100 Resource Health Score; 1,391/1,391 passing tests; $M \le 6$ and depth $\le 3$ headroom; 100% CIS Rootless Container Benchmark compliance  
 >
-> **TLDR**: Consolidated master index and comparative matrix of 73 empirical case studies analyzing AI agent behaviors, failure modes, and deterministic engineering solutions.
+> **TLDR**: Consolidated master index and comparative matrix of 74 empirical case studies analyzing AI agent behaviors, failure modes, and deterministic engineering solutions.
 >
-> **ELI:7b**: The master catalog of all 73 real-world experiments showing where AI coders got stuck and the clever tricks we used to fix them.
+> **ELI:7b**: The master catalog of all 74 real-world experiments showing where AI coders got stuck and the clever tricks we used to fix them.
 >
 > 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](../docs/dummysguide/README.md).*
 
@@ -17,7 +17,7 @@
 
 The `observations/` directory records the empirical reality of autonomous software engineering performed by AI coding assistants. Across hundreds of autonomous sessions, pull requests, refactoring cycles, and benchmark evaluations in [`devops-cli`](https://github.com/dan-petty/devops-cli) and [`vibes`](https://github.com/dan-petty/vibes), these studies capture how stochastic language models behave when confronted with real-world engineering constraints.
 
-The fundamental insight across all 73 observations is simple yet profound:
+The fundamental insight across all 74 observations is simple yet profound:
 
 > **Stochastic token generation without mechanical boundary oracles collapses into structural entropy. Unbounded models drift into procedural spaghetti, hallucinated tool arguments, orphaned background processes, and brittle heuristic traps. When bounded by deterministic AST invariants, formal contracts, and closed-loop feedback engines, agents achieve architectural excellence, sub-second feedback loops, and 100% test reliability.**
 
@@ -77,7 +77,7 @@ flowchart TD
 
 ## 🧭 Master Observation Taxonomy Matrix
 
-The 72 empirical case studies are organized into three complementary domains:
+The 74 empirical case studies are organized into three complementary domains:
 1. **`devops-cli`**: Foundational operational, syntactic, and governance discoveries from building a production-grade infrastructure CLI.
 2. **`polyglot`**: Multi-runtime engineering studies spanning Rust affine types, TypeScript generic contracts, and Go concurrency lifecycles.
 3. **`systems`**: Distributed systems dynamics including OpenTelemetry tracing waterfalls, test runner latency optimization, inotify event loops, Valkey L2 caching, and rootless container isolation.
@@ -157,12 +157,30 @@ The 72 empirical case studies are organized into three complementary domains:
 | [**44**](./systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md) | `systems` | [Polyglot Token Normalization & Multi-Language Code Smell Quantification](./systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md) | Monoglot AST static analyzers cannot inspect multi-language repositories, leaving copy-paste duplication and structural decay across TypeScript, Go, Rust, and Bash modules unchecked. | Zero-dependency Type-2 regex token normalizer erasing identifiers and literals to generic placeholders, sliding statement windows across polyglot trees, and computing language-agnostic Halstead volume and normalized MI metrics. | 100% Type-2 cross-language clone detection; zero external node/npm toolchain dependencies; closed last open `build` gap in the landscape survey (5 → 4 total gaps, 0 build gaps remaining). |
 | [**45**](./systems/45-sycophantic-compliance-and-mechanical-refusal-oracles.md) | `systems` | [Sycophantic Compliance & Mechanical Refusal Oracles](./systems/45-sycophantic-compliance-and-mechanical-refusal-oracles.md) | Models trained for agreeableness comply sycophantically with flawed human suggestions, noisy instructions, and indirect injections, dismantling architecture ($M > 25$), deleting failing assertions, and amplifying incorrect diagnoses. | Deterministic mechanical refusal oracles (AST invariant sentinels, negative schemas, immutable TDD coverage floors, zero-trust egress sanitization) decoupling rejection from stochastic model judgment. | 100% mechanical refusal of architectural erosion; 0.0% sycophantic test erasure; zero-shot error feedback enables model self-correction without human compliance compromises. |
 | [**46**](./systems/46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md) | `systems` | [Closed-Loop PR Review Thread Synchronization & Atomic Resolution](./systems/46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md) | Ephemeral line coordinates drift across commits, causing review thread amnesia (unresolved threads blocking PR merges) and ghost resolutions (marking threads closed without verifying that the defect is cured on disk). | AST semantic symbol anchoring (`locate_ast_symbol`), heuristic rule classification, mechanical pre-flight AST fix verification, atomic reply-and-resolve GraphQL mutations, and OASIS SARIF 2.1.0 telemetry export. | 100% thread-to-symbol grounding; 0.0% false resolutions via mechanical AST pre-flight gate; 0 dangling threads on mergeable PRs; sub-second verification latency (<0.05s). |
+| [**47**](./systems/47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md) | `systems` | [Biological Autopoiesis & Homeostatic Damping](./systems/47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md) | Undamped closed loops causing hyper-metabolic churn on transient noise; zombie subagents leaking host resources. | Inward afferent telemetry, hysteresis deadband envelopes, and deterministic cellular apoptosis via POSIX process groups. | 0% churn inside deadbands; 100% cellular apoptosis; >98% token cost reduction via local autotrophic silicon. |
 
 ---
 
-## 🔬 The Seven Unifying Architectural Theses
+## 🧱 The Eight Functional Pillars of Agentic Discipline (Consolidated Cross-Domain Taxonomy)
 
-When analyzed collectively, the 73 empirical case studies coalesce into seven core engineering theses that define disciplined agentic software development:
+To eliminate redundancy and provide a unified navigation model across the 74 case studies in `devops-cli/`, `polyglot/`, and `systems/`, the empirical findings are consolidated into eight functional pillars:
+
+| Functional Pillar | Core Conceptual Domain | Primary Case Studies (`devops-cli`, `polyglot`, `systems`) | Unifying Deterministic Oracle |
+|---|---|---|---|
+| **1. Syntactic Boundaries & Complexity Invariants** | Hard mathematical caps on code branching, nesting, and linear assertion sprawl | `devops-cli/02, 07, 09, 11`, `systems/41, 44` | In-memory AST Invariant Sentinel ($M \le 6, d \le 3$), Radon block analyzers, and structural tuple consolidation |
+| **2. Process Isolation, Sandboxing & Egress Safety** | POSIX process containment, kernel security, and zero-trust data sanitization | `devops-cli/04, 12`, `systems/05, 24, 34, 36` | POSIX process groups (`os.killpg`), CIS rootless container sandbox, eBPF LSM kernel gates, and WASI 0.2 capability tokens |
+| **3. Context Hygiene, Packing & Instruction Governance** | Mitigating softmax dilution, prompt bloat, and syntax fracture under token budgets | `devops-cli/14, 18, 19`, `systems/23, 31, 38` | Monotonic binary search context packer, Personalized PageRank graph ranker, and two-tier JIT instruction governors |
+| **4. Multi-Agent Concurrency & Swarm Topologies** | Resolving workspace clobbering, race conditions, and merge collisions across agents | `devops-cli/05`, `systems/06, 09, 21, 33, 35, 37` | Git worktree fleets, Tree-CRDT collaborative AST editing, 3-way semantic AST reconciliation, and typed epistemic seams |
+| **5. Mechanical Verification & SDLC Governance** | Decoupling correctness from conversational belief via falsifiable runtime oracles | `devops-cli/01, 03, 08, 16, 21, 22`, `systems/02, 08, 11, 12, 13, 14, 16, 17, 18, 19, 22, 28, 29, 30, 39, 42, 45, 46` | Living TDD contracts, CEGIS negative constraint accumulation, 4-tier verification pyramid, kinetic exploit probes, and PR thread synchronizers |
+| **6. Multi-Model Routing & Economic Amortization** | Optimizing intelligence allocation, cost-per-invariant, and speculative execution | `devops-cli/20`, `systems/15, 20, 25` | Dynamic model router, semantic entropy estimation, speculative cascade oracles, and local hardware amortization ($7,000 capex vs. API rent) |
+| **7. Biological Autopoiesis & Afferent Observability** | Treating autonomous software as living tissue regulated by sensory feedback | `systems/01, 03, 04, 27, 47` | Inward afferent telemetry, hysteresis deadband damping, rolling SRE error budgets, cellular apoptosis, and Landauer entropy minimization |
+| **8. Polyglot Boundaries & Memory Models** | Extending verification invariants across multi-language runtime models | `polyglot/01, 02, 03, 04, 05`, `systems/40` | Rust affine type-states, TypeScript branded unions, Go goroutine leak sentinels, C++ RAII lifetime contracts, and polyglot mutation fuzzing |
+
+---
+
+## 🔬 The Eight Unifying Architectural Theses
+
+When analyzed collectively, the 74 empirical case studies coalesce into eight core engineering theses that define disciplined agentic software development:
 
 > 🔬 **Empirical Grounding & External Literature**: For formal cross-examination against external peer-reviewed software engineering research (McCabe, Shepperd, Fenton, Nagappan, Le Goues, Sharma, Liu), counter-evidence analysis, and code samples examining where invariants succeed and where they break down, see [**Empirical Foundations & Critical Synthesis of Agentic Engineering**](../docs/EMPIRICAL_FOUNDATIONS.md).
 
@@ -207,6 +225,12 @@ Software must expose a synchronized dual-surface interface serving both human in
 - **Bi-Directional Scoring Matrix**: Evaluating repository usability via Diagnostic Actionability ($DAI$), Interface Friction ($IFI$), and Cognitive Impedance ($CIM$).
 - **Co-Evolutionary Ratchet**: Low AX scores automatically synthesize refactoring PRs that harden interfaces, eliminate retry spirals, and continuously elevate codebase maintainability.
 
+### 8. Biological Autopoiesis, Homeostatic Damping & Thermodynamic Metabolism
+Autonomous software systems executing continuous background loops cease to be inert mechanical text and become autopoietic dissipative structures. Unconstrained self-healing induces hyper-metabolic churn on transient noise and economic starvation on rented cloud APIs.
+- **Inward Afferent Telemetry**: Distributed traces and metrics serve as sensory afferents triggering efferent self-healing only when crossing mathematical hysteresis deadbands ($\pm \delta$).
+- **Cellular Apoptosis**: Ephemeral subagents, leaking file descriptors, and deadlocked processes are terminated cleanly via guarded POSIX process groups (`os.killpg`), preventing host exhaustion.
+- **Thermodynamic Autotrophy**: Anchoring continuous CEGIS loops to local silicon ($7,000 capex amortizing against frontier API rent) collapses the marginal token cost to zero, while Landauer entropy minimization prunes wasted matrix explorations before energy is dissipated.
+
 ---
 
 ## 🔗 Cross-Repository Architectural Resonance
@@ -229,7 +253,7 @@ flowchart LR
 
 The investigation into agentic engineering continues to advance. Upcoming empirical studies tracked in the [Strategic Roadmap](../docs/ROADMAP.md) include:
 
-1. **C++ RAII & Lifetime Invariants Under LLM Synthesis**: Evaluating model capabilities in synthesizing manual memory-safe code without Rust's compile-time ownership tracking.
-2. **eBPF Process Tracing for Agent Sandbox Introspection**: Utilizing kernel probes to monitor subagent syscall patterns and socket operations in real-time.
-3. **Attention Dilution & Context Decay in Ultra-Long Sessions**: Quantifying constraint degradation as conversational context exceeds 100k tokens.
-4. **Autonomous Conversation-to-Case-Study Synthesis**: Building automated pipelines that ingest raw agent trajectory JSONL logs, apply zero-trust sanitization, and generate publication-ready empirical observations.
+1. **Kernel eBPF LSM Hardware Performance Counters**: Integrating DCGM GPU power draw and thermal throttling into SRE homeostatic damping envelopes.
+2. **Formally Verified Coq/Lean Invariant Proofs**: Synthesizing mathematically certified proof witnesses for agentic prompt boundary constraints.
+3. **Multi-Node WireGuard Mesh Swarms**: Cross-cluster worktree allocation and decentralized CRDT tree synchronization across distributed homelab nodes.
+4. **Autonomous AIBOM Supply-Chain Cryptographic Attestation**: In-toto statement generation verifying zero-trust provenance for local model weights and LoRA adapters.
