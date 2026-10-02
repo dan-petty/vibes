@@ -50,9 +50,11 @@ async def test_gateway_tool_dispatch_and_telemetry():
     gateway.register_tool("echo", echo_tool)
 
     res = await gateway.execute_tool("echo", msg="hello")
-    assert res == "Echo: hello"
-    assert gateway.telemetry.total_requests == 1
-    assert gateway.telemetry.successful_invocations == 1
+    assert (
+        res,
+        gateway.telemetry.total_requests,
+        gateway.telemetry.successful_invocations,
+    ) == ("Echo: hello", 1, 1)
 
 
 @pytest.mark.asyncio
@@ -72,9 +74,11 @@ async def test_gateway_automatic_retry_on_rate_limit():
     gateway.register_tool("retry_tool", transient_failing_tool)
 
     res = await gateway.execute_tool("retry_tool")
-    assert res == "success"
-    assert attempts == 3
-    assert gateway.telemetry.successful_invocations == 1
+    assert (
+        res,
+        attempts,
+        gateway.telemetry.successful_invocations,
+    ) == ("success", 3, 1)
 
 
 @pytest.mark.asyncio
