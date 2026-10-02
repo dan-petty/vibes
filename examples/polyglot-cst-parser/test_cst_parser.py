@@ -59,14 +59,17 @@ class Account:
 """
     parser = PolyglotCSTParser()
     node = parser.parse_content(py_code, "finance.py", "python")
-    assert (node.skipped, node.language) == (False, "python")
-
     sym_names = [s.name for s in node.symbols]
     sym_kinds = [s.kind for s in node.symbols]
-    assert "calculate_tax" in sym_names
-    assert "Account" in sym_names
-    assert (SymbolKind.FUNCTION in sym_kinds, SymbolKind.CLASS in sym_kinds) == (True, True)
-    assert node.metrics.cyclomatic_complexity >= 3
+    assert (
+        node.skipped,
+        node.language,
+        "calculate_tax" in sym_names,
+        "Account" in sym_names,
+        SymbolKind.FUNCTION in sym_kinds,
+        SymbolKind.CLASS in sym_kinds,
+        node.metrics.cyclomatic_complexity >= 3,
+    ) == (False, "python", True, True, True, True, True)
 
 
 def test_rust_symbol_extraction_and_complexity() -> None:
