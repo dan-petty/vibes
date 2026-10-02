@@ -63,12 +63,14 @@ DEFAULT_BROWSER_HEADERS = {
 
 class ExtractionTier(StrEnum):
     """Execution tier utilized to extract page content."""
+
     STATIC_HTTP = "static_http"
     HEADLESS_BROWSER = "headless_browser"
 
 
 class PageQuality(StrEnum):
     """Quality classification of extracted page content."""
+
     HIGH = "high"
     PARTIAL = "partial"
     EMPTY_SHELL = "empty_shell"
@@ -78,6 +80,7 @@ class PageQuality(StrEnum):
 @dataclass
 class DomainStrategy:
     """Learned extraction strategy for a specific domain."""
+
     domain: str
     preferred_tier: ExtractionTier = ExtractionTier.STATIC_HTTP
     requires_js: bool = False
@@ -91,6 +94,7 @@ class DomainStrategy:
 @dataclass
 class CrawledPage:
     """Clean extracted content and metadata from a web page."""
+
     url: str
     title: str
     markdown_content: str
@@ -162,7 +166,7 @@ class DomainStrategyStore:
         """Update strategy upon successful page extraction."""
         strategy = self.get_strategy(domain)
         strategy.preferred_tier = tier_used
-        strategy.requires_js = (tier_used == ExtractionTier.HEADLESS_BROWSER)
+        strategy.requires_js = tier_used == ExtractionTier.HEADLESS_BROWSER
         strategy.consecutive_successes += 1
         strategy.total_crawls += 1
         self._save_if_configured()
@@ -213,13 +217,19 @@ class DomainStrategyStore:
             logger.warning("Could not load strategies from %s: %s", self.persistence_path, err)
 
 
+def _is_network_category_blocked(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True if IP falls into any disallowed category (private, loopback, link-local, reserved)."""
+    return any((ip_obj.is_private, ip_obj.is_loopback, ip_obj.is_link_local, ip_obj.is_reserved))
+
+
+def _is_explicitly_allowed(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True if IP is in the allowed test networks."""
+    return any(ip_obj in net for net in ALLOWED_TEST_NETWORKS if net.version == ip_obj.version)
+
+
 def _is_disallowed_address(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Return True for any address the crawler must never reach."""
-    blocked = ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved
-    allowed = any(
-        ip_obj in net for net in ALLOWED_TEST_NETWORKS if net.version == ip_obj.version
-    )
-    return blocked and not allowed
+    return _is_network_category_blocked(ip_obj) and not _is_explicitly_allowed(ip_obj)
 
 
 def _resolved_addresses(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -258,9 +268,7 @@ def validate_url_security(url: str) -> tuple[str, str]:
         raise ValueError("URL must include a valid hostname.")
 
     if _is_disallowed_private_ip(hostname):
-        raise ValueError(
-            f"SSRF violation: '{hostname}' is, or resolves to, a non-public address."
-        )
+        raise ValueError(f"SSRF violation: '{hostname}' is, or resolves to, a non-public address.")
 
     return parsed.scheme, hostname
 
@@ -336,7 +344,6 @@ def decode_body(raw: bytes, content_type: str = "") -> str:
         if decoded is not None:
             return decoded
     return raw.decode("utf-8", errors="replace")
-
 
 
 def _meta_charset(raw: bytes) -> str | None:
@@ -415,13 +422,16 @@ class AdaptiveWebCrawler:
             if status_code == 429:
                 self.strategy_store.record_rate_limit(domain)
             return self._build_page(
-                url, ExtractionOutcome(warnings=[failure]), ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED, start_time
+                url,
+                ExtractionOutcome(warnings=[failure]),
+                (ExtractionTier.STATIC_HTTP, PageQuality.BLOCKED),
+                start_time,
             )
 
         document = extract(html, url)
         quality = SPADetector.analyze(html, document.markdown)
 
-        return self._build_page(url, _outcome(document), ExtractionTier.STATIC_HTTP, quality, start_time)
+        return self._build_page(url, _outcome(document), (ExtractionTier.STATIC_HTTP, quality), start_time)
 
     def _attempt_headless_extract(
         self, url: str, domain: str, wait_selector: str, start_time: float
@@ -432,23 +442,28 @@ class AdaptiveWebCrawler:
             if status_code == 429:
                 self.strategy_store.record_rate_limit(domain)
             return self._build_page(
-                url, ExtractionOutcome(warnings=[failure]), ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED, start_time
+                url,
+                ExtractionOutcome(warnings=[failure]),
+                (ExtractionTier.HEADLESS_BROWSER, PageQuality.BLOCKED),
+                start_time,
             )
 
         document = extract(html, url)
         text = document.markdown
         quality = PageQuality.HIGH if len(text) >= 100 else PageQuality.PARTIAL
 
-        return self._build_page(url, _outcome(document), ExtractionTier.HEADLESS_BROWSER, quality, start_time)
+        return self._build_page(
+            url, _outcome(document), (ExtractionTier.HEADLESS_BROWSER, quality), start_time
+        )
 
     def _build_page(
         self,
         url: str,
         extraction: ExtractionOutcome,
-        tier: ExtractionTier,
-        quality: PageQuality,
+        tier_and_quality: tuple[ExtractionTier, PageQuality],
         start_time: float,
     ) -> CrawledPage:
+        tier, quality = tier_and_quality
         # Standard token approximation: ~4 characters per token
         title, content, links = extraction.title, extraction.content, extraction.links
         token_estimate = max(len(content) // 4, 1) if content else 0
@@ -485,6 +500,7 @@ class AdaptiveWebCrawler:
         """
         try:
             import httpx
+
             with httpx.Client(timeout=10.0, follow_redirects=False) as client:
                 return self._follow_redirects(client, url, headers)
         except ValueError:
@@ -513,4 +529,7 @@ class AdaptiveWebCrawler:
         """Fallback headless browser executor or simulated environment."""
         # When Playwright is not present, returns a standard structured response
         logger.info("Headless browser tier invoked for %s waiting on selector '%s'", url, wait_selector)
-        return 200, f"<html><head><title>Hydrated Page</title></head><body><main><h1>Hydrated Content</h1><p>Rendered for {url}</p></main></body></html>"
+        return (
+            200,
+            f"<html><head><title>Hydrated Page</title></head><body><main><h1>Hydrated Content</h1><p>Rendered for {url}</p></main></body></html>",
+        )
