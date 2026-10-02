@@ -858,44 +858,42 @@ _POLYGLOT_DECISION_RE: Final[re.Pattern[str]] = re.compile(
 )
 
 
+def _brace_step(ch: str, depth: int, max_nesting: int) -> tuple[int, int]:
+    """Update brace nesting depth and peak nesting level."""
+    if ch == "{":
+        return depth + 1, max(max_nesting, depth + 1)
+    if ch == "}":
+        return depth - 1, max_nesting
+    return depth, max_nesting
+
+
 def _extract_brace_body(content: str, brace_pos: int) -> tuple[str, int, int]:
     """Extract code block within matching braces, returning (body, end_pos, max_nesting)."""
     depth = 1
     curr = brace_pos + 1
     max_nesting = 1
     while curr < len(content) and depth > 0:
-        ch = content[curr]
-        if ch == "{":
-            depth += 1
-            if depth > max_nesting:
-                max_nesting = depth
-        elif ch == "}":
-            depth -= 1
+        depth, max_nesting = _brace_step(content[curr], depth, max_nesting)
         curr += 1
     return content[brace_pos:curr], curr, max_nesting
 
 
-def _audit_polyglot_function(
-    file_path: str,
-    fn_name: str,
-    fn_body: str,
-    nesting_meta: tuple[int, int],
+def _evaluate_complexity_violations(
+    target: tuple[str, int, str],
+    metrics: tuple[int, int],
     config: SentinelConfig,
 ) -> list[Violation]:
-    """Audit single polyglot function block for cyclomatic complexity and nesting depth."""
-    lineno, max_nesting = nesting_meta
+    """Evaluate cyclomatic complexity and nesting depth against active rules."""
+    file_path, lineno, entity = target
+    complexity, depth = metrics
     violations: list[Violation] = []
-    decisions = len(_POLYGLOT_DECISION_RE.findall(fn_body))
-    complexity = 1 + decisions
-    depth = max(1, max_nesting - 1)
-
     if config.is_rule_active("CyclomaticComplexity") and complexity > config.max_complexity:
         violations.append(
             Violation(
                 file_path=file_path,
                 line_number=lineno,
                 invariant="CyclomaticComplexity",
-                message=f"Function '{fn_name}' has cyclomatic complexity of {complexity} (limit: {config.max_complexity}).",
+                message=f"{entity} has cyclomatic complexity of {complexity} (limit: {config.max_complexity}).",
                 metric_value=complexity,
                 threshold=config.max_complexity,
             )
@@ -906,12 +904,26 @@ def _audit_polyglot_function(
                 file_path=file_path,
                 line_number=lineno,
                 invariant="NestingDepth",
-                message=f"Function '{fn_name}' has nesting depth of {depth} (limit: {config.max_depth}).",
+                message=f"{entity} has nesting depth of {depth} (limit: {config.max_depth}).",
                 metric_value=depth,
                 threshold=config.max_depth,
             )
         )
     return violations
+
+
+def _audit_polyglot_function(
+    target: tuple[str, str],
+    fn_body: str,
+    nesting_meta: tuple[int, int],
+    config: SentinelConfig,
+) -> list[Violation]:
+    """Audit single polyglot function block for cyclomatic complexity and nesting depth."""
+    file_path, fn_name = target
+    lineno, max_nesting = nesting_meta
+    decisions = len(_POLYGLOT_DECISION_RE.findall(fn_body))
+    metrics = (1 + decisions, max(1, max_nesting - 1))
+    return _evaluate_complexity_violations((file_path, lineno, f"Function '{fn_name}'"), metrics, config)
 
 
 def _audit_polyglot_functions(
@@ -930,43 +942,23 @@ def _audit_polyglot_functions(
         brace_start = match.end() - 1
         fn_body, end_pos, max_nesting = _extract_brace_body(source, brace_start)
         lineno = source[: match.start()].count("\n") + 1
-        violations.extend(_audit_polyglot_function(file_path, fn_name, fn_body, (lineno, max_nesting), config))
+        violations.extend(
+            _audit_polyglot_function((file_path, fn_name), fn_body, (lineno, max_nesting), config)
+        )
         pos = end_pos
     return violations, fn_found
 
 
 def _audit_polyglot_module_fallback(file_path: str, source: str, config: SentinelConfig) -> list[Violation]:
     """Audit top-level script code when no declared functions are found."""
-    violations: list[Violation] = []
     decisions = len(_POLYGLOT_DECISION_RE.findall(source))
-    complexity = 1 + decisions
     has_brace = "{" in source
     _, _, max_nesting = _extract_brace_body(source, 0) if has_brace else ("", 0, 1)
     depth = max(1, max_nesting - 1) if has_brace else 1
-
-    if config.is_rule_active("CyclomaticComplexity") and complexity > config.max_complexity:
-        violations.append(
-            Violation(
-                file_path=file_path,
-                line_number=1,
-                invariant="CyclomaticComplexity",
-                message=f"Module '{Path(file_path).name}' has cyclomatic complexity of {complexity} (limit: {config.max_complexity}).",
-                metric_value=complexity,
-                threshold=config.max_complexity,
-            )
-        )
-    if config.is_rule_active("NestingDepth") and depth > config.max_depth:
-        violations.append(
-            Violation(
-                file_path=file_path,
-                line_number=1,
-                invariant="NestingDepth",
-                message=f"Module '{Path(file_path).name}' has nesting depth of {depth} (limit: {config.max_depth}).",
-                metric_value=depth,
-                threshold=config.max_depth,
-            )
-        )
-    return violations
+    metrics = (1 + decisions, depth)
+    return _evaluate_complexity_violations(
+        (file_path, 1, f"Module '{Path(file_path).name}'"), metrics, config
+    )
 
 
 def _audit_polyglot_complexity(file_path: str, source: str, config: SentinelConfig) -> list[Violation]:
@@ -977,32 +969,38 @@ def _audit_polyglot_complexity(file_path: str, source: str, config: SentinelConf
     return _audit_polyglot_module_fallback(file_path, source, config)
 
 
+def _audit_line_sanitization(file_path: str, line_number: int, line: str) -> list[Violation]:
+    """Audit single polyglot source line for IP and subdomain sanitization violations."""
+    if line.strip().startswith(("// sentinel:", "# sentinel:")):
+        return []
+    violations: list[Violation] = [
+        Violation(
+            file_path=file_path,
+            line_number=line_number,
+            invariant="ZeroTrustSanitization",
+            message=f"Private host address '{match}' detected. Use RFC 5737 or loopback.",
+        )
+        for match in IPV4_PATTERN.findall(line)
+        if _is_prohibited_ip(match)
+    ]
+    hostname = _extract_disallowed_subdomain(line)
+    if hostname:
+        violations.append(
+            Violation(
+                file_path=file_path,
+                line_number=line_number,
+                invariant="ZeroTrustSanitization",
+                message=f"Subdomain '{hostname}' detected. Standardize mock hostnames to '{CANONICAL_MOCK_DOMAIN}' with no subdomains.",
+            )
+        )
+    return violations
+
+
 def _audit_polyglot_sanitization(file_path: str, source: str) -> list[Violation]:
     """Scan polyglot source lines for private IP addresses and disallowed mock subdomains."""
     violations: list[Violation] = []
     for line_number, line in enumerate(source.splitlines(), 1):
-        if line.strip().startswith(("// sentinel:", "# sentinel:")):
-            continue
-        for match in IPV4_PATTERN.findall(line):
-            if _is_prohibited_ip(match):
-                violations.append(
-                    Violation(
-                        file_path=file_path,
-                        line_number=line_number,
-                        invariant="ZeroTrustSanitization",
-                        message=f"Private host address '{match}' detected. Use RFC 5737 or loopback.",
-                    )
-                )
-        hostname = _extract_disallowed_subdomain(line)
-        if hostname:
-            violations.append(
-                Violation(
-                    file_path=file_path,
-                    line_number=line_number,
-                    invariant="ZeroTrustSanitization",
-                    message=f"Subdomain '{hostname}' detected. Standardize mock hostnames to '{CANONICAL_MOCK_DOMAIN}' with no subdomains.",
-                )
-            )
+        violations.extend(_audit_line_sanitization(file_path, line_number, line))
     return violations
 
 
@@ -1023,6 +1021,15 @@ def _audit_polyglot_path(file_path: Path, config: SentinelConfig) -> list[Violat
     return _filter_active_violations(detected, waivers, config)
 
 
+def _handle_parse_failure(
+    file_path: Path, parse_err: Exception | None, config: SentinelConfig
+) -> list[Violation]:
+    """Return syntax violation if rule is active and error exists."""
+    if config.is_rule_active("SyntaxIntegrity") and parse_err:
+        return [_syntax_violation(file_path, parse_err)]
+    return []
+
+
 def audit_file(
     file_path: Path,
     max_complexity: int = 10,
@@ -1040,9 +1047,7 @@ def audit_file(
 
     source, tree, parse_err = _parse_source_tree(file_path)
     if parse_err is not None or tree is None:
-        if active_config.is_rule_active("SyntaxIntegrity") and parse_err:
-            return [_syntax_violation(file_path, parse_err)]
-        return []
+        return _handle_parse_failure(file_path, parse_err, active_config)
 
     detected = _run_visitors(tree, str(file_path), active_config)
     waivers = _scan_waivers(file_path, source)
@@ -1116,18 +1121,24 @@ def _collect_py_targets(root_path: Path) -> list[Path]:
     return sorted(_walk_repository_py_files(root_path))
 
 
+def _polyglot_files_in_dir(parent: str, files: Sequence[str]) -> Iterator[Path]:
+    """Yield polyglot file paths from a single directory."""
+    parent_path = Path(parent)
+    return (parent_path / name for name in files if Path(name).suffix in POLYGLOT_LANGUAGE_EXTENSIONS)
+
+
+def _walk_repository_polyglot_files(root: Path) -> Iterator[Path]:
+    """Walk directory tree yielding repository polyglot files."""
+    for parent, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
+        yield from _polyglot_files_in_dir(parent, files)
+
+
 def _collect_polyglot_targets(root_path: Path) -> list[Path]:
     """Expand one target into repository polyglot files beneath it."""
     if root_path.is_file():
         return [root_path] if root_path.suffix in POLYGLOT_LANGUAGE_EXTENSIONS else []
-    found: list[Path] = []
-    for parent, dirs, files in os.walk(root_path):
-        dirs[:] = [d for d in dirs if _is_repository_dir(d)]
-        for name in files:
-            p = Path(parent) / name
-            if p.suffix in POLYGLOT_LANGUAGE_EXTENSIONS:
-                found.append(p)
-    return sorted(found)
+    return sorted(_walk_repository_polyglot_files(root_path))
 
 
 def _collect_audit_targets(root_path: Path) -> list[Path]:
@@ -1166,6 +1177,18 @@ def _find_missing_targets(paths: Sequence[Path]) -> list[Violation]:
     ]
 
 
+def _tally_audit_targets(report: AuditReport, targets: list[Path]) -> None:
+    """Populate target file counts on the audit report."""
+    report.files_checked = len(targets)
+    report.py_files_checked = sum(1 for p in targets if p.suffix == ".py")
+    report.polyglot_files_checked = len(targets) - report.py_files_checked
+
+
+def _filter_existing_paths(paths: Sequence[Path]) -> list[Path]:
+    """Filter input paths to those that exist on disk."""
+    return [path for path in paths if path.exists()]
+
+
 def audit_targets(
     paths: Sequence[Path],
     max_complexity: int = 10,
@@ -1181,10 +1204,8 @@ def audit_targets(
     report = AuditReport()
     if active_config.is_rule_active("TargetIntegrity"):
         report.violations.extend(_find_missing_targets(paths))
-    targets = _expand_targets([path for path in paths if path.exists()])
-    report.files_checked = len(targets)
-    report.py_files_checked = sum(1 for p in targets if p.suffix == ".py")
-    report.polyglot_files_checked = len(targets) - report.py_files_checked
+    targets = _expand_targets(_filter_existing_paths(paths))
+    _tally_audit_targets(report, targets)
     for target_file in targets:
         report.violations.extend(audit_file(target_file, config=active_config))
     return report
