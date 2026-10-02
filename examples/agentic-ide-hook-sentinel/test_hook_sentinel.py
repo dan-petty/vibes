@@ -168,7 +168,6 @@ def test_evaluate_lsp_diagnostics() -> None:
     ) == (False, 1, 1, True, True)
 
 
-
 # --- Notations a resolver accepts and a strict parser does not -----------------------------
 
 
@@ -207,7 +206,11 @@ def test_a_child_that_ignores_sigterm_still_returns_within_the_grace_period() ->
     sentinel = hook_sentinel.IdeHookSentinel(workspace_root=Path("."))
     started = time.monotonic()
     result = sentinel.run_isolated_command(
-        ["python3", "-c", "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(120)"],
+        [
+            "python3",
+            "-c",
+            "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(120)",
+        ],
         timeout_seconds=0.1,
         grace_seconds=0.15,
     )

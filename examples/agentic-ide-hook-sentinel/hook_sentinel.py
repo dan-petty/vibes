@@ -49,7 +49,10 @@ GRACE_SECONDS: Final[float] = 2.0
 LSP_SEVERITY_ERROR: Final[int] = 1
 LSP_SEVERITY_WARNING: Final[int] = 2
 _LSP_SEVERITY_NAMES: Final[dict[str, int]] = {
-    "error": LSP_SEVERITY_ERROR, "warning": LSP_SEVERITY_WARNING, "information": 3, "hint": 4,
+    "error": LSP_SEVERITY_ERROR,
+    "warning": LSP_SEVERITY_WARNING,
+    "information": 3,
+    "hint": 4,
 }
 
 
@@ -61,6 +64,7 @@ def _lsp_severity(diagnostic: dict[str, Any]) -> int:
     if isinstance(raw, int):
         return raw
     return _LSP_SEVERITY_NAMES.get(str(raw).strip().lower(), LSP_SEVERITY_ERROR)
+
 
 ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]] = (
     ipaddress.ip_network("192.0.2.0/24"),
@@ -143,6 +147,24 @@ class DiagnosticEvaluation:
     prescriptive_guidance: str
 
 
+def _is_valid_octet_range(octets: list[int]) -> bool:
+    """Check if all octet values are within 0..255."""
+    return all(0 <= value <= 255 for value in octets)
+
+
+def _parse_quad_octets(parts: list[str]) -> list[int] | None:
+    """Parse 4 octets or return None if invalid."""
+    if len(parts) != 4:
+        return None
+    try:
+        octets = [_octet(part) for part in parts]
+    except ValueError:
+        return None
+    if not _is_valid_octet_range(octets):
+        return None
+    return octets
+
+
 def _normalize_ipv4(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse a dotted quad the way a resolver does, or return None if it is not one.
 
@@ -157,14 +179,8 @@ def _normalize_ipv4(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Addres
     Each octet is re-read here with the base the C resolver would use, so the guard judges
     the address the connection will actually go to.
     """
-    parts = ip_str.split(".")
-    if len(parts) != 4:
-        return _strict(ip_str)
-    try:
-        octets = [_octet(part) for part in parts]
-    except ValueError:
-        return _strict(ip_str)
-    if any(value < 0 or value > 255 for value in octets):
+    octets = _parse_quad_octets(ip_str.split("."))
+    if octets is None:
         return _strict(ip_str)
     return ipaddress.ip_address(".".join(str(value) for value in octets))
 
@@ -187,14 +203,27 @@ def _strict(ip_str: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None
         return None
 
 
+def _is_local_or_unroutable(addr: ipaddress.IPv4Address | ipaddress.IPv6Address | None) -> bool:
+    """Check if address is None, loopback, or unspecified."""
+    return addr is None or addr.is_loopback or addr.is_unspecified
+
+
+def _is_in_network_list(
+    addr: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    networks: Sequence[ipaddress.IPv4Network | ipaddress.IPv6Network],
+) -> bool:
+    """Check if address belongs to any network of matching IP version."""
+    return any(addr in net for net in networks if net.version == addr.version)
+
+
 def _check_private_ip(ip_str: str) -> bool:
     """Return True when the address names a real machine on a private network."""
     addr = _normalize_ipv4(ip_str)
-    if addr is None or addr.is_loopback or addr.is_unspecified:
+    if _is_local_or_unroutable(addr):
         return False
-    if any(addr in net for net in ALLOWED_TEST_NETWORKS if net.version == addr.version):
+    if _is_in_network_list(addr, ALLOWED_TEST_NETWORKS):
         return False
-    return any(addr in net for net in PRIVATE_HOST_NETWORKS if net.version == addr.version)
+    return _is_in_network_list(addr, PRIVATE_HOST_NETWORKS)
 
 
 def _scan_for_forbidden_ips(payload_text: str) -> list[str]:
@@ -281,9 +310,7 @@ class IdeHookSentinel:
 
         return HookEvaluation(decision=HookDecision.ALLOW, reason="File write verified safe")
 
-    def _reap_timed_out_process(
-        self, proc: subprocess.Popen[str], grace_seconds: float
-    ) -> tuple[str, str]:
+    def _reap_timed_out_process(self, proc: subprocess.Popen[str], grace_seconds: float) -> tuple[str, str]:
         """Terminate process group, escalating from SIGTERM to SIGKILL if grace period expires."""
         self._kill_process_group(proc.pid, signal.SIGTERM)
         # Bounded. `communicate()` with no timeout blocks until the group exits, so a
@@ -392,4 +419,3 @@ class IdeHookSentinel:
             is_clean=False,
             prescriptive_guidance=guidance,
         )
-
