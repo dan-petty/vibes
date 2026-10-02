@@ -68,9 +68,11 @@ URL_B = "https://sub.example.com/status"
     py_file.write_text(dirty_code, encoding="utf-8")
 
     metrics = ResourceScanner.scan_python_file(py_file)
-    assert len(metrics.sanitization_violations) == 2
-    assert any("10.0.0.5" in v for v in metrics.sanitization_violations)
-    assert any("sub.example.com" in v for v in metrics.sanitization_violations)
+    assert (
+        len(metrics.sanitization_violations),
+        any("10.0.0.5" in v for v in metrics.sanitization_violations),
+        any("sub.example.com" in v for v in metrics.sanitization_violations),
+    ) == (2, True, True)
 
 
 def test_output_reviewer_evaluates_healthy_resource() -> None:
@@ -93,9 +95,11 @@ def test_output_reviewer_evaluates_healthy_resource() -> None:
     )
 
     evaluation = OutputReviewer.evaluate(scan, run)
-    assert evaluation.quality_score == 100.0
-    assert evaluation.health_status == HealthStatus.HEALTHY
-    assert len(evaluation.actionable_recommendations) == 0
+    assert (
+        evaluation.quality_score,
+        evaluation.health_status,
+        len(evaluation.actionable_recommendations),
+    ) == (100.0, HealthStatus.HEALTHY, 0)
 
 
 def test_output_reviewer_deducts_for_violations_and_failures() -> None:
@@ -119,9 +123,11 @@ def test_output_reviewer_deducts_for_violations_and_failures() -> None:
     )
 
     evaluation = OutputReviewer.evaluate(scan, run)
-    assert evaluation.quality_score < 50.0
-    assert evaluation.health_status == HealthStatus.CRITICAL
-    assert len(evaluation.actionable_recommendations) >= 2
+    assert (
+        evaluation.quality_score < 50.0,
+        evaluation.health_status,
+        len(evaluation.actionable_recommendations) >= 2,
+    ) == (True, HealthStatus.CRITICAL, True)
 
 
 def test_resource_runner_parses_self_reported_pytest_duration() -> None:
@@ -137,7 +143,11 @@ def test_resource_runner_parses_self_reported_pytest_duration() -> None:
         passed_count=9,
         execution_seconds=ResourceRunner._parse_pytest_duration(stdout_sample),
     )
-    assert (run.execution_seconds, run.feedback_latency_seconds, run.harness_overhead_seconds) == (0.38, 0.38, 1.66)
+    assert (run.execution_seconds, run.feedback_latency_seconds, run.harness_overhead_seconds) == (
+        0.38,
+        0.38,
+        1.66,
+    )
 
 
 def test_resource_runner_duration_falls_back_to_wall_clock() -> None:
@@ -152,7 +162,11 @@ def test_resource_runner_duration_falls_back_to_wall_clock() -> None:
         passed_count=1,
         execution_seconds=ResourceRunner._parse_pytest_duration("\u2713 All checks passed."),
     )
-    assert (run.execution_seconds, run.feedback_latency_seconds, run.harness_overhead_seconds) == (None, 0.001, 0.0)
+    assert (run.execution_seconds, run.feedback_latency_seconds, run.harness_overhead_seconds) == (
+        None,
+        0.001,
+        0.0,
+    )
 
 
 def test_execution_telemetry_ignores_interpreter_boot_overhead() -> None:
@@ -195,16 +209,16 @@ def test_execution_telemetry_flags_genuinely_slow_suite() -> None:
         FeedbackCategory.PERFORMANCE,
         FeedbackPriority.MEDIUM,
     )
-    assert "4.80s" in feedback[0].headline and "1.70s of interpreter boot" in feedback[0].prescriptive_guidance
+    assert (
+        "4.80s" in feedback[0].headline and "1.70s of interpreter boot" in feedback[0].prescriptive_guidance
+    )
 
 
 def test_resource_runner_parses_pytest_counts() -> None:
     """Ensure ResourceRunner regex extracts test counts from raw stdout."""
     stdout_sample = "===== 14 passed, 2 failed, 3 warnings in 2.15s ====="
     passed, failed, warnings = ResourceRunner._parse_pytest_counts(stdout_sample)
-    assert passed == 14
-    assert failed == 2
-    assert warnings == 3
+    assert (passed, failed, warnings) == (14, 2, 3)
 
 
 def test_workbench_full_cycle_skip_tests(tmp_path: Path) -> None:
@@ -217,10 +231,12 @@ def test_workbench_full_cycle_skip_tests(tmp_path: Path) -> None:
     workbench = ResourceIterationWorkbench(root_dir=tmp_path, baseline_path=baseline_file)
     report = workbench.run_cycle(execute_tests=False)
 
-    assert report.overall_health == HealthStatus.HEALTHY
-    assert report.overall_score == 100.0
-    assert len(report.resources_evaluated) >= 1
-    assert baseline_file.is_file()
+    assert (
+        report.overall_health,
+        report.overall_score,
+        len(report.resources_evaluated) >= 1,
+        baseline_file.is_file(),
+    ) == (HealthStatus.HEALTHY, 100.0, True, True)
 
     # Re-running with existing baseline computes deltas
     report2 = workbench.run_cycle(execute_tests=False)
@@ -237,10 +253,12 @@ def test_cli_main_entrypoint(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 
     captured = capsys.readouterr().out
     data = json.loads(captured)
-    assert "overall_health" in data
-    assert "overall_score" in data
-    assert "resources_evaluated" in data
-    assert "improvement_feedback" in data
+    assert (
+        "overall_health" in data,
+        "overall_score" in data,
+        "resources_evaluated" in data,
+        "improvement_feedback" in data,
+    ) == (True, True, True, True)
 
 
 def test_feedback_analyzer_refactoring_headroom() -> None:
@@ -260,9 +278,11 @@ def test_feedback_analyzer_refactoring_headroom() -> None:
     )
     feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     refactors = [f for f in feedback if f.category == FeedbackCategory.PROACTIVE_REFACTOR]
-    assert len(refactors) == 1
-    assert refactors[0].priority == FeedbackPriority.MEDIUM
-    assert "route_packet" in refactors[0].prescriptive_guidance
+    assert (
+        len(refactors),
+        refactors[0].priority,
+        "route_packet" in refactors[0].prescriptive_guidance,
+    ) == (1, FeedbackPriority.MEDIUM, True)
 
 
 def test_feedback_analyzer_documentation_and_typing() -> None:
@@ -282,10 +302,12 @@ def test_feedback_analyzer_documentation_and_typing() -> None:
     feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     docs = [f for f in feedback if f.category == FeedbackCategory.DOCUMENTATION]
     types = [f for f in feedback if f.category == FeedbackCategory.TYPE_SAFETY]
-    assert len(docs) == 1
-    assert len(types) == 1
-    assert "start_engine" in docs[0].prescriptive_guidance
-    assert "start_engine" in types[0].prescriptive_guidance
+    assert (
+        len(docs),
+        len(types),
+        "start_engine" in docs[0].prescriptive_guidance,
+        "start_engine" in types[0].prescriptive_guidance,
+    ) == (1, 1, True, True)
 
 
 def test_feedback_analyzer_test_parity() -> None:
@@ -302,9 +324,11 @@ def test_feedback_analyzer_test_parity() -> None:
     )
     feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     parity = [f for f in feedback if f.category == FeedbackCategory.TEST_PARITY]
-    assert len(parity) == 1
-    assert parity[0].priority == FeedbackPriority.HIGH
-    assert "orphan_module" in parity[0].headline
+    assert (
+        len(parity),
+        parity[0].priority,
+        "orphan_module" in parity[0].headline,
+    ) == (1, FeedbackPriority.HIGH, True)
 
 
 def test_feedback_analyzer_positive_reinforcement() -> None:
@@ -348,10 +372,12 @@ def test_export_feedback_to_sdlc_tasks() -> None:
         ),
     ]
     tasks = ResourceIterationWorkbench.export_feedback_to_sdlc(feedback_items)
-    assert len(tasks) == 1
-    assert tasks[0]["priority"] == "P2_MEDIUM"
-    assert tasks[0]["kind"] == "issue"
-    assert "PROACTIVE_REFACTOR" in tasks[0]["title"]
+    assert (
+        len(tasks),
+        tasks[0]["priority"],
+        tasks[0]["kind"],
+        "PROACTIVE_REFACTOR" in tasks[0]["title"],
+    ) == (1, "P2_MEDIUM", "issue", True)
 
 
 def test_cli_export_backlog_flag(tmp_path: Path) -> None:
@@ -370,7 +396,9 @@ def test_resource_runner_passes_addopts_override(monkeypatch: pytest.MonkeyPatch
     """Ensure run_tests_for_resource passes -o addopts= to prevent xdist worker overhead."""
     captured_command: list[str] = []
 
-    def mock_run_command(cls, command: list[str], target: str, cwd: Path, timeout: int = 30) -> RunExecutionResult:
+    def mock_run_command(
+        cls, command: list[str], target: str, cwd: Path, timeout: int = 30
+    ) -> RunExecutionResult:
         captured_command.extend(command)
         return RunExecutionResult(
             target=target,
@@ -402,9 +430,11 @@ def test_resource_watcher_snapshot_detects_files(tmp_path: Path) -> None:
     (venv_dir / "ignored.py").write_text("# ignored\n", encoding="utf-8")
 
     snapshot = ResourceWatcher.snapshot(tmp_path)
-    assert len(snapshot) == 2
-    assert str(tmp_path / "app.py") in snapshot
-    assert str(tmp_path / "test_app.py") in snapshot
+    assert (
+        len(snapshot),
+        str(tmp_path / "app.py") in snapshot,
+        str(tmp_path / "test_app.py") in snapshot,
+    ) == (2, True, True)
 
 
 def test_resource_watcher_detect_changes(tmp_path: Path) -> None:
@@ -429,14 +459,15 @@ def test_resource_watcher_tick_triggers_cycle_on_changes(tmp_path: Path) -> None
 
     prev_snapshot: dict[str, float] = {}
     new_snapshot, report = ResourceWatcher.watch_tick(wb, prev_snapshot, execute_tests=False)
-    assert report is not None
-    assert report.overall_health == HealthStatus.HEALTHY
-    assert len(new_snapshot) == 1
+    assert (
+        report is not None,
+        getattr(report, "overall_health", None),
+        len(new_snapshot),
+    ) == (True, HealthStatus.HEALTHY, 1)
 
     # Second tick with no changes returns report=None
     idle_snapshot, idle_report = ResourceWatcher.watch_tick(wb, new_snapshot, execute_tests=False)
-    assert idle_report is None
-    assert idle_snapshot == new_snapshot
+    assert (idle_report, idle_snapshot) == (None, new_snapshot)
 
 
 def test_resource_watcher_loop_terminates_at_max_ticks(tmp_path: Path) -> None:
@@ -455,13 +486,11 @@ def test_workbench_main_watch_flag(tmp_path: Path) -> None:
     assert exit_code == 0
 
 
-
-
 def test_nested_closures_are_not_public_surface(tmp_path: Path) -> None:
     """Asking an agent to document `wrapper` inside a decorator is manufactured work."""
     module = tmp_path / "api.py"
     module.write_text(
-        'def deprecated(reason):\n'
+        "def deprecated(reason):\n"
         '    """Public factory, documented."""\n'
         "    def decorate(func):\n"
         "        def wrapper(*args):\n"
