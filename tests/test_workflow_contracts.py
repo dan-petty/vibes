@@ -135,15 +135,17 @@ def test_every_referenced_step_id_exists_in_its_job(path: Path) -> None:
     assert dangling == []
 
 
+def _is_unwritten(step_map: dict[str, Any], ref: str, name: str) -> bool:
+    """Check if referenced step output is unwritten."""
+    step = step_map.get(ref)
+    return step is not None and not _writes_output(step, name)
+
+
 def _unwritten_outputs_in_job(job: dict[str, Any]) -> list[str]:
     """Find referenced outputs in a job that the referenced step never writes."""
     by_id = {step["id"]: step for step in (job.get("steps") or []) if "id" in step}
-    unwritten: list[str] = []
-    for ref, name in _STEP_REF.findall(yaml.safe_dump(job)):
-        step = by_id.get(ref)
-        if step is not None and not _writes_output(step, name):
-            unwritten.append(f"{ref}.{name}")
-    return unwritten
+    matches = _STEP_REF.findall(yaml.safe_dump(job))
+    return [f"{ref}.{name}" for ref, name in matches if _is_unwritten(by_id, ref, name)]
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
@@ -188,12 +190,15 @@ def _workflow_param_id(val: Any) -> str:
     return val if isinstance(val, str) else ""
 
 
+def _subcommand(argv: tuple[str, ...]) -> tuple[str, ...]:
+    """Extract subcommand tokens preceding options."""
+    return tuple(token for token in argv[:1] if not token.startswith("-"))
+
+
 def _missing_cli_flags(script: str, argv: tuple[str, ...]) -> list[str]:
     """Return command flags missing from the script or subcommand help output."""
-    subcommand = tuple(token for token in argv[:1] if not token.startswith("-"))
-    flags = [token for token in argv if token.startswith("--")]
-    help_text = _help(script, subcommand)
-    return [flag for flag in flags if flag not in help_text]
+    help_text = _help(script, _subcommand(argv))
+    return [flag for flag in argv if flag.startswith("--") and flag not in help_text]
 
 
 @pytest.mark.parametrize("workflow,script,argv", _cli_invocations(), ids=_workflow_param_id)
@@ -208,7 +213,7 @@ def test_every_cli_contract_a_workflow_depends_on_still_exists(
     runs, which for three of these workflows has been never.
     """
     missing = _missing_cli_flags(script, argv)
-    subcommand = [token for token in argv[:1] if not token.startswith("-")]
+    subcommand = _subcommand(argv)
     assert missing == [], f"{workflow}: {script} {' '.join(subcommand)} rejects {missing}"
 
 
