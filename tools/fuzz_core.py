@@ -97,7 +97,7 @@ _PY_BLOCK_HEADS: Final[tuple[str, ...]] = (
     "if value{n} > {n}:",
     "for index{n} in range({n}):",
     "while value{n} < 0:",
-    "with open(\"file-{n}.txt\") as handle{n}:",
+    'with open("file-{n}.txt") as handle{n}:',
     "if not value{n}:",
 )
 
@@ -180,7 +180,12 @@ def _shape_assert_chain(rng: random.Random, index: int) -> list[str]:
 def _shape_low_cohesion_class(rng: random.Random, index: int) -> list[str]:
     """Emit a class whose methods touch disjoint attributes, which is what LCOM4 counts."""
     groups = rng.randrange(2, 5)
-    lines = [f"class Component{index}:", '    """Generated component."""', "", "    def __init__(self) -> None:"]
+    lines = [
+        f"class Component{index}:",
+        '    """Generated component."""',
+        "",
+        "    def __init__(self) -> None:",
+    ]
     lines.extend(f"        self.field{g} = {g}" for g in range(groups))
     for group in range(groups):
         lines.extend(
@@ -196,7 +201,13 @@ def _shape_low_cohesion_class(rng: random.Random, index: int) -> list[str]:
 
 def _shape_clone_pair(rng: random.Random, index: int) -> list[str]:
     """Emit two functions with identical bodies, which is what clone detection counts."""
-    body = [f"    accumulator = {rng.randrange(100)}", "    for step in range(12):", "        accumulator += step * 3", "        accumulator -= step // 2", "    return accumulator"]
+    body = [
+        f"    accumulator = {rng.randrange(100)}",
+        "    for step in range(12):",
+        "        accumulator += step * 3",
+        "        accumulator -= step // 2",
+        "    return accumulator",
+    ]
     first = [f"def compute_{index}_a() -> int:", '    """Generated clone."""', *body, ""]
     second = [f"def compute_{index}_b() -> int:", '    """Generated clone."""', *body, ""]
     return first + second
@@ -347,9 +358,7 @@ def _roadmap_entry(rng: random.Random, index: int) -> list[str]:
     lines: list[str] = []
     for item in range(rng.randrange(1, 5)):
         lines.append(rng.choice(_ROADMAP_ITEMS).format(n=index * 10 + item, p=rng.randrange(4)))
-        lines.extend(
-            rng.choice(_ROADMAP_CONTEXT).format(n=item) for _ in range(rng.randrange(0, 3))
-        )
+        lines.extend(rng.choice(_ROADMAP_CONTEXT).format(n=item) for _ in range(rng.randrange(0, 3)))
     lines.append("")
     return lines
 
@@ -370,7 +379,9 @@ _REQ_SPECS: Final[tuple[str, ...]] = (
 def generate_requirements(rng: random.Random) -> str:
     """Generate a pyproject fragment declaring randomly specified dependencies."""
     specs = [rng.choice(_REQ_SPECS).format(n=rng.randrange(1, 40)) for _ in range(rng.randrange(1, 7))]
-    return "\n".join(["[project]", 'name = "generated"', "dependencies = [", *(f"    {s}," for s in specs), "]", ""])
+    return "\n".join(
+        ["[project]", 'name = "generated"', "dependencies = [", *(f"    {s}," for s in specs), "]", ""]
+    )
 
 
 _ACTION_REFS: Final[tuple[str, ...]] = (
@@ -549,14 +560,15 @@ def _shrink_lines(text: str, fails: Callable[[str], bool], max_rounds: int) -> s
     chunk = max(1, len(lines) // 2)
     rounds = 0
     while chunk >= 1 and rounds < max_rounds:
-        lines, removed, rounds = _shrink_pass(lines, fails, chunk, rounds, max_rounds)
+        lines, removed, used = _shrink_pass(lines, fails, chunk, max_rounds - rounds)
+        rounds += used
         if not removed:
             chunk //= 2
     return "".join(lines)
 
 
 def _shrink_pass(
-    lines: Sequence[str], fails: Callable[[str], bool], chunk: int, rounds: int, max_rounds: int
+    lines: Sequence[str], fails: Callable[[str], bool], chunk: int, budget: int
 ) -> tuple[list[str], bool, int]:
     """Try removing each window of `chunk` lines once, keeping every removal that holds.
 
@@ -567,14 +579,15 @@ def _shrink_pass(
     kept = list(lines)
     index = 0
     removed = False
-    while index < len(kept) and rounds < max_rounds:
+    used_rounds = 0
+    while index < len(kept) and used_rounds < budget:
         candidate = kept[:index] + kept[index + chunk :]
-        rounds += 1
+        used_rounds += 1
         if fails("".join(candidate)):
             kept, removed = candidate, True
         else:
             index += chunk
-    return kept, removed, rounds
+    return kept, removed, used_rounds
 
 
 def _shrink_tail(text: str, fails: Callable[[str], bool]) -> str:
