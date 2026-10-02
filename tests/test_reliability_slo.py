@@ -53,9 +53,15 @@ def test_measures_report_across_every_registered_indicator() -> None:
         _resource(near_threshold_functions=["g (M=9)"]),
     ])
     measured = measure_report(report)
-    assert (measured["gate_pass_rate"].good_events, measured["gate_pass_rate"].valid_events) == (2, 3)
-    assert measured["invariant_compliance"].ratio == pytest.approx(2 / 3)
-    assert measured["headroom_saturation"].ratio == pytest.approx(2 / 3)
+    assert (
+        (measured["gate_pass_rate"].good_events, measured["gate_pass_rate"].valid_events),
+        measured["invariant_compliance"].ratio,
+        measured["headroom_saturation"].ratio,
+    ) == (
+        (2, 3),
+        pytest.approx(2 / 3),
+        pytest.approx(2 / 3),
+    )
 
 
 def test_latency_sli_prefers_self_reported_execution_time() -> None:
@@ -243,9 +249,15 @@ def test_steering_objective_moves_the_phase_without_blocking_release() -> None:
         evaluate_objective(gating, _history("gate_pass_rate", [(100, 100)] * 10)),
     ]
 
-    assert states[0].status is BudgetStatus.EXHAUSTED
-    assert decide_phase(states).phase is LoopPhase.REACTIVE_REMEDIATION
-    assert decide_phase(gating_states(states)).phase is not LoopPhase.REACTIVE_REMEDIATION
+    assert (
+        states[0].status,
+        decide_phase(states).phase,
+        decide_phase(gating_states(states)).phase is not LoopPhase.REACTIVE_REMEDIATION,
+    ) == (
+        BudgetStatus.EXHAUSTED,
+        LoopPhase.REACTIVE_REMEDIATION,
+        True,
+    )
 
 
 def test_gating_objective_blocks_release(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -268,8 +280,10 @@ def test_only_defect_indicators_gate_the_release() -> None:
     gating = {o.sli for o in DEFAULT_OBJECTIVES if o.gating}
     steering = {o.sli for o in DEFAULT_OBJECTIVES if not o.gating}
 
-    assert gating == {"invariant_compliance", "gate_pass_rate"}
-    assert steering == {"feedback_latency", "headroom_saturation", "toil_containment"}
+    assert (gating, steering) == (
+        {"invariant_compliance", "gate_pass_rate"},
+        {"feedback_latency", "headroom_saturation", "toil_containment"},
+    )
 
 
 def test_near_ceiling_complexity_does_not_block_a_release() -> None:
@@ -279,5 +293,4 @@ def test_near_ceiling_complexity_does_not_block_a_release() -> None:
     saturation = next(o for o in DEFAULT_OBJECTIVES if o.sli == "headroom_saturation")
     states = [evaluate_objective(saturation, _history("headroom_saturation", [(50, 100)] * 10))]
 
-    assert states[0].status is BudgetStatus.EXHAUSTED
-    assert gating_states(states) == []
+    assert (states[0].status, gating_states(states)) == (BudgetStatus.EXHAUSTED, [])
