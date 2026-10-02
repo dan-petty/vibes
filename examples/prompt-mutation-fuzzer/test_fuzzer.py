@@ -179,7 +179,6 @@ def test_prompt_mutation_fuzzer_matrix_scoring() -> None:
     ) == (3, 2, 1, 66.7, 1)
 
 
-
 def test_fuzzer_cli_main_entrypoint(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Ensure fuzzer CLI entrypoint executes and supports --json output."""
     prompt_file = tmp_path / "prompt.txt"
@@ -791,4 +790,3 @@ def test_fuzzer_cli_baseline_and_sarif_flags(tmp_path: Path, capsys: pytest.Capt
     exit_sarif = main(["--sarif"])
     sarif_out = json.loads(capsys.readouterr().out)
     assert (exit_sarif, sarif_out["version"], len(sarif_out["runs"])) == (0, "2.1.0", 1)
-

@@ -705,10 +705,7 @@ class PromptMutationFuzzer:
         """Collect evaluation cases from caller or dynamically generate via provider."""
         if eval_cases is not None:
             return list(eval_cases)
-        return [
-            (kind, self.generate_candidate_code(base_prompt, kind))
-            for kind in self.config.active_kinds
-        ]
+        return [(kind, self.generate_candidate_code(base_prompt, kind)) for kind in self.config.active_kinds]
 
     def run_fuzz_matrix(
         self,
@@ -788,21 +785,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Model provider backend to drive (default: mock).",
     )
     parser.add_argument(
-        "--model", "-m", type=str, default=None, help="Target model identifier (e.g. gpt-4o, claude-3-5-sonnet)."
+        "--model",
+        "-m",
+        type=str,
+        default=None,
+        help="Target model identifier (e.g. gpt-4o, claude-3-5-sonnet).",
     )
     parser.add_argument("--api-base", type=str, default=None, help="Custom API base URL or REST endpoint.")
     parser.add_argument("--api-key", type=str, default=None, help="API key for cloud model providers.")
-    parser.add_argument("--list-providers", action="store_true", help="List all supported model providers and exit.")
+    parser.add_argument(
+        "--list-providers", action="store_true", help="List all supported model providers and exit."
+    )
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON scorecard.")
     parser.add_argument(
-        "--baseline", type=Path, default=None, help="Path to baseline JSON report for differential comparison."
+        "--baseline",
+        type=Path,
+        default=None,
+        help="Path to baseline JSON report for differential comparison.",
     )
     parser.add_argument(
-        "--save-baseline", type=Path, default=None, help="Save current run scorecard JSON to file as baseline."
+        "--save-baseline",
+        type=Path,
+        default=None,
+        help="Save current run scorecard JSON to file as baseline.",
     )
-    parser.add_argument(
-        "--sarif", action="store_true", help="Output OASIS SARIF 2.1.0 telemetry format."
-    )
+    parser.add_argument("--sarif", action="store_true", help="Output OASIS SARIF 2.1.0 telemetry format.")
     return parser
 
 
@@ -887,4 +894,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
