@@ -114,9 +114,7 @@ def deprecated(
     The warning is the half callers actually experience; the metadata is the half the
     sentinel enforces. Both are required, which is why they are declared in one place.
     """
-    for name, value in zip(
-        REQUIRED_DEPRECATION_FIELDS, (since, remove_in, replacement), strict=True
-    ):
+    for name, value in zip(REQUIRED_DEPRECATION_FIELDS, (since, remove_in, replacement), strict=True):
         if not value:
             raise ValueError(f"@deprecated requires '{name}'")
     parse_semver(since), parse_semver(remove_in)
@@ -299,9 +297,7 @@ def audit_record(record: DeprecationRecord, current_version: str) -> list[Violat
     return [violation for violation in findings if violation is not None]
 
 
-def _unmigrated_call_sites(
-    records: Sequence[DeprecationRecord], files: Sequence[Path]
-) -> list[Violation]:
+def _unmigrated_call_sites(records: Sequence[DeprecationRecord], files: Sequence[Path]) -> list[Violation]:
     """Report internal callers still using a symbol their own project deprecated."""
     deprecated_symbols = {record.symbol: record for record in records}
     declared_in = {record.symbol: record.file_path for record in records}
@@ -331,14 +327,21 @@ def _call_site_violation(record: DeprecationRecord, caller: Path) -> Violation:
     )
 
 
+def _expand_path_target(path: Path) -> list[Path]:
+    """Expand a single file or directory target into a sorted list of Python modules."""
+    if not path.exists():
+        return []
+    if path.is_file() and path.suffix == ".py":
+        return [path]
+    return sorted(path.rglob("*.py"))
+
+
 def _python_files(paths: Sequence[Path]) -> list[Path]:
     """Expand file and directory targets into a sorted list of Python modules."""
-    expanded = (
-        [path] if path.is_file() and path.suffix == ".py" else sorted(path.rglob("*.py"))
-        for path in paths
-        if path.exists()
-    )
-    return [module for group in expanded for module in group]
+    modules: list[Path] = []
+    for path in paths:
+        modules.extend(_expand_path_target(path))
+    return modules
 
 
 def audit_paths(paths: Sequence[Path], current_version: str) -> DeprecationReport:
@@ -403,7 +406,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print(f"\n❌ Found {len(report.violations)} deprecation contract violation(s):")
     for violation in report.violations:
-        print(f"  [{violation.defect.value}] {violation.file_path}:{violation.line_number} — {violation.message}")
+        print(
+            f"  [{violation.defect.value}] {violation.file_path}:{violation.line_number} — {violation.message}"
+        )
     return 1
 
 
