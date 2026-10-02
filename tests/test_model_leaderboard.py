@@ -43,25 +43,14 @@ def test_parse_pricing_catalog_default() -> None:
     local_qwen = catalog["qwen-2.5-coder-7b-local"]
 
     assert (
-        claude.provider,
-        claude.input_usd_per_m,
-        claude.output_usd_per_m,
-        claude.is_local,
-    ) == ("Anthropic", 3.00, 15.00, False)
-
-    assert (
-        deepseek.provider,
-        deepseek.input_usd_per_m,
-        deepseek.output_usd_per_m,
-        deepseek.is_local,
-    ) == ("DeepSeek", 0.27, 1.10, False)
-
-    assert (
-        local_qwen.provider,
-        local_qwen.input_usd_per_m,
-        local_qwen.output_usd_per_m,
-        local_qwen.is_local,
-    ) == ("Self-Hosted", 0.00, 0.00, True)
+        (claude.provider, claude.input_usd_per_m, claude.output_usd_per_m, claude.is_local),
+        (deepseek.provider, deepseek.input_usd_per_m, deepseek.output_usd_per_m, deepseek.is_local),
+        (local_qwen.provider, local_qwen.input_usd_per_m, local_qwen.output_usd_per_m, local_qwen.is_local),
+    ) == (
+        ("Anthropic", 3.00, 15.00, False),
+        ("DeepSeek", 0.27, 1.10, False),
+        ("Self-Hosted", 0.00, 0.00, True),
+    )
 
 
 def test_calculate_token_cost_cloud_and_local() -> None:
