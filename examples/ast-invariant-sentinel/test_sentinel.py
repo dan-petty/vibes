@@ -703,6 +703,22 @@ def test_lsp_framing_read_and_write() -> None:
     assert read_back == payload
 
 
+def _collect_lsp_responses(out_buf: io.BytesIO) -> list[dict]:
+    """Read all LSP message payloads from stream until EOF."""
+    out_buf.seek(0)
+    responses: list[dict] = []
+    while (parsed := _read_lsp_message(out_buf)) is not None:
+        responses.append(parsed)
+    return responses
+
+
+def _extract_response_fields(responses: list[dict]) -> tuple[list[str], list[int]]:
+    """Extract present methods and response IDs from LSP responses."""
+    methods = [r["method"] for r in responses if "method" in r]
+    ids = [r["id"] for r in responses if "id" in r]
+    return methods, ids
+
+
 def test_lsp_server_lifecycle_and_diagnostics() -> None:
     """run_lsp_server completes full initialize/didOpen/codeAction/shutdown/exit lifecycle."""
     in_buf = io.BytesIO()
@@ -732,17 +748,8 @@ def test_lsp_server_lifecycle_and_diagnostics() -> None:
 
     in_buf.seek(0)
     exit_code = run_lsp_server(reader=in_buf, writer=out_buf)
-
-    out_buf.seek(0)
-    responses: list[dict] = []
-    while True:
-        parsed = _read_lsp_message(out_buf)
-        if parsed is None:
-            break
-        responses.append(parsed)
-
-    methods = [r.get("method") for r in responses if "method" in r]
-    ids = [r.get("id") for r in responses if "id" in r]
+    responses = _collect_lsp_responses(out_buf)
+    methods, ids = _extract_response_fields(responses)
 
     assert (
         exit_code,
