@@ -168,18 +168,22 @@ def test_advisory_smells_never_gate(tmp_path: Path) -> None:
         "    def c(self):\n        self.y = 2\n    def d(self):\n        return self.y\n",
     )
     report = analyze([tmp_path])
-    assert any(f.smell is Smell.LOW_COHESION for f in report.advisory)
-    assert all(f.smell in ADVISORY_SMELLS for f in report.advisory)
-    assert Smell.LOW_COHESION not in {f.smell for f in report.gating}
+    assert (
+        any(f.smell is Smell.LOW_COHESION for f in report.advisory),
+        all(f.smell in ADVISORY_SMELLS for f in report.advisory),
+        Smell.LOW_COHESION not in {f.smell for f in report.gating},
+    ) == (True, True, True)
 
 
 def test_report_quantifies_before_it_judges(tmp_path: Path) -> None:
     """Every module is scored whether or not it breaches anything."""
     _write(tmp_path, "clean.py", "def f(x: int) -> int:\n    return x + 1\n")
     report = analyze([tmp_path])
-    assert len(report.modules) == 1
-    assert 0.0 <= report.mean_maintainability <= 100.0
-    assert report.modules[0].halstead_volume > 0
+    assert (
+        len(report.modules),
+        0.0 <= report.mean_maintainability <= 100.0,
+        report.modules[0].halstead_volume > 0,
+    ) == (1, True, True)
 
 
 def test_main_fails_on_a_missing_target(tmp_path: Path) -> None:
