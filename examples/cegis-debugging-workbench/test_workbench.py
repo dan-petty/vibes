@@ -157,9 +157,11 @@ def test_workbench_main_demo(capsys: object) -> None:
     """Verify CEGIS workbench main demonstration runs to completion."""
     main()
     captured = capsys.readouterr().out  # type: ignore[attr-defined]
-    assert "CEGIS Debugging Workbench Demo" in captured
-    assert "Sandboxed Container / Process Group Evaluation" in captured
-    assert "successfully converged" in captured
+    assert (
+        "CEGIS Debugging Workbench Demo" in captured,
+        "Sandboxed Container / Process Group Evaluation" in captured,
+        "successfully converged" in captured,
+    ) == (True, True, True)
 
 
 def test_the_evaluator_reports_what_its_engine_does_not_confine() -> None:
@@ -171,8 +173,10 @@ def test_the_evaluator_reports_what_its_engine_does_not_confine() -> None:
     A caller running untrusted code is entitled to the runtime's answer, not the policy's.
     """
     report = SandboxedPatchEvaluator().enforcement()
-    assert report is not None
-    assert report.unenforced == [
-        "CIS-5.1 (Read-only Root Filesystem)",
-        "CIS-5.8 (Hardened Tmpfs Scratch Mount)",
-    ]
+    assert (report is not None, report.unenforced if report else []) == (
+        True,
+        [
+            "CIS-5.1 (Read-only Root Filesystem)",
+            "CIS-5.8 (Hardened Tmpfs Scratch Mount)",
+        ],
+    )
