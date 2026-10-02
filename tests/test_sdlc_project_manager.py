@@ -35,10 +35,12 @@ def test_sdlc_resource_creation_and_dict() -> None:
         business_value=8,
     )
     data = res.to_dict()
-    assert data["number"] == 101
-    assert data["kind"] == "issue"
-    assert data["lifecycle_state"] == "Ready"
-    assert data["priority"] == "P1_HIGH"
+    assert (
+        data["number"],
+        data["kind"],
+        data["lifecycle_state"],
+        data["priority"],
+    ) == (101, "issue", "Ready", "P1_HIGH")
 
 
 def test_dependency_graph_blocking_logic() -> None:
@@ -91,9 +93,11 @@ def test_prioritization_scoring_hierarchy() -> None:
     score_sec = PrioritizationScorer.score_resource(res_sec, graph)
     score_pr = PrioritizationScorer.score_resource(res_pr, graph)
 
-    assert score_sec > score_normal
-    assert score_pr > score_normal
-    assert score_sec > 1000.0  # P0 + security + bug modifiers
+    assert (
+        score_sec > score_normal,
+        score_pr > score_normal,
+        score_sec > 1000.0,
+    ) == (True, True, True)
 
 
 def test_recommend_action_prioritizes_failing_pr_first() -> None:
@@ -107,9 +111,11 @@ def test_recommend_action_prioritizes_failing_pr_first() -> None:
     manager = SDLCProjectManager([issue_ready, pr_failing])
     rec = manager.recommend_next_agent_action()
 
-    assert rec is not None
-    assert rec.action_type == "REMEDIATE_PR_CHECKS"
-    assert rec.target_resource.number == 2
+    assert (
+        rec is not None,
+        rec.action_type if rec else None,
+        rec.target_resource.number if rec else None,
+    ) == (True, "REMEDIATE_PR_CHECKS", 2)
 
 
 def test_recommend_action_prioritizes_unresolved_review_threads() -> None:
@@ -123,9 +129,11 @@ def test_recommend_action_prioritizes_unresolved_review_threads() -> None:
     manager = SDLCProjectManager([issue_ready, pr_review])
     rec = manager.recommend_next_agent_action()
 
-    assert rec is not None
-    assert rec.action_type == "RESOLVE_REVIEW_THREADS"
-    assert rec.target_resource.number == 2
+    assert (
+        rec is not None,
+        rec.action_type if rec else None,
+        rec.target_resource.number if rec else None,
+    ) == (True, "RESOLVE_REVIEW_THREADS", 2)
 
 
 def test_recommend_action_bypasses_blocked_issues() -> None:
@@ -143,10 +151,11 @@ def test_recommend_action_bypasses_blocked_issues() -> None:
     manager = SDLCProjectManager([issue_blocked, dep_in_progress, issue_free])
     rec = manager.recommend_next_agent_action()
 
-    assert rec is not None
-    assert rec.action_type == "IMPLEMENT_ISSUE"
-    # Should recommend the blocker task (already in progress) or unblocked issue, never the blocked task!
-    assert rec.target_resource.number in (99, 2)
+    assert (
+        rec is not None,
+        rec.action_type if rec else None,
+        rec.target_resource.number in (99, 2) if rec else False,
+    ) == (True, "IMPLEMENT_ISSUE", True)
 
 
 def test_kanban_board_rendering() -> None:
@@ -157,10 +166,12 @@ def test_kanban_board_rendering() -> None:
     manager = SDLCProjectManager([res1, res2])
     board = manager.render_kanban_board()
 
-    assert "AUTONOMOUS SDLC PROJECT BOARD" in board
-    assert "[ IN PROGRESS ]" in board
-    assert "[ READY ]" in board
-    assert "#1 [ISSUE] Design Architecture" in board
+    assert (
+        "AUTONOMOUS SDLC PROJECT BOARD" in board,
+        "[ IN PROGRESS ]" in board,
+        "[ READY ]" in board,
+        "#1 [ISSUE] Design Architecture" in board,
+    ) == (True, True, True, True)
 
 
 def test_cli_prioritize_and_next_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
