@@ -327,12 +327,12 @@ def _build_personalization(node_ids: Sequence[str], focal: Sequence[str]) -> dic
 
 def _pagerank_iteration(
     nodes: Sequence[str],
-    current: dict[str, float],
-    p: dict[str, float],
+    distributions: tuple[dict[str, float], dict[str, float]],
     graph: SymbolGraph,
     damping: float,
 ) -> dict[str, float]:
     """Perform one power iteration step of Personalized PageRank."""
+    current, p = distributions
     dangling_sum = sum(current[u] for u in nodes if not graph.edges.get(u))
     dangling_contrib = damping * dangling_sum
     next_r: dict[str, float] = {}
@@ -351,7 +351,7 @@ def _run_pagerank_loop(
     """Execute iterative power method until convergence or max iterations."""
     current = dict(p)
     for _ in range(cfg.max_iter):
-        next_r = _pagerank_iteration(nodes, current, p, graph, cfg.damping)
+        next_r = _pagerank_iteration(nodes, (current, p), graph, cfg.damping)
         diff = sum(abs(next_r[k] - current[k]) for k in nodes)
         current = next_r
         if diff < cfg.tolerance:
@@ -389,12 +389,14 @@ def _audit_orphans(graph: SymbolGraph, out: list[Finding]) -> None:
         out_deg = len(graph.edges.get(nid, ()))
         in_deg = len(graph.in_edges.get(nid, ()))
         if out_deg == 0 and in_deg == 0:
-            out.append(Finding(
-                rule=DiagnosticRule.RNK001,
-                message=f"Orphaned symbol with zero graph connections: {node.name}",
-                target=nid,
-                severity="note",
-            ))
+            out.append(
+                Finding(
+                    rule=DiagnosticRule.RNK001,
+                    message=f"Orphaned symbol with zero graph connections: {node.name}",
+                    target=nid,
+                    severity="note",
+                )
+            )
 
 
 def _compute_hub_threshold(scores: Sequence[float]) -> float | None:
@@ -415,39 +417,44 @@ def _audit_hub_hotspots(graph: SymbolGraph, out: list[Finding]) -> None:
         return
     for nid, node in graph.nodes.items():
         if node.score > threshold:
-            out.append(Finding(
-                rule=DiagnosticRule.RNK002,
-                message=f"Hub centrality hotspot (score={node.score:.4f}): {node.name}",
-                target=nid,
-                severity="warning",
-            ))
+            out.append(
+                Finding(
+                    rule=DiagnosticRule.RNK002,
+                    message=f"Hub centrality hotspot (score={node.score:.4f}): {node.name}",
+                    target=nid,
+                    severity="warning",
+                )
+            )
 
 
 def _audit_node_cycle_targets(
     u: str,
     targets: set[str],
     graph: SymbolGraph,
-    seen: set[tuple[str, str]],
-    out: list[Finding],
+    collector: tuple[set[tuple[str, str]], list[Finding]],
 ) -> None:
     """Audit mutual 2-cycle recursion for outgoing targets of a node."""
+    seen, out = collector
     for v in targets:
         pair: tuple[str, str] = (u, v) if u < v else (v, u)
         if pair not in seen and u in graph.edges.get(v, ()):
             seen.add(pair)
-            out.append(Finding(
-                rule=DiagnosticRule.RNK004,
-                message=f"Mutual circular reference cycle between {u} and {v}",
-                target=f"{u} <-> {v}",
-                severity="warning",
-            ))
+            out.append(
+                Finding(
+                    rule=DiagnosticRule.RNK004,
+                    message=f"Mutual circular reference cycle between {u} and {v}",
+                    target=f"{u} <-> {v}",
+                    severity="warning",
+                )
+            )
 
 
 def _audit_cycles(graph: SymbolGraph, out: list[Finding]) -> None:
     """Audit for direct mutual 2-cycle recursion between symbols."""
     seen: set[tuple[str, str]] = set()
+    collector = (seen, out)
     for u, targets in graph.edges.items():
-        _audit_node_cycle_targets(u, targets, graph, seen, out)
+        _audit_node_cycle_targets(u, targets, graph, collector)
 
 
 def _render_symbol_content(sym: SymbolNode, fidelity: FidelityLevel) -> str:
@@ -494,12 +501,14 @@ def pack_context(
             excluded_count += 1
 
     if excluded_count > 0:
-        findings.append(Finding(
-            rule=DiagnosticRule.RNK003,
-            message=f"Budget saturated: {excluded_count} ranked symbols excluded from context pack",
-            target=f"budget:{budget_tokens}",
-            severity="warning",
-        ))
+        findings.append(
+            Finding(
+                rule=DiagnosticRule.RNK003,
+                message=f"Budget saturated: {excluded_count} ranked symbols excluded from context pack",
+                target=f"budget:{budget_tokens}",
+                severity="warning",
+            )
+        )
 
     rendered = _serialize_model_ready_pack(packed, fidelity, current_tokens, budget_tokens)
     return PackedContextResult(
@@ -545,7 +554,9 @@ def _is_valid_source_dir(dirname: str) -> bool:
     return not dirname.startswith(".") and dirname not in {"node_modules", "venv", "__pycache__"}
 
 
-def _ingest_dir_python_files(dirpath: str, filenames: Sequence[str], base_root: Path, out: list[SymbolNode]) -> None:
+def _ingest_dir_python_files(
+    dirpath: str, filenames: Sequence[str], base_root: Path, out: list[SymbolNode]
+) -> None:
     """Ingest python files in a single directory."""
     for fname in sorted(filenames):
         if fname.endswith(".py"):
@@ -588,11 +599,13 @@ def _finding_to_sarif(f: Finding) -> dict[str, Any]:
         "ruleId": f.rule.value,
         "level": "error" if f.severity == "error" else "warning",
         "message": {"text": f.message},
-        "locations": [{
-            "physicalLocation": {
-                "artifactLocation": {"uri": f.target},
-            },
-        }],
+        "locations": [
+            {
+                "physicalLocation": {
+                    "artifactLocation": {"uri": f.target},
+                },
+            }
+        ],
     }
 
 
@@ -602,10 +615,12 @@ def export_sarif(findings: Sequence[Finding], tool_name: str = "ast-relevance-co
     sarif = {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
-        "runs": [{
-            "tool": {"driver": {"name": tool_name, "version": "0.1.0"}},
-            "results": results,
-        }],
+        "runs": [
+            {
+                "tool": {"driver": {"name": tool_name, "version": "0.1.0"}},
+                "results": results,
+            }
+        ],
     }
     return json.dumps(sarif, indent=2)
 
@@ -625,12 +640,14 @@ def format_markdown_report(result: PackedContextResult) -> str:
         "",
     ]
     if result.findings:
-        lines.extend([
-            "## Diagnostic Findings",
-            "",
-            "| Rule | Message | Target |",
-            "|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "## Diagnostic Findings",
+                "",
+                "| Rule | Message | Target |",
+                "|---|---|---|",
+            ]
+        )
         for f in result.findings:
             lines.append(f"| `{f.rule}` | {f.message} | `{f.target}` |")
         lines.append("")
@@ -712,4 +729,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

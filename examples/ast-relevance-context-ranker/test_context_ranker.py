@@ -60,13 +60,13 @@ def standalone_helper() -> str:
     return "ok"
 '''
 
-CYCLE_SOURCE = '''
+CYCLE_SOURCE = """
 def func_a() -> None:
     func_b()
 
 def func_b() -> None:
     func_a()
-'''
+"""
 
 
 def test_extract_symbols_from_source() -> None:
@@ -74,7 +74,13 @@ def test_extract_symbols_from_source() -> None:
     symbols = extract_symbols_from_source(SAMPLE_SOURCE, "calc.py")
     kinds = [s.kind for s in symbols]
     names = [s.name for s in symbols]
-    expected_names = ["Calculator", "Calculator.add", "Calculator.compute", "run_pipeline", "standalone_helper"]
+    expected_names = [
+        "Calculator",
+        "Calculator.add",
+        "Calculator.compute",
+        "run_pipeline",
+        "standalone_helper",
+    ]
     present = [name in names for name in expected_names]
     assert (len(symbols) >= 5, SymbolKind.CLASS in kinds, all(present)) == (True, True, True)
 
@@ -113,7 +119,10 @@ def test_personalized_pagerank_elevates_focal_symbol() -> None:
     focal_id = "calc.py::run_pipeline"
     scores = compute_pagerank(graph, PageRankConfig(focal_symbols=(focal_id,)))
     sorted_ids = sorted(scores.keys(), key=lambda k: scores[k], reverse=True)
-    assert (sorted_ids[0] == focal_id, scores[focal_id] > scores["calc.py::standalone_helper"]) == (True, True)
+    assert (sorted_ids[0] == focal_id, scores[focal_id] > scores["calc.py::standalone_helper"]) == (
+        True,
+        True,
+    )
 
 
 def test_pack_context_budget_bounding() -> None:
@@ -181,7 +190,11 @@ def test_sarif_export_schema_and_markdown_report() -> None:
     compute_pagerank(graph)
     res = pack_context(graph, budget_tokens=500)
     report = format_markdown_report(res)
-    assert (data["version"] == "2.1.0", data["runs"][0]["results"][0]["ruleId"] == "RNK002", "# AST Relevance" in report) == (True, True, True)
+    assert (
+        data["version"] == "2.1.0",
+        data["runs"][0]["results"][0]["ruleId"] == "RNK002",
+        "# AST Relevance" in report,
+    ) == (True, True, True)
 
 
 def test_cli_dispatch_rank_and_pack(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -193,4 +206,10 @@ def test_cli_dispatch_rank_and_pack(tmp_path: Path, capsys: pytest.CaptureFixtur
     code_pack = main(["pack", "--dir", str(tmp_path), "--budget", "500", "--format", "pack"])
     out_pack, _ = capsys.readouterr()
     code_empty = main([])
-    assert (code_rank == 0, "Ranked" in out_rank, code_pack == 0, "Repository Context Pack" in out_pack, code_empty == 0) == (True, True, True, True, True)
+    assert (
+        code_rank == 0,
+        "Ranked" in out_rank,
+        code_pack == 0,
+        "Repository Context Pack" in out_pack,
+        code_empty == 0,
+    ) == (True, True, True, True, True)
