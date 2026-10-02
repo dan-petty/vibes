@@ -139,28 +139,17 @@ class TemplateInfo:
     variables: tuple[str, ...]
 
 
-def load_contract(
-    path: Path,
-    provided: Mapping[str, Any] | None = None,
-    *,
-    interactive: bool = False,
-    ask: Callable[[str], str] = input,
-) -> Contract:
-    """Parse, answer, render and validate a contract, refusing anything that would emit
-    invalid Python.
+def _clean_provided_answers(provided: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Filter out private metadata keys from user-provided answers."""
+    if not provided:
+        return {}
+    return {str(k): v for k, v in provided.items() if not str(k).startswith("_")}
 
-    The order matters. Answers are substituted into the *parsed* document, so a value
-    carrying a colon or a brace cannot restructure it, and validation runs on the rendered
-    result, so a variable that produces an unusable slug is refused here rather than
-    discovered as a directory nothing can import.
-    """
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(document, dict):
-        raise ContractError(f"{path}: expected a mapping at the top level")
-    variables = load_variables(document)
-    clean_provided = {str(k): v for k, v in (provided or {}).items() if not str(k).startswith("_")}
-    answers = resolve(variables, clean_provided, interactive=interactive, ask=ask)
-    rendered = render({key: value for key, value in document.items() if key != "variables"}, answers)
+
+def _build_contract_instance(
+    rendered: dict[str, Any], variables: tuple[Variable, ...], answers: Mapping[str, Any]
+) -> Contract:
+    """Instantiate and validate Contract from rendered document mapping."""
     contract = Contract(
         name=str(rendered.get("name", "")).strip(),
         slug=str(rendered.get("slug", "")).strip(),
@@ -172,6 +161,25 @@ def load_contract(
     )
     _reject_invalid(contract)
     return contract
+
+
+def load_contract(
+    path: Path,
+    provided: Mapping[str, Any] | None = None,
+    *,
+    interactive: bool = False,
+    ask: Callable[[str], str] = input,
+) -> Contract:
+    """Parse, answer, render and validate a contract, refusing anything that would emit invalid Python."""
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ContractError(f"{path}: expected a mapping at the top level")
+    variables = load_variables(document)
+    clean_provided = _clean_provided_answers(provided)
+    answers = resolve(variables, clean_provided, interactive=interactive, ask=ask)
+    body = {key: value for key, value in document.items() if key != "variables"}
+    rendered = render(body, answers)
+    return _build_contract_instance(rendered, variables, answers)
 
 
 def _operation(entry: Any) -> Operation:
@@ -225,33 +233,43 @@ def _naming_problems(contract: Contract) -> list[str]:
     return problems
 
 
-def _operation_problems(contract: Contract) -> list[str]:
-    """Return every breach in the operation list itself."""
-    problems: list[str] = []
-    if not contract.operations:
-        problems.append("at least one operation is required")
-    names = [operation.name for operation in contract.operations]
-    problems += [
+def _operation_name_problems(names: list[str]) -> list[str]:
+    """Return problems with operation name formatting and duplication."""
+    problems = [
         f"operation name {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)
     ]
-    problems += [f"duplicate operation {n!r}" for n in sorted({n for n in names if names.count(n) > 1})]
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    for n in duplicates:
+        problems.append(f"duplicate operation {n!r}")
+    return problems
+
+
+def _operation_problems(contract: Contract) -> list[str]:
+    """Return every breach in the operation list itself."""
+    if not contract.operations:
+        return ["at least one operation is required"]
+    names = [operation.name for operation in contract.operations]
+    problems = _operation_name_problems(names)
     for operation in contract.operations:
-        problems += _argument_problems(operation)
+        problems.extend(_argument_problems(operation))
+    return problems
+
+
+def _argument_name_problems(op_name: str, names: list[str]) -> list[str]:
+    """Check argument identifier syntax and duplicates."""
+    problems = [
+        f"{op_name}: argument {n!r} must be a lowercase identifier" for n in names if not _IDENTIFIER.match(n)
+    ]
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    for n in duplicates:
+        problems.append(f"{op_name}: duplicate argument {n!r}")
     return problems
 
 
 def _argument_problems(operation: Operation) -> list[str]:
     """Return every breach in one operation's argument list."""
     names = [argument.name for argument in operation.arguments]
-    problems = [
-        f"{operation.name}: argument {n!r} must be a lowercase identifier"
-        for n in names
-        if not _IDENTIFIER.match(n)
-    ]
-    problems += [
-        f"{operation.name}: duplicate argument {n!r}"
-        for n in sorted({n for n in names if names.count(n) > 1})
-    ]
+    problems = _argument_name_problems(operation.name, names)
     if not operation.summary:
         problems.append(f"{operation.name}: summary is required; it becomes the docstring")
     return problems
@@ -834,14 +852,12 @@ def _write_contract_layer(target_dir: Path, contract: Contract, result: Generate
         result.written.append(path)
 
 
-def _save_update_answers(
-    answers_path: Path,
+def _build_updated_answers(
     contract: Contract,
     contract_ref: str | Path | None,
     recorded: Mapping[str, Any],
-    result: Generated,
-) -> None:
-    """Record updated contract answers and metadata back to disk."""
+) -> dict[str, Any]:
+    """Assemble updated answers mapping including contract and template metadata."""
     answers_data = dict(contract.answers)
     answers_data["_contract"] = str(contract.slug)
     chosen_template = (
@@ -851,7 +867,16 @@ def _save_update_answers(
     )
     if chosen_template:
         answers_data["_template"] = str(chosen_template)
-    answers_path.write_text(yaml.safe_dump(answers_data, sort_keys=True), encoding="utf-8")
+    return answers_data
+
+
+def _save_update_answers(
+    answers_path: Path,
+    answers_data: Mapping[str, Any],
+    result: Generated,
+) -> None:
+    """Record updated contract answers and metadata back to disk."""
+    answers_path.write_text(yaml.safe_dump(dict(answers_data), sort_keys=True), encoding="utf-8")
     result.written.append(answers_path)
 
 
@@ -860,8 +885,7 @@ def update_in_place(
     contract: str | Path | None = None,
     provided: Mapping[str, Any] | None = None,
     *,
-    interactive: bool = False,
-    ask: Callable[[str], str] = input,
+    ask: Callable[[str], str] | bool = False,
 ) -> Generated:
     """Re-apply a contract to an existing generated project, preserving domain logic."""
     if not target_dir.is_dir():
@@ -872,12 +896,15 @@ def update_in_place(
     resolved_path = _find_update_contract(target_dir, contract, recorded)
     merged_answers = _merge_answers(recorded, provided)
 
-    loaded_contract = load_contract(resolved_path, merged_answers, interactive=interactive, ask=ask)
+    is_interactive = bool(ask)
+    ask_fn = ask if callable(ask) else input
+    loaded_contract = load_contract(resolved_path, merged_answers, interactive=is_interactive, ask=ask_fn)
     result = Generated()
 
     _write_contract_layer(target_dir, loaded_contract, result)
     _reconcile_handlers(target_dir / "handlers.py", loaded_contract, result)
-    _save_update_answers(answers_path, loaded_contract, contract, recorded, result)
+    updated_answers = _build_updated_answers(loaded_contract, contract, recorded)
+    _save_update_answers(answers_path, updated_answers, result)
 
     return result
 
@@ -972,7 +999,7 @@ def _handle_update(args: argparse.Namespace) -> int:
         args.target,
         contract=contract_ref,
         provided=_supplied(args),
-        interactive=_interactive(args),
+        ask=_interactive(args),
     )
     for path in result.written:
         print(f"  updated   {path}")

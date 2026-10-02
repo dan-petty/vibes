@@ -182,16 +182,14 @@ def _check_tree_completeness(
     for parent, listed in children.items():
         missing = _parent_missing_children(parent, listed, oracle)
         line_no = listed[0].line_number
+        location = parent.relative_to(root) if parent != root else Path(".")
         for name in missing:
-            findings.append(_missing_child_finding(parent, root, name, line_no, file_str))
+            findings.append(_missing_child_finding(location, name, line_no, file_str))
     return findings
 
 
-def _missing_child_finding(
-    parent: Path, root: Path, name: str, line_number: int, file_str: str
-) -> DocFinding:
+def _missing_child_finding(location: Path, name: str, line_number: int, file_str: str) -> DocFinding:
     """Build a finding for a filesystem entry the map claims to enumerate but omits."""
-    location = parent.relative_to(root) if parent != root else Path(".")
     return DocFinding(
         file_path=file_str,
         line_number=line_number,
@@ -485,23 +483,38 @@ def _check_inline_math_findings(line: str, line_no: int, file_path: str) -> list
 
 
 def _inspect_display_math_line(
-    line: str, line_no: int, file_path_str: str, current_align_env: str | None, findings: list[DocFinding]
-) -> str | None:
+    line: str,
+    target: tuple[str, int],
+    current_align_env: str | None,
+) -> tuple[str | None, DocFinding | None]:
     """Inspect display math line for invalid ampersand usage and update align environment."""
+    file_path_str, line_no = target
     align_env = _update_align_env(line, current_align_env)
+    finding = None
     if _is_math_ampersand_invalid(line, in_align_env=(align_env is not None)):
-        findings.append(
-            DocFinding(
-                file_path=file_path_str,
-                line_number=line_no,
-                category="math",
-                message=(
-                    "Unescaped '&' detected in LaTeX display math block. In KaTeX / LaTeX, '&' is an alignment "
-                    "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
-                    "the word 'and' instead."
-                ),
-            )
+        finding = DocFinding(
+            file_path=file_path_str,
+            line_number=line_no,
+            category="math",
+            message=(
+                "Unescaped '&' detected in LaTeX display math block. In KaTeX / LaTeX, '&' is an alignment "
+                "delimiter and cannot be used in text or standard expressions. Use '\\&' or "
+                "the word 'and' instead."
+            ),
         )
+    return align_env, finding
+
+
+def _handle_display_math_line(
+    line: str,
+    target: tuple[str, int],
+    current_align_env: str | None,
+    findings: list[DocFinding],
+) -> str | None:
+    """Inspect display math line, updating environment and appending any finding."""
+    align_env, finding = _inspect_display_math_line(line, target, current_align_env)
+    if finding is not None:
+        findings.append(finding)
     return align_env
 
 
@@ -524,8 +537,8 @@ def check_latex_math_hygiene(lines: Sequence[str], file_path: Path) -> list[DocF
             current_align_env = None
             continue
         if in_display_math:
-            current_align_env = _inspect_display_math_line(
-                line, line_no, file_path_str, current_align_env, findings
+            current_align_env = _handle_display_math_line(
+                line, (file_path_str, line_no), current_align_env, findings
             )
             continue
         findings.extend(_check_display_math_findings(line, line_no, file_path_str))
