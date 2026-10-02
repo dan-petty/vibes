@@ -157,9 +157,14 @@ def test_embedding_drift_auditor_preserved() -> None:
     rec2, _ = cache.get_repomap(p, source_code=SAMPLE_PY_V2)
 
     report = EmbeddingDriftAuditor.calculate_drift(rec1, rec2)
-    assert report.cosine_distance <= 0.05
-    assert report.verdict == DriftVerdict.PRESERVED
-    assert (report.added_symbols, report.retained_symbols) == (
+    assert (
+        report.cosine_distance <= 0.05,
+        report.verdict,
+        report.added_symbols,
+        report.retained_symbols,
+    ) == (
+        True,
+        DriftVerdict.PRESERVED,
         ["_compute_mean"],
         ["calculate_metrics"],
     )
