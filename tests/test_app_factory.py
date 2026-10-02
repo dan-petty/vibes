@@ -16,6 +16,7 @@ import importlib.util
 import io
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -125,13 +126,18 @@ def test_generated_code_type_checks(generated: Path) -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
-def test_the_generated_suite_passes_unedited(generated: Path) -> None:
-    """A scaffold that ships a red suite trains its user to ignore the suite."""
-    test_path = generated / "test_reconciler.py"
-    spec = importlib.util.spec_from_file_location("test_reconciler", test_path)
+def _load_module(name: str, path: Path) -> types.ModuleType:
+    """Load and execute a module from a file path."""
+    spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_generated_suite_passes_unedited(generated: Path) -> None:
+    """A scaffold that ships a red suite trains its user to ignore the suite."""
+    mod = _load_module("test_reconciler", generated / "test_reconciler.py")
     test_funcs = [func for name, func in vars(mod).items() if name.startswith("test_") and callable(func)]
     assert len(test_funcs) >= 5
     for func in test_funcs:
@@ -140,20 +146,19 @@ def test_the_generated_suite_passes_unedited(generated: Path) -> None:
 
 def test_the_generated_application_runs_and_refuses_a_contract_breach(generated: Path) -> None:
     """Both problems at once: a caller correcting one argument per round trip is the cost avoided."""
-    reconciler_path = generated / "reconciler.py"
-    spec = importlib.util.spec_from_file_location("reconciler", reconciler_path)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
+    mod = _load_module("reconciler", generated / "reconciler.py")
     sys.modules["reconciler"] = mod
     sys.path.insert(0, str(generated))
-    spec.loader.exec_module(mod)
 
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         exit_code = mod.main(["reconcile", "--arguments", '{"invoice_id": 7, "bogus": 1}'])
     stdout = buf.getvalue()
-    assert (exit_code, "undeclared argument 'bogus'" in stdout) == (1, True)
-    assert "must be string, got int" in stdout
+    assert (
+        exit_code,
+        "undeclared argument 'bogus'" in stdout,
+        "must be string, got int" in stdout,
+    ) == (1, True, True)
 
 
 def _run(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
