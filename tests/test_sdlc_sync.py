@@ -39,9 +39,15 @@ def test_a_finding_that_stops_being_reported_closes_its_card() -> None:
     merged, result = reconcile_backlog(existing, [_card(2, "[DECAY] still present")])
 
     states = {c["title"]: c["lifecycle_state"] for c in merged}
-    assert states["[DECAY] fixed since"] == LifecycleState.DONE.value
-    assert states["[DECAY] still present"] == LifecycleState.BACKLOG.value
-    assert result.closed == ["[DECAY] fixed since"]
+    assert (
+        states["[DECAY] fixed since"],
+        states["[DECAY] still present"],
+        result.closed,
+    ) == (
+        LifecycleState.DONE.value,
+        LifecycleState.BACKLOG.value,
+        ["[DECAY] fixed since"],
+    )
 
 
 def test_a_new_finding_opens_a_card() -> None:
