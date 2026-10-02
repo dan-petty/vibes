@@ -185,21 +185,16 @@ def reconcile_import_sets(
 
 def _extract_methods_map(cls: ast.ClassDef) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
     """Extract method definitions from class body mapped by method name."""
-    return {
-        item.name: item
-        for item in cls.body
-        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    return {item.name: item for item in cls.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 def _build_collision_report(
     name: str,
     kind: SymbolKind,
-    base_node: ast.stmt | None,
-    ours_node: ast.stmt | None,
-    theirs_node: ast.stmt | None,
+    nodes: tuple[ast.stmt | None, ast.stmt | None, ast.stmt | None],
 ) -> CollisionReport:
     """Construct structured collision diagnostics for AST divergence."""
+    base_node, ours_node, theirs_node = nodes
     return CollisionReport(
         symbol_name=name,
         symbol_kind=kind,
@@ -225,17 +220,16 @@ def _is_ours_accepted(t_hash: str | None, b_hash: str | None, o_hash: str | None
 def _arbitrate_single_node(
     name: str,
     kind: SymbolKind,
-    base_node: ast.stmt | None,
-    ours_node: ast.stmt | None,
-    theirs_node: ast.stmt | None,
+    nodes: tuple[ast.stmt | None, ast.stmt | None, ast.stmt | None],
 ) -> tuple[ast.stmt | None, CollisionReport | None]:
     """Arbitrate 3-way conflict for a single AST statement node."""
+    base_node, ours_node, theirs_node = nodes
     b_hash, o_hash, t_hash = _safe_hash(base_node), _safe_hash(ours_node), _safe_hash(theirs_node)
     if _is_theirs_accepted(o_hash, b_hash):
         return theirs_node, None
     if _is_ours_accepted(t_hash, b_hash, o_hash):
         return ours_node, None
-    return None, _build_collision_report(name, kind, base_node, ours_node, theirs_node)
+    return None, _build_collision_report(name, kind, nodes)
 
 
 def _reconcile_single_class_method(
@@ -246,7 +240,7 @@ def _reconcile_single_class_method(
 ) -> tuple[ast.stmt | None, CollisionReport | None]:
     """Arbitrate single class method across three variants."""
     bm, om, tm = base_m.get(name), ours_m.get(name), theirs_m.get(name)
-    return _arbitrate_single_node(name, SymbolKind.FUNCTION, bm, om, tm)
+    return _arbitrate_single_node(name, SymbolKind.FUNCTION, (bm, om, tm))
 
 
 def _consume_class_method(
@@ -302,7 +296,11 @@ def _try_reconcile_class(
     t_node: ast.stmt | None,
 ) -> tuple[ast.stmt | None, bool]:
     """Attempt method-level reconciliation if all three are class nodes."""
-    if isinstance(b_node, ast.ClassDef) and isinstance(o_node, ast.ClassDef) and isinstance(t_node, ast.ClassDef):
+    if (
+        isinstance(b_node, ast.ClassDef)
+        and isinstance(o_node, ast.ClassDef)
+        and isinstance(t_node, ast.ClassDef)
+    ):
         merged_cls, _ = reconcile_class_methods(b_node, o_node, t_node)
         if merged_cls:
             return merged_cls, True
@@ -356,8 +354,10 @@ def arbitrate_symbol(
         return cls_node, [], True
 
     kind = _resolve_symbol_kind(ours_sym, theirs_sym)
-    node, col = _arbitrate_single_node(name, kind, b_node, o_node, t_node)
-    is_false = _is_disjoint_symbol_addition(node, base_sym is not None, ours_sym is not None, theirs_sym is not None)
+    node, col = _arbitrate_single_node(name, kind, (b_node, o_node, t_node))
+    is_false = _is_disjoint_symbol_addition(
+        node, base_sym is not None, ours_sym is not None, theirs_sym is not None
+    )
     return node, _wrap_collision(col), is_false
 
 
@@ -384,13 +384,12 @@ def assemble_merged_module(
 
 
 def _consume_arbitrated_symbol(
-    stmt: ast.stmt | None,
-    cols: list[CollisionReport],
-    was_false: bool,
+    result: tuple[ast.stmt | None, list[CollisionReport], bool],
     merged_stmts: list[ast.stmt],
     collisions: list[CollisionReport],
 ) -> int:
     """Record arbitrated symbol and return incremental false conflict count."""
+    stmt, cols, was_false = result
     if cols:
         collisions.extend(cols)
         return 0
@@ -412,8 +411,8 @@ def _reconcile_all_symbols(
     false_conflicts = 0
 
     for name in names:
-        stmt, cols, was_false = arbitrate_symbol(name, b_syms.get(name), o_syms.get(name), t_syms.get(name))
-        false_conflicts += _consume_arbitrated_symbol(stmt, cols, was_false, merged_stmts, collisions)
+        res = arbitrate_symbol(name, b_syms.get(name), o_syms.get(name), t_syms.get(name))
+        false_conflicts += _consume_arbitrated_symbol(res, merged_stmts, collisions)
 
     return merged_stmts, collisions, false_conflicts
 
@@ -436,7 +435,9 @@ def _build_reconciliation_result(
             duration_ms=round(elapsed_ms, 3),
         )
     code = assemble_merged_module(doc_node, imports, stmts)
-    status = ReconciliationStatus.COMMUTATIVE_MERGE if false_conflicts > 0 else ReconciliationStatus.CLEAN_MERGE
+    status = (
+        ReconciliationStatus.COMMUTATIVE_MERGE if false_conflicts > 0 else ReconciliationStatus.CLEAN_MERGE
+    )
     return ReconciliationResult(
         status=status,
         merged_code=code,
@@ -479,11 +480,13 @@ def reconcile_3way(base_code: str, ours_code: str, theirs_code: str) -> Reconcil
 
 def to_sarif(result: ReconciliationResult) -> dict[str, Any]:
     """Export reconciliation outcome into schema-compliant OASIS SARIF 2.1.0."""
-    rules = [{
-        "id": "AST001",
-        "name": "SemanticCollisionConflict",
-        "shortDescription": {"text": "3-way AST merge detected unresolvable body collision"},
-    }]
+    rules = [
+        {
+            "id": "AST001",
+            "name": "SemanticCollisionConflict",
+            "shortDescription": {"text": "3-way AST merge detected unresolvable body collision"},
+        }
+    ]
     results = [
         {
             "ruleId": "AST001",
@@ -496,10 +499,12 @@ def to_sarif(result: ReconciliationResult) -> dict[str, Any]:
     return {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
-        "runs": [{
-            "tool": {"driver": {"name": "ASTSemanticReconciler", "version": "0.1.0", "rules": rules}},
-            "results": results,
-        }],
+        "runs": [
+            {
+                "tool": {"driver": {"name": "ASTSemanticReconciler", "version": "0.1.0", "rules": rules}},
+                "results": results,
+            }
+        ],
     }
 
 
@@ -516,11 +521,13 @@ def to_markdown(result: ReconciliationResult) -> str:
         "",
     ]
     if result.collisions:
-        lines.extend([
-            "## Detected Semantic Collisions",
-            "| Symbol | Kind | Reason |",
-            "| :--- | :--- | :--- |",
-        ])
+        lines.extend(
+            [
+                "## Detected Semantic Collisions",
+                "| Symbol | Kind | Reason |",
+                "| :--- | :--- | :--- |",
+            ]
+        )
         for c in result.collisions:
             lines.append(f"| `{c.symbol_name}` | {c.symbol_kind.value} | {c.reason} |")
     return "\n".join(lines)
@@ -535,7 +542,9 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ours", required=True, type=Path, help="Local/ours branch file")
     parser.add_argument("--theirs", required=True, type=Path, help="Remote/theirs branch file")
     parser.add_argument("--output", "-o", type=Path, help="Destination path for reconciled code")
-    parser.add_argument("--format", choices=["code", "sarif", "markdown"], default="code", help="Output format")
+    parser.add_argument(
+        "--format", choices=["code", "sarif", "markdown"], default="code", help="Output format"
+    )
     return parser
 
 

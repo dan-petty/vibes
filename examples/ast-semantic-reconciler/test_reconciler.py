@@ -199,7 +199,8 @@ def test_main_cli_execution_clean(tmp_path: Path) -> None:
 
 def test_main_cli_execution_collision(tmp_path: Path) -> None:
     """Verify main CLI command returns exit code 1 on collision."""
-    b, o, t = _write_source_files(tmp_path, "def run(): return 0\n", "def run(): return 1\n", "def run(): return 2\n")
+    b, o, t = _write_source_files(
+        tmp_path, "def run(): return 0\n", "def run(): return 1\n", "def run(): return 2\n"
+    )
     code = main(["--base", str(b), "--ours", str(o), "--theirs", str(t), "--format", "markdown"])
     assert code == 1
-
