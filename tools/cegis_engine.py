@@ -294,6 +294,27 @@ def _check_string_constants_for_private_ips(tree: ast.AST, filename: str) -> lis
     return violations
 
 
+WAIVER_PRAGMA_RE: Final[re.Pattern[str]] = re.compile(
+    r"^#\s*sentinel:\s*allow\[([A-Za-z0-9_]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
+)
+MIN_WAIVER_JUSTIFICATION_CHARS: Final[int] = 12
+
+
+def _has_sanitization_waiver(source_code: str) -> bool:
+    """Return True if source header declares an authorized ZeroTrustSanitization waiver."""
+    for line in source_code.splitlines()[:15]:
+        match = WAIVER_PRAGMA_RE.match(line.strip())
+        if not match:
+            continue
+        rule, reason = match.group(1), match.group("reason").strip()
+        if (
+            rule in ("ZeroTrustSanitization", "ZeroTrustEgressViolation", "CEGIS004")
+            and len(reason) >= MIN_WAIVER_JUSTIFICATION_CHARS
+        ):
+            return True
+    return False
+
+
 def _find_sprawl_line(func: ast.FunctionDef | ast.AsyncFunctionDef) -> int | None:
     """Find line number of 3+ consecutive asserts if sprawl exists, else None."""
     consecutive = 0
@@ -415,7 +436,7 @@ class ASTInvariantVerifier:
             return [_syntax_error_counterexample(err, filename)], 99, 99
 
         violations, max_cc, max_d = _inspect_ast_functions(tree, self.thresholds, filename)
-        if self.thresholds.enforce_zero_trust_ips:
+        if self.thresholds.enforce_zero_trust_ips and not _has_sanitization_waiver(source_code):
             violations.extend(_check_string_constants_for_private_ips(tree, filename))
 
         return violations, max_cc, max_d

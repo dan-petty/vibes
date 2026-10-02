@@ -40,9 +40,7 @@ CANONICAL_MOCK_DOMAIN = "example.com"
 # Allowed documentation networks for zero-trust compliance
 
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-WAIVER_PRAGMA_RE = re.compile(
-    r"^#\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
-)
+WAIVER_PRAGMA_RE = re.compile(r"^#\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$")
 MIN_WAIVER_JUSTIFICATION_CHARS = 12
 
 
@@ -57,6 +55,8 @@ def _has_sanitization_waiver(content: str) -> bool:
         ):
             return True
     return False
+
+
 PYTEST_PASSED_RE = re.compile(r"(\d+)\s+passed")
 PYTEST_FAILED_RE = re.compile(r"(\d+)\s+failed")
 PYTEST_WARNINGS_RE = re.compile(r"(\d+)\s+warnings?")
@@ -64,8 +64,18 @@ PYTEST_WARNINGS_RE = re.compile(r"(\d+)\s+warnings?")
 # which is what makes one warm session attributable back to individual resources.
 WARM_SESSION_TIMEOUT_SECONDS = 600
 PYTEST_BASE_ARGS = (
-    "-p", "no:cov", "-p", "no:logfire", "-p", "no:xdist", "-p", "no:anyio",
-    "-p", "no:cacheprovider", "-o", "addopts=",
+    "-p",
+    "no:cov",
+    "-p",
+    "no:logfire",
+    "-p",
+    "no:xdist",
+    "-p",
+    "no:anyio",
+    "-p",
+    "no:cacheprovider",
+    "-o",
+    "addopts=",
 )
 PYTEST_SUMMARY_DURATION_RE = re.compile(
     r"(?:passed|failed|error|errors|skipped|xfailed|xpassed|deselected|no tests ran)[^\n]*?\sin\s(\d+(?:\.\d+)?)s"
@@ -74,6 +84,7 @@ PYTEST_SUMMARY_DURATION_RE = re.compile(
 
 class ResourceType(StrEnum):
     """Classification of repository resources."""
+
     PYTHON_MODULE = "python_module"
     TEST_SUITE = "test_suite"
     SAMPLE_APP = "sample_app"
@@ -84,6 +95,7 @@ class ResourceType(StrEnum):
 
 class HealthStatus(StrEnum):
     """Overall health status of an evaluated resource."""
+
     HEALTHY = "HEALTHY"
     NEEDS_REMEDIATION = "NEEDS_REMEDIATION"
     CRITICAL = "CRITICAL"
@@ -92,6 +104,7 @@ class HealthStatus(StrEnum):
 @dataclass
 class ResourceScanMetrics:
     """Static AST and code metrics extracted during the Scan phase."""
+
     file_path: str
     resource_type: ResourceType
     loc: int = 0
@@ -115,6 +128,7 @@ class ResourceScanMetrics:
 @dataclass
 class RunExecutionResult:
     """Execution telemetry captured during the Run phase."""
+
     target: str
     command: list[str]
     exit_code: int
@@ -145,6 +159,7 @@ class RunExecutionResult:
 @dataclass
 class ReviewEvaluation:
     """Consolidated assessment produced during the Review phase."""
+
     resource_path: str
     health_status: HealthStatus
     quality_score: float
@@ -168,6 +183,7 @@ class ReviewEvaluation:
 
 class FeedbackCategory(StrEnum):
     """Categorization of actionable feedback for recursive improvement."""
+
     PROACTIVE_REFACTOR = "PROACTIVE_REFACTOR"
     TEST_PARITY = "TEST_PARITY"
     DOCUMENTATION = "DOCUMENTATION"
@@ -179,6 +195,7 @@ class FeedbackCategory(StrEnum):
 
 class FeedbackPriority(StrEnum):
     """Priority ranking of improvement feedback."""
+
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
     LOW = "LOW"
@@ -188,6 +205,7 @@ class FeedbackPriority(StrEnum):
 @dataclass
 class ImprovementFeedback:
     """Meaningful feedback item driving the positive recursive improvement loop."""
+
     category: FeedbackCategory
     priority: FeedbackPriority
     target: str
@@ -210,6 +228,7 @@ class ImprovementFeedback:
 @dataclass
 class IterationReport:
     """Top-level iteration report encompassing all evaluated resources."""
+
     timestamp: str
     overall_health: HealthStatus
     overall_score: float
@@ -266,7 +285,16 @@ class ASTMetricCalculator:
     @classmethod
     def calculate_max_nesting(cls, root: ast.AST) -> int:
         """Calculate the deepest indentation nesting depth inside a function."""
-        nesting_types = (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith, ast.Try, ast.ExceptHandler)
+        nesting_types = (
+            ast.If,
+            ast.While,
+            ast.For,
+            ast.AsyncFor,
+            ast.With,
+            ast.AsyncWith,
+            ast.Try,
+            ast.ExceptHandler,
+        )
 
         def _walk_depth(node: ast.AST, depth: int) -> int:
             cur_depth = depth + 1 if isinstance(node, nesting_types) else depth
@@ -312,9 +340,7 @@ class ASTMetricCalculator:
     def _check_ip_string(cls, text: str, lineno: int, violations: list[str]) -> None:
         """Report every private host address in a string, IPv4 and IPv6 alike."""
         for match in private_hosts_in(text):
-            violations.append(
-                f"Line {lineno}: Private host address '{match}'. Use RFC 5737 or loopback."
-            )
+            violations.append(f"Line {lineno}: Private host address '{match}'. Use RFC 5737 or loopback.")
 
     @classmethod
     def _check_subdomain_string(cls, text: str, lineno: int, violations: list[str]) -> None:
@@ -325,7 +351,9 @@ class ASTMetricCalculator:
             return
         host = match.group(1)
         if host != CANONICAL_MOCK_DOMAIN and host.endswith(f".{CANONICAL_MOCK_DOMAIN}"):
-            violations.append(f"Line {lineno}: Subdomain '{host}' detected. Use standard '{CANONICAL_MOCK_DOMAIN}'.")
+            violations.append(
+                f"Line {lineno}: Subdomain '{host}' detected. Use standard '{CANONICAL_MOCK_DOMAIN}'."
+            )
 
 
 @dataclass
@@ -349,6 +377,7 @@ class FunctionReading:
 @dataclass
 class _FunctionAggregate:
     """Helper accumulator for function-level AST metrics."""
+
     max_complexity: int = 1
     max_depth: int = 1
     complexity_violations: list[str] = field(default_factory=list)
@@ -396,6 +425,7 @@ def _load_docs_validator_cls() -> type[Any]:
     """Dynamically load DocsValidator supporting both direct script and module imports."""
     try:
         from docs_validator import DocsValidator
+
         return DocsValidator
     except ModuleNotFoundError:
         from tools.docs_validator import DocsValidator  # type: ignore[no-redef,import-not-found]
@@ -421,9 +451,7 @@ def _node_import_stems(node: ast.AST) -> set[str]:
     return set()
 
 
-def _exercised_modules(
-    test_paths: Sequence[Path], module_paths: Sequence[Path], root_dir: Path
-) -> set[str]:
+def _exercised_modules(test_paths: Sequence[Path], module_paths: Sequence[Path], root_dir: Path) -> set[str]:
     """Return module stems reachable from the test suite's import graph.
 
     Filename convention is not verification. `doc_core.py` is 97% covered by
@@ -483,23 +511,48 @@ def _accumulate_case(totals: dict[str, list[Any]], case: Any) -> None:
     entry[2] += float(case.get("time", 0.0) or 0.0)
 
 
+def _parse_python_source(path: Path) -> tuple[str, ast.Module] | str:
+    """Read and parse python file, returning (content, tree) or error string."""
+    try:
+        content = path.read_text(encoding="utf-8")
+        return content, ast.parse(content, filename=str(path))
+    except (SyntaxError, UnicodeDecodeError, OSError) as err:
+        return f"Parse error: {str(err)[:256]}"
+
+
+def _count_code_lines(content: str) -> int:
+    """Count non-empty, non-comment lines of code."""
+    return sum(1 for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#"))
+
+
+def _resolve_sanitization(tree: ast.AST, content: str, is_test: bool) -> list[str]:
+    """Check sanitization unless waived or a test suite."""
+    if is_test or _has_sanitization_waiver(content):
+        return []
+    return ASTMetricCalculator.check_sanitization(tree)
+
+
+def _has_unannotated_args(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Return True if any non-self/cls argument lacks a type annotation."""
+    return any(a.arg not in ("self", "cls") and a.annotation is None for a in fn.args.args)
+
+
 class ResourceScanner:
     """Scans repository files and computes structured baseline metrics."""
 
     @classmethod
     def scan_python_file(cls, path: Path) -> ResourceScanMetrics:
         """Parse and extract AST metrics, contracts, and sanitization from a Python file."""
-        try:
-            content = path.read_text(encoding="utf-8")
-            tree = ast.parse(content, filename=str(path))
-        except (SyntaxError, UnicodeDecodeError, OSError) as err:
+        parsed = _parse_python_source(path)
+        res_type = cls._classify_resource_type(path)
+        if isinstance(parsed, str):
             return ResourceScanMetrics(
                 file_path=str(path),
-                resource_type=cls._classify_resource_type(path),
-                complexity_violations=[f"Parse error: {str(err)[:256]}"],
+                resource_type=res_type,
+                complexity_violations=[parsed],
             )
 
-        loc = len([ln for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#")])
+        content, tree = parsed
         func_nodes = _public_function_nodes(tree)
         class_nodes = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
 
@@ -507,38 +560,37 @@ class ResourceScanner:
         for fn in func_nodes:
             agg.update(cls._inspect_function(fn))
 
-        # Test suites and explicitly waived policy fixtures declare ZeroTrustSanitization waivers
-        is_test = cls._classify_resource_type(path) == ResourceType.TEST_SUITE
-        is_waived = is_test or _has_sanitization_waiver(content)
-        sanitization_violations = [] if is_waived else ASTMetricCalculator.check_sanitization(tree)
+        san_violations = _resolve_sanitization(tree, content, res_type == ResourceType.TEST_SUITE)
 
         return ResourceScanMetrics(
             file_path=str(path),
-            resource_type=cls._classify_resource_type(path),
-            loc=loc,
+            resource_type=res_type,
+            loc=_count_code_lines(content),
             functions_count=len(func_nodes),
             classes_count=len(class_nodes),
             max_complexity=agg.max_complexity,
             max_depth=agg.max_depth,
             complexity_violations=agg.complexity_violations,
-            sanitization_violations=sanitization_violations,
+            sanitization_violations=san_violations,
             near_threshold_functions=agg.near_threshold_functions,
             functions_without_docstrings=agg.functions_without_docstrings,
             functions_without_type_hints=agg.functions_without_type_hints,
         )
 
     @classmethod
-    def _inspect_function(
-        cls, fn: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> FunctionReading:
+    def _inspect_function(cls, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> FunctionReading:
         complexity = ASTMetricCalculator.calculate_complexity(fn)
         depth = ASTMetricCalculator.calculate_max_nesting(fn)
         c_viol, d_viol, near_thr = cls._check_complexity_bounds(fn.name, fn.lineno, complexity, depth)
         miss_doc, miss_type = cls._check_function_contract(fn)
         return FunctionReading(
-            complexity=complexity, depth=depth, complexity_violation=c_viol,
-            depth_violation=d_viol, near_threshold=near_thr,
-            missing_docstring=miss_doc, missing_type_hints=miss_type,
+            complexity=complexity,
+            depth=depth,
+            complexity_violation=c_viol,
+            depth_violation=d_viol,
+            near_threshold=near_thr,
+            missing_docstring=miss_doc,
+            missing_type_hints=miss_type,
         )
 
     @staticmethod
@@ -558,9 +610,7 @@ class ResourceScanner:
         if fn.name.startswith("_"):
             return None, None
         miss_doc = fn.name if not ast.get_docstring(fn) else None
-        missing_annotation = fn.returns is None or any(
-            a.annotation is None for a in fn.args.args if a.arg not in ("self", "cls")
-        )
+        missing_annotation = fn.returns is None or _has_unannotated_args(fn)
         miss_type = fn.name if missing_annotation else None
         return miss_doc, miss_type
 
@@ -572,9 +622,7 @@ class ResourceScanner:
         findings = validator.validate_file(path)
         content = path.read_text(encoding="utf-8", errors="replace")
         violations = [
-            f"{f.line_number}: [{f.category}] {f.message}"
-            for f in findings
-            if f.severity == "error"
+            f"{f.line_number}: [{f.category}] {f.message}" for f in findings if f.severity == "error"
         ]
         return ResourceScanMetrics(
             file_path=str(path),
@@ -631,7 +679,9 @@ class ResourceRunner:
         """Execute subprocess command with bounded timeout and capture execution telemetry."""
         start_time = time.monotonic()
         try:
-            proc = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, check=False)
+            proc = subprocess.run(
+                command, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, check=False
+            )
             stdout = proc.stdout
             stderr = proc.stderr
             exit_code = proc.returncode
@@ -720,16 +770,18 @@ class ResourceRunner:
         with tempfile.TemporaryDirectory() as tmp:
             report_path = Path(tmp) / "junit.xml"
             cmd = [
-                sys.executable, "-m", "pytest", *PYTEST_BASE_ARGS,
-                "-o", "junit_family=xunit1", f"--junit-xml={report_path}",
+                sys.executable,
+                "-m",
+                "pytest",
+                *PYTEST_BASE_ARGS,
+                "-o",
+                "junit_family=xunit1",
+                f"--junit-xml={report_path}",
                 *[str(target) for target in targets],
             ]
             run = cls.run_command(cmd, "warm-session", cwd=cwd, timeout=timeout)
             totals = cls._suite_case_totals(report_path)
-        return {
-            path: cls._attributed_result(path, counts, run)
-            for path, counts in totals.items()
-        }
+        return {path: cls._attributed_result(path, counts, run) for path, counts in totals.items()}
 
     @staticmethod
     def _attributed_result(
@@ -782,7 +834,9 @@ def _evaluate_scan_penalties(scan: ResourceScanMetrics, recs: list[str]) -> floa
     penalty = 0.0
     if scan.complexity_violations:
         penalty += len(scan.complexity_violations) * 20.0
-        recs.append(f"Decompose functions to satisfy M <= {MAX_ALLOWED_COMPLEXITY}: {scan.complexity_violations}")
+        recs.append(
+            f"Decompose functions to satisfy M <= {MAX_ALLOWED_COMPLEXITY}: {scan.complexity_violations}"
+        )
     if scan.sanitization_violations:
         penalty += len(scan.sanitization_violations) * 15.0
         recs.append(f"Remediate private IP/subdomain leaks: {scan.sanitization_violations}")
@@ -846,18 +900,73 @@ class OutputReviewer:
         )
 
     @staticmethod
-    def _calculate_deltas(scan: ResourceScanMetrics, baseline: dict[str, Any], deltas: dict[str, float]) -> None:
+    def _calculate_deltas(
+        scan: ResourceScanMetrics, baseline: dict[str, Any], deltas: dict[str, float]
+    ) -> None:
         prev_m = baseline.get("max_complexity")
         if prev_m is not None:
             deltas["complexity_delta"] = scan.max_complexity - prev_m
 
     @staticmethod
-    def _determine_health(score: float, scan: ResourceScanMetrics, run: RunExecutionResult | None) -> HealthStatus:
+    def _determine_health(
+        score: float, scan: ResourceScanMetrics, run: RunExecutionResult | None
+    ) -> HealthStatus:
         if _is_critical_health(scan, run):
             return HealthStatus.CRITICAL
         if _is_needs_remediation(score, scan, run):
             return HealthStatus.NEEDS_REMEDIATION
         return HealthStatus.HEALTHY
+
+
+def _collect_decay_targets(evaluations: Sequence[ReviewEvaluation], root_dir: Path) -> list[Path]:
+    """Collect existing non-documentation target paths for smell quantification."""
+    return [
+        target
+        for e in evaluations
+        if e.scan_metrics.resource_type is not ResourceType.DOCUMENTATION
+        if (target := root_dir / e.resource_path).exists()
+    ]
+
+
+def _run_quantifier_safe(quantifier: Any, targets: list[Path]) -> list[Any]:
+    """Execute smell quantifier safely, returning gating findings or empty list on error."""
+    try:
+        report = quantifier.analyze(targets, include_advisory=False)
+        return list(report.gating)
+    except (OSError, SyntaxError, ValueError) as err:
+        print(f"⚠️  Structural decay analysis unavailable: {err}", file=sys.stderr)
+        return []
+
+
+def _collect_test_and_prod_paths(
+    evaluations: Sequence[ReviewEvaluation],
+) -> tuple[set[str], list[Path], list[Path]]:
+    """Partition evaluations into test stems, test paths, and production paths."""
+    test_stems: set[str] = set()
+    test_paths: list[Path] = []
+    prod_paths: list[Path] = []
+    for e in evaluations:
+        p = Path(e.resource_path)
+        if e.scan_metrics.resource_type == ResourceType.TEST_SUITE:
+            test_stems.add(p.stem.lower())
+            test_paths.append(p)
+        else:
+            prod_paths.append(p)
+    return test_stems, test_paths, prod_paths
+
+
+def _missing_parity_feedback(scan: ResourceScanMetrics) -> ImprovementFeedback:
+    """Build feedback finding for a production module lacking companion tests."""
+    file_path = scan.file_path
+    stem = Path(file_path).stem
+    return ImprovementFeedback(
+        category=FeedbackCategory.TEST_PARITY,
+        priority=FeedbackPriority.HIGH,
+        target=file_path,
+        headline=f"Missing companion test suite for {Path(file_path).name}",
+        prescriptive_guidance=f"Module '{file_path}' does not have a matching test suite in tests/.",
+        suggested_action=f"Create 'tests/test_{stem}.py' to expand automated verification.",
+    )
 
 
 class FeedbackAnalyzer:
@@ -1026,37 +1135,13 @@ class FeedbackAnalyzer:
         feedback: list[ImprovementFeedback],
         root_dir: Path,
     ) -> None:
-        """Surface gating code smells the complexity and depth caps cannot see.
-
-        Cyclomatic complexity and nesting are two axes. A 300-line linear function, a
-        seven-parameter signature and a class with a dozen responsibilities all pass both
-        and are all harder to change. Only gating smells enter the backlog: advisory ones
-        (LCOM4, clones, dead symbols, maintainability index) are sound measurements whose
-        action needs judgement, and a work-generating loop must not manufacture that.
-        """
+        """Surface gating code smells the complexity and depth caps cannot see."""
         quantifier = _load_smell_quantifier()
         if quantifier is None:
             return
-        targets = [
-            root_dir / e.resource_path
-            for e in evaluations
-            if e.scan_metrics.resource_type is not ResourceType.DOCUMENTATION
-        ]
-        try:
-            # Only gating smells enter the backlog, so only gating work is paid for:
-            # the advisory detectors are 94% of the runtime and every finding they
-            # produce would be discarded on the next line.
-            report = quantifier.analyze(
-                [t for t in targets if t.exists()], include_advisory=False
-            )
-        except (OSError, SyntaxError, ValueError) as err:
-            # `logger` was never defined or imported in this module, so this handler
-            # raised NameError instead of degrading: a quantifier that failed took the
-            # whole loop down. The path had never been exercised, which is how it
-            # survived. Degradation is now visible rather than silent.
-            print(f"⚠️  Structural decay analysis unavailable: {err}", file=sys.stderr)
-            return
-        feedback.extend(cls._decay_feedback(finding) for finding in report.gating[:10])
+        targets = _collect_decay_targets(evaluations, root_dir)
+        gating = _run_quantifier_safe(quantifier, targets)
+        feedback.extend(cls._decay_feedback(finding) for finding in gating[:10])
 
     @staticmethod
     def _decay_feedback(finding: Any) -> ImprovementFeedback:
@@ -1083,18 +1168,8 @@ class FeedbackAnalyzer:
         feedback: list[ImprovementFeedback],
         root_dir: Path,
     ) -> None:
-        test_stems = {
-            Path(e.resource_path).stem.lower()
-            for e in evaluations
-            if e.scan_metrics.resource_type == ResourceType.TEST_SUITE
-        }
-        exercised = _exercised_modules(
-            [Path(e.resource_path) for e in evaluations
-             if e.scan_metrics.resource_type == ResourceType.TEST_SUITE],
-            [Path(e.resource_path) for e in evaluations
-             if e.scan_metrics.resource_type != ResourceType.TEST_SUITE],
-            root_dir,
-        )
+        test_stems, test_paths, prod_paths = _collect_test_and_prod_paths(evaluations)
+        exercised = _exercised_modules(test_paths, prod_paths, root_dir)
 
         for item in evaluations:
             scan = item.scan_metrics
@@ -1102,16 +1177,7 @@ class FeedbackAnalyzer:
                 continue
             stem = Path(scan.file_path).stem.lower()
             if not _is_verified(stem, test_stems, exercised):
-                feedback.append(
-                    ImprovementFeedback(
-                        category=FeedbackCategory.TEST_PARITY,
-                        priority=FeedbackPriority.HIGH,
-                        target=scan.file_path,
-                        headline=f"Missing companion test suite for {Path(scan.file_path).name}",
-                        prescriptive_guidance=f"Module '{scan.file_path}' does not have a matching test suite in tests/.",
-                        suggested_action=f"Create 'tests/test_{Path(scan.file_path).stem}.py' to expand automated verification.",
-                    )
-                )
+                feedback.append(_missing_parity_feedback(scan))
 
 
 class ResourceIterationWorkbench:
@@ -1159,7 +1225,7 @@ class ResourceIterationWorkbench:
 
         # Phase 5: ITERATE
         report = self._synthesize_report(
-            evaluations, total_passed, total_failed, total_violations, feedback_items
+            evaluations, (total_passed, total_failed, total_violations), feedback_items
         )
         self._save_baseline(evaluations)
         return report
@@ -1176,41 +1242,49 @@ class ResourceIterationWorkbench:
         """
         if not execute_tests:
             return {}
-        targets = [
-            Path(scan.file_path)
-            for scan in scans
-            if scan.resource_type is ResourceType.TEST_SUITE
-        ]
-        return ResourceRunner._warm_session_results(
-            targets, self.root_dir, WARM_SESSION_TIMEOUT_SECONDS
-        )
+        targets = [Path(scan.file_path) for scan in scans if scan.resource_type is ResourceType.TEST_SUITE]
+        return ResourceRunner._warm_session_results(targets, self.root_dir, WARM_SESSION_TIMEOUT_SECONDS)
 
-    def _filter_scans(self, scans: list[ResourceScanMetrics], pattern: str | None) -> list[ResourceScanMetrics]:
+    def _filter_scans(
+        self, scans: list[ResourceScanMetrics], pattern: str | None
+    ) -> list[ResourceScanMetrics]:
         if not pattern:
             return scans
         regex = re.compile(pattern)
         return [s for s in scans if regex.search(s.file_path)]
 
     @staticmethod
+    def _is_critical_eval(evals: list[ReviewEvaluation], failed: int, violations: int) -> bool:
+        return failed > 0 or violations > 0 or any(e.health_status == HealthStatus.CRITICAL for e in evals)
+
+    @staticmethod
+    def _needs_remediation_eval(evals: list[ReviewEvaluation], avg_score: float) -> bool:
+        return avg_score < 90.0 or any(e.health_status == HealthStatus.NEEDS_REMEDIATION for e in evals)
+
+    @staticmethod
     def _resolve_overall_health_and_action(
         evals: list[ReviewEvaluation],
-        failed: int,
-        violations: int,
+        defects: tuple[int, int],
         avg_score: float,
         fb_list: list[ImprovementFeedback],
     ) -> tuple[HealthStatus, str]:
-        if failed > 0 or violations > 0 or any(e.health_status == HealthStatus.CRITICAL for e in evals):
-            return HealthStatus.CRITICAL, "Remediate failing tests and AST complexity violations before proceeding."
-        if avg_score < 90.0 or any(e.health_status == HealthStatus.NEEDS_REMEDIATION for e in evals):
-            return HealthStatus.NEEDS_REMEDIATION, "Refactor modules with high nesting or warnings to reach 100% quality gate."
+        failed, violations = defects
+        if ResourceIterationWorkbench._is_critical_eval(evals, failed, violations):
+            return (
+                HealthStatus.CRITICAL,
+                "Remediate failing tests and AST complexity violations before proceeding.",
+            )
+        if ResourceIterationWorkbench._needs_remediation_eval(evals, avg_score):
+            return (
+                HealthStatus.NEEDS_REMEDIATION,
+                "Refactor modules with high nesting or warnings to reach 100% quality gate.",
+            )
         return HealthStatus.HEALTHY, ResourceIterationWorkbench._determine_healthy_action(fb_list)
 
     def _synthesize_report(
         self,
         evals: list[ReviewEvaluation],
-        passed: int,
-        failed: int,
-        violations: int,
+        test_counts: tuple[int, int, int],
         feedback: list[ImprovementFeedback] | None = None,
     ) -> IterationReport:
         fb_list = feedback or []
@@ -1223,8 +1297,11 @@ class ResourceIterationWorkbench:
                 improvement_feedback=fb_list,
             )
 
+        passed, failed, violations = test_counts
         avg_score = round(sum(e.quality_score for e in evals) / len(evals), 1)
-        overall_health, action = self._resolve_overall_health_and_action(evals, failed, violations, avg_score, fb_list)
+        overall_health, action = self._resolve_overall_health_and_action(
+            evals, (failed, violations), avg_score, fb_list
+        )
 
         return IterationReport(
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1273,7 +1350,9 @@ class ResourceIterationWorkbench:
         if report.improvement_feedback:
             lines.extend(self._render_feedback_section(report.improvement_feedback))
 
-        lines.append("==========================================================================================")
+        lines.append(
+            "=========================================================================================="
+        )
         return "\n".join(lines)
 
     @staticmethod
@@ -1327,20 +1406,22 @@ class ResourceIterationWorkbench:
         for idx, item in enumerate(feedback_items, start=1):
             if item.category == FeedbackCategory.POSITIVE_REINFORCEMENT:
                 continue
-            tasks.append({
-                "resource_id": f"fb-{idx}",
-                "kind": "issue",
-                "number": 1000 + idx,
-                "title": f"[{item.category.value}] {item.headline}",
-                "labels": ["enhancement", item.category.value.lower()],
-                "lifecycle_state": "Backlog",
-                "priority": priority_map.get(item.priority, "P2_MEDIUM"),
-                "effort_points": 2 if item.priority == FeedbackPriority.LOW else 5,
-                "business_value": 8 if item.priority == FeedbackPriority.HIGH else 4,
-                "prescriptive_guidance": item.prescriptive_guidance,
-                "suggested_action": item.suggested_action,
-                "target": item.target,
-            })
+            tasks.append(
+                {
+                    "resource_id": f"fb-{idx}",
+                    "kind": "issue",
+                    "number": 1000 + idx,
+                    "title": f"[{item.category.value}] {item.headline}",
+                    "labels": ["enhancement", item.category.value.lower()],
+                    "lifecycle_state": "Backlog",
+                    "priority": priority_map.get(item.priority, "P2_MEDIUM"),
+                    "effort_points": 2 if item.priority == FeedbackPriority.LOW else 5,
+                    "business_value": 8 if item.priority == FeedbackPriority.HIGH else 4,
+                    "prescriptive_guidance": item.prescriptive_guidance,
+                    "suggested_action": item.suggested_action,
+                    "target": item.target,
+                }
+            )
         return tasks
 
 
@@ -1421,15 +1502,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser for resource iteration workbench."""
     parser = argparse.ArgumentParser(description="Resource Iteration Workbench for AI Agents.")
     parser.add_argument("--root", "-r", type=Path, default=Path("."), help="Repository root directory.")
-    parser.add_argument("--pattern", "-p", type=str, default=None, help="Regex pattern to filter target files.")
+    parser.add_argument(
+        "--pattern", "-p", type=str, default=None, help="Regex pattern to filter target files."
+    )
     parser.add_argument("--skip-tests", action="store_true", help="Skip executing test suites.")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON report.")
-    parser.add_argument("--export-backlog", type=Path, default=None, help="Export feedback to SDLC backlog JSON.")
+    parser.add_argument(
+        "--export-backlog", type=Path, default=None, help="Export feedback to SDLC backlog JSON."
+    )
     parser.add_argument("--watch", "-w", action="store_true", help="Run in continuous file-watcher mode.")
-    parser.add_argument("--watch-interval", type=float, default=1.0, help="Watch mode polling interval in seconds.")
+    parser.add_argument(
+        "--watch-interval", type=float, default=1.0, help="Watch mode polling interval in seconds."
+    )
     parser.add_argument("--max-ticks", type=int, default=None, help="Maximum watch ticks before exiting.")
-    parser.add_argument("--audit-docs", action="store_true", default=True, help="Include documentation files in scan and review.")
-    parser.add_argument("--no-audit-docs", dest="audit_docs", action="store_false", help="Exclude documentation files from scan.")
+    parser.add_argument(
+        "--audit-docs",
+        action="store_true",
+        default=True,
+        help="Include documentation files in scan and review.",
+    )
+    parser.add_argument(
+        "--no-audit-docs",
+        dest="audit_docs",
+        action="store_false",
+        help="Exclude documentation files from scan.",
+    )
     return parser
 
 
