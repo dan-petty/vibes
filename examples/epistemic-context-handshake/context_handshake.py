@@ -83,13 +83,13 @@ def compute_context_hash(
 
 
 def create_context_envelope(
-    parent_agent: str,
-    target_subagent: str,
+    agents: tuple[str, str],
     symbols: list[str],
     preconditions: list[str],
     allowed_parameters: list[str],
 ) -> ContextEnvelope:
     """Synthesize a new content-addressed ContextEnvelope."""
+    parent_agent, target_subagent = agents
     ctx_hash = compute_context_hash(symbols, preconditions, allowed_parameters)
     env_id = f"env-{ctx_hash[:12]}"
     return ContextEnvelope(
@@ -286,8 +286,7 @@ def parse_args(args: list[str]) -> argparse.Namespace:
 def _run_envelope_command(opts: argparse.Namespace) -> int:
     """Generate and display sample context envelope."""
     env = create_context_envelope(
-        opts.parent,
-        opts.target,
+        (opts.parent, opts.target),
         ["parse_ast", "format_output"],
         ["git_clean", "coverage_floor_met"],
         ["file_path", "line_limit"],
@@ -317,8 +316,7 @@ def main(argv: list[str] | None = None) -> int:
         return _run_envelope_command(opts)
 
     sample_env = create_context_envelope(
-        "lead-agent",
-        "subagent-refactor",
+        ("lead-agent", "subagent-refactor"),
         ["parse_ast"],
         ["git_clean"],
         ["file_path"],
