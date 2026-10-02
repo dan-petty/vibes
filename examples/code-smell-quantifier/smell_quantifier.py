@@ -34,7 +34,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import networkx
 from radon.complexity import cc_rank, cc_visit_ast
@@ -329,6 +329,17 @@ def _class_methods(node: ast.ClassDef) -> list[ast.FunctionDef | ast.AsyncFuncti
     return [child for child in node.body if isinstance(child, kinds) and not child.name.startswith("_")]
 
 
+def _extract_node_identifier(node: ast.AST) -> str:
+    """Extract symbol name from Name, Attribute, or Call AST node."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Call):
+        return _extract_node_identifier(node.func)
+    return ""
+
+
 def _is_data_carrier(node: ast.ClassDef) -> bool:
     """Return True for classes whose whole purpose is to hold fields.
 
@@ -336,20 +347,10 @@ def _is_data_carrier(node: ast.ClassDef) -> bool:
     same false positive, and excluding data carriers is the standard correction: the
     attribute ceiling is about accumulated responsibility, and a record has one.
     """
-    decorators = {
-        d.id if isinstance(d, ast.Name) else getattr(d, "attr", "")
-        for d in node.decorator_list
-        if isinstance(d, (ast.Name, ast.Attribute))
-    }
-    decorators |= {
-        getattr(d.func, "id", getattr(d.func, "attr", ""))
-        for d in node.decorator_list
-        if isinstance(d, ast.Call)
-    }
-    bases = {b.id if isinstance(b, ast.Name) else getattr(b, "attr", "") for b in node.bases}
-    return bool(decorators & {"dataclass"}) or bool(
-        bases & {"NamedTuple", "TypedDict", "BaseModel", "Enum", "StrEnum", "IntEnum"}
-    )
+    decorators = {_extract_node_identifier(d) for d in node.decorator_list}
+    bases = {_extract_node_identifier(b) for b in node.bases}
+    data_carrier_bases = {"NamedTuple", "TypedDict", "BaseModel", "Enum", "StrEnum", "IntEnum"}
+    return "dataclass" in decorators or bool(bases & data_carrier_bases)
 
 
 def detect_god_classes(tree: ast.AST, path: Path) -> list[SmellFinding]:
@@ -378,6 +379,15 @@ def _class_ceiling_findings(node: ast.ClassDef, path: Path) -> list[SmellFinding
     ]
 
 
+def _called_method_names(method_node: ast.AST, known_methods: set[str]) -> set[str]:
+    """Return names of known class methods called within a method AST."""
+    return {
+        c.func.attr
+        for c in ast.walk(method_node)
+        if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr in known_methods
+    }
+
+
 def _cohesion_components(node: ast.ClassDef) -> int:
     """Return LCOM4: the number of disjoint method-attribute clusters in a class.
 
@@ -390,13 +400,7 @@ def _cohesion_components(node: ast.ClassDef) -> int:
         return 1
     method_names = {m.name for m in methods}
     touched = {
-        m.name: _class_attribute_references(m)
-        | {
-            c.func.attr
-            for c in ast.walk(m)
-            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr in method_names
-        }
-        for m in methods
+        m.name: _class_attribute_references(m) | _called_method_names(m, method_names) for m in methods
     }
     return _count_disjoint_clusters(touched)
 
@@ -493,42 +497,54 @@ def _statement_windows(tree: ast.AST, path: Path, size: int) -> Iterable[tuple[s
         yield from _windows_in_scope(body, f"{path.name}:{subject}", size)
 
 
+def _statement_mass(stmt: ast.stmt) -> int:
+    """Calculate the mass (node count) of an AST statement."""
+    return sum(1 for _ in ast.walk(stmt))
+
+
 def _windows_in_scope(body: list[ast.stmt], subject: str, size: int) -> Iterable[tuple[str, str, int]]:
     """Yield qualifying windows within one statement list."""
     prints = [_normalize_for_clone(stmt) for stmt in body]
-    masses = [sum(1 for _ in ast.walk(stmt)) for stmt in body]
+    masses = [_statement_mass(stmt) for stmt in body]
     starts = (s for s in range(len(body) - size + 1) if sum(masses[s : s + size]) >= MIN_CLONE_NODE_MASS)
     for start in starts:
         yield "|".join(prints[start : start + size]), subject, body[start].lineno
+
+
+def _collect_window_groups(trees: dict[Path, ast.AST], size: int) -> dict[str, list[tuple[Path, str, int]]]:
+    """Index statement window occurrences by their normalized fingerprint."""
+    groups: dict[str, list[tuple[Path, str, int]]] = defaultdict(list)
+    for path, tree in trees.items():
+        for fingerprint, subject, line in _statement_windows(tree, path, size):
+            groups[fingerprint].append((path, subject, line))
+    return groups
+
+
+def _duplicated_block_finding(occurrences: list[tuple[Path, str, int]], size: int) -> SmellFinding | None:
+    """Build a duplicated block finding if occurrences cover at least 2 distinct sites."""
+    sites = {(p, line) for p, _, line in occurrences}
+    if len(sites) < 2:
+        return None
+    path, subject, line = occurrences[0]
+    others = ", ".join(f"{p.name}:{ln}" for p, _, ln in occurrences[1:4])
+    return SmellFinding(
+        smell=Smell.DUPLICATED_BLOCK,
+        file_path=str(path),
+        line_number=line,
+        subject=subject,
+        measured=len(sites),
+        threshold=1,
+        detail=f"{size}-statement block repeated at {others}, identical once names are erased",
+    )
 
 
 def detect_duplicated_blocks(
     trees: dict[Path, ast.AST], size: int = MIN_CLONE_STATEMENTS
 ) -> list[SmellFinding]:
     """Flag statement sequences repeated across the corpus, ignoring names and literals."""
-    groups: dict[str, list[tuple[Path, str, int]]] = defaultdict(list)
-    for path, tree in trees.items():
-        for fingerprint, subject, line in _statement_windows(tree, path, size):
-            groups[fingerprint].append((path, subject, line))
-
-    findings: list[SmellFinding] = []
-    for occurrences in groups.values():
-        sites = {(p, line) for p, _, line in occurrences}
-        if len(sites) < 2:
-            continue
-        path, subject, line = occurrences[0]
-        others = ", ".join(f"{p.name}:{ln}" for p, _, ln in occurrences[1:4])
-        findings.append(
-            SmellFinding(
-                smell=Smell.DUPLICATED_BLOCK,
-                file_path=str(path),
-                line_number=line,
-                subject=subject,
-                measured=len(sites),
-                threshold=1,
-                detail=f"{size}-statement block repeated at {others}, identical once names are erased",
-            )
-        )
+    groups = _collect_window_groups(trees, size)
+    raw_findings = (_duplicated_block_finding(occ, size) for occ in groups.values())
+    findings = [f for f in raw_findings if f is not None]
     return _merge_overlapping_clones(findings, size)
 
 
@@ -591,36 +607,27 @@ def _polyglot_windows(
         yield fp, f"{path.name}:{start_line}", start_line
 
 
-def detect_polyglot_clones(
-    sources: Mapping[Path, str],
-    size: int = MIN_CLONE_STATEMENTS,
-) -> list[SmellFinding]:
-    """Detect duplicated statement/token blocks across multi-language source files."""
+def _collect_polyglot_window_groups(
+    sources: Mapping[Path, str], size: int
+) -> dict[str, list[tuple[Path, str, int]]]:
+    """Index polyglot window occurrences across source files by their fingerprint."""
     groups: dict[str, list[tuple[Path, str, int]]] = defaultdict(list)
     for path, source in sources.items():
         lang = POLYGLOT_EXTENSIONS.get(path.suffix, "unknown")
         lines = _polyglot_line_fingerprints(source, lang)
         for fp, subject, line_no in _polyglot_windows(lines, path, size):
             groups[fp].append((path, subject, line_no))
+    return groups
 
-    findings: list[SmellFinding] = []
-    for occurrences in groups.values():
-        sites = {(p, line) for p, _, line in occurrences}
-        if len(sites) < 2:
-            continue
-        path, subject, line = occurrences[0]
-        others = ", ".join(f"{p.name}:{ln}" for p, _, ln in occurrences[1:4])
-        findings.append(
-            SmellFinding(
-                smell=Smell.DUPLICATED_BLOCK,
-                file_path=str(path),
-                line_number=line,
-                subject=subject,
-                measured=len(sites),
-                threshold=1,
-                detail=f"{size}-statement block repeated at {others}, identical once names are erased",
-            )
-        )
+
+def detect_polyglot_clones(
+    sources: Mapping[Path, str],
+    size: int = MIN_CLONE_STATEMENTS,
+) -> list[SmellFinding]:
+    """Detect duplicated statement/token blocks across multi-language source files."""
+    groups = _collect_polyglot_window_groups(sources, size)
+    raw_findings = (_duplicated_block_finding(occ, size) for occ in groups.values())
+    findings = [f for f in raw_findings if f is not None]
     return _merge_overlapping_clones(findings, size)
 
 
@@ -657,18 +664,25 @@ def _extract_polyglot_tokens(code_lines: Sequence[str]) -> tuple[list[str], list
     return operators, operands, complexity
 
 
-def polyglot_module_metrics(source: str, language: str) -> tuple[float, float, int]:
-    """Compute (maintainability index, Halstead volume, complexity) for polyglot source."""
-    lines = source.splitlines()
+def _strip_polyglot_comments(lines: Sequence[str], language: str) -> list[str]:
+    """Filter out empty lines and single-line comments for a given language."""
     prefixes = LINE_COMMENT_PREFIXES.get(language, ("#", "//"))
-    code_lines = [ln for ln in lines if ln.strip() and not any(ln.strip().startswith(p) for p in prefixes)]
-    loc = max(1, len(code_lines))
-    operators, operands, complexity = _extract_polyglot_tokens(code_lines)
+    return [ln for ln in lines if ln.strip() and not ln.strip().startswith(prefixes)]
 
+
+def _calculate_halstead_volume(operators: Sequence[str], operands: Sequence[str]) -> float:
+    """Compute Halstead program volume from operators and operands."""
     n = len(operators) + len(operands)
     eta = len(set(operators)) + len(set(operands))
-    volume = round(n * math.log2(max(2, eta)), 2) if n > 0 and eta > 1 else 0.0
+    return round(n * math.log2(max(2, eta)), 2) if n > 0 and eta > 1 else 0.0
 
+
+def polyglot_module_metrics(source: str, language: str) -> tuple[float, float, int]:
+    """Compute (maintainability index, Halstead volume, complexity) for polyglot source."""
+    code_lines = _strip_polyglot_comments(source.splitlines(), language)
+    loc = max(1, len(code_lines))
+    operators, operands, complexity = _extract_polyglot_tokens(code_lines)
+    volume = _calculate_halstead_volume(operators, operands)
     raw_mi = 171.0 - 5.2 * math.log(max(1.0, volume)) - 0.23 * complexity - 16.2 * math.log(loc)
     mi = max(0.0, min(100.0, round(raw_mi * 100.0 / 171.0, 1)))
     return mi, volume, complexity
@@ -874,15 +888,25 @@ def _parse_module(file_path: Path) -> tuple[str, ast.AST] | None:
         return None
 
 
-def _scan_modules(paths: Sequence[Path], report: SmellReport, include_advisory: bool) -> dict[Path, ast.AST]:
-    """Run every per-file detector, returning the parsed trees the cross-file ones need.
+def _active_per_file_detectors(include_advisory: bool) -> list[Any]:
+    """Return active per-file detectors based on advisory inclusion."""
+    if include_advisory:
+        return list(PER_FILE_DETECTORS)
+    return [d for d in PER_FILE_DETECTORS if d not in ADVISORY_DETECTORS]
 
-    Split out of `analyze` because the per-file sweep and the cross-file passes are two
-    jobs, and holding both in one function put it over the complexity ceiling once the
-    ceiling was measured correctly.
-    """
+
+def _run_per_file_detectors(tree: ast.AST, file_path: Path, detectors: list[Any]) -> list[SmellFinding]:
+    """Run per-file smell detectors on a parsed AST."""
+    findings: list[SmellFinding] = []
+    for d in detectors:
+        findings.extend(d(tree, file_path))
+    return findings
+
+
+def _scan_modules(paths: Sequence[Path], report: SmellReport, include_advisory: bool) -> dict[Path, ast.AST]:
+    """Run every per-file detector, returning the parsed trees the cross-file ones need."""
     trees: dict[Path, ast.AST] = {}
-    detectors = [d for d in PER_FILE_DETECTORS if include_advisory or d not in ADVISORY_DETECTORS]
+    detectors = _active_per_file_detectors(include_advisory)
     for file_path in _python_files(paths):
         parsed = _parse_module(file_path)
         if parsed is None:
@@ -891,7 +915,7 @@ def _scan_modules(paths: Sequence[Path], report: SmellReport, include_advisory: 
         trees[file_path] = tree
         if include_advisory:
             report.modules.extend(_module_scores(file_path, source))
-        report.findings.extend(f for d in detectors for f in d(tree, file_path))
+        report.findings.extend(_run_per_file_detectors(tree, file_path, detectors))
     return trees
 
 
@@ -963,12 +987,29 @@ def _walk_python_files(root: Path) -> list[Path]:
     return sorted(found)
 
 
+def _expand_python_path(path: Path) -> list[Path]:
+    """Expand a single path target into a list of Python files."""
+    if path.is_file():
+        return [path] if path.suffix == ".py" else []
+    return _walk_python_files(path)
+
+
 def _python_files(paths: Sequence[Path]) -> list[Path]:
     """Expand file and directory targets into a sorted list of the repository's modules."""
-    expanded = (
-        [p] if p.is_file() and p.suffix == ".py" else _walk_python_files(p) for p in paths if p.exists()
-    )
-    return [m for group in expanded for m in group]
+    found: list[Path] = []
+    for p in paths:
+        if p.exists():
+            found.extend(_expand_python_path(p))
+    return found
+
+
+def _matches_requested_language(suffix: str, languages: Sequence[str]) -> bool:
+    """Check if suffix matches any language name or extension in the requested list."""
+    if "all" in languages:
+        return True
+    norm_langs = {lang.lower().lstrip(".") for lang in languages}
+    file_lang = POLYGLOT_EXTENSIONS[suffix]
+    return file_lang in norm_langs or suffix.lstrip(".") in norm_langs
 
 
 def _is_matching_language(
@@ -980,12 +1021,13 @@ def _is_matching_language(
     if suffix not in POLYGLOT_EXTENSIONS:
         return False
     if languages:
-        if "all" in languages:
-            return True
-        norm_langs = {lang.lower().lstrip(".") for lang in languages}
-        file_lang = POLYGLOT_EXTENSIONS[suffix]
-        return file_lang in norm_langs or suffix.lstrip(".") in norm_langs
-    return True if is_explicit_file else suffix == ".py"
+        return _matches_requested_language(suffix, languages)
+    return is_explicit_file or suffix == ".py"
+
+
+def _polyglot_files_in_dir(parent: Path, files: Sequence[str], languages: Sequence[str] | None) -> list[Path]:
+    """Filter files in directory matching polyglot language criteria."""
+    return [parent / name for name in files if _is_matching_language(Path(name).suffix, False, languages)]
 
 
 def _walk_polyglot_files(root: Path, languages: Sequence[str] | None = None) -> list[Path]:
@@ -993,24 +1035,26 @@ def _walk_polyglot_files(root: Path, languages: Sequence[str] | None = None) -> 
     found: list[Path] = []
     for parent, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if _is_repository_dir(d)]
-        for name in files:
-            p = Path(parent) / name
-            if _is_matching_language(p.suffix, False, languages):
-                found.append(p)
+        found.extend(_polyglot_files_in_dir(Path(parent), files, languages))
     return sorted(found)
+
+
+def _expand_polyglot_path(path: Path, languages: Sequence[str] | None) -> list[Path]:
+    """Expand a single path target into a list of matching polyglot files."""
+    if path.is_file():
+        return [path] if _is_matching_language(path.suffix, True, languages) else []
+    if path.is_dir():
+        return _walk_polyglot_files(path, languages)
+    return []
 
 
 def _polyglot_files(paths: Sequence[Path], languages: Sequence[str] | None = None) -> list[Path]:
     """Expand targets into multi-language files matching requested languages."""
-    expanded: list[list[Path]] = []
+    found: list[Path] = []
     for p in paths:
-        if not p.exists():
-            continue
-        if p.is_file() and _is_matching_language(p.suffix, True, languages):
-            expanded.append([p])
-        elif p.is_dir():
-            expanded.append(_walk_polyglot_files(p, languages))
-    return [m for group in expanded for m in group]
+        if p.exists():
+            found.extend(_expand_polyglot_path(p, languages))
+    return found
 
 
 def _scan_polyglot_sources(
@@ -1128,6 +1172,12 @@ def _git_repo_root() -> Path | None:
         return None
 
 
+def _parse_git_log_line(line: str) -> tuple[str, str, str] | None:
+    """Parse one tab-delimited git log line into (full_sha, short_sha, subject)."""
+    parts = line.strip().split("\t", 2)
+    return (parts[0], parts[1], parts[2]) if len(parts) == 3 else None
+
+
 def _git_rev_list(count: int) -> list[tuple[str, str, str]]:
     """Retrieve up to count recent git commits formatted as (full_sha, short_sha, subject)."""
     try:
@@ -1138,12 +1188,8 @@ def _git_rev_list(count: int) -> list[tuple[str, str, str]]:
             check=True,
             timeout=10,
         )
-        commits: list[tuple[str, str, str]] = []
-        for line in res.stdout.splitlines():
-            parts = line.strip().split("\t", 2)
-            if len(parts) == 3:
-                commits.append((parts[0], parts[1], parts[2]))
-        return commits
+        parsed = (_parse_git_log_line(line) for line in res.stdout.splitlines())
+        return [c for c in parsed if c is not None]
     except (subprocess.SubprocessError, OSError):
         return []
 
@@ -1240,6 +1286,19 @@ def _audit_git_source(
     return None, []
 
 
+def _to_rel_path_str(path: Path, repo_root: Path) -> str:
+    """Compute repository-relative path string, falling back to str(path)."""
+    try:
+        return str(path.resolve().relative_to(repo_root))
+    except (ValueError, OSError):
+        return str(path)
+
+
+def _filter_git_candidates(files: Sequence[str], languages: Sequence[str] | None) -> list[str]:
+    """Filter list of git files against candidate source criteria."""
+    return [f for f in files if _is_git_candidate(f, languages)]
+
+
 def _resolve_git_candidates(
     commit_sha: str,
     paths: Sequence[Path],
@@ -1247,22 +1306,13 @@ def _resolve_git_candidates(
     languages: Sequence[str] | None,
 ) -> list[str]:
     """Resolve target paths into repository-relative files at a specific revision."""
-    rel_targets: list[str] = []
-    for p in paths:
-        try:
-            rel = p.resolve().relative_to(repo_root)
-            rel_targets.append(str(rel))
-        except (ValueError, OSError):
-            rel_targets.append(str(p))
-
+    rel_targets = [_to_rel_path_str(p, repo_root) for p in paths]
     if not rel_targets or rel_targets == ["."]:
-        all_files = _git_ls_files(commit_sha)
-        return [f for f in all_files if _is_git_candidate(f, languages)]
+        return _filter_git_candidates(_git_ls_files(commit_sha), languages)
 
     matched: list[str] = []
     for target in rel_targets:
-        files = _git_ls_files(commit_sha, target)
-        matched.extend(f for f in files if _is_git_candidate(f, languages))
+        matched.extend(_filter_git_candidates(_git_ls_files(commit_sha, target), languages))
     return sorted(set(matched))
 
 
@@ -1453,17 +1503,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_targets(raw_paths: Sequence[str]) -> tuple[list[Path], list[Path]]:
-    """Split requested targets into those that exist and those that do not.
+def _partition_targets(targets: Sequence[Path]) -> tuple[list[Path], list[Path]]:
+    """Partition targets into present and missing lists."""
+    present = [t for t in targets if t.exists()]
+    missing = [t for t in targets if not t.exists()]
+    return present, missing
 
-    A path that does not exist is reported and then excluded, never silently skipped: a
-    gate that certifies a typo as clean is worse than one that refuses to run.
-    """
-    targets = [Path(raw) for raw in raw_paths] or [Path(".")]
-    missing = [target for target in targets if not target.exists()]
+
+def _warn_missing_targets(missing: Sequence[Path]) -> None:
+    """Emit warning to stderr for non-existent targets."""
     for target in missing:
         print(f"MISSING {target} — refusing to certify a path that does not exist.", file=sys.stderr)
-    return [target for target in targets if target.exists()], missing
+
+
+def _resolve_targets(raw_paths: Sequence[str]) -> tuple[list[Path], list[Path]]:
+    """Split requested targets into those that exist and those that do not."""
+    targets = [Path(raw) for raw in raw_paths] or [Path(".")]
+    present, missing = _partition_targets(targets)
+    _warn_missing_targets(missing)
+    return present, missing
 
 
 def _render_json(report: SmellReport) -> str:
@@ -1479,22 +1537,44 @@ def _render_json(report: SmellReport) -> str:
     )
 
 
+def _parse_cli_languages(languages_arg: str | None) -> list[str] | None:
+    """Parse comma-separated language argument into a list of strings."""
+    if not languages_arg:
+        return None
+    return [lang.strip() for lang in languages_arg.split(",")]
+
+
+def _run_trend_command(
+    present: list[Path], args: argparse.Namespace, langs: list[str] | None, missing: list[Path]
+) -> int:
+    """Execute trend analysis across historical git revisions."""
+    trend_report = compute_trend(present, revisions_count=args.trend, languages=langs)
+    output = _render_trend_json(trend_report) if args.json else "\n".join(render_trend(trend_report))
+    print(output)
+    return 1 if missing else 0
+
+
+def _run_analysis_command(
+    present: list[Path], args: argparse.Namespace, langs: list[str] | None, missing: list[Path]
+) -> int:
+    """Execute standard codebase smell analysis and enforce gating failure conditions."""
+    report = analyze(present, languages=langs)
+    output = _render_json(report) if args.json else "\n".join(render(report))
+    print(output)
+    blocking = {"none": [], "gating": report.gating, "any": report.findings}[args.fail_on]
+    return 1 if (blocking or missing) else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI runner for the code smell quantifier."""
-    args = build_arg_parser().parse_args(list(argv[1:]) if argv is not None else None)
+    cli_args = list(argv[1:]) if argv is not None else None
+    args = build_arg_parser().parse_args(cli_args)
     present, missing = _resolve_targets(args.paths)
-    langs = [lang.strip() for lang in args.languages.split(",")] if args.languages else None
+    langs = _parse_cli_languages(args.languages)
 
     if args.trend is not None:
-        trend_report = compute_trend(present, revisions_count=args.trend, languages=langs)
-        print(_render_trend_json(trend_report) if args.json else "\n".join(render_trend(trend_report)))
-        return 1 if missing else 0
-
-    report = analyze(present, languages=langs)
-    print(_render_json(report) if args.json else "\n".join(render(report)))
-
-    blocking = {"none": [], "gating": report.gating, "any": report.findings}[args.fail_on]
-    return 1 if blocking or missing else 0
+        return _run_trend_command(present, args, langs, missing)
+    return _run_analysis_command(present, args, langs, missing)
 
 
 if __name__ == "__main__":
