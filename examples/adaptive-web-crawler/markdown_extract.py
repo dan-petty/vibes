@@ -36,16 +36,42 @@ from urllib.parse import urljoin
 
 # Never emitted, and never recursed into. Their text is chrome: it repeats on every page of
 # a site, so it inflates every document with the same tokens and tells a model nothing.
-BOILERPLATE_TAGS: Final[frozenset[str]] = frozenset({
-    "script", "style", "noscript", "svg", "canvas", "template", "iframe", "object", "embed",
-    "nav", "header", "footer", "aside", "form", "button", "select", "dialog", "menu",
-})
+BOILERPLATE_TAGS: Final[frozenset[str]] = frozenset(
+    {
+        "script",
+        "style",
+        "noscript",
+        "svg",
+        "canvas",
+        "template",
+        "iframe",
+        "object",
+        "embed",
+        "nav",
+        "header",
+        "footer",
+        "aside",
+        "form",
+        "button",
+        "select",
+        "dialog",
+        "menu",
+    }
+)
 
 # ARIA landmarks that mean the same as the tags above. Marked-up chrome is still chrome,
 # and a site that uses `<div role="navigation">` is not offering different content.
-BOILERPLATE_ROLES: Final[frozenset[str]] = frozenset({
-    "navigation", "banner", "contentinfo", "search", "complementary", "menubar", "toolbar",
-})
+BOILERPLATE_ROLES: Final[frozenset[str]] = frozenset(
+    {
+        "navigation",
+        "banner",
+        "contentinfo",
+        "search",
+        "complementary",
+        "menubar",
+        "toolbar",
+    }
+)
 
 # Where the substance usually is, most specific first. Which one matched is reported rather
 # than assumed, because "the whole body" and "the article element" are different documents
@@ -96,8 +122,12 @@ class ExtractedDocument:
         model has no way to qualify it. Two lines cost nothing and make the difference
         between context and hearsay.
         """
-        header = [f"# {escape_inline(self.title)}" if self.title else "# Untitled",
-                  "", f"Source: <{self.url}>", ""]
+        header = [
+            f"# {escape_inline(self.title)}" if self.title else "# Untitled",
+            "",
+            f"Source: <{self.url}>",
+            "",
+        ]
         return "\n".join(header) + self.markdown
 
 
@@ -240,8 +270,7 @@ class BlockBuilder:
     def flush(self) -> None:
         """Close the block under construction, escaping the page's text and nothing else."""
         joined = "".join(
-            fragment if is_markup else escape_inline(fragment)
-            for is_markup, fragment in self._fragments
+            fragment if is_markup else escape_inline(fragment) for is_markup, fragment in self._fragments
         ).strip()
         self._fragments = []
         prefix, self._prefix = self._prefix, ""
@@ -302,10 +331,23 @@ class ModelReadyExtractor(HTMLParser):
     # All thirteen, per WHATWG HTML §13.1.2. Seven were missing, and a void element that
     # is also chrome — `<input aria-hidden="true">` — opened a skipped region waiting for
     # an end tag that can never come, so the rest of the page was dropped in silence.
-    VOID: ClassVar[frozenset[str]] = frozenset({
-        "area", "base", "br", "col", "embed", "hr", "img", "input",
-        "link", "meta", "source", "track", "wbr",
-    })
+    VOID: ClassVar[frozenset[str]] = frozenset(
+        {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "source",
+            "track",
+            "wbr",
+        }
+    )
 
     def __init__(self, base_url: str) -> None:
         """Prepare an extractor rooted at the page's own URL.
@@ -330,14 +372,20 @@ class ModelReadyExtractor(HTMLParser):
             self.context.base_url = self.context.resolve(href)
             self.context.base_seen = True
 
+    def _is_chrome_or_base(self, name: str, attributes: dict[str, str]) -> bool:
+        """Return True if chrome or base tag consumed this tag."""
+        if self.chrome.enter(name, attributes, name in self.VOID):
+            return True
+        if name == "base":
+            self._handle_base_tag(attributes)
+            return True
+        return False
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """Dispatch one opening tag, after chrome and `<base>` have had their say."""
         name = tag.lower()
         attributes = {key.lower(): (value or "") for key, value in attrs}
-        if self.chrome.enter(name, attributes, name in self.VOID):
-            return
-        if name == "base":
-            self._handle_base_tag(attributes)
+        if self._is_chrome_or_base(name, attributes):
             return
         if name in MAIN_REGIONS:
             self.context.regions_seen.add(name)
