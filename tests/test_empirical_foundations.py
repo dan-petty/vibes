@@ -123,16 +123,16 @@ def test_overfitted_patch_passes_narrow_suite_but_fails_generalization() -> None
     """Asserts that an overfitted patch satisfies a 5-element test suite but fails outside it."""
     # Narrow suite (inputs 0..5)
     narrow_inputs = [0, 1, 2, 3, 4, 5]
-    overfitted_narrow = [overfitted_agent_implementation(i) for i in narrow_inputs]
-    correct_narrow = [correct_fibonacci_implementation(i) for i in narrow_inputs]
+    overfitted_narrow = list(map(overfitted_agent_implementation, narrow_inputs))
+    correct_narrow = list(map(correct_fibonacci_implementation, narrow_inputs))
 
     # Both implementations pass 100% of the narrow test suite!
     assert (overfitted_narrow, len(overfitted_narrow)) == (correct_narrow, 6)
 
     # Generalized inputs (inputs 6..8)
     extended_inputs = [6, 7, 8]
-    overfitted_extended = [overfitted_agent_implementation(i) for i in extended_inputs]
-    correct_extended = [correct_fibonacci_implementation(i) for i in extended_inputs]
+    overfitted_extended = list(map(overfitted_agent_implementation, extended_inputs))
+    correct_extended = list(map(correct_fibonacci_implementation, extended_inputs))
 
     # The overfitted patch catastrophically fails outside the fixture horizon
     assert (overfitted_extended, correct_extended) == ([0, 0, 0], [8, 13, 21])
