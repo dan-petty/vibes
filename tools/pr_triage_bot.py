@@ -28,7 +28,10 @@ _RFC1918_PATTERN: Final[re.Pattern[str]] = re.compile(
 _SECRET_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("AWS_KEY", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("PRIVATE_KEY", re.compile(r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----")),
-    ("GENERIC_TOKEN", re.compile(r"(?i)\b(?:api_key|auth_token|secret_key)\s*=\s*['\"][A-Za-z0-9_\-]{20,}['\"]")),
+    (
+        "GENERIC_TOKEN",
+        re.compile(r"(?i)\b(?:api_key|auth_token|secret_key)\s*=\s*['\"][A-Za-z0-9_\-]{20,}['\"]"),
+    ),
 )
 
 # GitHub Action 40-character commit hash pinning pattern
@@ -254,7 +257,11 @@ class SecurityReviewer:
                 )
             )
         for keyword in call.keywords:
-            if keyword.arg == "shell" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True:
+            if (
+                keyword.arg == "shell"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+            ):
                 out.append(
                     ReviewFinding(
                         persona=PersonaKind.SECURITY,
@@ -548,17 +555,7 @@ class PRTriageBot:
         """Synthesize persona review verdict and summary."""
         errors = [f for f in findings if f.severity == Severity.ERROR]
         warnings = [f for f in findings if f.severity == Severity.WARNING]
-
-        if errors:
-            verdict = ReviewVerdict.REQUEST_CHANGES
-            summary = f"Identified {len(errors)} error(s) requiring resolution before merge."
-        elif warnings:
-            verdict = ReviewVerdict.COMMENT
-            summary = f"Clean of blocking errors; noted {len(warnings)} advisory warning(s)."
-        else:
-            verdict = ReviewVerdict.APPROVE
-            summary = "All persona quality and architectural invariants passed cleanly."
-
+        verdict, summary = _evaluate_persona_verdict(len(errors), len(warnings))
         return PersonaReview(
             persona=persona,
             verdict=verdict,
@@ -574,6 +571,18 @@ class PRTriageBot:
         if ReviewVerdict.COMMENT in verdicts:
             return ReviewVerdict.COMMENT
         return ReviewVerdict.APPROVE
+
+
+def _evaluate_persona_verdict(errors: int, warnings: int) -> tuple[ReviewVerdict, str]:
+    """Determine review verdict and summary from error and warning counts."""
+    if errors > 0:
+        return (
+            ReviewVerdict.REQUEST_CHANGES,
+            f"Identified {errors} error(s) requiring resolution before merge.",
+        )
+    if warnings > 0:
+        return ReviewVerdict.COMMENT, f"Clean of blocking errors; noted {warnings} advisory warning(s)."
+    return ReviewVerdict.APPROVE, "All persona quality and architectural invariants passed cleanly."
 
 
 def _node_decision_points(child: ast.AST) -> int:
@@ -615,9 +624,7 @@ def _extract_call_name(node: ast.AST) -> str:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build CLI parser for PR triage bot."""
-    parser = argparse.ArgumentParser(
-        description="Closed-Loop PR Triage & Invariant Review Bot."
-    )
+    parser = argparse.ArgumentParser(description="Closed-Loop PR Triage & Invariant Review Bot.")
     parser.add_argument(
         "--paths",
         "-p",

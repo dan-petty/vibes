@@ -373,48 +373,53 @@ def observe(target: Target, text: str, workspace: Path) -> Observation:
     return Observation(_fingerprint(value, workspace), None, time.perf_counter() - start)
 
 
-def _prop_crash(target: Target, text: str, ws: Path, first: Observation, budget: float) -> str | None:
+@dataclass(frozen=True)
+class TrialContext:
+    """Invocation context for property verification."""
+
+    target: Target
+    text: str
+    workspace: Path
+    observation: Observation
+
+
+def _prop_crash(trial: TrialContext, budget: float) -> str | None:
     """Report an exception outside the instrument's declared tolerances."""
-    del target, text, ws, budget
-    return first.error
+    del budget
+    return trial.observation.error
 
 
-def _prop_nondeterministic(
-    target: Target, text: str, ws: Path, first: Observation, budget: float
-) -> str | None:
+def _prop_nondeterministic(trial: TrialContext, budget: float) -> str | None:
     """Report two identical invocations that disagreed."""
     del budget
-    if first.error is not None:
+    if trial.observation.error is not None:
         return None
-    second = observe(target, text, ws)
-    if second.fingerprint == first.fingerprint:
+    second = observe(trial.target, trial.text, trial.workspace)
+    if second.fingerprint == trial.observation.fingerprint:
         return None
-    return f"two identical calls returned {first.fingerprint} then {second.fingerprint}"
+    return f"two identical calls returned {trial.observation.fingerprint} then {second.fingerprint}"
 
 
-def _prop_non_idempotent(
-    target: Target, text: str, ws: Path, first: Observation, budget: float
-) -> str | None:
+def _prop_non_idempotent(trial: TrialContext, budget: float) -> str | None:
     """Report a repair that changed the document again on a second application."""
     del budget
-    if target.fixer is None or first.error is not None:
+    if trial.target.fixer is None or trial.observation.error is not None:
         return None
-    once = target.fixer(text, ws)
-    twice = target.fixer(once, ws)
+    once = trial.target.fixer(trial.text, trial.workspace)
+    twice = trial.target.fixer(once, trial.workspace)
     if once == twice:
         return None
     return f"repair did not converge: {len(once)} chars became {len(twice)} on reapplication"
 
 
-def _prop_slow(target: Target, text: str, ws: Path, first: Observation, budget: float) -> str | None:
+def _prop_slow(trial: TrialContext, budget: float) -> str | None:
     """Report an invocation that exceeded the time budget."""
-    del target, text, ws
-    if first.elapsed <= budget:
+    if trial.observation.elapsed <= budget:
         return None
-    return f"one call took {first.elapsed:.2f}s against a {budget:.2f}s budget"
+    return f"one call took {trial.observation.elapsed:.2f}s against a {budget:.2f}s budget"
 
 
-PROPERTIES: Final[dict[str, Callable[[Target, str, Path, Observation, float], str | None]]] = {
+PROPERTIES: Final[dict[str, Callable[[TrialContext, float], str | None]]] = {
     "crash": _prop_crash,
     "nondeterministic": _prop_nondeterministic,
     "non_idempotent": _prop_non_idempotent,
@@ -431,8 +436,9 @@ def evaluate(
 ) -> Failure | None:
     """Check every property against one input, returning the first that fails."""
     first = observe(target, case.text, workspace)
+    trial = TrialContext(target, case.text, workspace, first)
     for name in PROPERTY_ORDER:
-        detail = PROPERTIES[name](target, case.text, workspace, first, budget)
+        detail = PROPERTIES[name](trial, budget)
         if detail:
             return Failure(target.name, name, case.corpus, case.seed, case.origin, detail)
     return None
@@ -463,13 +469,14 @@ def _failure_class(failure: Failure) -> tuple[str, str, str]:
     return (failure.target, failure.prop, failure.detail.split(":")[0])
 
 
-def _minimize(target: Target, case: Case, failure: Failure, workspace: Path, plan: Plan) -> Case:
+def _minimize(target: Target, case: Case, failure: Failure, env: tuple[Path, Plan]) -> Case:
     """Shrink a failing input to the smallest one that fails the same property.
 
     The predicate insists on the *same* property, not merely on some failure. Without that
     the shrinker is free to wander into a different, easier defect and report a minimized
     input that never demonstrated the one that was found.
     """
+    workspace, plan = env
 
     def still_fails(text: str) -> bool:
         found = evaluate(target, Case(case.corpus, text, case.seed, case.origin), workspace, plan.budget)
@@ -480,12 +487,12 @@ def _minimize(target: Target, case: Case, failure: Failure, workspace: Path, pla
 
 def _explore_target(
     target: Target,
-    workspace: Path,
-    plan: Plan,
+    env: tuple[Path, Plan],
     seen: set[tuple[str, str, str]],
     campaign: Campaign,
 ) -> None:
     """Evaluate generated cases for one target and record novel failures."""
+    workspace, plan = env
     for case in _case_stream(target, plan.cases, plan.seed):
         campaign.executed += 1
         failure = evaluate(target, case, workspace, plan.budget)
@@ -495,32 +502,31 @@ def _explore_target(
         if f_class in seen:
             continue
         seen.add(f_class)
-        minimized = _minimize(target, case, failure, workspace, plan)
-        _record(campaign, target, failure, minimized, plan)
+        minimized = _minimize(target, case, failure, env)
+        _record(campaign, target, (failure, minimized), plan)
 
 
 def explore(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
     """Search for inputs that violate a property, and keep the ones that do."""
     campaign = Campaign()
     seen: set[tuple[str, str, str]] = set()
+    env = (workspace, plan)
     for target in targets:
-        _explore_target(target, workspace, plan, seen, campaign)
+        _explore_target(target, env, seen, campaign)
     return campaign
 
 
-def _record(
-    campaign: Campaign, target: Target, failure: Failure, minimized: Case, plan: Plan
-) -> None:
+def _record(campaign: Campaign, target: Target, defect: tuple[Failure, Case], plan: Plan) -> None:
     """Attach a minimized failure to the campaign, persisting it when the plan keeps it."""
+    failure, minimized = defect
     campaign.failures.append(replace(failure, digest=minimized.digest()))
     if plan.save:
         campaign.saved.append(str(save_case(plan.corpus_dir, target.name, minimized)))
 
 
-def _replay_case(
-    target: Target, case: Case, workspace: Path, plan: Plan, campaign: Campaign
-) -> None:
+def _replay_case(target: Target, case: Case, env: tuple[Path, Plan], campaign: Campaign) -> None:
     """Evaluate one replayed case and record failures."""
+    workspace, plan = env
     campaign.executed += 1
     failure = evaluate(target, case, workspace, plan.budget)
     if failure is not None:
@@ -530,9 +536,10 @@ def _replay_case(
 def replay(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campaign:
     """Re-run every input the corpus has ever kept. This is the gate."""
     campaign = Campaign()
+    env = (workspace, plan)
     for target in targets:
         for case in iter_corpus(plan.corpus_dir, target):
-            _replay_case(target, case, workspace, plan, campaign)
+            _replay_case(target, case, env, campaign)
     return campaign
 
 
@@ -602,12 +609,12 @@ def _crosscheck_cases(target: Target, plan: Plan) -> Iterator[Case]:
 
 def _crosscheck_case(
     target: Target,
-    index: int,
-    case: Case,
+    case_entry: tuple[int, Case],
     workspace: Path,
     campaign: Campaign,
 ) -> None:
     """Evaluate determinism of one case across hash seeds."""
+    index, case = case_entry
     path = _write(workspace, f"cross-{target.name}-{index}", case.text, SUFFIXES[case.corpus])
     campaign.executed += 1
     answers = _confirmed_answers(target.name, path)
@@ -620,7 +627,7 @@ def crosscheck(targets: Sequence[Target], workspace: Path, plan: Plan) -> Campai
     campaign = Campaign()
     for target in targets:
         for index, case in enumerate(_crosscheck_cases(target, plan)):
-            _crosscheck_case(target, index, case, workspace, campaign)
+            _crosscheck_case(target, (index, case), workspace, campaign)
     return campaign
 
 

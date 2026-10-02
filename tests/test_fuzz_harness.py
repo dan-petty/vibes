@@ -211,9 +211,7 @@ def test_replay_of_a_healthy_instrument_is_silent(tmp_path: Path) -> None:
     assert (campaign.executed, campaign.failures) == (1, [])
 
 
-def test_crosscheck_reports_hash_seed_divergence(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_crosscheck_reports_hash_seed_divergence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The subprocess plumbing is mocked; what is asserted is that disagreement is caught."""
     monkeypatch.setattr(fuzz_harness, "_seed_fingerprint", lambda target, path, seed: seed)
     plan = Plan(cases=2, seed=1, corpus_dir=tmp_path / "corpus")
@@ -221,9 +219,7 @@ def test_crosscheck_reports_hash_seed_divergence(
     assert (campaign.executed, len(gating_failures(campaign))) == (2, 2)
 
 
-def test_crosscheck_agrees_when_every_seed_agrees(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_crosscheck_agrees_when_every_seed_agrees(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A check that fires on agreement would make the corpus unusable."""
     monkeypatch.setattr(fuzz_harness, "_seed_fingerprint", lambda target, path, seed: "same")
     plan = Plan(cases=3, seed=1, corpus_dir=tmp_path / "corpus")
@@ -339,8 +335,17 @@ def test_the_report_is_machine_readable_for_ci_and_the_sarif_adapter(
 
     monkeypatch.setitem(fuzz_harness.TARGETS, "probe", _probe(_boom))
     report = tmp_path / "nested" / "fuzz.json"
-    main(["replay", "--targets", "probe", "--corpus-dir", str(_corpus_with(tmp_path, "probe")),
-          "--report", str(report)])
+    main(
+        [
+            "replay",
+            "--targets",
+            "probe",
+            "--corpus-dir",
+            str(_corpus_with(tmp_path, "probe")),
+            "--report",
+            str(report),
+        ]
+    )
     capsys.readouterr()
     payload = json.loads(report.read_text(encoding="utf-8"))
     assert (payload["executed"], payload["failures"][0]["severity"]) == (1, "error")
@@ -388,18 +393,19 @@ def test_fuzz_harness_decomposed_case_helpers(tmp_path: Path) -> None:
 
     camp_explore_clean = Campaign()
     seen: set[tuple[str, str, str]] = set()
-    _explore_target(clean_target, tmp_path, plan, seen, camp_explore_clean)
+    env = (tmp_path, plan)
+    _explore_target(clean_target, env, seen, camp_explore_clean)
 
     camp_explore_boom = Campaign()
-    _explore_target(boom_target, tmp_path, plan, seen, camp_explore_boom)
+    _explore_target(boom_target, env, seen, camp_explore_boom)
 
     camp_replay_clean = Campaign()
     camp_replay_boom = Campaign()
-    _replay_case(clean_target, case, tmp_path, plan, camp_replay_clean)
-    _replay_case(boom_target, case, tmp_path, plan, camp_replay_boom)
+    _replay_case(clean_target, case, env, camp_replay_clean)
+    _replay_case(boom_target, case, env, camp_replay_boom)
 
     camp_crosscheck = Campaign()
-    _crosscheck_case(clean_target, 0, case, tmp_path, camp_crosscheck)
+    _crosscheck_case(clean_target, (0, case), tmp_path, camp_crosscheck)
 
     assert (
         (camp_explore_clean.executed, len(camp_explore_clean.failures)),
@@ -414,5 +420,3 @@ def test_fuzz_harness_decomposed_case_helpers(tmp_path: Path) -> None:
         (1, 1),
         1,
     )
-
-
