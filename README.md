@@ -34,7 +34,7 @@ Here you will find:
 
 The headline exhibition in `vibes` is drawn from the autonomous development of [`devops-cli`](https://github.com/dan-petty/devops-cli)—a complex, multi-cloud, container-orchestrating, AI-integrated developer CLI built with over 900 automated tests, strict $\ge 90.0\%$ test coverage, and 10 continuous CI quality gates.
 
-> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 73 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
+> 🧭 **Master Observation Index**: For the comprehensive cross-domain synthesis and comparative matrix of all 76 case studies, see [**Consolidated Field Observations & Architectural Synthesis**](./observations/README.md).
 
 | Exhibition Piece | Core Observation & Breakthrough |
 |---|---|
@@ -405,7 +405,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 45-sycophantic-compliance-and-mechanical-refusal-oracles.md
 │       ├── 46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md
 │       ├── 47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md
-│       └── 48-the-improv-axiom-and-generative-headroom-elevation.md
+│       ├── 48-the-improv-axiom-and-generative-headroom-elevation.md
+│       └── 49-dissipative-structures-and-allometric-metabolism-in-agentic-swarms.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -423,6 +424,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── configurable-prose-style-and-terminology-gates.md
 │   ├── contract-template-ecosystem-and-in-place-updates.md
 │   ├── deterministic-oracles-and-feedback-inversion.md
+│   ├── dissipative-entropy-reduction-and-allometric-swarm-routing.md
 │   ├── epistemic-hygiene-and-context-pruning.md
 │   ├── epistemic-seam-and-mitigated-defect-auditing.md
 │   ├── error-budget-driven-feedback-inversion.md

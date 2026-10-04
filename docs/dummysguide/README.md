@@ -96,6 +96,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 12. [**Chapter 12: Code as Living Tissue**](./12-the-biology-and-physics-of-coding-agents.md)  
     *The Biology and Physics of AI* — Why coding agents behave like cells (apoptosis), ant colonies (stigmergy), shivering bodies (homeostasis), and sleep cycles (context compaction).
 
+13. [**Chapter 13: Nature's Secret Tricks for AI**](./13-slime-molds-and-fungal-roots.md)  
+    *Slime Molds, Fungal Roots, Superconductors, and Forest Fires* — How nature solves network traffic jams, zero-resistance conduction, and dead-wood clearing in code.
+
 ---
 
 ## 🚀 Want to Dive Deeper?
