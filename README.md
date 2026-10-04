@@ -448,6 +448,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── sycophantic-compliance-and-mechanical-refusal.md
 │   ├── synthetic-chaos-and-invariant-convergence-testing.md
 │   ├── test-harness-concurrency-leak-sentinel.md
+│   ├── the-harold-multi-agent-swarm-orchestration.md
 │   ├── the-improv-axiom-and-generative-headroom-elevation.md
 │   ├── tiered-verification-pyramid-and-sub-second-oracles.md
 │   ├── tool-cardinality-budget-management.md
