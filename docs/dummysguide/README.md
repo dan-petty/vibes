@@ -93,6 +93,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 11. [**Chapter 11: The "Yes, And..." Rule of Coding**](./11-the-improv-rule-of-coding.md)  
     *Why Great AI Coding is Like Improv Theater* — Never deny the compiler's errors, avoid cheating or skipping tests, and use every constraint as creative fuel to build cleaner code.
 
+12. [**Chapter 12: Code as Living Tissue**](./12-the-biology-and-physics-of-coding-agents.md)  
+    *The Biology and Physics of AI* — Why coding agents behave like cells (apoptosis), ant colonies (stigmergy), shivering bodies (homeostasis), and sleep cycles (context compaction).
+
 ---
 
 ## 🚀 Want to Dive Deeper?
