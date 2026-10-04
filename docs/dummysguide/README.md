@@ -90,6 +90,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 10. [**Chapter 10: The Sovereign Human Core**](./10-the-human-in-the-loop.md)  
     *The Pilot and the Autopilot* — The three things AI can never do (Purpose, Boundaries, Accountability), the air-lock principle, and the 3-strike rule.
 
+11. [**Chapter 11: The "Yes, And..." Rule of Coding**](./11-the-improv-rule-of-coding.md)  
+    *Why Great AI Coding is Like Improv Theater* — Never deny the compiler's errors, avoid cheating or skipping tests, and use every constraint as creative fuel to build cleaner code.
+
 ---
 
 ## 🚀 Want to Dive Deeper?
@@ -98,5 +101,5 @@ When you are ready to see how these fundamentals translate into mathematical pro
 
 - [**The Disciplined Agentic Manifesto**](../MANIFESTO.md): The formal engineering thesis behind agentic software development.
 - [**Taxonomy of Agentic Software Engineering**](../TAXONOMY.md): The full architectural classification of agent swarms, memory, and gates.
-- [**Consolidated Field Observations**](../../observations/README.md): 71 deep empirical case studies drawn from real production projects.
+- [**Consolidated Field Observations**](../../observations/README.md): 75 deep empirical case studies drawn from real production projects.
 - [**Architectural Patterns**](../../README.md#reusable-engineering-patterns): Reusable blueprints and operational playbooks for autonomous agents.
