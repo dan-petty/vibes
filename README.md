@@ -404,7 +404,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── 44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md
 │       ├── 45-sycophantic-compliance-and-mechanical-refusal-oracles.md
 │       ├── 46-closed-loop-pr-review-thread-synchronization-and-atomic-resolution.md
-│       └── 47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md
+│       ├── 47-biological-autopoiesis-homeostatic-damping-and-afferent-observability.md
+│       └── 48-the-improv-axiom-and-generative-headroom-elevation.md
 │
 ├── patterns/                          # Operational playbooks for human-agent collaboration
 │   ├── 3-way-ast-semantic-reconciliation.md
@@ -447,6 +448,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── sycophantic-compliance-and-mechanical-refusal.md
 │   ├── synthetic-chaos-and-invariant-convergence-testing.md
 │   ├── test-harness-concurrency-leak-sentinel.md
+│   ├── the-improv-axiom-and-generative-headroom-elevation.md
 │   ├── tiered-verification-pyramid-and-sub-second-oracles.md
 │   ├── tool-cardinality-budget-management.md
 │   └── zero-trust-sandboxing-and-observability.md
