@@ -1,0 +1,27 @@
+# The roadmap jobs' settings for this repository. Every runner reads this file
+# through the GitHub contents API at one ref; `devops roadmap migrate`, `render` and `reprioritize`
+# take it with `--ref`, which defaults to the default branch.
+
+# The project board (number) that holds the roadmap's Items. It has no default.
+board = 3
+
+# Planned releases kept after the current one.
+planning_horizon = 3
+
+# L: open issue limit where the throttle ratio reaches 1 closure per opening
+open_issue_limit = 100
+
+# s: share of open_issue_limit at which the throttle ratio begins rising above 0
+throttle_start_fraction = 0.8
+
+# o: share of open_issue_limit above the limit that adds one closure per opening
+overage_step_fraction = 0.25
+
+# Base credit granted at release start with zero delivered items
+release_credit_base = 10
+
+# Additional credit granted per item delivered in the previous release
+release_credit_per_delivered_item = 1
+
+# Upper cap on release credit, and target item count per release cycle
+release_item_target = 30
