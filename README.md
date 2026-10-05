@@ -298,6 +298,8 @@ This repository is distributed under the terms of the [Apache License, Version 2
 ├── .github/
 │   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
 │   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
+│   ├── project-template.json          # Declarative GitHub Projects v2 schema template
+│   ├── roadmap.toml                   # Roadmap configuration and project board mapping
 │   └── workflows/                     # Autonomous recursive CI/CD workflows
 │       ├── ci.yml                     # Multi-version test & AST invariant certification
 │       ├── codeql.yml                 # CodeQL semantic security & invariant analysis
@@ -320,6 +322,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── RETROSPECTIVE.md               # Empirical retrospective on autonomous dynamics & mechanical oracles
 │   ├── CURATION_GUIDELINES.md         # Guidelines for submitting & sanitizing artifacts
 │   ├── EMPIRICAL_FOUNDATIONS.md       # Critical synthesis cross-examining assertions against external literature
+│   ├── agent/                         # Autonomous agent task tracking and project boards
 │   ├── archive/                       # Delivered roadmap scope, retained for provenance
 │   ├── dummysguide/                   # Beginner-friendly fundamentals without technical mumbo jumbo
 │   ├── landscape/                     # Comparable-project survey: manifest, facts snapshot, report
