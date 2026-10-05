@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "Vibes Roadmap",
+  "description": "Standardized GitHub Projects v2 template for tracking vibes features, sprints, milestones, and agentic workflows.",
+  "short_name": "vibes-roadmap",
+  "fields": [
+    {
+      "name": "Status",
+      "type": "single_select",
+      "options": [
+        {"name": "New", "color": "GRAY", "description": "An item that is not yet ready", "replaces": ["Backlog", "Todo"]},
+        {"name": "Ready", "color": "BLUE", "description": "A problem statement, acceptance criteria and an answer to every key question"},
+        {"name": "In Progress", "color": "YELLOW", "description": "Actively under development"},
+        {"name": "In Review", "color": "PURPLE", "description": "Its pull request is open for review and CI"},
+        {"name": "Done", "color": "GREEN", "description": "Delivered and closed"},
+        {"name": "Blocked", "color": "RED", "description": "Waiting on something outside the roadmap: hardware, an upstream release or a person's decision"}
+      ]
+    },
+    {
+      "name": "Priority",
+      "type": "single_select",
+      "options": [
+        {"name": "P0-Critical", "color": "RED", "description": "Urgent blocker or security defect"},
+        {"name": "P1-High", "color": "ORANGE", "description": "High-priority milestone deliverable"},
+        {"name": "P2-Medium", "color": "YELLOW", "description": "Standard release deliverable"},
+        {"name": "P3-Low", "color": "GREEN", "description": "Minor optimization or polish"}
+      ]
+    },
+    {
+      "name": "Value",
+      "type": "single_select",
+      "options": [
+        {"name": "High", "color": "GREEN"},
+        {"name": "Medium", "color": "YELLOW"},
+        {"name": "Low", "color": "GRAY"}
+      ]
+    },
+    {
+      "name": "Effort",
+      "type": "single_select",
+      "options": [
+        {"name": "Low", "color": "GREEN"},
+        {"name": "Medium", "color": "YELLOW"},
+        {"name": "High", "color": "RED"}
+      ]
+    },
+    {
+      "name": "Job record",
+      "type": "text",
+      "description": "JSON the roadmap jobs write: the last value they set for each field (Release, Status, Priority, Value, Effort). No view shows it."
+    }
+  ],
+  "views": [
+    {
+      "name": "Sprint Kanban",
+      "layout": "board",
+      "group_by": "Status",
+      "visible_fields": ["Title", "Assignees", "Milestone", "Priority", "Labels"],
+      "filter": "no:milestone or milestone:\"current\"",
+      "description": "Active sprint board tracking items from New to Done."
+    },
+    {
+      "name": "Roadmap Timeline",
+      "layout": "roadmap",
+      "group_by": "Milestone",
+      "date_fields": ["Start Date", "Target Date"],
+      "visible_fields": ["Title", "Status", "Priority", "Assignees"],
+      "description": "Release roadmap timeline grouped chronologically by release version."
+    },
+    {
+      "name": "Triage & Quality Table",
+      "layout": "table",
+      "filter": "is:open label:status/triage,status/blocked,type/bug",
+      "sort_by": [{"field": "Priority", "direction": "asc"}],
+      "visible_fields": ["Title", "Status", "Priority", "Labels", "Assignees", "Updated"],
+      "description": "Incoming issue and PR triage table prioritizing bugs and blockers."
+    },
+    {
+      "name": "Value vs Effort Priority Matrix",
+      "layout": "table",
+      "group_by": "Value",
+      "sort_by": [{"field": "Value", "direction": "desc"}, {"field": "Effort", "direction": "asc"}],
+      "visible_fields": ["Title", "Milestone", "Value", "Effort", "Status"],
+      "description": "Items grouped by Value and sorted by Value, then Effort."
+    }
+  ]
+}
