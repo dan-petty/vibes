@@ -1,0 +1,95 @@
+# Labels the roadmap jobs read and apply in this repository (devops-cli ADR 0001).
+# Intake reads the type/ labels from this file; sync them with: devops gh labels sync
+# Add this repository's own scope/ labels below.
+
+# ── Type labels: intake assigns one of these (type/epic aside) ────────────────
+- name: "type/feature"
+  color: "0E8A16"
+  description: "New user-facing functionality or capability addition"
+
+- name: "type/bug"
+  color: "D73A4A"
+  description: "Defect, regression, or incorrect runtime behavior"
+
+- name: "type/security"
+  color: "B60205"
+  description: "Security vulnerability, CVE, or credential protection"
+
+- name: "type/refactor"
+  color: "1D76DB"
+  description: "Code simplification, deduplication, or structural reorganization"
+
+- name: "type/docs"
+  color: "0075CA"
+  description: "Documentation additions, guides, manuals, or README updates"
+
+- name: "type/infra"
+  color: "5319E7"
+  description: "Kubernetes, Docker, DevContainer, or OpenTofu infrastructure"
+
+- name: "type/test"
+  color: "FBCA04"
+  description: "Unit, integration, invariant, or benchmark test authoring"
+
+- name: "type/chore"
+  color: "CFD3D7"
+  description: "Dependency upgrades, tooling adjustments, or maintenance"
+
+- name: "type/epic"
+  color: "3E4B9E"
+  description: "High-level tracking epic or release parent issue coordinating deliverables"
+
+# ── Priority labels ───────────────────────────────────────────────────────────
+- name: "priority/p0-critical"
+  color: "B60205"
+  description: "Urgent blockages, critical vulnerabilities, or release blockers"
+
+- name: "priority/p1-high"
+  color: "D93F0B"
+  description: "High impact work required for upcoming release milestone"
+
+- name: "priority/p2-medium"
+  color: "FBCA04"
+  description: "Standard priority feature work and architectural improvements"
+
+- name: "priority/p3-low"
+  color: "0E8A16"
+  description: "Minor polish, low-severity improvements, and backlogged tasks"
+
+# ── Status labels ─────────────────────────────────────────────────────────────
+- name: "status/triage"
+  color: "EDEDED"
+  description: "New issue or PR awaiting technical triage and scoping"
+
+- name: "status/in-progress"
+  color: "BFDADC"
+  description: "Actively being designed or implemented by developer or agent"
+
+- name: "status/in-review"
+  color: "D4C5F9"
+  description: "Pull request open and undergoing multi-persona review or CI gates"
+
+- name: "status/blocked"
+  color: "E11D21"
+  description: "Execution blocked by external dependency or upstream review"
+
+- name: "status/ready-to-merge"
+  color: "0E8A16"
+  description: "All quality gates passed and approved by maintainer for merge"
+
+# ── Roadmap job labels ────────────────────────────────────────────────────────
+- name: "release"
+  color: "1D76DB"
+  description: "Pull request or issue associated with a release cut"
+
+- name: "needs-split"
+  color: "FBCA04"
+  description: "Too big for one pull request; reprioritization descopes it until it is split"
+
+- name: "source/agent"
+  color: "5319E7"
+  description: "Filed by an agent; counts toward the filing quota"
+
+- name: "budget/borrowed"
+  color: "B60205"
+  description: "Agent opening beyond the quota allowance; counts as debt until closed"
