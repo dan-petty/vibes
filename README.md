@@ -298,6 +298,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 ├── .github/
 │   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
 │   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
+│   ├── labels.yml                     # Labels the roadmap jobs read and apply
 │   ├── project-template.json          # Declarative GitHub Projects v2 schema template
 │   ├── roadmap.toml                   # Roadmap configuration and project board mapping
 │   └── workflows/                     # Autonomous recursive CI/CD workflows
