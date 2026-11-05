@@ -222,7 +222,10 @@ def _run_cargo_test_suite(crate_dir: Path) -> tuple[bool, int]:
     """Execute cargo test on Rust benchmark crate if cargo is available."""
     cargo_bin = shutil.which("cargo")
     if not cargo_bin or not (crate_dir / "Cargo.toml").is_file():
-        return True, 4
+        # No cargo, no crate, no tests: reporting four passing tests here is the
+        # difference between a benchmark that measured something and one that
+        # measured its own absence. A missing toolchain fails the track.
+        return False, 0
     try:
         res = subprocess.run(
             [cargo_bin, "test", "--quiet"],
@@ -234,7 +237,8 @@ def _run_cargo_test_suite(crate_dir: Path) -> tuple[bool, int]:
         )
         return res.returncode == 0, 4 if res.returncode == 0 else 0
     except (subprocess.TimeoutExpired, OSError):
-        return True, 4
+        # A killed or unexecutable cargo is a failed run, not a silent pass.
+        return False, 0
 
 
 def run_rust_typestate_benchmark() -> TrackResult:
