@@ -55,7 +55,7 @@ sequenceDiagram
 ### The Three Pathologies of Line-Based Thread Tracking
 
 1. **Drift Desynchronization**: A comment left on line 42 of revision `HEAD~2` points to line 58 after imports are added. When an agent queries line 42 of the active file, it inspects an unrelated AST node and either reports a false positive or attempts to refactor the wrong code.
-2. **Ghost Resolution**: When agents are tasked with resolving threads, they frequently execute GraphQL `resolveReviewThread` mutations based purely on conversational intent without verifying the file on disk. In our baseline audit, $34.2\%$ of agent-resolved threads retained the original defect in code.
+2. **Ghost Resolution**: When agents are tasked with resolving threads, they frequently execute GraphQL `resolveReviewThread` mutations based purely on conversational intent without verifying the file on disk, so a thread is marked resolved while the original defect remains in the code.
 3. **Orphaned Thread Abandonment**: When a file is renamed, decomposed into multiple modules, or deleted, threads anchored to the old path become "orphans." Agents fail to recognize that the path no longer exists and loop indefinitely trying to find the missing file.
 
 ---
@@ -67,7 +67,6 @@ We evaluated 25 pull requests containing 184 review discussion threads before an
 | Evaluation Metric | Naive Agent Baseline (Line-Based) | Closed-Loop AST Synchronizer (`pr_thread_sync`) | Variance / Impact |
 | :--- | :--- | :--- | :--- |
 | **Thread-to-Code Grounding Accuracy** | $61.4\%$ (line drift desync) | **$100.0\%$** (AST symbol resolution) | $+38.6\%$ grounding |
-| **False Resolution Rate** (marked resolved but defect remains) | $34.2\%$ | **$0.0\%$** (mechanical AST pre-flight gate) | $-34.2\%$ false fixes |
 | **Dangling Unresolved Threads at Merge** | $4.8$ threads/PR | **$0.0$** threads/PR | $100\%$ mergeable state |
 | **Manual Human Resolution Time** | $14.2$ minutes/PR | **$0.0$** minutes/PR | Zero administrative toil |
 | **Resolution Verification Speed** | N/A (unverified) | **$< 0.05$ seconds** across 50 threads | Sub-second determinism |
