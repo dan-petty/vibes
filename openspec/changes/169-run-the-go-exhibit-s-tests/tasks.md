@@ -5,7 +5,7 @@
 Reads: none. Changes: `benchmarks/benchmark_runner.py`.
 
 - [x] 1.1 Add test_cargo_timeout_returns_failed to benchmarks/test_benchmark_runner.py. The test patches shutil.which to return a path, patches subprocess.run to raise subprocess.TimeoutExpired, calls _run_cargo_test_suite with a valid crate_dir, and asserts the result is (False, 0). Also add a test for the OSError path and the missing-cargo path, each asserting (False, 0), and verify that `uv run pytest benchmarks/test_benchmark_runner.py -v -k 'cargo_timeout or cargo_missing or cargo_oserror'` fails on the base
-- [ ] 1.2 In benchmarks/benchmark_runner.py, change the early-return 'return True, 4' (line 224) to 'return False, 0'. Change the except-block 'return True, 4' (line 237) to 'return False, 0'. No other logic changes, and verify that `uv run pytest benchmarks/test_benchmark_runner.py -v -k 'cargo_timeout or cargo_missing or cargo_oserror'` passes
+- [x] 1.2 In benchmarks/benchmark_runner.py, change the early-return 'return True, 4' (line 224) to 'return False, 0'. Change the except-block 'return True, 4' (line 237) to 'return False, 0'. No other logic changes, and verify that `uv run pytest benchmarks/test_benchmark_runner.py -v -k 'cargo_timeout or cargo_missing or cargo_oserror'` passes
 - [ ] 1.3 Change no document, run `uv run devops docs generate --sync-readme`, and verify that `uv run devops ci docs` passes
 
 ## 2. Skip rust track test when cargo absent
