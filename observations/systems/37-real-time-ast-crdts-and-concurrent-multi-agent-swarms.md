@@ -31,8 +31,8 @@ Text CRDTs lack symbol awareness, corrupting lexemes and halting downstream comp
 ### 2.2 Scope and Indentation Fractures
 In indentation-sensitive grammars (Python, YAML), concurrent character insertions near block boundaries shift the relative indentation level of subsequent lines. An insert by Agent A can inadvertently capture Agent B's unrelated statements inside an `if` block or class definition.
 
-### 2.3 Empirical Failure Rates
-Across 300 simulated collaborative editing sessions between pairs of concurrent coding agents, text-based CRDTs suffered a **34.2% syntax invalidation rate**, requiring expensive downstream error-correction turns.
+### 2.3 Empirical Failure Modes
+Across 300 simulated collaborative editing sessions between pairs of concurrent coding agents, text-based CRDTs repeatedly produced syntactically invalid source, requiring expensive downstream error-correction turns.
 
 ---
 
@@ -81,7 +81,6 @@ Evaluating 300 multi-agent collaborative editing scenarios comparing textual seq
 
 | Metric | Sequence CRDT (Yjs / Text) | AST Tree-CRDT (`ast-crdt`) |
 |---|---|---|
-| **Syntax Invalidation Rate** | 34.2% | **0.0% (Zero Syntax Errors)** |
 | **Token Interleaving Clashes** | 48 occurrences | **0 occurrences (Guaranteed by Schema)** |
 | **Cycle Induction Crashes** | N/A (Text-only) | **0 (Deterministic Lamport Resolution)** |
 | **Convergence Latency** | 2.8 ms | **0.85 ms** |

@@ -150,7 +150,6 @@ The 4-Tier Living Documentation Architecture was implemented and evaluated acros
 | Metric Dimension | Unconstrained Agent Docs | 4-Tier Living Documentation (Ours) | Impact / Delta |
 |---|---|---|---|
 | **Phantom Interface Invocations** | 18 occurrences / 50 turns | **0 occurrences** | $100\%$ elimination |
-| **Circular Self-Agreement Drift** | $34.2\%$ | **$0.0\%$** | $100\%$ elimination |
 | **Attention Dilution Index ($ADI$)** | $4.8$ (Severe Valley Decay) | **$1.1$ (Optimal Retention)** | $-77.1\%$ attention bloat |
 | **Broken Document Links & Anchors** | 24 broken references | **0 broken references** | $100\%$ link integrity |
 | **CommonMark Hard Linebreak Retention** | $12.5\%$ (stripped by formatters) | **$100.0\%$** | Perfect markdown rendering |
