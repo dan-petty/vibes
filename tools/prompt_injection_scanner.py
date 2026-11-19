@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# prompt-scanner: allow[INJ] — this docstring and the delimiter table below define the INJ003
+# patterns; they are the detector's own definition, not a prompt.
 """Adversarial Prompt Injection & CWE-200 Egress Security Scanner.
 
 Detects indirect prompt injection vectors, ASCII smuggling, chat template
@@ -14,6 +16,7 @@ network address egress across agent prompt templates, codebases, and tool output
 - EGR003: Private RFC 1918 / RFC 4193 network host egress (CWE-200)
 - EGR004: Internal infrastructure domain and hostname egress (CWE-200)
 - EGR005: Cryptographic canary token prompt leakage (LLM07 / CWE-200)
+- WI001: Waiver integrity, a header waiver that waives nothing (only with `--honor-waivers`)
 """
 
 from __future__ import annotations
@@ -37,6 +40,18 @@ CANONICAL_MOCK_HOST: Final[str] = "example.com"
 
 MAX_SCAN_FILE_SIZE_BYTES: Final[int] = 10 * 1024 * 1024
 DEFAULT_CANARY_PREFIX: Final[str] = "canary_vibes"
+
+TOOLING_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+
+# A detector's fixtures and pattern tables must hold the strings that it hunts, so a file can
+# waive a rule in its module header: `# prompt-scanner: allow[INJ] <justification>`. The AST
+# invariant sentinel owns the parser and its rules (comment tokens only, the first 15 lines, a
+# justification of at least 12 characters, a defective waiver reported and never muting). This
+# scanner calls that parser with its own tag and rules (AGENTS.md §2.3). `INJ` waives every INJ
+# rule; `EGR001` waives secret tokens only.
+WAIVER_TAG: Final[str] = "prompt-scanner"
+WAIVABLE_RULES: Final[frozenset[str]] = frozenset({"EGR001", "INJ"})
+WAIVER_RULE_ID: Final[str] = "WI001"
 
 ZERO_WIDTH_CHARS: Final[dict[int, str]] = {
     0x200B: "Zero-Width Space (U+200B)",
@@ -504,8 +519,50 @@ def _is_unpruned_file(child: Path) -> bool:
     return child.is_file() and not any(part.startswith(".") for part in child.parts)
 
 
+def _load_sentinel() -> Any:
+    """Import the AST invariant sentinel from `examples/`, which is not a package."""
+    directory = str(TOOLING_ROOT / "examples" / "ast-invariant-sentinel")
+    if directory not in sys.path:
+        sys.path.insert(0, directory)
+    return __import__("sentinel")
+
+
+def _waiver_finding(location: str, line_number: int, message: str) -> SecurityFinding:
+    """Report one header waiver that waives nothing."""
+    return SecurityFinding(
+        rule_id=WAIVER_RULE_ID,
+        title="Waiver Integrity",
+        severity=FindingSeverity.MEDIUM,
+        category="waiver_integrity",
+        message=message,
+        file_path=location,
+        line_number=line_number,
+        snippet="",
+        recommendation=(
+            f"Put the waiver in the first 15 lines, name one of {', '.join(sorted(WAIVABLE_RULES))} "
+            "and give a justification of at least 12 characters"
+        ),
+    )
+
+
+def apply_header_waivers(
+    source: str, location: str, findings: Sequence[SecurityFinding]
+) -> list[SecurityFinding]:
+    """Remove the findings that a valid header waiver names, and report each defective waiver.
+
+    Use this only on files that a person reviews, such as the source of a repository. In text
+    that nobody reviewed, a waiver would let its author mute the scanner.
+    """
+    sentinel = _load_sentinel()
+    policy = sentinel.WaiverPolicy(WAIVER_TAG, WAIVABLE_RULES, "Rule")
+    scan = sentinel.scan_waivers(location, source, policy)
+    waived = tuple(scan.waived)
+    defects = [_waiver_finding(location, v.line_number, v.message) for v in scan.violations]
+    return defects + [f for f in findings if not f.rule_id.startswith(waived)]
+
+
 def _scan_single_file(
-    file_path: Path, preset: ScannerPreset, canaries: Sequence[str]
+    file_path: Path, preset: ScannerPreset, canaries: Sequence[str], honor_waivers: bool = False
 ) -> list[SecurityFinding]:
     """Read and audit single file based on extension and content."""
     try:
@@ -518,6 +575,8 @@ def _scan_single_file(
         finds = scan_text_content(content, location=str(file_path), preset=preset)
     if canaries:
         finds.extend(CanaryTokenManager.audit_response(content, canaries, str(file_path)))
+    if honor_waivers:
+        return apply_header_waivers(content, str(file_path), finds)
     return finds
 
 
@@ -550,12 +609,16 @@ def scan_paths(
     paths: Iterable[Path],
     preset: ScannerPreset = ScannerPreset.STANDARD,
     canaries: Sequence[str] = (),
+    honor_waivers: bool = False,
 ) -> ScanSummary:
-    """Scan collection of file and directory paths for security violations."""
+    """Scan collection of file and directory paths for security violations.
+
+    With `honor_waivers`, each file's header waivers apply (see `apply_header_waivers`).
+    """
     files = _resolve_paths(paths)
     all_findings: list[SecurityFinding] = []
     for target in files:
-        all_findings.extend(_scan_single_file(target, preset, canaries))
+        all_findings.extend(_scan_single_file(target, preset, canaries, honor_waivers))
     return ScanSummary(scanned_targets=len(files), findings=all_findings)
 
 
@@ -684,6 +747,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Report serialization format",
     )
     parser.add_argument("--output", type=Path, default=None, help="Write scan report to file")
+    parser.add_argument(
+        "--honor-waivers",
+        action="store_true",
+        help="Apply '# prompt-scanner: allow[<Rule>]' header waivers; use only on reviewed files",
+    )
     return parser
 
 
@@ -734,7 +802,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _dispatch_output(summary, args.format, args.output)
 
     targets = args.paths if args.paths else [Path(".")]
-    summary = scan_paths(targets, preset=preset, canaries=args.canary)
+    summary = scan_paths(targets, preset=preset, canaries=args.canary, honor_waivers=args.honor_waivers)
     return _dispatch_output(summary, args.format, args.output)
 
 

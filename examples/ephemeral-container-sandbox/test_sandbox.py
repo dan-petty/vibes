@@ -210,14 +210,16 @@ def test_sandbox_run_command_execution() -> None:
 def test_sandbox_cli_audit_and_demo(capsys: Any) -> None:
     """Verify CLI audit and demo command entrypoints execute cleanly."""
     exit_audit = main(["--audit"])
-    assert exit_audit == 0
     captured_audit = capsys.readouterr().out
-    assert "CIS ROOTLESS CONTAINER BENCHMARK AUDIT" in captured_audit
-
     exit_demo = main(["--demo", "--simulator"])
-    assert exit_demo == 0
     captured_demo = capsys.readouterr().out
-    assert "EPHEMERAL CONTAINER SANDBOX MATRIX" in captured_demo
+
+    assert (
+        exit_audit,
+        "CIS ROOTLESS CONTAINER BENCHMARK AUDIT" in captured_audit,
+        exit_demo,
+        "EPHEMERAL CONTAINER SANDBOX MATRIX" in captured_demo,
+    ) == (0, True, 0, True)
 
 
 # --- What the policy declares against what the engine applies ---------------------------

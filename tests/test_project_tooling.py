@@ -163,13 +163,15 @@ def test_github_client_token_precedence(monkeypatch: pytest.MonkeyPatch) -> None
     """An explicit token wins; otherwise GITHUB_TOKEN, then GH_TOKEN, then unauthenticated."""
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
-    assert GitHubAPIClient(token="explicit").token == "explicit"
-    assert GitHubAPIClient().token == ""
+    explicit = GitHubAPIClient(token="explicit").token
+    unauthenticated = GitHubAPIClient().token
 
     monkeypatch.setenv("GH_TOKEN", "from-gh")
-    assert GitHubAPIClient().token == "from-gh"
+    from_gh = GitHubAPIClient().token
     monkeypatch.setenv("GITHUB_TOKEN", "from-github")
-    assert GitHubAPIClient().token == "from-github"
+    from_github = GitHubAPIClient().token
+
+    assert (explicit, unauthenticated, from_gh, from_github) == ("explicit", "", "from-gh", "from-github")
 
 
 def test_github_client_sends_authenticated_json_request(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -50,13 +50,13 @@ def test_dependency_graph_blocking_logic() -> None:
     res3 = SDLCResource("3", SDLCResourceKind.ISSUE, 3, "CLI Wrapper", depends_on=[2])
 
     graph = DependencyGraph([res1, res2, res3])
-    assert graph.is_blocked(2) is True
-    assert graph.is_blocked(1) is False
+    before = (graph.is_blocked(2), graph.is_blocked(1))
 
     # Mark base schema as DONE
     res1.lifecycle_state = LifecycleState.DONE
-    assert graph.is_blocked(2) is False
-    assert graph.is_blocked(3) is True
+    after = (graph.is_blocked(2), graph.is_blocked(3))
+
+    assert (before, after) == ((True, False), (False, True))
 
 
 def test_dependency_graph_circular_dependency_detection() -> None:

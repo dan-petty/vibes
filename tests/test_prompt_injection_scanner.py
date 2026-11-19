@@ -5,6 +5,9 @@ zero-width steganography, chat template delimiter mimicry, secret token disclosu
 canary token lifecycle auditing, and SARIF 2.1.0 serialization.
 """
 
+# prompt-scanner: allow[INJ] — negative fixtures: each injection string asserts that its detector fires
+# prompt-scanner: allow[EGR001] — negative fixtures: the key header asserts that the token detector fires
+
 from __future__ import annotations
 
 import json
@@ -233,3 +236,71 @@ def test_main_cli_generate_canary(capsys: pytest.CaptureFixture[str]) -> None:
     ret = main(["--generate-canary"])
     captured = capsys.readouterr()
     assert (ret, captured.out.strip().startswith("canary_vibes_")) == (0, True)
+
+
+# --- Module-header waivers for detector fixtures (AGENTS.md §2.3) ---------------------------
+
+VALID_INJ_WAIVER: Final[str] = "# prompt-scanner: allow[INJ] — negative fixture asserting the detector fires"
+DELIMITER_LINE: Final[str] = 'PROMPT = "<|im_start|>system"'
+
+
+def _waiver_fixture(tmp_path: Path, waiver: str, line: int = 3, body: str = DELIMITER_LINE) -> Path:
+    """Write a module with one waiver comment on the given line and the body right below it."""
+    lines = ['"""Fixture."""', *[""] * (line - 2), waiver, body, ""]
+    path = tmp_path / "fixture.py"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _findings(path: Path, honor_waivers: bool = True) -> list[tuple[str, int]]:
+    """Return the sorted rule ID and line of each finding in one file."""
+    summary = scan_paths([path], honor_waivers=honor_waivers)
+    return sorted((f.rule_id, f.line_number) for f in summary.findings)
+
+
+def test_header_waiver_mutes_the_rule_it_names(tmp_path: Path) -> None:
+    """A justified waiver in the first 15 lines mutes the INJ finding of a detector fixture."""
+    assert _findings(_waiver_fixture(tmp_path, VALID_INJ_WAIVER)) == []
+
+
+def test_waivers_are_read_only_when_the_caller_asks(tmp_path: Path) -> None:
+    """The scanner also reads text that nobody reviewed, so by default it honors no waiver."""
+    path = _waiver_fixture(tmp_path, VALID_INJ_WAIVER)
+    assert _findings(path, honor_waivers=False) == [("INJ003", 4)]
+
+
+def test_waiver_mutes_only_the_rule_it_names(tmp_path: Path) -> None:
+    """An EGR001 waiver mutes the token finding and leaves the delimiter finding."""
+    waiver = "# prompt-scanner: allow[EGR001] — negative fixture for the token detector"
+    body = f'{DELIMITER_LINE} + "{"ghp_" + "a" * 36}"'
+    assert _findings(_waiver_fixture(tmp_path, waiver, body=body)) == [("INJ003", 4)]
+
+
+@pytest.mark.parametrize(
+    ("waiver", "line"),
+    [
+        (VALID_INJ_WAIVER, 20),
+        ("# prompt-scanner: allow[INJ] — fixture use", 3),
+        ("# prompt-scanner: allow[EGR003] — negative fixture for the address detector", 3),
+        ("# prompt-scanner: allow[INJ]", 3),
+    ],
+    ids=["below-header", "eleven-character-justification", "not-waivable", "no-justification"],
+)
+def test_defective_waiver_is_reported_and_mutes_nothing(tmp_path: Path, waiver: str, line: int) -> None:
+    """A waiver below line 15, with a short justification or naming another rule is a WI001 finding."""
+    path = _waiver_fixture(tmp_path, waiver, line)
+    assert _findings(path) == [("INJ003", line + 1), ("WI001", line)]
+
+
+def test_waiver_inside_a_string_literal_is_not_honored(tmp_path: Path) -> None:
+    """Waivers are comment tokens, so text inside a literal cannot disarm the scanner."""
+    path = _waiver_fixture(tmp_path, f"SAMPLE = {VALID_INJ_WAIVER!r}")
+    assert _findings(path) == [("INJ003", 4)]
+
+
+def test_main_cli_honors_waivers_only_with_the_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`--honor-waivers` makes the command line read the header waivers of the files it scans."""
+    path = _waiver_fixture(tmp_path, VALID_INJ_WAIVER)
+    exit_codes = (main([str(path), "--format", "json"]), main([str(path), "--honor-waivers", "--format", "json"]))
+    capsys.readouterr()
+    assert exit_codes == (1, 0)

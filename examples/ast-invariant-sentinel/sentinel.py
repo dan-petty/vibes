@@ -77,11 +77,34 @@ IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 # Closed domain of waivable invariants. Structural caps (complexity, nesting) are
 # never waivable: a metric you can opt out of is not an invariant.
 WAIVABLE_INVARIANTS = frozenset({"ZeroTrustSanitization"})
-WAIVER_PRAGMA_RE = re.compile(
-    r"^(?:#|//|\*)\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
-)
 WAIVER_HEADER_LINE_LIMIT = 15
 MIN_WAIVER_JUSTIFICATION_CHARS = 12
+
+
+@dataclass(frozen=True)
+class WaiverPolicy:
+    """The waiver grammar of one tool: the tag it reads and the rules that a file can waive.
+
+    A tool reads only the comments that carry its own tag, so it never honors or reports a
+    waiver of another tool. The prompt injection scanner in `tools/` calls `scan_waivers` with
+    its own policy: one parser and one set of rules for both tools (AGENTS.md §2.3).
+    """
+
+    tag: str
+    waivable: frozenset[str]
+    noun: str = "Invariant"
+
+    @property
+    def pragma(self) -> re.Pattern[str]:
+        """Return the pattern of one waiver comment: `<tag>: allow[<Name>] <justification>`."""
+        return re.compile(
+            rf"^(?:#|//|\*)\s*{re.escape(self.tag)}:\s*allow\[([A-Za-z0-9]+)\]"
+            r"\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
+        )
+
+
+SENTINEL_WAIVERS = WaiverPolicy("sentinel", WAIVABLE_INVARIANTS)
+WAIVER_PRAGMA_RE = SENTINEL_WAIVERS.pragma
 
 
 @dataclass(frozen=True)
@@ -721,40 +744,45 @@ def _iter_header_comments(source: str) -> list[tuple[int, str]]:
     return comments
 
 
-def _waiver_defect(match: re.Match[str] | None) -> str | None:
+def _waiver_defect(match: re.Match[str] | None, policy: WaiverPolicy) -> str | None:
     """Return why a waiver pragma is invalid, or None when it is well-formed."""
     if match is None:
-        return "Malformed waiver. Expected: # sentinel: allow[<Invariant>] <justification>"
-    invariant = match.group(1)
-    if invariant not in WAIVABLE_INVARIANTS:
-        return f"Invariant '{invariant}' is not waivable. Waivable: {', '.join(sorted(WAIVABLE_INVARIANTS))}."
+        return f"Malformed waiver. Expected: # {policy.tag}: allow[<{policy.noun}>] <justification>"
+    name = match.group(1)
+    if name not in policy.waivable:
+        return f"{policy.noun} '{name}' is not waivable. Waivable: {', '.join(sorted(policy.waivable))}."
     if len(match.group("reason").strip()) < MIN_WAIVER_JUSTIFICATION_CHARS:
-        return (
-            f"Waiver for '{invariant}' needs >= {MIN_WAIVER_JUSTIFICATION_CHARS} characters of justification."
-        )
+        return f"Waiver for '{name}' needs >= {MIN_WAIVER_JUSTIFICATION_CHARS} characters of justification."
     return None
 
 
-def _scan_waivers(file_path: Path, source: str) -> WaiverScan:
-    """Parse `# sentinel: allow[<Invariant>] <justification>` pragmas from the module header."""
+def scan_waivers(file_path: Path | str, source: str, policy: WaiverPolicy = SENTINEL_WAIVERS) -> WaiverScan:
+    """Parse `# <tag>: allow[<Name>] <justification>` pragmas from the module header.
+
+    Return the names that the header waives, and a `WaiverIntegrity` violation for each
+    pragma of this tag that waives nothing: malformed, not waivable, not justified in at
+    least 12 characters, or below line 15.
+    """
     waived: set[str] = set()
     violations: list[Violation] = []
     for line_number, text in _iter_header_comments(source):
-        if "sentinel:" not in text:
+        if f"{policy.tag}:" not in text:
             continue
-        match = WAIVER_PRAGMA_RE.match(text.strip())
-        defect = _waiver_defect(match)
+        match = policy.pragma.match(text.strip())
+        defect = _waiver_defect(match, policy)
         if defect or match is None:
             violations.append(
                 Violation(str(file_path), line_number, "WaiverIntegrity", defect or "Invalid waiver.")
             )
             continue
         waived.add(match.group(1))
-    violations.extend(_late_waiver_violations(file_path, source, waived))
+    violations.extend(_late_waiver_violations(str(file_path), source, waived, policy))
     return WaiverScan(frozenset(waived), tuple(violations))
 
 
-def _late_waiver_violations(file_path: Path, source: str, waived: set[str]) -> list[Violation]:
+def _late_waiver_violations(
+    file_path: str, source: str, waived: set[str], policy: WaiverPolicy
+) -> list[Violation]:
     """Report a waiver written below the header window, where it has no effect.
 
     A pragma on line 16 of a 15-line header is ignored in silence: the file's violations are
@@ -765,11 +793,11 @@ def _late_waiver_violations(file_path: Path, source: str, waived: set[str]) -> l
     for index, line in enumerate(
         source.splitlines()[WAIVER_HEADER_LINE_LIMIT:], WAIVER_HEADER_LINE_LIMIT + 1
     ):
-        match = WAIVER_PRAGMA_RE.match(line.strip())
+        match = policy.pragma.match(line.strip())
         if match and match.group(1) not in waived:
             late.append(
                 Violation(
-                    str(file_path),
+                    file_path,
                     index,
                     "WaiverIntegrity",
                     f"Waiver for '{match.group(1)}' is below line {WAIVER_HEADER_LINE_LIMIT} and has no "
@@ -1018,7 +1046,7 @@ def _audit_polyglot_path(file_path: Path, config: SentinelConfig) -> list[Violat
     if config.is_rule_active("ZeroTrustSanitization"):
         detected.extend(_audit_polyglot_sanitization(str(file_path), source))
     detected.extend(_audit_polyglot_complexity(str(file_path), source, config))
-    waivers = _scan_waivers(file_path, source)
+    waivers = scan_waivers(file_path, source)
     return _filter_active_violations(detected, waivers, config)
 
 
@@ -1051,7 +1079,7 @@ def audit_file(
         return _handle_parse_failure(file_path, parse_err, active_config)
 
     detected = _run_visitors(tree, str(file_path), active_config)
-    waivers = _scan_waivers(file_path, source)
+    waivers = scan_waivers(file_path, source)
     return _filter_active_violations(detected, waivers, active_config)
 
 
@@ -1068,7 +1096,7 @@ def audit_source(
         if active_config.is_rule_active("ZeroTrustSanitization"):
             detected.extend(_audit_polyglot_sanitization(file_path, source))
         detected.extend(_audit_polyglot_complexity(file_path, source, active_config))
-        waivers = _scan_waivers(path_obj, source)
+        waivers = scan_waivers(path_obj, source)
         return _filter_active_violations(detected, waivers, active_config)
 
     try:
@@ -1077,7 +1105,7 @@ def audit_source(
         return [_syntax_violation(path_obj, err)] if active_config.is_rule_active("SyntaxIntegrity") else []
 
     detected = _run_visitors(tree, file_path, active_config)
-    waivers = _scan_waivers(path_obj, source)
+    waivers = scan_waivers(path_obj, source)
     return _filter_active_violations(detected, waivers, active_config)
 
 

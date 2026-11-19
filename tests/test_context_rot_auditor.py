@@ -5,6 +5,8 @@ observation bloat detection, repetitive error deduplication, and active context 
 Consolidates assertions into structural tuple checks to maintain proactive complexity headroom.
 """
 
+# prompt-scanner: allow[INJ] — transcript fixtures: the parser under test reads role prefixes
+
 from __future__ import annotations
 
 import json

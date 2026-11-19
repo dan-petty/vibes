@@ -411,16 +411,21 @@ def test_a_failed_command_falls_back_and_reports_it(
     """
     server = _FakeValkey(fail=frozenset({failing}))
     client = _fake_client(monkeypatch, server)
-    assert client.is_connected is True
+    connected_before = client.is_connected
 
     stored = client.set("key", "value")
     value = client.get("key")
     client.get("key")
 
-    assert (stored, value, client.is_connected) == (True, expected, False)
-    assert server.commands == sent
-    assert failing in (client.fallback_reason or "")
-    assert len(_warnings(caplog)) == 1
+    assert (
+        connected_before,
+        stored,
+        value,
+        client.is_connected,
+        server.commands,
+        failing in (client.fallback_reason or ""),
+        len(_warnings(caplog)),
+    ) == (True, True, expected, False, sent, True, 1)
 
 
 def test_a_live_server_hit_is_reported_as_valkey(

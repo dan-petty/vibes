@@ -141,6 +141,11 @@ you can opt out of is not an invariant. A malformed waiver, one naming a non-wai
 lacking a justification of at least 12 characters raises `WaiverIntegrity` **and** leaves the original
 violation reported.
 
+Another tool can use the same parser with its own tag and its own waivable rules:
+`scan_waivers(path, source, WaiverPolicy(tag, waivable, noun))`. A tool reads only the comments that
+carry its tag. The prompt injection scanner in `tools/` uses the tag `prompt-scanner` and waives only
+`INJ` and `EGR001`.
+
 ---
 
 ## Programmatic Integration
