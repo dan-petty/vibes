@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli`  
 > **Topic**: Eliminating Homelab Leaks, Private IP Disclosure, and Standardizing Mock Data  
-> **Key Metric**: Zero leaked secrets/IPs across 200+ issues and public repositories  
-> **TLDR**: Eliminate homelab IP leaks and credentials by standardizing mock test data to example.com and RFC 5737 blocks with automated pre-commit scanners.
+> **Key Metric**: One scrub of leaked homelab hostnames, node names and mount paths (issue #152, v0.2.16), then a written rule; no automated private-IP scanner gated commits in September 2026  
+> **TLDR**: Reduce homelab IP and credential leaks by standardizing mock test data to example.com and RFC 5737 blocks under a written agent rule, backed by narrow tests and a private-key pre-commit hook.
 > **ELI:7b**: Never let the AI see or commit real passwords or your home Wi-Fi address. Use fake example.com websites and dummy IP addresses instead.
 
 ---
@@ -22,7 +22,7 @@ If left unchecked, agents will casually copy-paste real environment details into
 
 ## 2. The Observed Phenomenon
 
-During initial experiments with autonomous documentation generation and test creation, the agent naturally used whatever strings it saw in the active environment:
+During autonomous documentation generation and test creation, the agent used whatever strings it saw in the active environment. In `devops-cli`, issue #152 (milestone v0.2.16) recorded internal homelab hostnames, physical node names, NodePort references and drive paths that "slipped into task tracking and documents", and scrubbed them from `config.yaml`, task files, `docs/ROADMAP.md` and a Squid deployment manifest. The scrubbed values stay in git history. Typical shapes of the leak:
 - Unit tests hardcoded URLs pointing at a concrete LAN address and port, and at an internal `*.lan` hostname.
 - Markdown tasks recorded actual workstation hostnames and file system paths.
 - Dummy test endpoints used arbitrary random domains (e.g., `http://mytestapp.com`, `http://fake-vault.io`), which risked collision with real external domains or leaking intent.
@@ -43,7 +43,7 @@ LLMs are contextual mimicry engines:
 
 ## 4. Remediation & Architectural Pattern
 
-In `devops-cli`, we codified the **Zero Information Leakage & Comprehensive Environment Sanitization Mandate**:
+In `devops-cli`, `AGENTS.md` codified the **Zero Information Leakage & Comprehensive Environment Sanitization** rule. The filter in the diagram below is that written rule plus review prompts that flag RFC 1918 addresses; no code rewrites raw context into RFC 5737 values:
 
 ```mermaid
 flowchart TD
@@ -62,22 +62,22 @@ flowchart TD
 
 ### 1. Mandatory Documentation Placeholders & Standards
 - **IP Addresses**: Strictly restricted to RFC 5737 blocks (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) or loopback (`127.0.0.1` / `localhost`). Private RFC 1918 IPs (`10/8`, `172.16/12`, `192.168/16`) are strictly prohibited in committed code.
-- **Mock Domain Standardization**: Standardize all mock and dummy URLs to `example.com` with **no subdomains** (e.g. `http://example.com/api`, never `api.example.com` or `test.example.com`). This completely eliminates DNS leakage and inconsistent test fixtures.
+- **Mock Domain Standardization**: Standardize all mock and dummy URLs to `example.com` with **no subdomains** (e.g. `http://example.com/api`, never `api.example.com` or `test.example.com`). RFC 2606 reserves `example.com` for documentation, so a fixture never names a real third party, and one fixed name keeps test fixtures consistent.
 - **Abstract Role Notation**: Concrete servers are always referred to by role abstractions: `<gpu-node>`, `<storage-node>`, `<ingress-host>`.
 
 ### 2. Committed vs. Runtime Config Segregation
 - `config.example.yaml`: Committed repository template containing only generic or `localhost` endpoints.
 - `config.yaml`: Uncommitted, `.gitignored` local runtime file that remains the exclusive property of the developer's workstation. Agents are forbidden from overwriting or resetting user runtime configurations.
 
-### 3. Automated Pre-Push Secret & Sanitization Scans
-- CI runs `devops scan gitleaks` and custom regex sanitization checks prior to allowing any push.
+### 3. Automated Pre-Commit and Pre-Push Checks
+- The pre-commit stage runs `detect-private-key`. The pre-push hook runs `devops ci`, whose `security` step is Bandit, plus the full test suite, which holds narrow leak tests (for example `test_zero_homelab_ip_or_hostname_leakage_in_portkey_lightllm`, scoped to two manifests). `devops scan secrets` wraps Gitleaks, but in September 2026 neither CI nor a hook ran it, and no check scanned every committed file for RFC 1918 addresses (commit `acd091826`).
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Zero Information Leakage**: Complete sanitization across all public repositories, PRs, and release notes.
-- **High Portability**: Test fixtures running against `http://example.com` execute reliably in any CI environment without network dependency or DNS resolution failures.
+- **Less Information Leakage**: After the issue #152 scrub, the written rule and review prompts kept new homelab values out of most files. The rule does not reach git history, where the scrubbed values remain.
+- **High Portability**: Test fixtures that mock calls to `http://example.com` execute reliably in any CI environment without network access. A fixture that really calls `example.com` still needs DNS and the network.
 - **Mental Clarity**: Eliminates ambiguity over whether an endpoint in documentation is real or illustrative.
 
 > [!IMPORTANT]

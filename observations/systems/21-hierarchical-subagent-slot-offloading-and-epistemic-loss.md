@@ -1,8 +1,8 @@
 # Observation 21: Hierarchical Subagent Slot Offloading & Epistemic Boundary Hygiene
 
 > **Project**: `vibes` — Multi-Agent Orchestration & Economic Optimization
-> **Topic**: Solving the "Big Decides, Small Types, Big Checks" Trilemma: Preventing Epistemic Loss Across Subagent Delegation Boundaries and Quantifying 60%+ Token Cost Reductions
-> **Key Metric**: 59.6% reduction in frontier token expenditure via local/open-weights slot offloading; 0% constraint stripping achieved via structural Invariant Envelopes (`InvariantConstraint`); 100% detection of silent failure absorption via deterministic AST verification.
+> **Topic**: Solving the "Big Decides, Small Types, Big Checks" Trilemma: Preventing Epistemic Loss Across Subagent Delegation Boundaries and Measuring Token Offload in a Mock Demonstration
+> **Key Metric**: 59.6% of tokens offloaded to local and open-weights slots (55.8% lower dollar cost) in the illustrative output of `python3 tools/subagent_orchestrator.py demo`, whose token counts are hard-coded and which calls no model. Envelopes (`InvariantConstraint`) and `REJECTED`/`FAILED` statuses are covered by unit tests; no stripping rate or detection rate has been measured.
 > **TLDR**: Quantify and bound information loss across hierarchical subagent offloading pipelines by enforcing structured typed schema contracts.
 > **ELI:7b**: When big planning agents hand work down to small typing agents, use strict data schemas so critical constraints aren't lost in translation.
 
@@ -17,7 +17,7 @@ When parent agents decompose tasks for child subagents, three failure modes syst
 2. **Silent Failure Absorption**: When a child agent returns an empty payload, truncated output, or partial traceback, the parent agent fails to recognize the failure and synthesizes a confident hallucination.
 3. **Economic Asymmetry**: Monolithic orchestration routes mechanical tasks—such as scouting directory trees, formatting AST symbols, and generating type annotations—through frontier reasoning APIs, resulting in rapid token exhaustion and high operational costs.
 
-To solve these failure modes and fulfill Milestone 5 deliverable **#2005**, we implemented [`tools/subagent_orchestrator.py`](../../tools/subagent_orchestrator.py).
+To address these failure modes, we implemented [`tools/subagent_orchestrator.py`](../../tools/subagent_orchestrator.py).
 
 ---
 
@@ -34,19 +34,19 @@ flowchart TD
     classDef lost fill:#b3261e,color:#fff
 
     U["User Goal: Refactor dispatcher,<br/>preserve public symbols,<br/>keep M <= 6, depth <= 2"]:::full
-    U -->|"1. Natural Language"| P["Frontier Planner (Big Decides)<br/>Context: 100%"]:::full
+    U -->|"1. Natural Language"| P["Frontier Planner (Big Decides)<br/>Full Context"]:::full
 
-    P -->|"2. Compressed Text Prompt<br/>(Lacks Invariant Envelope)"| S1["Local Worker (Small Types)<br/>Context: 65% (Constraint Stripped)"]:::fading
-    S1 -->|"3. Unstructured Output<br/>(Omits required symbol)"| Synth["Parent Synthesis<br/>Context: 45% (Silent Absorption)"]:::lost
+    P -->|"2. Compressed Text Prompt<br/>(Lacks Invariant Envelope)"| S1["Local Worker (Small Types)<br/>Constraint Stripped"]:::fading
+    S1 -->|"3. Unstructured Output<br/>(Omits required symbol)"| Synth["Parent Synthesis<br/>Silent Absorption"]:::lost
 
     Synth -->|"4. False Success Claim"| BadPR["Broken Pull Request<br/>(Fails CI Invariants)"]:::lost
 ```
 
-Without machine-enforced boundary contracts, the probability of invariant violation compounds exponentially with each delegation layer:
+Without machine-enforced boundary contracts, a constraint must survive every delegation layer. If boundary $i$ keeps it with probability $\phi_i$, the chance that it survives $k$ boundaries is the product:
 
 $$P(\text{fidelity}) = \prod_{i=1}^{k} \phi_i$$
 
-Where $\phi_i \approx 0.80$ to $0.85$ represents per-boundary transmission fidelity. Across a 3-tier swarm, end-to-end constraint retention drops to $\approx 55\%$.
+With assumed (not measured) values of $\phi_i = 0.80$ to $0.85$, three boundaries keep the constraint with probability $0.51$ to $0.61$.
 
 ### 2.2 Preserving Constraints via Structural Envelopes
 
@@ -66,7 +66,7 @@ Subagents receive the constraint envelope as an explicit, machine-readable requi
 
 ## 3. Telemetry & Empirical Findings
 
-Using [`tools/subagent_orchestrator.py`](../../tools/subagent_orchestrator.py), a complex refactoring task (migrating a monolithic dispatcher to a table-driven handler with full type annotations) was executed across four tiered slots.
+The `demo` subcommand of [`tools/subagent_orchestrator.py`](../../tools/subagent_orchestrator.py) prints a mock run of one refactoring task (migrating a monolithic dispatcher to a table-driven handler with type annotations) across four tiered slots. The statuses, token counts and latencies are hard-coded in `SubagentOrchestrator.execute_mock_demo()`, and no model or verifier runs. The figures below are illustrative output of `python3 tools/subagent_orchestrator.py demo`.
 
 ### 3.1 Multi-Tier Subtask Execution Metrics
 
@@ -119,7 +119,7 @@ By separating `FAILED` from `REJECTED`, the orchestrator provides prescriptive f
 ```
 ❌ Constraint INV-SLOT-001 violated: Preservation violation: missing required symbol(s) ['dispatch_request']
 ```
-This enables zero-shot self-correction on subsequent iterations without corrupting parent synthesis.
+A worker can use this message on its next attempt. The orchestrator itself does not retry.
 
 ### 4.2 Deterministic Invariant Verification Oracle
 
@@ -129,13 +129,13 @@ Rather than prompting a frontier model to "review if this code looks clean", the
 - Extracts all public top-level functions and classes (`_is_public_definition`).
 - Checks candidate symbols against required symbol sets.
 
-Deterministic oracles provide sub-millisecond verification with zero token cost and zero hallucination risk.
+These checks cost no tokens and give the same result on every run. They check only complexity, depth, syntax and symbol presence: an empty output is marked `FAILED`, but a truncated output that still parses and keeps the required symbols passes.
 
 ---
 
 ## 5. Architectural Invariants & Synthesis
 
-From the design and empirical validation of hierarchical subagent slot offloading, five architectural invariants are codified:
+From the design of hierarchical subagent slot offloading, five architectural invariants are codified:
 
 1. **Immutable Invariant Envelope Invariant**: Any constraint designated as non-negotiable (complexity caps, public API stability, typing floors) must be passed across delegation boundaries as a structured, immutable envelope. Textual prompt compression without envelope tagging is strictly prohibited.
 2. **Explicit Rejection Semantics**: Silent absorption of subagent failures is forbidden. When subagent outputs fail invariant checks, the orchestrator must mark the task `REJECTED` and detail the exact mathematical violation.

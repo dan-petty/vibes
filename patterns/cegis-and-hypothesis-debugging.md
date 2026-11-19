@@ -3,7 +3,7 @@
 > **Pattern Class**: Operational Debugging & Defect Remediation
 > **Problem**: Faced with a defect, agents guess: they patch symptoms, mask errors, and cycle between fixes that each break the other
 > **Solution**: Counterexample-guided synthesis with an accumulating constraint set, so a later patch cannot silently reintroduce an earlier bug
-> **TLDR**: Convert bug remediation into an accumulating counterexample constraint loop: write a failing test first, synthesize a fix, and verify zero regressions.
+> **TLDR**: Convert bug remediation into an accumulating counterexample constraint loop: write a failing test first, synthesize a fix, and verify that every accumulated test still passes.
 > **ELI:7b**: When fixing a bug, write a test that proves the failure first. Fix it, and make sure none of the previous bug tests break.
 > **Reference Implementation**: [`examples/cegis-debugging-workbench/`](../examples/cegis-debugging-workbench/)
 
@@ -22,7 +22,9 @@ This single-shot trial-and-error approach results in **patch churn, symptom mask
 
 ## 2. Core Mechanics
 
-The CEGIS pattern transforms debugging from stochastic guessing into a **formal, converging constraint satisfaction loop**:
+The CEGIS pattern transforms debugging from stochastic guessing into a **test-driven loop that accumulates counterexamples as constraints**.
+
+The name is an analogy. Counterexample-guided inductive synthesis (CEGIS) comes from program synthesis ([Solar-Lezama et al., ASPLOS 2006](https://doi.org/10.1145/1168857.1168907)): a solver searches a finite space of candidate programs, a verifier checks each candidate against the specification and returns a counterexample, and the solver adds it as a constraint. In this pattern an agent writes the candidate patch and a test suite plays the verifier. Nothing is proved, and the loop is not guaranteed to converge:
 
 ```mermaid
 flowchart TD
@@ -71,7 +73,7 @@ def test_parse_manifest_string_replicas_counterexample():
     assert manifest.replicas == 3
 ```
 
-### Step 2: Minimal Synthesized Patch (`src/devops_cli/parser.py`)
+### Step 2: Minimal Synthesized Patch (illustrative `parser.py`)
 ```python
 # Before
 replicas = manifest_dict["spec"]["replicas"]

@@ -1,6 +1,6 @@
 # Sample App: Ephemeral Rootless Container Sandbox Harness
 
-An isolated, hardened execution harness and CIS security benchmark auditor for safely executing untrusted AI agent payloads inside rootless containers (`docker` / `podman`) with a zero-dependency standard-library simulator fallback.
+An execution harness for untrusted AI agent payloads, with a policy checker for eight controls modeled on the CIS Docker Benchmark. It runs payloads in `docker` / `podman` containers as an unprivileged user, or in a zero-dependency standard-library subprocess fallback (the "simulator"). It does not check that the container runtime itself is rootless.
 
 ---
 
@@ -8,21 +8,21 @@ An isolated, hardened execution harness and CIS security benchmark auditor for s
 
 Autonomous AI agents generate and execute arbitrary code, system commands, and test suites. Running unvetted agent code directly on developer workstations or host environments presents severe operational and security threats:
 
-1. **Host Compromise & Persistence (CWE-78)**: Malicious or hallucinated commands can tamper with host binaries, shell configurations (`.bashrc`, `.zshrc`), or system services.
+1. **Host Compromise & Persistence**: Malicious or hallucinated commands can tamper with host binaries, shell configurations (`.bashrc`, `.zshrc`), or system services.
 2. **Network Egress & Data Exfiltration (SSRF)**: Agent-executed payloads can reach internal RFC 1918 addresses, cloud metadata endpoints (`169.254.169.254`), or exfiltrate environment secrets to untrusted command-and-control servers.
 3. **Denial of Service & Fork Bombs (CWE-400)**: Recursive subagent loops or runaway processes can exhaust workstation PIDs, CPU cycles, and RAM.
 4. **Secret Leakage & Environment Contamination**: Passing the host's complete environment into child processes exposes cloud credentials (`AWS_SECRET_ACCESS_KEY`), GitHub tokens, and SSH keys.
 
-The **Ephemeral Rootless Container Sandbox Harness** establishes a zero-trust execution perimeter, stripping all host credentials, locking down network interfaces, bounding resource limits, and — where a container runtime is present — mounting filesystems in read-only mode.
+The **Ephemeral Rootless Container Sandbox Harness** establishes a zero-trust execution perimeter, stripping host credentials from the environment (the simulator can still read credential files under `$HOME`), locking down network interfaces, bounding resource limits, and — where a container runtime is present — mounting filesystems in read-only mode.
 
 > [!IMPORTANT]
 > **Two numbers, and they are not the same number.** `CISPolicyAuditor` scores the *policy object*: it answers "does this configuration ask for the eight controls". `RuntimeEnforcementAuditor` scores the *engine about to run*: it answers "which of them will actually be applied". For a long time only the first existed, so a default policy reported **100.0/100 with zero violations** while the engine-less path enforced **none** of the eight — it ran a payload that opened a socket and wrote a file into the invoking user's home directory, and called the run compliant. A conformance check of a declaration is not a measurement of a runtime.
 
 ---
 
-## CIS Rootless Container Security Controls
+## Container Security Controls (CIS Docker Benchmark Style)
 
-The harness embeds an automated auditor validating compliance against 8 core CIS Docker/Rootless Container benchmarks:
+The harness embeds a policy checker for 8 controls. The `CIS-5.x` IDs are this harness's own labels, not item numbers of the CIS Docker Benchmark, and CIS publishes no separate benchmark for rootless containers. In CIS Docker Benchmark v1.6.0 the matching items are 4.1 (container user), 5.4 (capabilities), 5.11 (memory), 5.13 (read-only root filesystem), 5.26 (no new privileges) and 5.29 (PIDs limit). The benchmark has no item for `--network none` or for a `noexec` `/tmp`.
 
 | CIS Control | Description | Enforcement Mechanism |
 |---|---|---|
@@ -53,8 +53,8 @@ flowchart TD
     SimulatorEngine --> Result
 ```
 
-- **Container Mode**: When `docker` or `podman` is available, orchestrates ephemeral unprivileged containers with strict flag isolation.
-- **Simulator Mode**: When running in offline or nested environments without a container socket, uses POSIX process group isolation (`os.setsid`), bounded execution timers, sanitized environments, `setrlimit` caps, and a **seccomp-BPF filter installed in the child between `fork` and `exec`** — kernel-enforced, unprivileged, and irrevocable. This is the path that actually runs on most developer machines and in most CI jobs, and until [`syscall_filter.py`](./syscall_filter.py) it enforced nothing.
+- **Container Mode**: When `docker` or `podman` is on `PATH`, calls its CLI (`docker run --rm ...`) with the flags in the table above. It does not check that the runtime is rootless. `run_python_code` passes the host interpreter path (`sys.executable`) as the command inside the `python:3.12-slim` image, where that path does not exist, so Python payloads fail in this mode; the tests check only the argument list. For this mode `RuntimeEnforcementAuditor` reports all eight controls as enforced from the flags alone; it does not inspect the running container.
+- **Simulator Mode**: When running in offline or nested environments without a container socket, uses POSIX process group isolation (`os.setsid`), bounded execution timers, sanitized environments, `setrlimit` caps, and a **seccomp-BPF filter installed in the child between `fork` and `exec`** — kernel-enforced, unprivileged, and irrevocable. The memory cap is `RLIMIT_AS` (address space per process), not a cgroup, and the process cap is `RLIMIT_NPROC`, which counts every process of the user. This is the path that actually runs on most developer machines and in most CI jobs, and until [`syscall_filter.py`](./syscall_filter.py) it enforced nothing.
 - **Buffer Bounding**: Output streams are strictly capped to 64KB (`MAX_OUTPUT_BYTES = 65536`) with truncation markers to prevent CWE-400 memory bloat.
 
 ---
@@ -63,8 +63,10 @@ flowchart TD
 
 ### Run CIS Policy Security Audit
 ```bash
-python3 examples/ephemeral-container-sandbox/sandbox.py --audit
+python3 examples/ephemeral-container-sandbox/sandbox.py --audit --simulator
 ```
+
+Without `--simulator`, the runtime section reports the `docker` or `podman` engine when one is on `PATH`.
 
 Output:
 ```text
@@ -107,11 +109,13 @@ Output:
 ==========================================================================
 🛡️  EPHEMERAL CONTAINER SANDBOX MATRIX (Runtime: simulator)
 --------------------------------------------------------------------------
-  [CONTAINED]  Safe Math Computation                      -> 28.42ms
-  [CONTAINED]  Infinite Loop Timeout Containment          -> 512.11ms
-  [CONTAINED]  Output Stream Buffer Bounding (CWE-400)    -> 65536 bytes
+  [CONTAINED]  Safe Math Computation                      -> 92.49ms
+  [CONTAINED]  Infinite Loop Timeout Containment          -> 213.65ms
+  [CONTAINED]  Output Stream Buffer Bounding (CWE-400)    -> 65535 bytes
 ==========================================================================
 ```
+
+Timings vary by host. The "Infinite Loop" probe is `time.sleep(10)`, stopped by the demo's 0.15 s timeout.
 
 ---
 
@@ -121,7 +125,7 @@ Output:
 python3 -m pytest -v examples/ephemeral-container-sandbox/test_sandbox.py
 ```
 
-All 11 unit tests validate:
+The 17 tests in `test_sandbox.py` validate:
 - Policy immutability and default CIS controls.
 - Audit scoring deductions on insecure configurations.
 - Docker and Podman argument synthesis.
@@ -180,6 +184,6 @@ you must; never filter `connect`'s address.
 pytest examples/ephemeral-container-sandbox/test_syscall_filter.py
 ```
 
-Every claim above is executed against the kernel. The syscall table is cross-checked
+The deny and refuse behavior above is executed against the kernel. The architecture pin and the x32 kill are checked by inspecting the emitted BPF program, not by running an x32 process. The syscall table is cross-checked
 against `asm/unistd_64.h` by a test, because a transcription error denies a different call
 than the one named and nothing else would notice.

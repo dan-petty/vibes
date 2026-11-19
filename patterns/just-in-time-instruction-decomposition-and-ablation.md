@@ -16,9 +16,9 @@ Autonomous agents rely on system prompts and repository instructions (`AGENTS.md
 This causes three systemic failures:
 
 1. **The Context Window Tax**:
-   Monolithic instruction sets routinely exceed 30,000 tokens (>100KB), consuming over 25% of modern model context windows before any file content is loaded.
+   Monolithic instruction sets can exceed 100 KB. The devops-cli `AGENTS.md` was 110 KB, about 24,700 `cl100k_base` tokens, at commit 910b82348 (2026-10-07). That is about 19% of a 128k-token context window before any file content is loaded.
 2. **Attention Dilution & The Lost-in-the-Middle Phenomenon**:
-   Transformer attention mechanisms suffer severe degradation in middle prompt regions. Rules positioned between token offsets 5,000 and 25,000 experience up to 60% lower adherence compared to leading and trailing instructions.
+   Liu et al., "Lost in the Middle: How Language Models Use Long Contexts" (TACL 2024, [arXiv:2307.03172](https://arxiv.org/abs/2307.03172)), found that models use information at the start and end of a long context better than information in the middle. They measured multi-document question answering and key-value retrieval, not instruction adherence. Rules in the middle of a long instruction file can have the same problem.
 3. **The Inversion Lag**:
    Engineering teams frequently automate rules into deterministic mechanical gates (AST sentinels, formatters, schema checkers) but fail to prune the redundant prose instructions. The prompt wastes cognitive bandwidth restating constraints that git pre-commit hooks already verify mechanically.
 
@@ -68,12 +68,13 @@ flowchart LR
 3. **Counterfactual Rule Ablation**:
    - Systematically evaluate instruction retention by simulating rule omission in continuous test harnesses.
    - Rules whose removal does not increase invariant breach rates are candidates for archival or mechanical transformation.
+   - The `ablate` command of the reference implementation does not run this experiment. It ranks sections with a heuristic: a cited gate code and the word count of the section (`tools/instruction_governor.py`, `AblationAuditor._score_section`).
 
 ---
 
 ## 3. Concrete Implementation Snippets
 
-Below is a reference implementation of the JIT instruction governor and rule attribution engine:
+Below is a simplified sketch of the JIT instruction governor. The module in `tools/instruction_governor.py` uses other field and domain names:
 
 ```python
 """Just-In-Time (JIT) instruction governor and rule attribution engine."""
@@ -101,7 +102,7 @@ class InstructionGovernor:
         self.core_envelope_tokens_max = core_envelope_tokens_max
 
     def estimate_tokens(self, text: str) -> int:
-        """Estimate token count based on standard whitespace and punctuation ratio."""
+        """Estimate token count as the whitespace-separated word count."""
         return max(1, len(text.split()))
 
     def resolve_domain_overlays(self, target_paths: list[str]) -> set[str]:
@@ -129,15 +130,15 @@ class InstructionGovernor:
 2. **Prune Redundant Prose Upon Inversion**:
    When a prose guideline is inverted into an automated AST or linting gate, immediately condense the prose rule to an invariant citation.
 3. **Continuous Token Auditing**:
-   Run `tools/instruction_governor.py audit` in CI to ensure that Tier 1 prompt kernels never exceed the 2,000-token ceiling.
+   Run `tools/instruction_governor.py audit --json` in CI and compare the Tier 1 estimate with the 2,000-token ceiling. The command reports word-count estimates per section. It does not fail when a section exceeds the ceiling.
 
 ---
 
 ## 5. Verifiable Impact
 
-Adopting the JIT Instruction Decomposition and Ablation pattern across autonomous review harnesses achieved:
-- **89.9% reduction** in baseline instruction token load (31.4k $\to$ 3.1k tokens).
-- **$4.2\times$ reduction** in time-to-first-token latency.
-- **+58.7% improvement** in middle-valley invariant adherence.
-- Complete elimination of redundant prompt instructions for mechanically gated invariants.
+No measured result in this repository backs this pattern. The expected effects are:
+- A smaller baseline instruction load. For scale, the monolithic devops-cli `AGENTS.md` was about 24,700 `cl100k_base` tokens on 2026-10-07.
+- A shorter time-to-first-token, because the model reads a shorter prompt.
+- Better adherence to rules that would otherwise sit in the middle of a long context.
+- Less prose that restates mechanically gated invariants.
 

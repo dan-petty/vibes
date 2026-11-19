@@ -1,19 +1,19 @@
 # Chapter 13: Nature's Secret Tricks for AI
 ### Slime Molds, Fungal Roots, Superconductors, and Forest Fires
 
-> **TLDR**: Nature spent four billion years solving complex network routing, resource allocation, and zero-friction conduction. AI software systems borrow these exact tricks: using slime-mold routing to navigate files, underground fungal networks to broadcast compiler warnings, superconducting tables to eliminate code friction, and controlled forest fires to clear dead code.
+> **TLDR**: Nature spent four billion years solving complex network routing, resource allocation, and zero-friction conduction. AI software systems borrow ideas from these tricks: using slime-mold routing to navigate files, underground fungal networks to broadcast compiler warnings, superconducting tables to eliminate code friction, and controlled forest fires to clear dead code.
 >
-> **ELI:7b**: You know how trees talk to each other through mushroom roots underground, and how forest fires clear out dead leaves so baby trees can grow? Coding with AI uses the exact same tricks: smart networks connect all the code files together, and we burn away old broken code so the app stays fast and healthy.
+> **ELI:7b**: You may have heard that trees talk to each other through mushroom roots underground (scientists still argue about how much), and you know forest fires clear out dead leaves so baby trees can grow. Coding with AI uses similar tricks: smart networks connect all the code files together, and we burn away old broken code so the app stays fast and healthy.
 
 ---
 
 ## 🍄 1. The Slime Mold Navigator (Context Without GPS)
 
-In 2010, scientists in Tokyo did a famous experiment with a bright yellow slime mold called *Physarum polycephalum*.
+In 2010, scientists in Japan and the UK (Tero et al., *Science*) did a famous experiment with a bright yellow slime mold called *Physarum polycephalum*.
 
-They placed tiny oat flakes on a wet map in the exact spots of Tokyo's train stations. The slime mold grew out in all directions. Whenever a path carried lots of nutrients, the tubes swelled and grew thick. Whenever a path led nowhere, the tubes withered away.
+They placed tiny oat flakes on a wet map at the spots of the cities around Tokyo. The slime mold grew out in all directions. Whenever a path carried lots of nutrients, the tubes swelled and grew thick. Whenever a path led nowhere, the tubes withered away.
 
-Within 26 hours, this brainless single-celled organism had built a network that was **virtually identical to the human-engineered Tokyo subway system!**
+Within 26 hours, this brainless single-celled organism had built a network **comparable in efficiency, fault tolerance and cost to the human-engineered Tokyo-area rail network!**
 
 ```mermaid
 flowchart LR
@@ -35,9 +35,11 @@ The AI finds the **fastest route to the bug** without needing a human to tell it
 
 ## 🌲 2. The Wood Wide Web: Underground Fungal Networks
 
-In a dense forest, trees look like they are standing alone. But beneath the soil, thousands of miles of fungal mycelium connect the root systems of every birch, pine, and oak tree:
+In a dense forest, trees look like they are standing alone. But beneath the soil, fungal threads (mycelium) connect the roots of many trees. Popular books tell two stories about this network:
 - If a tree in the shade is starving, a tree in the sunshine sends it sugar through the fungus.
-- If beetles attack one tree on the edge of the forest, that tree sends an electrical warning through the roots. Neighboring trees receive the warning and start pumping bitter chemicals into their leaves **before the beetles even reach them!**
+- If beetles attack one tree, warning signals travel through the network, and neighboring trees start making defensive chemicals **before the beetles even reach them!**
+
+Scientists still debate these stories. Some greenhouse experiments with seedlings show small transfers, but a 2023 review (Karst, Jones & Hoeksema, *Nature Ecology & Evolution*) found the evidence from real forests weak. The analogy below uses the popular version.
 
 ```mermaid
 flowchart TD
@@ -51,9 +53,9 @@ flowchart TD
 ```
 
 ### How AI Uses This
-In an AI coding workstation, the Language Server Protocol (LSP) and Model Context Protocol (FastMCP) are the **underground fungal network**:
+In an AI coding workstation, the Language Server Protocol (LSP) and the Model Context Protocol (MCP; FastMCP is one Python framework for it) are the **underground fungal network**:
 - If an agent modifies a function in `handlers.py`, the underground network immediately whispers to `router.py` and `tests.py`: *"The function signature just changed!"*
-- The AI sees the warning inside its editor in twelve milliseconds, long before running a slow test or pushing broken code.
+- The AI sees the warning inside its editor almost at once, long before running a slow test or pushing broken code.
 
 ---
 
@@ -89,9 +91,9 @@ def dispatch(action_name: str) -> None:
 
 ## 🔥 4. Forest Fires & The Delete-On-Sight Rule
 
-In the Rocky Mountains, lodgepole pine trees produce pinecones that are glued shut by thick, tough resin. They cannot open in normal spring weather.
+In the Rocky Mountains, many lodgepole pine trees produce pinecones that are glued shut by thick, tough resin. They do not open in normal spring weather.
 
-They only open when a **forest fire** sweeps through! The intense heat melts the resin, clears away dead, tangled brush that was blocking sunlight, and scatters millions of fresh seeds into nutrient-rich ash.
+They open mainly when a **forest fire** sweeps through! The intense heat melts the resin, clears away dead, tangled brush that was blocking sunlight, and scatters millions of fresh seeds into nutrient-rich ash.
 
 If humans extinguish every small fire, dead wood piles up for decades until a single lightning strike creates an uncontrollable catastrophe.
 
@@ -114,13 +116,13 @@ Biologist Max Kleiber discovered that an animal's metabolism scales to its body 
 ```mermaid
 flowchart TD
     subgraph SmallModel ["The Hummingbird (Local 7B/14B Model)"]
-        H1["150 tokens/sec | Instant Reflex"]
+        H1["Fast | Instant Reflex"]
         H2["Checks syntax, formats code, fixes typos, runs linters"]
         H3["Zero API cost on local computer"]
     end
 
     subgraph BigModel ["The Blue Whale (Frontier Reasoning Model)"]
-        W1["15 tokens/sec | Deep Thought"]
+        W1["Slower per token | Deep Thought"]
         W2["Designs overall architecture, solves tough algorithms"]
         W3["High-cost, high-leverage"]
     end
@@ -132,7 +134,7 @@ If you ask a giant frontier model (the Blue Whale) to fix a typo in a comment, y
 If you ask a tiny model (the Hummingbird) to design a distributed database, it will collapse under the weight of the task.
 
 **Smart engineering pairs them together**:
-- Let the fast local model (the hummingbird) zip through syntax checks, formatting, and file searches at 150 tokens per second.
+- Let the fast local model (the hummingbird) zip through syntax checks, formatting, and file searches.
 - Wake up the big frontier model (the whale) only when you need deep architectural reasoning and long-term planning.
 
 ---
@@ -140,7 +142,7 @@ If you ask a tiny model (the Hummingbird) to design a distributed database, it w
 ## 🎯 Key Takeaways
 
 1. **Route like a slime mold**: Focus only on the files where tests are failing; let dead paths wither away.
-2. **Connect like a fungal root**: Use LSP and FastMCP so warnings travel across the codebase at the speed of reflex.
+2. **Connect like a fungal root**: Use LSP and MCP so warnings travel across the codebase at the speed of reflex.
 3. **Cool down your code**: Turn sprawling `if/else` ladders into frictionless lookup tables.
 4. **Burn the dead wood**: Delete obsolete code on sight to keep the repository fresh and readable.
 5. **Pair hummingbirds with whales**: Use fast local models for quick edits and big frontier models for deep thinking.

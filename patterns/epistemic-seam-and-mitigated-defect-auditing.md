@@ -3,8 +3,8 @@
 > **Pattern Class**: Multi-Agent Verification & Epistemic Governance
 > **Problem**: Verifier personas conflate mitigation with refutation, silently discarding genuine defects based on hallucinated safety context, while negative filtering catalogs suffer runaway epistemic drift by learning from model opinions
 > **Solution**: A tripartite verification protocol (Confirmed, Refuted with Line Citation, Mitigated with Named Mechanism) paired with an immutable Epistemic Seam that permits negative catalog learning solely from deterministic ground truth or human verification
-> **TLDR**: Maintain immutable epistemic seams between defect identification and fix synthesis, preventing agents from falsely claiming a bug is resolved.
-> **ELI:7b**: Keep the bug-hunter role separate from the bug-fixer role so the fixer can't grade its own homework and claim it's done when it isn't.
+> **TLDR**: Give every verified finding one of three verdicts (confirmed, refuted with a line citation, mitigated with a named mechanism), and let false-positive catalogs learn only from deterministic checks or human review.
+> **ELI:7b**: A checker that calls a bug report wrong must point to the line that proves it. A bug that is only softened stays on the list, and the list of known false alarms learns only from people and exact tools, never from the AI's opinion.
 > **Reference Implementation**: [`tools/finding_baseline.py`](../tools/finding_baseline.py), [`tools/sarif_report.py`](../tools/sarif_report.py)
 
 ---
@@ -75,7 +75,7 @@ flowchart LR
 
 ## 3. Concrete Implementation Snippets
 
-Below is a reference Python implementation of the tripartite verdict model and the immutable epistemic catalog guardrail:
+Below is a sketch of the tripartite verdict model and the immutable epistemic catalog guardrail. It is not in this repository. The reference tools are narrower: `tools/finding_baseline.py` keeps a file of accepted findings that changes only by an explicit `record` or `prune` command, and `tools/sarif_report.py` gives each finding a stable fingerprint. devops-cli has the verdicts as finding statuses (`devops review verify <id> <n> --status MITIGATED --reason ...`):
 
 ```python
 """Tripartite verification engine with immutable epistemic seam."""
@@ -136,6 +136,6 @@ class EpistemicCatalog:
 ## 4. Key Takeaways
 
 1. **Mitigation is Not Absence**: Treating a mitigated defect as refuted silently sweeps compounding architectural risk under the rug.
-2. **Models Cannot Teach Their Own Oracles**: Allowing an LLM's invalidation opinions to train false-positive suppression catalogs guarantees catastrophic false-negative drift over time.
+2. **Models Cannot Teach Their Own Oracles**: Allowing an LLM's invalidation opinions to train false-positive suppression catalogs risks false-negative drift over time.
 3. **Visible Nuance Over Binary Filters**: Presenting developers with *"Mitigated: Defect present, bounded by seccomp sandbox"* empowers human judgement rather than creating false senses of security.
 

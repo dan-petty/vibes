@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Code Smell Quantifier: deterministic, stdlib-only measurement of structural decay.
+"""Code Smell Quantifier: deterministic measurement of structural decay (radon, vulture, networkx).
 
 This repository already enforces two metrics — cyclomatic complexity and nesting depth —
 and both are pass/fail gates. A gate answers "may this ship"; it does not answer "where is
@@ -11,7 +11,7 @@ measures had no counterpart here:
     pylint R0913/R0915  long parameter lists, long functions
     pylint R0902/R0904  god objects
     sonar, cohesion     LCOM4
-    import-linter       coupling, instability, import cycles
+    import-linter       import cycles
     vulture             unreferenced module-level symbols
 
 Each detector here is deterministic and reports a *measured value against a stated
@@ -51,8 +51,9 @@ MAX_CYCLOMATIC_COMPLEXITY: Final[int] = 10  # radon cc / repository McCabe ceili
 MIN_CLONE_STATEMENTS: Final[int] = 6  # PMD-CPD minimum-tokens analogue
 # Statement count alone makes six consecutive imports a "clone" of any other six imports,
 # because they are structurally identical everywhere. CPD avoids this by counting tokens.
-# Calibrated on this corpus: import windows peak at 27 AST nodes while code windows have a
-# median of 128, so a 40-node floor excludes every import run and keeps 90% of code.
+# Calibrated on tools/ and examples/ at commit 5737f74: import windows peak at 41 AST nodes
+# (3 of 456 reach 40) while code windows have a median of 128, so a 40-node floor excludes
+# nearly every import run and keeps 90% of code.
 MIN_CLONE_NODE_MASS: Final[int] = 40
 # Vulture's own default. Below this its findings need a human to confirm reachability.
 VULTURE_MIN_CONFIDENCE: Final[int] = 60
@@ -163,8 +164,8 @@ def module_metrics(source: str) -> tuple[float, float, int]:
     """Return (maintainability index, Halstead volume, max complexity) from radon.
 
     These were hand-written here first, against radon's published formulae. Measured on
-    this repository the hand-written maintainability index ran 18 to 40 points below
-    radon's on the same modules: the ranking survived, the absolute values did not, and a
+    this repository the hand-written maintainability index ran below radon's on the
+    same modules: the ranking survived, the absolute values did not, and a
     threshold calibrated to radon's scale was being applied to numbers that were not on
     it. Reporting the reference implementation's number is not a convenience, it is the
     difference between a metric and a paraphrase of one.
@@ -926,11 +927,10 @@ def analyze(
 ) -> SmellReport:
     """Quantify every module under the supplied targets across Python and polyglot languages.
 
-    `include_advisory=False` computes only what gates. Measured on this corpus the
-    advisory detectors are 94% of the runtime — vulture alone is roughly eight seconds
-    against one for everything that gates — so a caller that consumes `report.gating` and
-    discards the rest should not pay for the rest. The self-improvement loop is exactly
-    such a caller.
+    `include_advisory=False` computes only what gates. On tools/ and examples/ at commit
+    5737f74 the advisory detectors took about 70% of the runtime (about 10 s with them,
+    about 3 s without), so a caller that consumes `report.gating` and discards the rest
+    should not pay for the rest. The self-improvement loop is exactly such a caller.
     """
     report = SmellReport()
     trees = _scan_modules(paths, report, include_advisory)

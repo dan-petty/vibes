@@ -1,4 +1,4 @@
-"""Tests for Live Multi-Model Leaderboard & Cost-Per-Invariant Index.
+"""Tests for Multi-Model Leaderboard & Cost-Per-Invariant Index.
 
 Verifies model pricing parsing, AST invariant evaluation, patch minimality scoring,
 token cost calculations, leaderboard ranking, markdown/json reporting, and CLI interfaces.

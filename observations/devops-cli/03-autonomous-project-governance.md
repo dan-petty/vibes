@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli`  
 > **Topic**: Grounding Agent Sessions into GitHub Projects v2 and Structured Task Files  
-> **Key Metric**: Zero ungrounded tasks, 100% issue-to-commit traceability  
-> **TLDR**: Ground autonomous agent sessions in GitHub Projects v2 and atomic issue cards to eliminate conversational amnesia and ensure 100% commit-to-issue traceability.
+> **Key Metric**: About 200 per-task files under `docs/agent/tasks/` (197 at commit `acd091826`, 2026-09-24); the "Zero Ungrounded Tasks" mandate was a rule, and some pull requests still had no parent issue  
+> **TLDR**: Ground autonomous agent sessions in GitHub Projects v2 and atomic issue cards to reduce conversational amnesia and make most commits traceable to an issue.
 > **ELI:7b**: AIs have short-term memory loss. Keep the AI on track by giving it a written task card and having it check off items as it finishes them.
 
 ---
@@ -54,11 +54,11 @@ Without an external ground truth:
 
 ## 4. Remediation & Architectural Pattern
 
-In `devops-cli`, this is codified in `AGENTS.md` through the **Proactive GitHub Project Tracking & Workflow Grounding Mandate**:
+In September 2026, `devops-cli` codified this in `AGENTS.md` through the **Proactive GitHub Project Tracking & Workflow Grounding** rule and the **Mandatory GitHub Projects v2 Session Bootstrap (Zero Ungrounded Tasks)** section (commit `acd091826`). The project later dropped the board: since 2026-10-28 ([ADR 0016](https://github.com/dan-petty/devops-cli/blob/main/docs/adr/0016-labels-hold-the-roadmap-items-fields.md)) labels and milestones hold each item's status and priority, no roadmap job reads or writes the project board, and the `docs/agent/tasks/` files are gone.
 
 ### 1. Mandatory Session Bootstrap
 At the beginning of every session or upon receiving any user prompt:
-- The agent queries active issues and project cards (`devops gh project-status` or FastMCP `gh_project_status`).
+- The agent queries active issues and project cards (`devops gh project status` or FastMCP `gh_project_status`).
 - If no issue exists for the requested task, the agent immediately authors a structured issue and places it on the project board.
 - The card is transitioned from `Todo` -> `In Progress`.
 
@@ -77,9 +77,9 @@ Every non-trivial deliverable receives a dedicated markdown file containing:
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Over 200 Traceable Issues**: Every single deliverable in `devops-cli` is linked to an atomic issue, task spec, and PR.
-- **Zero Orphaned Code**: No code was committed without a clear rationale and parent issue.
-- **Flawless Multi-Agent Handoffs**: When one agent reached token limits or timed out, the next agent resumed by simply reading the task spec and checking the project card.
+- **Over 200 Traceable Issues**: Most deliverables in `devops-cli` link an atomic issue, task spec, and PR. Not all do: PR #507 (a roadmap edit) and PR #577 (a `.gitignore` fix) name no parent issue.
+- **Few Orphaned Changes**: The rule required a parent issue for every change; small chores sometimes merged without one.
+- **Multi-Agent Handoffs**: When one agent reached token limits or timed out, the next agent could resume by reading the task spec and checking the project card. No handoff success rate was recorded.
 
 > [!TIP]
 > **Takeaway for Agentic Practitioners**: Treat the project board not as a human management dashboard, but as an external memory bank for your AI agents.

@@ -40,7 +40,7 @@ This document provides foundational context, architectural standards, and operat
 
 **Reach for the established tool first.** A reputable open source project is the preferred implementation of any solved problem, and reimplementing one by hand is a defect, not a virtue. Hand-rolled equivalents are slower to write, carry the author's misreadings, and are maintained by exactly one person who will not be here next year.
 
-This repository previously treated "zero-dependency" as a quality in itself. It is not. It is a constraint that buys portability in an executable exhibit, and it costs correctness everywhere else. The cost has been measured: a hand-written maintainability index in [`examples/code-smell-quantifier/`](./examples/code-smell-quantifier/) disagreed with `radon`, its own reference implementation, by **18 to 40 points** on the same modules — the ranking held, the absolute values did not, and the threshold calibrated against radon's scale was being applied to numbers that were not on it.
+This repository previously treated "zero-dependency" as a quality in itself. It is not. It is a constraint that buys portability in an executable exhibit, and it costs correctness everywhere else. The cost has been measured: a hand-written maintainability index in [`examples/code-smell-quantifier/`](./examples/code-smell-quantifier/) disagreed with `radon`, its own reference implementation, on the same modules — the ranking held, the absolute values did not, and the threshold calibrated against radon's scale was being applied to numbers that were not on it.
 
 ### What Qualifies as Reputable
 
@@ -107,7 +107,7 @@ Every contribution to `vibes` must fit cleanly into one of four core categories:
 > Before authoring an observation, run the [Agentic Experience Contribution Harness](./artifacts/prompts/experience-contribution-harness.md). Its first stage returns `NO_OBSERVATION` for most sessions, which is the expected outcome: the value of this archive is set by what does not get written. An agent asked to "write up this session" will always produce a document; the harness is the filter that decides whether it should.
 
 ### Rules of Placement
-- Never scatter loose files in the root directory. The root holds exactly the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pytest.ini`, `.pre-commit-config.yaml`, `.gitignore`). Everything else belongs in one of the four category directories.
+- Never scatter loose files in the root directory. The root holds exactly the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pyproject.toml`, `pytest.ini`, `.pre-commit-config.yaml`, `.gitignore`). Everything else belongs in one of the four category directories.
 - The directory map in [`README.md`](./README.md) is mechanically diffed against the filesystem by `docs_validator.py` (`directory_map` rule): every mapped path must exist, and any directory the map enumerates must be enumerated completely. Add new files to the map in the same commit, or mark a deliberately partial listing with an `...` entry.
 - All new observations must reside in a project-specific subdirectory under `observations/` (e.g., `observations/devops-cli/`).
 - Filenames must be lowercase with hyphens (kebab-case), descriptive, and self-explanatory. Number prefixes (`01-`, `02-`) are encouraged for curated reading sequences.
@@ -169,14 +169,14 @@ Every pattern must then provide an actionable operational playbook:
   - **Mandatory Quoting**: Double-quote all edge and node labels containing parens, brackets, or operators: `A -->|"Yes (Error)"| B`, `Node["Label (Details)"]`.
   - **No Semicolons in Sequence Diagrams**: Never use `;` as punctuation in `sequenceDiagram` (treats `;` as statement separator).
   - **Bounded Aspect Ratio**: Maintain balanced 2D aspect ratio ($1:3 \le \text{Height}/\text{Width} \le 3:1$). Avoid unbranched vertical ladders > 3:1.
-  - **Accessible Theme Palette**: Declare both `fill:` and `color:` with WCAG AA $\ge 4.5:1$ contrast. Mechanically enforced by `docs_validator.py` (`mermaid_style`) and certified via `node tools/verify_mermaid.mjs .`.
+  - **Accessible Theme Palette**: Declare both `fill:` and `color:` with WCAG AA $\ge 4.5:1$ contrast. Mechanically enforced by `docs_validator.py` (`mermaid_style`); `node tools/verify_mermaid.mjs .` separately checks that every diagram renders.
 - **Fences & Code Syntax**: Always specify language identifiers. Embed nested markdown examples in 4-backtick fences (````markdown ... ````).
 - **Directory Maps**: Place directory trees at the document bottom. They must explain what files are *for* and remain synchronized with disk via `docs_validator.py` (`directory_map`).
 - **The 4-Tier Living Documentation Architecture ([Observation 27](./observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md), [Pattern](./patterns/multi-tier-living-documentation.md))**:
   - **Tier 1 (Mechanical Extraction)**: CLI tables and FastMCP schemas extracted deterministically via AST/reflection, avoiding the Phantom Architecture Trap.
   - **Tier 2 (Generative Synthesis)**: High-level ADRs and verified empirical summaries constrained to rigid templates.
   - **Tier 3 (Fail-Closed Gating)**: Continuous automated validation via `tools/docs_validator.py`.
-  - **Tier 4 (Active Compaction)**: Compact transient logs to maintain $ADI \le 1.5$ ([Observation 23](./observations/systems/23-attention-dilution-context-rot-and-active-compaction.md)).
+  - **Tier 4 (Active Compaction)**: Compact transient logs to keep the Attention Dilution Index low; $ADI \le 1.5$ is a heuristic target with no calibration behind it, and `tools/context_rot_auditor.py` reports ADI without a threshold ([Observation 23](./observations/systems/23-attention-dilution-context-rot-and-active-compaction.md)).
 - **CommonMark Linebreak Standards & Whitespace Hygiene (`DOC012`)**: Hard breaks require 2 trailing spaces or `\`. Accidental single trailing spaces are prohibited (`python tools/docs_validator.py --fix`).
 - **Author as Merged**: Author all documents and checklists in their final completed state. Never create post-merge administrative PRs.
 
@@ -199,7 +199,7 @@ Every pattern must then provide an actionable operational playbook:
 
 ## 8. Autonomous Recursive Development Protocol & Project Tooling
 
-To ensure the repository thrives with **zero required human manual intervention**, autonomous agents must follow the closed-loop recursive development lifecycle:
+To keep the repository improving with little manual work, autonomous agents must follow the closed-loop recursive development lifecycle. A person still reviews and merges each pull request:
 
 ```mermaid
 flowchart LR
@@ -227,7 +227,7 @@ flowchart LR
 5. **Publish SARIF 2.1.0 Findings**:
    - Emit findings via [`tools/sarif_report.py`](./tools/sarif_report.py) (`--out findings.sarif`) so code scanning renders findings directly on PRs. Ensure schema validity against `artifacts/schemas/sarif-schema-2.1.0.json`.
 6. **Mandatory Self-Hardening Rule**:
-   - PRs addressing bugs, defects, or regressions MUST modify `AGENTS.md` with concrete preventative rules or fail `recursive-hardening.yml`.
+   - PRs addressing bugs, defects, or regressions MUST modify `AGENTS.md` with concrete preventative rules or fail `recursive-hardening.yml`. That workflow runs after merge on PRs labelled `bug`, `defect` or `regression`; it does not block the merge, and it opens a hardening issue.
 7. **Multi-Path CLI Contracts (`nargs="*"`)**:
    - Tools invoked by `.pre-commit-config.yaml` (`pass_filenames: true`) receive N filenames per invocation. CLI entry points must accept `nargs="*"` and audit every supplied path. Never slice `argv[1]`.
 8. **Inbound Review Falsification & Batch Verification**:
@@ -242,7 +242,7 @@ flowchart LR
     - Manage work across three distinct surfaces: [`docs/ROADMAP.md`](./docs/ROADMAP.md) for scheduled deliverables, `.data/sdlc_backlog.json` for mechanical findings, and GitHub Issues for non-derivable conversations or decisions.
 13. **Dual-Surface Interface & Agent Experience (AX) Integrity**:
     - Software interfaces must expose synchronized dual surfaces: human teleology and observability (UX) alongside machine-verifiable negative schemas and structured diagnostics (AX).
-    - All tools and MCP servers must enforce negative schemas (`additionalProperties: false`) to eliminate parameter hallucination spirals. Errors must return machine-actionable CEGIS counterexample vectors rather than conversational prose.
+    - All tools and MCP servers must enforce negative schemas (`additionalProperties: false`) to eliminate parameter hallucination spirals. Errors must return machine-actionable counterexamples rather than conversational prose.
     - Autonomous agents must actively quantify interaction friction (DAI, IFI, CIM); when friction is detected, agents must open self-hardening refactoring PRs to elevate the software substrate's AX ([Observation 32](./observations/systems/32-dual-first-class-consumers-and-bi-directional-agentic-feedback-loops.md), [Pattern](./patterns/bi-directional-metric-feedback-and-ax-scoring.md)).
 
 > For detailed case studies and root-cause post-mortems of operational lessons, see [`docs/RETROSPECTIVE.md#8-operational-lessons-from-the-autonomous-development-loop`](./docs/RETROSPECTIVE.md#8-operational-lessons-from-the-autonomous-development-loop).
@@ -322,7 +322,7 @@ To foster an autonomous, creative, and continuously self-improving engineering i
 
 ## 10. The Five Mechanical Oracles & Defensive Engineering Invariants
 
-Stochastic language generation must always be bounded by deterministic mechanical oracles. Rather than sprawling narrative instructions, the codebase enforces invariants via deterministic linters, AST sentinels, and formal gate tools.
+Stochastic language generation must always be bounded by deterministic mechanical oracles. Rather than sprawling narrative instructions, the codebase enforces invariants via deterministic linters, AST sentinels, and gate tools.
 
 ### Mechanical Invariant Matrix
 
@@ -335,10 +335,12 @@ Stochastic language generation must always be bounded by deterministic mechanica
 | `DOC012` | CommonMark Linebreaks | Strict 2-space linebreaks; zero single trailing spaces | `docs_validator.py` (`--fix`) |
 | `DOC013` | KaTeX Math Hygiene | Zero unescaped ampersands (`&`) in math unless in matrix/aligned block | `docs_validator.py` |
 | `AIBOM001` | Supply Chain & Model Safety | Forbid remote unverified model execution; pin all action hashes | `supply_chain_audit.py`, `aibom_scanner.py` |
-| `ROT002` | Context Rot & Attention Dilution | $ADI \le 1.5$; prompt tokens $\le 20,000$; JIT instruction hydration | `context_rot_auditor.py`, `instruction_governor.py` |
-| `EBPF001` | Subprocess & Syscall Confinement | Process group isolation (`start_new_session=True`); default-deny seccomp | `ebpf_tracer.py`, `seccomp_synthesizer.py` |
+| `ROT002` | Context Rot & Attention Dilution | Invariant in the lost-in-the-middle band (strict preset: 20–80% of the context); `ROT001` flags context above the preset ceiling (strict: 32,000 tokens); ADI is reported without a threshold; JIT instruction hydration (Tier 1 $\le 2,000$ tokens) | `context_rot_auditor.py`, `instruction_governor.py` |
+| `EBPF001` | Subprocess & Syscall Confinement | Unauthorized binary execution in a recorded event stream; default-deny seccomp profiles. Neither tool checks process group isolation (`start_new_session=True`) | `ebpf_tracer.py`, `seccomp_synthesizer.py` |
 | `SGM001` | Symbol Integrity & Dead References | Zero dangling symbols, broken links, or phantom API references | `code_memory.py`, `docs_validator.py` |
 | `CPP001` | Polyglot Memory Safety | Strict RAII ownership; zero dangling pointers or channel deadlocks | `cpp_lifetime_sentinel.py`, `go-leak-sentinel` |
+
+Of the tools in this table, `ci.yml` runs `sentinel.py`, `docs_validator.py` and `verify_mermaid.mjs` as gates on this repository (the pre-commit hooks run the first two), and runs `supply_chain_audit.py` only as a SARIF report. The other tools run on demand.
 
 ### Core Defensive Implementation Patterns
 
@@ -348,7 +350,7 @@ Stochastic language generation must always be bounded by deterministic mechanica
 2. **Structural Tuple Equality Consolidation (Mitigating Assertion Sprawl)**:
    - Consolidate linear assertions in test suites into structural tuple equality checks (`assert (actual_a, actual_b) == (expected_a, expected_b)`). Prevents linear tests from tripping $M \le 10$ while preserving full Pytest diff diagnostics.
 3. **Negative Tool Schemas & Prescriptive Prompts**:
-   - Forbid undeclared arguments (`extra="forbid"` in Pydantic v2, `additionalProperties: false` in JSON Schema). Validation handlers must synthesize prescriptive error prompts detailing allowable arguments for zero-shot self-correction.
+   - Forbid undeclared arguments (`extra="forbid"` in Pydantic v2, `additionalProperties: false` in JSON Schema). Validation handlers must synthesize prescriptive error prompts detailing allowable arguments, so that the agent can correct the call on its next turn.
 4. **Process Group Containment & Resource Bounds**:
    - Isolate subprocesses into POSIX process groups (`start_new_session=True` on `subprocess.Popen`) and terminate via `os.killpg(os.getpgid(proc.pid), SIGTERM/SIGKILL)`. Avoid `preexec_fn=os.setsid` in multithreaded runtimes to prevent fork-deadlocks.
    - Enforce pre-flight file size caps ($\le 5$MB) and verify `resolved_path.is_relative_to(base_root)` to prevent symlink recursion (`ELOOP`) and traversal escapes.
@@ -395,7 +397,7 @@ python3 tools/reliability_slo.py status --history docs/reliability/iterations   
 
 Record into [`docs/reliability/iterations/`](./docs/reliability/iterations/) — the **committed** ledger — in the same commit as the work it measures. The ledger is sharded one file per iteration so concurrent branches merge without conflict, and holds nothing but aggregate counts.
 
-1. **Phase 1 (Reactive Remediation)** — entered when any objective's budget is `EXHAUSTED`, or is `BURNING` faster than its window elapses across at least three iterations. Focus 100% of priority on minimal, surgical fixes until the budget recovers. `invariant_compliance` carries a 1.0 target and therefore *no* budget: a single invariant breach enters this phase immediately, by design.
+1. **Phase 1 (Reactive Remediation)** — entered when any objective's budget is `EXHAUSTED`, or is `BURNING` (burn rate above 2.0, `CRITICAL_BURN_RATE` in `tools/reliability_slo.py`) across at least three iterations. Focus 100% of priority on minimal, surgical fixes until the budget recovers. `invariant_compliance` carries a 1.0 target and therefore *no* budget: a single invariant breach enters this phase immediately, by design.
 2. **Phase 2 (Proactive Quality Elevation)** — the default while budgets are `HEALTHY`:
    - Decomposing functions operating near the complexity ceiling ($7 \le M \le 10$) down to safe headroom ($M \le 6$).
    - Elevating public docstring coverage and parameter type annotations to 100%.

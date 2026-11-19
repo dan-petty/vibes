@@ -13,10 +13,10 @@
 
 A review pipeline that produces findings is a work generator, and work generators are judged by what they produce. Nothing in the usual design penalises a finding that is wrong, because the cost lands on whoever acts on it — often an agent, which will act on all of them, in order, without asking whether they are real.
 
-The failure is not that reviewers hallucinate. In a review of 286 findings against this repository, most were real and several were valuable. The failure is subtler and more corrosive:
+The failure is not that reviewers hallucinate. In a review of 286 findings against this repository, most were real and several were valuable. The run is recorded in devops-cli `docs/ROADMAP.md` (commit `b75fd178a`, 2026-09-21), which gives the 286, 7 and 23 counts below. The failure is subtler and more corrosive:
 
-- Every finding carried a location with line numbers. Two cited lines that do not contain the described construct.
-- 274 of 286 carried **executable** verification criteria — `git check-ignore -v .env`, `git ls-files .env*`, `grep -n`.
+- Every finding carried a location with line numbers. Some cited lines that do not contain the described construct.
+- Nearly all carried **executable** verification criteria — `git check-ignore -v .env`, `git ls-files .env*`, `grep -n`.
 - All 286 were marked `verified_by: llm`. **The criteria were written to be run, and nothing ran them.**
 - `reportable` was `true` for all 286, including the 7 that were never verified at all.
 - 23 findings carried a withdrawal reason and were reported anyway.
@@ -79,7 +79,7 @@ Test the pipeline the way you would test any gate: feed it a finding that must b
 > **A field that is never false carries no information.** `reportable: true` on all 286 findings is not a filter, it is a column. Before trusting any verdict field, check its distribution: if one value never appears, nothing is deciding it.
 
 - **Do not accept confidence as evidence.** A score of 0.99 attached to an unexecuted criterion measures fluency, not truth. Rank by executed outcome, not by asserted certainty.
-- **Do not let volume substitute for signal.** 286 findings with 14 CRITICAL invites triage by severity, and severity is exactly the field polarity errors corrupt.
+- **Do not let volume substitute for signal.** A long list of findings, some marked CRITICAL, invites triage by severity, and severity is exactly the field polarity errors corrupt.
 - **Do not mix unverified findings into the confirmed list.** They need a different reader and a different decision.
 - **Do not fix in finding order.** Verify the whole batch first: withdrawals are cheap, and a batch with a systematic error — a stale line map, an inverted check — is far easier to spot across findings than within one.
 - **Do not skip the pipeline's own regression test.** The bug here was never in a finding; it was in the stage that was supposed to falsify them and instead rubber-stamped them.

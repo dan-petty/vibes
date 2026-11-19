@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Structured Output Generation, JSON Grammar Healing, and Prescriptive Schema Retry  
-> **Key Metric**: $> 92\%$ auto-repair rate without model roundtrips; 100% single-turn recovery on schema violations; zero infinite retry loops  
-> **TLDR**: Repair malformed LLM JSON outputs with zero-overhead regex and grammar healers, recovering over 92% of syntax errors without model round-trips.
+> **Key Metric**: Issue #123 set a target of "> 90%" recovery and "maximum 2 retry attempts"; no repair rate was measured; retries are bounded, so no retry loop is infinite  
+> **TLDR**: Repair malformed LLM JSON outputs locally with a fence-stripping regex and the `json_repair` library before paying for a model round-trip.
 > **ELI:7b**: Fix trailing commas and unclosed brackets in AI-generated JSON with a fast local script instead of paying for another expensive API call.
 
 ---
@@ -18,7 +18,7 @@ While modern LLMs support "JSON mode", production agent runtimes encounter sever
 
 ## 2. The Observed Phenomenon: `devops-cli` Issue #123 Case Study
 
-In `devops-cli` ([Issue #123](https://github.com/dan-petty/devops-cli/issues/123) / [PR #230](https://github.com/dan-petty/devops-cli/pull/230)), agent tool invocations experienced recurrent serialization failures during multi-agent code review turns:
+In `devops-cli` ([Issue #123](https://github.com/dan-petty/devops-cli/issues/123) / [PR #230](https://github.com/dan-petty/devops-cli/pull/230)), OpenTelemetry traces recorded `AIClientError: Response validation failed` when a local open-weight model emitted slightly malformed JSON, markdown fences, or unexpected schema keys during structured generation. The fix addresses these failure classes (items 2 to 4 are general shapes, not separately recorded incidents):
 
 1. **Markdown Fence Wrapping**: Models frequently wrapped JSON payloads in markdown fences (````json ... ````) accompanied by conversational preamble ("Here is the requested tool call:"), causing `json.loads()` to crash with `JSONDecodeError: Expecting value: line 1 column 1`.
 2. **Trailing Commas**: Models emitted invalid trailing commas in arrays (`["lint", "format",]`) and dictionaries (`{"status": "ok",}`), which standard JSON parsers strictly reject.
@@ -49,7 +49,7 @@ The underlying failure mode stemmed from treating JSON parsing as a binary (vali
 
 ## 4. Remediation & Architectural Pattern
 
-The solution deployed in `devops-cli` is a **Two-Tier Structured Output Repair and Schema Reconciliation Engine**:
+The solution deployed in `devops-cli` (`src/devops_cli/ai/client/structured.py`) is a **Two-Tier Structured Output Repair and Schema Reconciliation Engine**. Tier 1 strips `<think>` blocks and markdown fences with a regex, tries `json.loads`, and on failure calls the open-source `json_repair` library, which does the comma, control-character and bracket repairs shown below. Tier 2 sends a reflection message with the validation error and retries a bounded number of times:
 
 ```mermaid
 flowchart TD
@@ -72,17 +72,17 @@ flowchart TD
 ```
 
 ### Core Repair Mechanics:
-1. **Preamble and Fence Peeling**: Extracts the innermost balanced JSON substring, discarding outer explanations and markdown delimiters.
-2. **Trailing Comma Stripping**: RegEx-driven normalization collapses trailing commas before closing brackets and braces without altering quoted strings.
-3. **Stack-Based Auto-Closure**: A lightweight lexical scanner tracks open bracket/brace stacks (`[`, `{`). Upon encountering truncated EOF, it synthesizes the exact closing sequence (e.g. `}"]}`), salvaging all complete records generated prior to the cutoff.
-4. **Prescriptive Error Prompts**: If Tier 1 cannot repair the JSON, Tier 2 synthesizes a structured prompt highlighting the exact field and type expectation rather than a raw Python exception.
+1. **Preamble and Fence Peeling**: A regex extracts the body of the first markdown code fence (optionally tagged `json`), discarding outer explanations and markdown delimiters.
+2. **Trailing Comma Stripping**: `json_repair` removes trailing commas before closing brackets and braces without altering quoted strings.
+3. **Auto-Closure**: On truncated input, `json_repair` closes open brackets and braces, salvaging the complete records generated before the cutoff.
+4. **Reflection Retry**: If Tier 1 cannot produce valid JSON or the payload fails schema validation, Tier 2 sends the validation error back to the model, truncated to `CONST_MAX_ERROR_DETAIL_LENGTH` (256) characters.
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
 
-1. **Local Healing Without Network Overhead**: $> 92\%$ of malformed or truncated JSON payloads are repaired in $< 0.2\text{ms}$ locally, eliminating expensive model roundtrips.
-2. **Elimination of Retry Loops**: Single-turn recovery success reached $100\%$ when combined with prescriptive schema prompts.
+1. **Local Healing Without Network Overhead**: Malformed or truncated JSON payloads that `json_repair` can fix need no model round-trip. Issue #123 set a "> 90%" recovery target; no repair rate or latency was measured.
+2. **Bounded Retry Loops**: Issue #123 capped retries at 2 before a typed `AIClientError`, so a schema failure cannot loop forever. No single-turn recovery rate was measured.
 3. **Data Salvage on Token Cutoffs**: Truncated code reviews retain all fully generated findings rather than failing the entire agent turn.
 
 > **Architectural Takeaway**: Never feed raw model completions directly to strict standard library parsers. Shield agent execution with a deterministic mechanical syntax repair tier that heals trivial formatting discrepancies locally before escalating to costly model retries.

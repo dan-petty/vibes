@@ -24,7 +24,7 @@ Every time you write:
 
 You are creating a fork in the road.
 
-If a function has 1 fork, it's easy to read. If a function has 15 forks, there are $2^{15}$ (over 32,000) possible paths through that function!
+If a function has 1 fork, it's easy to read. If a function has 15 separate `if` forks one after another, there can be up to $2^{15}$ (over 32,000) possible paths through that function!
 
 Neither a human developer nor an AI model can hold 32,000 execution paths in their head at the same time. The AI will inevitably forget one of the branches, mishandle an error, or introduce a subtle regression.
 
@@ -60,10 +60,10 @@ When an AI tries to edit an arrowhead function, it regularly gets confused about
 
 ## The Two Simple Rules: 10 Forks, 4 Indents
 
-In high-reliability engineering (like `devops-cli` and `vibes`), we enforce two golden numerical limits:
+In high-reliability engineering (like `devops-cli`), we enforce two golden numerical limits:
 
-1. **Max 10 Forks in Any Function**: If a function has more than 10 decisions (`if`, `for`, `try`, etc.), it is too big. Stop and break it up.
-2. **Max 4 Levels of Indentation**: If code indents more than 4 times, you must flatten it.
+1. **Max 10 Forks in Any Function**: If a function has more than 10 decisions (`if`, `for`, `except`, etc.), it is too big. Stop and break it up.
+2. **Max 4 Levels of Indentation**: If code indents more than 4 times, you must flatten it. (`devops-cli` enforces both limits with Ruff; the `vibes` sentinel allows a nesting depth of up to 5.)
 
 ---
 
@@ -100,7 +100,7 @@ Notice how clean the second version is. The "bad" cases are kicked out right at 
 If you have a ladder of `if/elif` statements checking a string, replace it with a dictionary:
 
 ```python
-# BEFORE (10-branch ladder):
+# BEFORE (4-branch ladder):
 def get_discount(tier):
     if tier == "bronze":
         return 0.05
@@ -150,7 +150,7 @@ def checkout(data):
 When an AI is asked to fix a bug in a 15-line function:
 - It can read the entire function in 1 second.
 - It understands all variables and paths.
-- It generates an exact, accurate patch with zero hallucination.
+- It is much more likely to generate an exact, accurate patch.
 
 When an AI is asked to fix a bug in a 300-line monster function:
 - It runs out of focus.

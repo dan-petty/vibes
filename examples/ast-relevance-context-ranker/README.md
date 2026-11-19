@@ -14,7 +14,7 @@ When autonomous AI coding agents navigate large, multi-file codebases, naive fil
 
 The **Graph-Ranked AST Context Optimizer** resolves both failures. It ingests the repository source tree into an abstract syntax tree (AST) symbol graph (functions, classes, methods, imports, and call/reference edges). It then computes **Personalized PageRank** over the symbol topology rooted at the agent's target focal symbols (the functions or classes being edited or investigated).
 
-By ranking individual AST symbol definitions by graph centrality and packing down to an exact token budget with graceful fidelity degradation (`FULL` $\to$ `SIGNATURES` $\to$ `OUTLINE`), the optimizer yields maximal architectural signal per token with 0% syntactic fracture.
+It ranks individual AST symbol definitions by graph centrality and packs them greedily, highest score first, into a token budget. Token counts are estimates (`ceil(len(text) / 4)` plus 5 per symbol), not tokenizer counts. The packer includes or excludes whole symbols, so it never cuts a symbol body in half. The caller picks one fidelity tier (`--fidelity FULL|SIGNATURES|OUTLINE`); the packer does not fall back to a lower tier when the budget is full. It excludes the remaining symbols and reports `RNK003`. The `SIGNATURES` and `OUTLINE` tiers keep only the first line of each `def` or `class`, so their output is a summary and does not always parse as Python.
 
 ---
 
@@ -35,8 +35,8 @@ flowchart TD
     Centrality --> BudgetPack["Token-Budget Greedy Packer"]
 
     BudgetPack -->|"Fit Budget"| Render["Model-Ready Markdown Pack"]
-    BudgetPack -->|"Saturated"| Degrade["Fidelity Fallback: FULL -> SIGNATURES -> OUTLINE"]
-    Degrade --> Render
+    BudgetPack -->|"Saturated"| Exclude["Exclude remaining symbols (RNK003)"]
+    Exclude --> Render
     Invariants --> SARIF["OASIS SARIF 2.1.0 Report"]
 ```
 
@@ -44,7 +44,7 @@ flowchart TD
 
 ## 3. Mathematical Formulation of Personalized PageRank
 
-Given a symbol graph $G = (V, E)$ where nodes $v \in V$ represent AST symbol declarations and directed edges $(u, v) \in E$ indicate that symbol $u$ invokes, inherits, or imports symbol $v$:
+Given a symbol graph $G = (V, E)$ where nodes $v \in V$ represent AST symbol declarations and directed edges $(u, v) \in E$ indicate that the body of symbol $u$ contains a name or attribute equal to the name of symbol $v$. Edges are matched by name only: a same-file symbol wins, else the first symbol with that name. There is no import or type resolution:
 
 Let $p \in \mathbb{R}^{|V|}$ be the personalization distribution vector:
 - If a focal symbol set $S_{\text{focal}} \subseteq V$ is specified (e.g. `calc.py::run_pipeline`), then:
@@ -59,7 +59,7 @@ where:
 - $d = 0.85$ is the damping factor.
 - $\text{In}(v) = \{u \in V \mid (u, v) \in E\}$ is the set of callers referencing symbol $v$.
 - $\text{OutDeg}(u) = |\{w \in V \mid (u, w) \in E\}|$ is the out-degree of symbol $u$.
-- Convergence is guaranteed when $\|r^{(k+1)} - r^{(k)}\|_1 < 10^{-5}$.
+- Iteration stops when $\|r^{(k+1)} - r^{(k)}\|_1 < 10^{-5}$ or after 50 iterations (`DEFAULT_MAX_ITER`), whichever comes first.
 
 ---
 

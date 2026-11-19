@@ -2,9 +2,9 @@
 
 > **Project**: `devops-cli`  
 > **Topic**: Mechanical Enforcement of Cyclomatic Complexity ($\le 10$) and Indentation Depth ($\le 5$)  
-> **Key Metric**: 100% compliance across all functions, automated AST invariant gates  
-> **TLDR**: Strictly enforce cyclomatic complexity <= 10 and nesting depth <= 5 via automated AST gates to prevent LLM code generation from collapsing into spaghetti loops.
-> **ELI:7b**: Don't let the AI write giant, messy functions with tons of nested if-statements. Limit functions to 10 decisions and 4 indents so the code stays clean and easy to read.
+> **Key Metric**: Nesting depth $\le 5$ blocked across `src/` (test plus pre-commit hook); complexity $\le 10$ reported but not blocked in September 2026 (240 functions over the cap)  
+> **TLDR**: Enforce cyclomatic complexity <= 10 and nesting depth <= 5 via automated AST gates to prevent LLM code generation from collapsing into spaghetti loops.
+> **ELI:7b**: Don't let the AI write giant, messy functions with tons of nested if-statements. Limit functions to 10 decisions and 5 levels of nesting so the code stays clean and easy to read.
 
 ---
 
@@ -18,10 +18,10 @@ Over multiple iterations, single functions expand from 20 lines to 200 lines, wi
 
 ## 2. The Observed Phenomenon
 
-In early iterations of `devops-cli`, command dispatchers and review finding formatters quickly degenerated into nested procedural cascades:
+LLM-written dispatchers and formatters tend to degenerate into nested procedural cascades. The function below is an illustrative sketch of that shape; it is not taken from the `devops-cli` source:
 
 ```python
-# Before Invariant Enforcement (LLM "Path of Least Resistance")
+# Illustrative: before invariant enforcement (LLM "Path of Least Resistance")
 def handle_finding(finding, config, mode):
     if finding is not None:
         if config.enabled:
@@ -55,30 +55,29 @@ LLMs optimize for the immediate prompt context:
 
 ## 4. Remediation & Architectural Pattern
 
-In `devops-cli`, we solved this by transforming complexity into a **hard mechanical gate**:
+In `devops-cli`, nesting depth became a **hard mechanical gate**. Complexity was measured but, in September 2026, not blocked:
 
 ```mermaid
 flowchart LR
     Code[Python Source Code] --> AST[Python AST Visitor]
     AST --> CC[Cyclomatic Complexity Meter]
     AST --> Depth[Max Nesting Depth Meter]
-    CC --> Gate{Complexity <= 10?}
+    CC --> Report["Complexity over 10: reported, not blocking"]
     Depth --> Gate2{Nesting <= 5?}
-    Gate -- No --> Reject[CI Failure: Reject Commit]
-    Gate2 -- No --> Reject
-    Gate -- Yes --> Pass[CI Invariant Gate: PASS]
-    Gate2 -- Yes --> Pass
+    Gate2 -- No --> Reject["Test and Pre-Commit Failure: Reject Commit"]
+    Gate2 -- Yes --> Pass[Invariant Gate: PASS]
 ```
 
 ### 1. The Automated Invariant Gate (`tests/test_architectural_invariants.py`)
-We implemented an automated test that parses the entire abstract syntax tree (AST) of the repository on every test run:
-- Computes cyclomatic complexity ($M = E - N + 2P$) for every function and method.
-- Rejects any function with $M > 10$.
-- Computes the maximum indentation/block nesting level across all functions.
-- Rejects any function with nesting depth $\ge 6$ indentation levels.
+An automated test parses the abstract syntax tree (AST) of every module in `src/devops_cli` on every test run (`src/devops_cli/security/complexity.py`):
+- Computes cyclomatic complexity for every function and method by counting decision points (1 + branches), which equals McCabe's $M = E - N + 2P$ for structured code.
+- Does not reject functions with $M > 10$ across the tree. The test calls the scanner with `max_complexity=100`; only `FileSystem.get_tools` is held to $M \le 10$. The `structural-invariants` pre-commit hook comment (`.pre-commit-config.yaml`, commit `acd091826`) says "complexity is reported without blocking, since 240 functions breach that cap today and nothing enforces it".
+- Computes the maximum block nesting level across all functions.
+- Rejects any function with nesting depth $\ge 6$ (`test_no_excessive_nesting_in_src`; the `structural-invariants` pre-commit hook blocks the same breach at commit time).
+- Since then the project has moved the caps into Ruff (`max-complexity = 10`, `max-nested-blocks = 4` on 2026-11-19).
 
 ### 2. The Architectural Transformation
-Faced with hard invariant rejections, the agent was mechanically compelled to:
+Faced with hard invariant rejections, the agent must:
 1. **Replace `if/elif` ladders with dictionary dispatch tables**:
    ```python
    SEVERITY_HANDLERS = {
@@ -99,9 +98,9 @@ Faced with hard invariant rejections, the agent was mechanically compelled to:
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Uniformly Clean Codebase**: Across the entire `src/devops_cli` source tree, not a single function exceeds cyclomatic complexity 10 or nesting depth 5.
-- **Superior Agent Comprehension**: Because every function is small, single-responsibility, and modular, subsequent agent sessions can comprehend, modify, and test any function within a tight token budget.
-- **Zero Human Formatting Fatigue**: Human reviewers do not need to leave comments like "please extract this into a helper function"; the CI gate handles it deterministically.
+- **Nesting Held, Complexity Not**: Across the `src/devops_cli` source tree, no function exceeded nesting depth 5. In the same tree, 240 functions exceeded cyclomatic complexity 10, because nothing blocked that cap.
+- **Agent Comprehension**: Small, single-responsibility functions let later agent sessions read, change, and test a function within a tight token budget. The gate guarantees this only for nesting.
+- **Less Human Formatting Fatigue**: For nesting, reviewers need not ask for an extracted helper; the gate does it deterministically. For complexity, in September 2026, review still had to.
 
 > [!IMPORTANT]
-> **Key Rule for Agent Architecture**: Polite prompt guidelines do not prevent code rot; deterministic AST invariant gates do. Constrain the agent's output space mathematically.
+> **Key Rule for Agent Architecture**: Polite prompt guidelines do not prevent code rot; deterministic AST invariant gates do, but only for the rules they block. A cap that is reported and not blocked does not hold.

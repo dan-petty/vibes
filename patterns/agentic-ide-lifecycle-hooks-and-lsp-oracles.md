@@ -20,7 +20,7 @@ Granting autonomous AI agents tool execution privileges inside an integrated dev
 
 ## 2. Core Mechanics
 
-This pattern positions an **IdeHookSentinel** between the agent's intent generation and the physical execution environment, while piping Language Server Protocol (LSP) diagnostics directly into the agent's self-healing loop:
+This pattern positions an **IdeHookSentinel** between the agent's intent generation and the physical execution environment, while piping Language Server Protocol (LSP) diagnostics directly into the agent's self-healing loop. The reference implementation is a Python library: it is not connected to an IDE and starts no language server. The caller passes the diagnostics in as dictionaries.
 
 ```mermaid
 sequenceDiagram
@@ -37,24 +37,24 @@ sequenceDiagram
         Hook-->>Agent: [DENY] Blocked RFC 1918 Egress
     else Policy Passed
         Hook->>Term: Execute in Isolated Process Group (start_new_session=True)
-        Term-->>Hook: Command Complete (or SIGTERM on timeout)
+        Term-->>Hook: Command Complete (or SIGTERM, then SIGKILL, on timeout)
         Hook-->>Agent: Clean Execution Telemetry
     end
 
     Agent->>Hook: Propose File Write: "src/service.py"
     Hook->>Hook: Verify Size <= 5MB & Relative to Workspace Root
     Hook->>FS: Write File
-    FS-->>LSP: File Modified (textDocument/didChange)
+    FS-->>LSP: File Modified (workspace/didChangeWatchedFiles)
     LSP-->>Hook: publishDiagnostics (Errors & Warnings)
-    Hook-->>Agent: Prescriptive Diagnostic Guidance (Line numbers & Expected types)
+    Hook-->>Agent: Prescriptive Diagnostic Guidance (Line and message of first error)
     Agent->>Agent: Self-Correct Code In-Process
 ```
 
 ### Key Operational Rules:
-1. **Zero Egress to Private RFC 1918 IPs**: All outbound addresses must be public or standard documentation blocks (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) or loopback (`127.0.0.1`).
+1. **Zero Egress to Private RFC 1918 IPs**: All outbound addresses must be public or standard documentation blocks (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) or loopback (`127.0.0.1`). The reference implementation scans the argument text for literal IP addresses only; it does not resolve hostnames.
 2. **Protected Path Shielding**: Intercept file operations targeting `.env*`, `.ssh/`, `.git/`, and system credential files.
-3. **Process Group Containment**: Never invoke external processes with plain `subprocess.Popen` without `start_new_session=True`. Always terminate via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`.
-4. **LSP-Driven Self-Correction**: Convert compiler errors into structured prompts detailing the exact line, symbol, and type expectation for instant zero-shot correction.
+3. **Process Group Containment**: Never invoke external processes with plain `subprocess.Popen` without `start_new_session=True`. Always terminate via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`, and send `SIGKILL` to the group if it is still running after a grace period (2 s in the reference implementation).
+4. **LSP-Driven Self-Correction**: Convert compiler errors into structured prompts. The reference implementation reports the one-based line and the message of the first error.
 
 ---
 
@@ -80,7 +80,7 @@ res = sentinel.run_isolated_command(["pytest", "tests/"], timeout_seconds=15.0)
 if res.timed_out:
     logger.error("Command timed out and process group was cleanly terminated.")
 
-# Step 3: Ingest LSP compiler diagnostics as CEGIS oracles
+# Step 3: Ingest LSP compiler diagnostics as a regression oracle
 diagnostics = fetch_lsp_diagnostics("src/handler.py")
 eval_report = sentinel.evaluate_lsp_diagnostics("src/handler.py", diagnostics)
 
@@ -94,8 +94,8 @@ if not eval_report.is_clean:
 ## 4. Guardrails & Anti-Patterns
 
 - ❌ **Anti-Pattern: Post-Execution Path Checking**: Checking if a file was sensitive after the agent has already written to it causes irreversible data corruption.
-- ❌ **Anti-Pattern: Killing Only Parent PIDs**: Using `proc.kill()` leaves child compilers or Docker daemons running in the background. Always use `os.killpg()`.
-- ⚠️ **Guardrail: Pre-Flight Size Boundaries**: Enforce a strict pre-flight file size cap ($\le 5\text{MB}$) to eliminate out-of-memory denial of service (CWE-400) when agents encounter minified JavaScript or binary blobs.
+- ❌ **Anti-Pattern: Killing Only Parent PIDs**: Using `proc.kill()` signals only the direct child, so its own children (compilers, `docker` client processes) keep running in the background. Always use `os.killpg()`.
+- ⚠️ **Guardrail: Pre-Flight Size Boundaries**: Enforce a strict pre-flight file size cap ($\le 5\text{MB}$) on each file write to limit uncontrolled resource consumption (CWE-400) when agents produce minified JavaScript or binary blobs.
 
 ---
 

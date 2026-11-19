@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Formal Tool Contract Verification Gate for AI Agents.
 
-Validates incoming agent tool invocation payloads and outgoing tool execution
-results against rigid schemas (JSON Schema Draft 2020-12 / OpenAPI compatible).
+Validates incoming agent tool invocation payloads against hand-written
+ParameterContract records (exportable as a JSON Schema 2020-12 parameters object;
+no JSON Schema validator runs) and checks the return value's Python type.
 Enforces negative assertions against hallucinated parameters, missing required
 arguments, unvalidated string lengths (CWE-400), and type coercion vulnerabilities.
-Emits structured, prescriptive error prompts for autonomous zero-shot self-correction.
+Emits structured, prescriptive error prompts meant to let the model correct the call.
 """
 
 from __future__ import annotations

@@ -41,7 +41,7 @@ flowchart TD
     subgraph AgenticLoop ["Autonomous Agent Feedback Loop"]
         Sentinel["AST Sentinel & CI Gates"]
         Agent["Autonomous Coding Agent"]
-        PatchSynthesis["CEGIS Patch Synthesis"]
+        PatchSynthesis["Test-Guided Patch Synthesis"]
     end
 
     subgraph Telemetry ["Resilience Metrics"]
@@ -74,15 +74,15 @@ Rather than injecting random bit-flips or generic syntax garbage, the chaos engi
 4. **Egress Poisoning**: Introduces simulated private network IP strings into comments or mock fixtures to verify that zero-trust egress sentinels actively catch leaks.
 
 ### 3.2 Quantitative Resilience Telemetry
-The benchmark tracks three essential metrics:
+A resilience benchmark should track three metrics. The reference implementation computes only $R_{\text{repair}}$, from detected and repaired counts that the caller supplies. Its `benchmark` command runs no agent: it prints `Repair Ratio = 100.0%` for one hard-coded demo mutation (`chaos_monkey.py:309-313`).
 - **Time-to-Detection ($T_{\text{detect}}$)**: Latency between mutation injection and oracle identification.
 - **Convergence Rounds ($N_{\text{rounds}}$)**: The number of self-correction turns required to restore all invariants.
 - **Repair Ratio ($R_{\text{repair}}$)**: The percentage of injected mutations successfully resolved without human intervention:
 
 $$R_{\text{repair}} = \frac{N_{\text{repaired}}}{N_{\text{injected}}}$$
 
-### 3.3 Atomic Rollback Safety
-Every injection records the exact byte-level state of the target file prior to mutation. If an agent fails to converge or times out, the harness atomically reverts all files to their pristine baseline.
+### 3.3 Rollback Safety
+Every injection records the text of the target file before mutation. If an agent fails to converge or times out, the harness must revert all files to their baseline. In the reference implementation, `rollback_chaos_mutation` writes the saved text back with a plain file write, not an atomic rename, and the caller must invoke it. If the original file was empty, rollback deletes the file.
 
 ---
 

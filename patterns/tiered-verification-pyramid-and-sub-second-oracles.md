@@ -11,16 +11,16 @@
 
 ## 1. Context & Forces
 
-As software projects grow in scale and maturity, their verification machinery accumulates complexity. What begins as a 200ms test suite grows to include end-to-end integration tests, containerized databases, schema validators, code coverage instrumentation, and multi-language linters. In a mature repository, running the complete test suite often takes between 45 seconds and 3 minutes.
+As software projects grow in scale and maturity, their verification machinery accumulates complexity. What begins as a 200ms test suite grows to include end-to-end integration tests, containerized databases, schema validators, code coverage instrumentation, and multi-language linters. In a mature repository, running the complete test suite can take minutes.
 
 For human developers, this latency is easily tolerated. But for autonomous AI coding agents operating in an agentic loop, **long validation latency is an existential barrier to convergence**:
 
 1. **The Cognitive Decay Trap**:
    During long test runs, the agent's context window is flooded with polling status checks, command outputs, and framework tracebacks. This causes attention dilution ($ADI$), where early system instructions and negative constraints are forgotten.
 2. **The Tool Execution Timeout**:
-   Agent environments enforce strict timeouts on tool executions (typically 30 seconds). Monolithic test runs exceed this threshold, forcing commands into asynchronous background tasks that disrupt conversational focus.
+   Agent environments enforce timeouts on tool executions (Claude Code's Bash tool defaults to 2 minutes). Monolithic test runs can exceed this threshold, forcing commands into asynchronous background tasks that disrupt conversational focus.
 3. **The Assertion Density Penalty**:
-   When tests assert multiple properties sequentially, Python AST semantics compile each `assert` to an `if not (expr): raise AssertionError` branch. Ten linear assertions add $+10$ to the test function's McCabe cyclomatic complexity ($M$), causing the test suite itself to breach architectural complexity caps ($M \le 10$).
+   When tests assert multiple properties sequentially, each `assert` is equivalent to `if __debug__: if not expr: raise AssertionError`, a branch. radon and this repository's AST sentinel count each `assert` as $+1$, so ten linear assertions add $+10$ to the test function's McCabe cyclomatic complexity ($M$) and can make the test suite itself breach architectural complexity caps ($M \le 10$). Ruff's `C901` (mccabe) does not count `assert`.
 
 ---
 
@@ -62,7 +62,7 @@ To prevent comprehensive tests from breaching McCabe complexity ceilings ($M \le
 
 ### Anti-Pattern: Linear Assertion Sprawl
 ```python
-# FLAWED: Compiles to 6 branch points in AST (McCabe M = 7)
+# FLAWED: 6 assert branches (radon M = 7)
 def test_create_user(client):
     user = client.create_user("alice", "alice@example.com")
     assert user.id is not None
@@ -75,7 +75,7 @@ def test_create_user(client):
 
 ### Pattern: Consolidated Structural Tuple Equality
 ```python
-# CORRECT: Compiles to a single AST comparison (McCabe M = 1)
+# CORRECT: one assert with a single comparison (radon M = 2)
 def test_create_user(client):
     user = client.create_user("alice", "alice@example.com")
     assert (
@@ -103,12 +103,12 @@ AssertionError: assert (True, 'alice', 'alice@example.com', 'developer', False, 
 
 ---
 
-## 4. Counterexample-Guided Synthesis (CEGIS) Protocol
+## 4. Structured Counterexample Protocol
 
 When Layer 1 or Layer 2 oracles fail, error reporting must be formatted as structured, deterministic counterexamples rather than conversational prose:
 
 ```python
-# Example: CEGIS Error Representation for AI Agents
+# Example: Structured Counterexample for AI Agents
 {
     "status": "FAILED",
     "oracle": "Layer 1: Unit Slice",
@@ -121,7 +121,7 @@ When Layer 1 or Layer 2 oracles fail, error reporting must be formatted as struc
 }
 ```
 
-By presenting the failure as an algebraic counterexample, the agent's neural search space is immediately constrained to modifying line 42, enabling single-turn repair convergence.
+Presenting the failure as a concrete counterexample points the agent at line 42 and the failing input, which can allow a repair in one turn. This borrows the idea of a counterexample from counterexample-guided inductive synthesis (CEGIS, Solar-Lezama et al. 2006), where a verifier returns counterexamples to a solver; an agent reading a test failure is an analogy to it, not CEGIS.
 
 ---
 

@@ -2,8 +2,8 @@
 
 > **Project**: `vibes` — Cognitive Invariants & Long-Horizon Agent Reliability
 > **Topic**: Overcoming the "Lost-in-the-Middle" Ceiling: Auditing Attention Dilution, Mitigating Context Rot, and Enforcing Active Invariant Re-Pinning Across Long-Horizon Sessions
-> **Key Metric**: 82.4% token volume reclamation via Observation Masking; 100% preservation of invariant constraints trapped in the 20%–80% depth valley via Anchor Re-Pinning; 4.6x reduction in Attention Dilution Index (ADI).
-> **TLDR**: Combat attention dilution and context rot in long multi-turn sessions by actively compacting history to maintain an Attention Dilution Index <= 1.5.
+> **Key Metric**: `tools/context_rot_auditor.py` flags invariant-bearing messages in the middle of a transcript (`ROT002`), masks long tool output and re-pins the last three invariant messages at the end; no command in this repository measures token reclamation, adherence or Attention Dilution Index (ADI) change on real transcripts.
+> **TLDR**: Combat attention dilution and context rot in long multi-turn sessions by compacting tool output and re-pinning invariants near the end of the context.
 > **ELI:7b**: Summarize and compress long chat logs as you go so the AI doesn't get brain fog from carrying 50,000 words of chat history.
 
 ---
@@ -12,12 +12,12 @@
 
 Modern frontier and open-weights models advertise context windows spanning from 128k to over 1M tokens. In commercial marketing and early agent demos, this capacity was celebrated as the end of token budgeting.
 
-However, recent 2025/2026 empirical studies—including **RULER**, **AgentLongBench**, **LOCA-bench**, and **LoCoBench-Agent**—have confirmed a sobering architectural reality: **raw context capacity is a vanity metric**. In long-horizon agentic workloads, agents routinely fail not because they exceed token limits, but because of two interrelated failure modes:
-1. **Attention Dilution**: Transformer attention is mathematically normalized via softmax ($\sum_{i=1}^N w_i = 1.0$). As total context depth $N$ expands, the attention probability mass allocated to each individual token decreases inversely. High-signal instructions become drowned in background noise.
-2. **Context Rot & Positional Degradation ("Lost in the Middle")**: Attention is not distributed uniformly across the prompt sequence. Models exhibit severe U-shaped positional bias: attention concentrates heavily on the initial system prefix (primacy bias) and the immediate user suffix (recency bias), creating an attention deficit "valley" across the middle 20% to 80% of the context.
-3. **Observation Bloat**: External command executions, test suite outputs, and git diff dumps rapidly flood context history with low-entropy text, driving signal-to-noise ratios below 10%.
+However, long-context benchmarks show that **raw context capacity overstates usable capacity**. **RULER** (Hsieh et al., COLM 2024, arXiv 2404.06654) finds effective context lengths well below the claimed ones, and agent benchmarks such as **AgentLongBench** (arXiv 2601.20730), **LOCA-bench** (arXiv 2602.07962) and **LoCoBench-Agent** (arXiv 2511.13998) report falling performance as agent context grows. In long-horizon agentic workloads, agents can fail well before they exceed token limits, because of these interrelated failure modes:
+1. **Attention Dilution**: Transformer attention is normalized via softmax ($\sum_{i=1}^N w_i = 1.0$). As the context length $N$ grows, the average weight per token is $1/N$, so unless the attention scores become sharper, the weight on any one instruction can fall. High-signal instructions can be drowned in background noise.
+2. **Context Rot & Positional Degradation ("Lost in the Middle")**: Models use information at the start and end of a long input better than information in the middle (Liu et al., "Lost in the Middle", TACL 2024), and their attention shows a matching U-shaped positional bias (Hsieh et al., "Found in the Middle", Findings of ACL 2024). The 20% to 80% "valley" that `ROT002` checks under `--preset strict` is this tool's heuristic, not a boundary taken from those papers.
+3. **Observation Bloat**: External command executions, test suite outputs, and git diff dumps rapidly flood context history with low-signal text.
 
-When an agent operates in an append-only conversational loop, critical architectural invariants (such as $M \le 6$, depth $\le 3$, zero RFC 1918 IPs, or negative constraints) established early in the session slide into this middle-depth valley, where they suffer silent extinction.
+When an agent operates in an append-only conversational loop, critical architectural invariants (such as $M \le 6$, depth $\le 3$, zero RFC 1918 IPs, or negative constraints) established early in the session slide into the middle of the context, where the model can fail to apply them.
 
 To measure, audit, and systematically remediate this phenomenon, we implemented [`tools/context_rot_auditor.py`](../../tools/context_rot_auditor.py).
 
@@ -27,7 +27,7 @@ To measure, audit, and systematically remediate this phenomenon, we implemented 
 
 ### 2.1 The Lost-in-the-Middle Attention Valley
 
-When tracing multi-turn agent sessions spanning 15+ turns ($> 30\text{k}$ tokens), we observed a catastrophic collapse in constraint adherence:
+The diagram shows the expected shape of the risk in a long session ($> 30\text{k}$ tokens). It is a model of the risk, not a measured trace:
 
 ```mermaid
 flowchart TD
@@ -42,7 +42,7 @@ flowchart TD
     Middle -.-> Trap["Invariant Extinction Zone<br/>(Negative Constraints Dropped,<br/>Complexity Caps Breached)"]:::weak
 ```
 
-In long sessions where invariants were stated only in turn 0 or turn 2, the probability of the agent violating a stated invariant rose from **4.2% in turns 1–3** to **52.8% in turns 12–20**, despite the invariant text remaining physically present in the context history.
+An invariant stated only in turn 0 or turn 2 ends up in the middle of the context in a long session, even though its text is still present. This repository has no measurement of how often agents then violate it.
 
 ### 2.2 Quantifying Attention Dilution Index (ADI)
 
@@ -50,7 +50,7 @@ To assess the operational degradation risk of an active context, the auditor com
 
 $$\text{ADI} = \left( \frac{N_{\text{noise}}}{N_{\text{signal}}} \right) \times \left( \frac{N_{\text{total}}}{10{,}000} \right)$$
 
-Where $N_{\text{signal}}$ represents tokens bearing architectural invariants, negative constraints, or core task specifications, and $N_{\text{noise}}$ represents raw command output, compiler logs, and repetitive chatter. An $\text{ADI} \le 1.0$ indicates a healthy, dense context; an $\text{ADI} \ge 3.0$ indicates severe context rot risk.
+Where $N_{\text{signal}}$ represents tokens bearing architectural invariants, negative constraints, or core task specifications, and $N_{\text{noise}}$ represents raw command output, compiler logs, and repetitive chatter. ADI is a heuristic: it is not derived from attention weights. The code computes it (`tools/context_rot_auditor.py:572`) but sets no ADI threshold, and no data in this repository calibrates one.
 
 ---
 
@@ -70,7 +70,7 @@ flowchart LR
     Auditor --> Findings["SARIF & JSON Findings<br/>(ADI Score, Middle Invariants)"]:::warning
     Auditor --> Compactor["Active Context Compactor<br/>(Observation Masking & Pinning)"]:::compact
 
-    Compactor --> Dense["Dense Re-Anchored Context<br/>(80%+ Token Reduction)"]:::compact
+    Compactor --> Dense["Dense Re-Anchored Context<br/>(Masked Tool Output)"]:::compact
 ```
 
 ### 3.1 Detection Rules
@@ -82,23 +82,15 @@ flowchart LR
 
 ### 3.2 Active Multi-Scale Compaction
 The `ActiveContextCompactor` implements three mechanical compaction passes:
-1. **Observation Masking**: Truncates repetitive middle-depth command outputs, retaining only the leading 3 lines and trailing 3 lines while reporting omitted line counts.
+1. **Observation Masking**: Truncates each tool output of more than 300 estimated tokens and more than 10 lines, keeping the first 3 and last 3 lines and reporting the omitted line count.
 2. **Traceback Deduplication**: Suppresses repeated error dumps into short single-line signature hashes.
-3. **Anchor Re-Pinning**: Extracts all active invariant envelopes and appends a consolidated `### 🛡️ ANCHORED INVARIANT ENVELOPE (PINNED)` block to the immediate suffix of the context window, shifting critical rules from the low-attention valley back into the high-recency attention zone.
+3. **Anchor Re-Pinning**: Appends a `### 🛡️ ANCHORED INVARIANT ENVELOPE (PINNED)` block at the end of the context that repeats the last three invariant-bearing non-system messages, moving those rules from the middle of the context to its end. Earlier invariant messages are not repeated.
 
 ---
 
 ## 4. Empirical Evaluation & Telemetry
 
-We evaluated the auditor and active compactor across real-world multi-turn agent transcripts:
-
-| Telemetry Dimension | Raw Uncompacted Transcript | Compacted & Re-Anchored Context | Impact / Improvement |
-| :--- | :--- | :--- | :--- |
-| **Total Context Size** | 41,200 tokens | **7,250 tokens** | **82.4% token reduction** |
-| **Attention Dilution Index (ADI)** | 4.82 (Critical Rot Risk) | **0.86 (Dense / Healthy)** | **4.6x ADI reduction** |
-| **Middle-Valley Invariants** | 4 invariants in valley | **0 trapped** (Re-pinned to suffix) | **100% valley rescue** |
-| **Observation Volume** | 31,400 tokens (76.2% share) | **2,800 tokens (38.6% share)** | **91.1% bloat reduction** |
-| **Constraint Adherence Rate** | 47.2% | **98.6%** | **+51.4% adherence** |
+No evaluation on real agent transcripts exists in this repository, so no token reduction, ADI change or adherence rate is reported here. `tests/test_context_rot_auditor.py` checks rules `ROT002` to `ROT005`, observation masking and re-pinning on small hand-written transcripts (`pytest tests/test_context_rot_auditor.py`: 12 passed).
 
 ---
 
@@ -106,6 +98,6 @@ We evaluated the auditor and active compactor across real-world multi-turn agent
 
 1. **Reject Append-Only Transcript Topologies**: Autonomous agents must never maintain unpruned append-only message histories. Tool outputs exceeding 10 lines must be masked upon turn completion.
 2. **Mandatory Suffix Anchor Re-Pinning**: In any session exceeding 5 turns or 10,000 tokens, the orchestrator must dynamically re-pin the active invariant envelope to the immediate prompt suffix.
-3. **Continuous ADI Monitoring**: Agent runtimes should track ADI as a first-class health metric, triggering compaction whenever $\text{ADI} > 2.5$.
+3. **Continuous ADI Monitoring**: Agent runtimes can track ADI as a health signal. Set a compaction threshold only after measuring ADI against outcomes on real transcripts; this repository has no calibrated value.
 4. **Export Telemetry as OASIS SARIF 2.1.0**: Emit schema-valid SARIF reports for CI and PR review integration, surfacing context rot risks before commits are finalized.
 

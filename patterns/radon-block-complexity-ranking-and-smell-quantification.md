@@ -13,7 +13,7 @@
 
 In structural software analytics, aggregate metrics (such as the Maintainability Index) incorporate lines of code, Halstead volume, and cyclomatic complexity into a single normalized score ($0$ to $100$). While useful for high-level repository health monitoring, module aggregates exhibit a dangerous masking effect:
 
-- A 400-line module with twenty small helper functions ($M = 1$) and one deeply nested 80-line function ($M = 18$) produces an aggregate MI score of $\ge 35$ (Grade A).
+- A module of about 400 lines with twenty small helper functions ($M = 1$) and one 80-line function ($M = 18$) can still receive MI rank A (radon ranks MI above 19 as A). A comment-heavy 392-line test module of that shape scored MI 20.8, rank A, with radon 6.0.1 `mi_visit`.
 - A developer or AI agent reviewing only module-level dashboards assumes the entire module is clean and well-factored.
 - The monolithic function continues to accumulate nested branches until it triggers production regressions or fails strict gating sentinels.
 
@@ -88,12 +88,14 @@ def detect_cyclomatic_complexity(
 ### 3.2 Reference Implementation Fidelity
 
 The metric must report radon's exact calculation and letter grade (`A` through `F`) rather than an ad-hoc approximation:
-- Rank A: $1 - 5$ (low complexity)
-- Rank B: $6 - 10$ (moderate complexity)
-- Rank C: $11 - 20$ (more complex, consider refactoring)
-- Rank D: $21 - 30$ (high complexity)
-- Rank E: $31 - 40$ (very high complexity)
-- Rank F: $41+$ (dangerous / untestable)
+- Rank A: $1 - 5$ (low risk, simple block)
+- Rank B: $6 - 10$ (low risk, well structured and stable block)
+- Rank C: $11 - 20$ (moderate risk, slightly complex block)
+- Rank D: $21 - 30$ (more than moderate risk, more complex block)
+- Rank E: $31 - 40$ (high risk, complex block, alarming)
+- Rank F: $41+$ (very high risk, error-prone, unstable block)
+
+These are the descriptions in radon's `cc_rank` docstring ([radon API](https://radon.readthedocs.io/en/latest/api.html)).
 
 ---
 

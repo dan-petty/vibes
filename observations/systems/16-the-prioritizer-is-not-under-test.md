@@ -10,7 +10,7 @@
 
 ## 1. Executive Context & Baseline
 
-This repository runs eleven quality gates. They check tests, coverage floors, complexity invariants, documentation integrity, Mermaid rendering, workflow syntax, JSON manifests, and error budgets. Every one of them asks the same kind of question: *is the product correct?*
+This repository runs eight CI quality gates. They check tests, coverage floors, complexity invariants, documentation integrity, Mermaid rendering, workflow syntax, JSON manifests, and error budgets. Every one of them asks the same kind of question: *is the product correct?*
 
 The loop that decides **which work happens next** is a separate tool. It scans the repository, scores every resource, ranks the findings, and hands the top item to an agent. Nothing in CI runs it.
 

@@ -56,12 +56,13 @@ flowchart TD
 ### Three Pillars of Isolation:
 
 1. **Unprivileged Process Isolation**:
-   - `runAsNonRoot: true` with non-zero UID/GID (`10001`).
+   - `runAsNonRoot: true` with non-zero UID/GID (`10001`). This is not the same as rootless: a rootless runtime (rootless Docker or Podman) runs the container engine itself without root. The reference implementation sets a non-root UID and is rootless only when the runtime is.
    - Root filesystem is mounted read-only (`readOnlyRootFilesystem: true`); temporary scratch space is mounted on size-bounded `tmpfs` or `emptyDir` volumes.
-   - All kernel capabilities are dropped (`drop: ["ALL"]`), preventing raw network socket forging or privilege escalation.
+   - All kernel capabilities are dropped (`drop: ["ALL"]`), preventing raw network sockets and other privileged operations. A setuid-root binary can still give a process UID 0 unless `no-new-privileges` is also set (`allowPrivilegeEscalation: false` in Kubernetes).
 2. **Egress Firewalling & SSRF Prevention**:
-   - Outbound network traffic is filtered at the kernel/CNI layer via Kubernetes `NetworkPolicy` or Docker network bridges.
-   - External internet egress is allowed only if explicitly needed, while all private RFC 1918 ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and cloud metadata endpoints (`169.254.169.254`) are dropped unconditionally.
+   - Outbound network traffic is filtered at the kernel/CNI layer via Kubernetes `NetworkPolicy` (enforced only by a CNI plugin that implements it) or, for Docker, host firewall rules such as the `DOCKER-USER` iptables chain. A Docker bridge network alone does not filter by destination.
+   - Standard `NetworkPolicy` has no deny rules. Once a policy selects the pod, all egress is denied except what allow rules permit: pod selectors for DNS, the OTel collector and Valkey, and, only if internet egress is needed, an `ipBlock` of `0.0.0.0/0` that lists the private RFC 1918 ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and `169.254.169.254/32` in `except`.
+   - The reference implementation does not filter by address. It runs containers with `--network none`, so the container has no network at all.
 3. **Telemetry Streaming**:
    - Execution commands within the sandbox stream child spans and standard streams to the local OTel Collector over in-cluster endpoints.
    - If execution times out or triggers an egress block, an alert fires instantly with the associated trace ID.
@@ -76,6 +77,9 @@ agent-sandbox:
   image: python:3.14-slim
   user: "10001:10001"
   read_only: true
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 100
   tmpfs:
     - /tmp:size=64M,mode=1777
     - /workspace:size=256M,mode=0755
@@ -88,18 +92,13 @@ agent-sandbox:
 
 ### Trace Injection Wrapper:
 ```python
-import os
 import subprocess
-import time
 
 def run_in_sandbox(command: list[str], traceparent: str, timeout_seconds: int = 30) -> subprocess.CompletedProcess:
     """Execute command inside sandbox container with W3C trace context."""
-    env = os.environ.copy()
-    env["TRACEPARENT"] = traceparent
-    env["PYTHONUNBUFFERED"] = "1"
-
     return subprocess.run(
-        ["docker", "exec", "-e", f"TRACEPARENT={traceparent}", "vibes-agent-sandbox", *command],
+        ["docker", "exec", "-e", f"TRACEPARENT={traceparent}", "-e", "PYTHONUNBUFFERED=1",
+         "vibes-agent-sandbox", *command],
         capture_output=True,
         text=True,
         timeout=timeout_seconds,
@@ -112,5 +111,5 @@ def run_in_sandbox(command: list[str], traceparent: str, timeout_seconds: int = 
 ## 4. Key Takeaways
 
 1. **Sandboxing is Not Optional**: Never allow an autonomous LLM to execute synthesized code directly on host developer machines.
-2. **Egress is the Weakest Link**: Most sandboxes secure the filesystem but leave outbound networking open. Enforcing CIDR blocklists prevents SSRF and secret exfiltration.
+2. **Egress is the Weakest Link**: Many sandboxes secure the filesystem but leave outbound networking open. Blocking private ranges and the metadata endpoint prevents SSRF to internal targets. It does not stop exfiltration to public hosts; only an allow-list or `--network none` does that.
 3. **Observability Completes the Loop**: Sandboxes without distributed tracing turn timeouts into debugging nightmares. Spans provide immediate visibility into command hangs and resource thrashing.

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """AST Invariant Sentinel: Automated static analyzer for agentic codebases.
 
-Enforces four non-negotiable architectural invariants:
+Enforces these invariants (limits from the `standard` preset):
 1. Cyclomatic Complexity <= 10
 2. Indentation / Block Nesting Depth <= 5
-3. Prohibition of arbitrary partial regex/substring pattern matching
-4. Zero-trust sanitization (no private host addresses, standardized mock domains)
+3. Zero-trust sanitization (no private host addresses, standardized mock domains)
+4. Syntax, target and waiver integrity (the file parses, every target exists, every
+   waiver is well formed)
 """
 
 # sentinel: allow[ZeroTrustSanitization] — this module defines the private-address policy;

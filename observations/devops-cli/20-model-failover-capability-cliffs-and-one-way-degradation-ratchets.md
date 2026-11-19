@@ -16,13 +16,13 @@ When a model tier becomes unavailable, the failover cascade (`gateway.py:67-73`)
 
 ## 2. The Observed Phenomenon
 
-**2a. Capability Cliff at Failover Boundaries**: When `devops-reasoning` (70B parameters, 32K+ context, high-fidelity instruction following) fails over to `devops-coder` (14B parameters, shorter effective context, weaker instruction adherence), the task does not gracefully degrade — it falls off a cliff. A 32K-token architectural reasoning task that succeeds at 70B produces incoherent, hallucinated output at 14B. The failover cascade assumes that lower-tier models produce lower-quality-but-usable results; in practice, they produce categorically different failure modes:
+**2a. Capability Cliff at Failover Boundaries**: When `devops-reasoning` (70B parameters, 32K+ context, high-fidelity instruction following) fails over to `devops-coder` (14B parameters, shorter effective context, weaker instruction adherence), the task can fall off a cliff instead of degrading gracefully: a long architectural reasoning task that a 70B model completes can come back incoherent from a 14B model. The failover cascade assumes that lower-tier models produce lower-quality-but-usable results; the expected failure modes are categorically different (expected shapes; no failover run was measured):
 
 - **70B → 14B**: Complex multi-file refactoring instructions are ignored; the model reverts to single-file edits
-- **14B → 7B**: Tool parameter schemas are hallucinated despite `additionalProperties: false`; JSON output malformation rate spikes
-- **Any quantized tier**: AWQ 4-bit models (`gateway.py:444-445`) lose the ability to produce syntactically valid JSON reliably, triggering the structured output repair pipeline (`structured.py`) on every response
+- **14B → 7B**: Tool parameter names are hallucinated (in September 2026 `devops-cli` declared no `additionalProperties: false` to catch them); JSON output malformation rises
+- **Any quantized tier**: AWQ 4-bit models (`gateway.py:444-445`) may produce invalid JSON more often, which triggers the structured output repair pipeline (`structured.py`)
 
-**2b. One-Way Embedding Batch Degradation**: The embedding engine's adaptive batching (`embeddings.py:266-279`) halves `self._current_batch_size` whenever a request exceeds 2.0s latency. However, there is no corresponding mechanism to increase batch size when latency returns to normal. A single transient network spike permanently ratchets batch size from 32 down to 16, then 8, then 4, then 2, then 1 — and stays there until the process restarts. This transforms a momentary infrastructure blip into permanent throughput degradation.
+**2b. One-Way Embedding Batch Degradation**: The embedding engine's adaptive batching (`embeddings.py:266-279`) halves `self._current_batch_size` whenever a request exceeds 2.0s latency. However, there is no corresponding mechanism to increase batch size when latency returns to normal. Each slow batch halves the size once: five slow batches during a transient network spike ratchet it from 32 down to 16, then 8, then 4, then 2, then 1 — and it stays there until the process restarts. This transforms a momentary infrastructure blip into permanent throughput degradation.
 
 The ratchet is best read by what is missing from it — every arrow points one way, and the only edge leaving `batch = 1` is a process restart:
 
@@ -47,8 +47,8 @@ stateDiagram-v2
 
     note right of B1
         No transition returns leftward.
-        A 30-second network blip costs
-        32x throughput until redeploy.
+        A blip that slows five batches
+        costs 32x throughput until restart.
     end note
 ```
 
@@ -60,13 +60,13 @@ The root cause is **treating model capabilities as a continuous spectrum when th
 
 $$C(\text{reasoning}) > C(\text{coder}) > C(\text{chat}) > C(\text{direct})$$
 
-where $C$ is a smooth, monotonically decreasing function. In reality, model capabilities exhibit sharp phase transitions:
+where $C$ is a smooth, monotonically decreasing function. In practice, capabilities can drop sharply at some model size or precision (the thresholds depend on the model family and task; `devops-cli` measured none):
 
-- Below ~13B parameters, reliable tool calling collapses
-- Below ~30B parameters, multi-step planning with constraints degrades non-linearly
-- AWQ 4-bit quantization introduces measurable JSON syntax error rates that don't exist at FP16/BF16
+- Below some size, reliable tool calling collapses
+- Below a larger size, multi-step planning with constraints degrades non-linearly
+- 4-bit AWQ quantization can raise JSON syntax error rates compared with FP16/BF16
 
-The failover cascade routes a 70B task to a 14B model because the 14B model is "next in line" — but the task may require capabilities that only exist above a 30B threshold. There is no mechanism to detect that a failover target is categorically incapable of the assigned task, so the system silently degrades from "correct execution" to "confident hallucination."
+The failover cascade routes a 70B task to a 14B model because the 14B model is "next in line" — but the task may require capabilities that the 14B model lacks. There is no mechanism to detect that a failover target is categorically incapable of the assigned task, so the system silently degrades from "correct execution" to "confident hallucination."
 
 The one-way batch ratchet exhibits a different but related pattern: **asymmetric adaptation**. The system learns to be cautious (shrink batch size) but never learns to be confident again (restore batch size). This is the operational equivalent of a circuit breaker that trips but never resets — appropriate for safety-critical systems, but pathological for throughput optimization where transient failures are the norm.
 
@@ -130,8 +130,8 @@ Cache probe results in `gateway_state.json` and use them to populate the capabil
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Failover cliff quantification**: 70B → 14B failover on a 32K reasoning task produces 0% usable output (complete task failure) versus 85%+ success at the native tier. Silent degradation is worse than explicit failure.
-- **Batch ratchet cost**: A single 2.1s latency spike permanently reduces embedding throughput from 32 items/request to 1 item/request — a 32× throughput collapse that persists until process restart.
+- **Failover cliff**: No success rate was measured for 70B → 14B failover. The risk is qualitative: a lower tier can return plausible but unusable output with no error. Silent degradation is worse than explicit failure.
+- **Batch ratchet cost**: Five batches over 2.0 s reduce embedding batch size from 32 items/request to 1 item/request (`_record_batch_latency` halves once per slow batch) — a 32× drop in items per request that persists until process restart.
 - **AIMD precedent**: TCP's congestion control solved this exact problem in 1988. Additive Increase / Multiplicative Decrease is the canonical solution for systems that must adapt to transient failures without permanent degradation.
 
 > **Aphorism**: A failover cascade that routes a 70B task to a 7B model doesn't degrade gracefully — it degrades catastrophically while reporting success. Silent capability cliffs are worse than loud failures.

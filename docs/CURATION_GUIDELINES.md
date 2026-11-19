@@ -30,7 +30,7 @@ Before committing any document, prompt, test log, or schema to `vibes`, verify a
   - `203.0.113.0/24` (TEST-NET-3)
   - or loopback `127.0.0.1` / `localhost`
 - [ ] **Standardized Hostnames**: Standardize all mock or dummy hostnames strictly to `example.com` (e.g. `http://example.com/health`). Do NOT use subdomains (e.g. avoid `api.example.com` or `vault.example.com`). Use abstract role labels (`<worker-node>`, `<storage-cluster>`) for infrastructure roles.
-- [ ] **Abstract Local Paths**: Replace concrete developer paths (`/home/dan/...`, `C:\Users\dan\...`) with generic path structures (`/home/user/...` or `~/.config/...`).
+- [ ] **Abstract Local Paths**: Replace concrete developer paths (`/home/<name>/...`, `C:\Users\<name>\...`) with generic path structures (`/home/user/...` or `~/.config/...`).
 - [ ] **Bounded Truncation on Logs**: Truncate raw logs and exception traces to eliminate unneeded noise and avoid token bloat.
 
 ---
@@ -87,4 +87,4 @@ flowchart TD
 All pull requests to `vibes` undergo automated and manual review:
 - **Link Integrity**: All relative links must resolve correctly.
 - **Markdown Formatting**: Adherence to standard GitHub Flavored Markdown.
-- **Sanitization Audit**: Automated regex check for IP addresses, secret patterns, and non-standard domain names.
+- **Sanitization Audit**: Automated checks for private (RFC 1918) IP addresses in documents (`tools/docs_validator.py`) and for private IP addresses and `example.com` subdomains in Python string literals (`examples/ast-invariant-sentinel/sentinel.py`). No automated check scans for secret patterns; check for secrets by hand.

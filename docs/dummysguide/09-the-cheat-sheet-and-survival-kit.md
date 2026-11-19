@@ -14,7 +14,7 @@ When you work with AI coding agents day in and day out, you quickly learn two tr
 1. **When agents work with tight guardrails, they feel like magic.** Features get built in minutes, bugs vanish instantly, and tests pass on the first try.
 2. **When agents derail, they derail fast.** An agent can burn through thousands of tokens in three minutes, thrashing between broken edits, inventing fake functions, or drowning in slow test timeouts.
 
-You don't need to re-read fifty pages of theory when an agent gets stuck in the middle of a release. You need a fast, battle-tested reference card. This chapter is your pocket survival kit.
+You don't need to re-read fifty pages of theory when an agent gets stuck in the middle of a release. You need a fast, short reference card. This chapter is your pocket survival kit.
 
 ---
 
@@ -30,7 +30,7 @@ Print these out, stick them on your wall, or paste them into your agent's system
 | **4** | **The 1-Second Loop** | Keep the inner edit test sub-second | If tests take 60 seconds, the agent enters the lag trap and starts hallucinating. Keep the feedback loop instant. |
 | **5** | **Clean Rooms Stay Clean** | Zero secrets, zero private IPs, canonical `example.com` | Never leak real hostnames, LAN IPs (`192.168.x.x`), or tokens. Always use RFC 5737 docs IPs or `example.com`. |
 | **6** | **The Grounded Task** | Track steps in a written issue card, not in chat | Chat memory rots over long conversations. A written checklist keeps the agent anchored across hours of work. |
-| **7** | **The Tuple Trick** | Compare test properties as structural tuples | Ten separate `assert` lines add $+10$ to your function's complexity score. A single tuple assertion keeps it at $M=1$. |
+| **7** | **The Tuple Trick** | Compare test properties as structural tuples | In radon and the `vibes` sentinel, ten separate `assert` lines add $+10$ to your function's complexity score. A single tuple assertion keeps it at $M=1$. |
 | **8** | **Two Brains, One Job** | Big models plan, fast tools and small models execute | Use frontier models for architecture and strategy; use local models, linters, and AST sentinels for verification. |
 | **9** | **Polyglot Invariants** | Languages differ, but spaghetti is spaghetti everywhere | Whether it is Python, Rust, Go, TypeScript, or Bash, enforce the same $M \le 10$ and depth $\le 5$ ceiling. |
 | **10** | **Stop Guessing, Run Oracles** | When stuck, ask a tool, never an opinion | When an agent is unsure about a schema or file, run an AST parser or test runner rather than guessing. |
@@ -112,20 +112,20 @@ Use this matrix to keep your team and your agents honest:
 |---|---|---|
 | **Specification** | Fuzzy prompt: *"Build a billing system"* | Executable test suite and typed schemas |
 | **Feedback Loop** | Manual browser refreshes, human squinting | Sub-second AST sentinels and automated unit tests |
-| **Error Handling** | *"Fix this error please!"* (speculative guessing) | Counterexample-Guided Inductive Synthesis (CEGIS) |
+| **Error Handling** | *"Fix this error please!"* (speculative guessing) | Hand back the exact failing input, as a verifier does in CEGIS (counterexample-guided inductive synthesis) |
 | **Code Length** | 400-line monster functions | Functions strictly capped at $M \le 10$, depth $\le 5$ |
 | **Dead Code** | Left behind *"just in case we need it later"* | Ruthlessly deleted on sight (zero zombie code) |
 | **Secrets & IPs** | Real `.env` files and LAN hostnames in chat | Masked credentials, RFC 5737 IPs, `example.com` |
 | **Task State** | Lost in 50 pages of scrolling chat history | Grounded in GitHub Projects cards and issue tracking |
 | **Model Usage** | Burn expensive frontier tokens on typos | Frontier models for architecture, fast local tools for checks |
-| **Multi-Language** | Works in Python, breaks in Rust and Go | Polyglot complexity gating across all languages |
+| **Multi-Language** | Works in Python, breaks in Rust and Go | Polyglot complexity gating across languages |
 | **Release Bar** | *"Seems to work on my laptop, ship it!"* | 100% clean pre-push quality gate verification |
 
 ---
 
 ## ⏱️ The 3-Second Pre-Merge Validity Checklist
 
-Before you or your agent merges any branch or opens a release PR, run down this 5-point checklist. It takes three seconds and catches 99% of release defects:
+Before you or your agent merges any branch or opens a release PR, run down this 5-point checklist. It takes three seconds and catches the most common release defects:
 
 ```text
 [ ] 1. FAST CHECKS: Did `sentinel.py` and `docs_validator.py` pass with 0 errors?
@@ -154,4 +154,4 @@ Ready to explore the foundational chapters in detail?
 - ⚡ [**Chapter 8: Fast Checks Beat Slow Tests (Verification Speed)**](./08-fast-checks-beat-slow-tests.md)
 - 🧰 [**Chapter 9: The Cheat Sheet & Survival Kit (Daily Decision Trees)**](./09-the-cheat-sheet-and-survival-kit.md)
 - 👑 [**Chapter 10: The Sovereign Human Core (Pilot & Autopilot)**](./10-the-human-in-the-loop.md)
-- 🔬 [**71 Real-World Case Studies (Field Observations)**](../../observations/README.md)
+- 🔬 [**Field Observations**](../../observations/README.md)

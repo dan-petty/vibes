@@ -1,6 +1,6 @@
 # Streaming Reasoning Token Parser & Bounded Stream Sanitizer
 
-Reference implementation of a streaming finite state machine (FSM) that intercepts, isolates, and sanitizes internal reasoning blocks (`<think>...</think>`, `[reasoning]...[/reasoning]`) emitted by frontier reasoning models.
+Reference implementation of a streaming finite state machine (FSM) that intercepts, isolates, and sanitizes internal reasoning blocks emitted by reasoning models. It handles one tag pair per instance: `<think>...</think>` by default, or another pair such as `[reasoning]...[/reasoning]` passed as `open_tag` and `close_tag`.
 
 ---
 
@@ -9,7 +9,7 @@ Reference implementation of a streaming finite state machine (FSM) that intercep
 Frontier reasoning models interleave or prefix responses with chain-of-thought tokens. In autonomous agent architectures, unmanaged reasoning tokens cause critical system failures:
 1. **Tool Argument Poisoning**: Leaked thought tokens get serialized into bash scripts, SQL queries, or JSON payloads, triggering execution syntax errors.
 2. **Terminal Stream Pollution**: Unfiltered `<think>` traces flood developer consoles, breaking interactive TUI layouts and obfuscating operational outputs.
-3. **Memory Exhaustion (CWE-400)**: Unbounded models can loop inside thinking blocks, consuming tens of thousands of tokens and exhausting client buffer memory.
+3. **Uncontrolled Resource Consumption (CWE-400)**: Unbounded models can loop inside thinking blocks, consuming tens of thousands of tokens, and the time and cost they carry, without yielding progress.
 4. **Tag Splitting Across Stream Chunks**: Network chunking frequently cuts tags across packet boundaries (`<th` in chunk $N$, `ink>` in chunk $N+1$).
 
 ---

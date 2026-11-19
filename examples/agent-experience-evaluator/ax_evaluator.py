@@ -2,12 +2,12 @@
 """Agent Experience (AX) Evaluator: Static analysis for agentic usability & low impedance.
 
 Evaluates codebases across three core Agent Experience dimensions:
-1. Diagnostic Actionability (DAI): Structured CEGIS error vectors vs. unstructured prose.
+1. Diagnostic Actionability (DAI): Structured error values vs. unstructured prose.
 2. Interface Friction (IFI): Strict negative schemas vs. permissive kwargs/dictionaries.
 3. Cognitive Impedance (CIM): Headroom preservation (M <= 6, depth <= 3).
 
-Computes composite S_AX score, generates SARIF 2.1.0 telemetry, and synthesizes
-closed-loop CEGIS remediation guidance.
+Computes composite S_AX score, generates SARIF 2.1.0 telemetry, and attaches a fixed
+remediation hint per rule.
 """
 
 from __future__ import annotations

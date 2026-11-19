@@ -9,9 +9,9 @@
 
 ## Overview & Problem Statement
 
-In concurrent Go applications, autonomous AI coding assistants frequently introduce subtle **goroutine leaks**—background goroutines that block indefinitely on channel operations, system calls, or synchronization locks, silently accumulating memory and thread table entries until the process exhausts resources.
+In concurrent Go applications, autonomous AI coding assistants frequently introduce subtle **goroutine leaks**—background goroutines that block indefinitely on channel operations, system calls, or synchronization locks, silently accumulating memory (each parked goroutine keeps its stack) until the process exhausts resources.
 
-Because Go lacks compile-time affine lifetime checks like Rust, concurrency invariants must be guarded by **deterministic runtime stack oracles**:
+The Go compiler does not check that a goroutine terminates (Rust's borrow checker does not check this for threads either), so concurrency invariants must be guarded by **deterministic runtime stack oracles**. The established Go library for this check is `go.uber.org/goleak` (`goleak.VerifyNone`, `goleak.VerifyTestMain`, `goleak.IgnoreTopFunction`). `sentinel.go` reimplements a small subset of it for illustration:
 
 ```mermaid
 flowchart TD
@@ -103,6 +103,9 @@ python3 examples/go-leak-sentinel/go_leak_sentinel.py --demo
 ```
 
 ### Output:
+
+The demo parses two hand-written sample traces (`SAMPLE_CLEAN_TRACE` and `SAMPLE_LEAKY_TRACE` in `go_leak_sentinel.py`), not a dump from a Go run. This is the report for the leaky trace (Scenario B):
+
 ```text
 ================================================================================
 🐹 GO CONCURRENCY & GOROUTINE LEAK SENTINEL — AUDIT REPORT
@@ -119,6 +122,9 @@ Concurrency Score:   50.0/100.0
   • [example.com/go-leak-sentinel.LeakyContextWorker.func1] Select blocked without termination. Add 'case <-ctx.Done(): return'.
 ================================================================================
 ```
+
+> [!WARNING]
+> **Limits of the Python parser.** It classifies a goroutine by the state in its header and by name patterns. A goroutine in a `time.Sleep` loop (Trap 2) has the state `[sleep]` and is not counted as a leak. The `runtime.gopark` pattern marks a goroutine as a system daemon, but with `GOTRACEBACK=system` every blocked goroutine shows a `runtime.gopark` frame, so blocked user goroutines are also excluded. The Go library (`sentinel.go`) counts goroutines with `runtime.NumGoroutine()` and has neither limit.
 
 ### Scan a Live Stack Dump File
 ```bash
@@ -144,7 +150,7 @@ func TestMyConcurrentWorker(t *testing.T) {
 }
 
 func TestImmediateVerification(t *testing.T) {
-    // Verifies no leaks exist at this moment
+    // Takes a baseline and checks it at once, so it does not find goroutines that leaked before the call
     sentinel.VerifyNone(t)
 }
 ```

@@ -1,8 +1,10 @@
 """Real-Time AST Conflict-Free Replicated Data Type (Tree-CRDT).
 
-Enables concurrent, lock-free collaborative editing over abstract syntax trees across
-autonomous subagents. Replaces character-based text CRDTs with grammatical tree
-operations, guaranteeing Strong Eventual Consistency (SEC) and valid AST syntax.
+In-process simulation of a replicated AST tree for concurrent edits by several agents.
+It replicates tree operations instead of characters. It does not guarantee Strong
+Eventual Consistency: concurrent moves that would form a cycle diverge across replicas,
+and inserts and deletes commute only under causal delivery. Materialized source is not
+syntax-checked.
 
 Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 """

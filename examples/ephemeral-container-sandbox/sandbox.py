@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Ephemeral Rootless Container Sandbox Harness.
 
-Provides isolated, ephemeral execution of untrusted agent payloads inside
-hardened rootless containers (Docker/Podman) with standard-library simulator
-fallback.
+Provides ephemeral execution of untrusted agent payloads inside Docker/Podman
+containers run as an unprivileged user (rootless only if the runtime itself is), with a
+standard-library simulator fallback.
 
 Key Hardening Features:
-- CIS Rootless Container Security Benchmark compliance auditing.
+- Policy checks for eight controls modeled on the CIS Docker Benchmark (the CIS-5.x
+  labels are local, not benchmark item numbers).
 - Deny-all egress network isolation (--network none).
-- Cgroups v2 resource quotas (memory caps, cpu bounds, pids limits).
-- Read-only root filesystem with ephemeral tmpfs scratch mounts.
+- Cgroups resource quotas in container mode (memory caps, cpu bounds, pids limits);
+  rlimits in the simulator.
+- Read-only root filesystem with ephemeral tmpfs scratch mounts (container mode only).
 - Dropped Linux capabilities (CAP_DROP ALL) and no-new-privileges flag.
 - Stripped, zero-trust sanitized environment variables (no secret leakage).
 - Output stream length capping to prevent denial of service (CWE-400).
@@ -93,7 +95,7 @@ class SandboxExecutionResult:
 
 @dataclass
 class CISAuditReport:
-    """Audit scorecard measuring compliance with CIS container benchmarks."""
+    """Audit scorecard for eight controls modeled on the CIS Docker Benchmark."""
 
     score: float
     passed_controls: list[str]
@@ -102,11 +104,11 @@ class CISAuditReport:
 
 
 class CISPolicyAuditor:
-    """Audits sandbox policies against CIS Docker/Rootless Security Benchmarks."""
+    """Audits sandbox policies against 8 local controls modeled on the CIS Docker Benchmark."""
 
     @classmethod
     def audit(cls, policy: SandboxSecurityPolicy) -> CISAuditReport:
-        """Audit policy against 8 canonical CIS rootless container controls."""
+        """Audit policy against the 8 local controls modeled on the CIS Docker Benchmark."""
         passed: list[str] = []
         violations: list[str] = []
         recs: list[str] = []
@@ -481,7 +483,7 @@ def run_benchmark_matrix(harness: ContainerSandboxHarness) -> list[tuple[str, bo
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint for running audits and demo containment matrices."""
     parser = argparse.ArgumentParser(description="Ephemeral Rootless Container Sandbox Harness")
-    parser.add_argument("--audit", action="store_true", help="Audit default security policy against CIS benchmarks")
+    parser.add_argument("--audit", action="store_true", help="Audit the default policy against eight controls modeled on the CIS Docker Benchmark")
     parser.add_argument("--demo", action="store_true", help="Run interactive sandbox containment matrix")
     parser.add_argument("--simulator", action="store_true", help="Force local simulator runtime instead of container")
     args = parser.parse_args(argv)

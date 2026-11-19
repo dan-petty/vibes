@@ -17,10 +17,10 @@ The stability of this verification seam relies on an axiomatic assumption:
 
 $$\text{Verifier Feedback} \to \text{Strict Epistemic Convergence towards Ground Truth}$$
 
-Telemetry across production review sweeps in `devops-cli` (#509 audit, #514, #515, #523, #524, #525) revealed that this assumption systematically collapses under three compounding failure modes:
+The `devops-cli` audit of its review pipeline (#509) and its fixes (#514, #515, #523, #524, #525), run against a synthetic corpus with 10 injected defects (#415), showed that this assumption collapses under three compounding failure modes:
 1. **Mitigation-Refutation Conflation**: The verifier confirms a real defect, invents or asserts a mitigation rationale, and classifies the verdict as "Refuted" — silently deleting genuine defects from developer visibility.
 2. **Evaluator Parochialism (Convention Infiltration)**: The verifier evaluates heterogeneous external repositories against the host tool's own parochial conventions (e.g., Python 3.14 runtime requirements, strict typing flags, internal console exemptions), manufacturing false negatives and noisy invalidations.
-3. **The Unreliable Teacher Trap**: The anti-hallucination catalog — designed to filter recurring model false positives — was configured to autonomously learn from model verdicts. The student model taught the filter catalog, causing epistemic drift where true vulnerabilities were permanently allowlisted.
+3. **The Unreliable Teacher Trap**: The anti-hallucination catalog — designed to filter recurring model false positives — learned from LLM invalidations and weak deterministic checks, and never forgot an entry. The model under test taught the filter catalog, so real defects could be suppressed on later runs.
 
 ```mermaid
 flowchart LR
@@ -52,26 +52,26 @@ flowchart LR
 
 ## 2. The Observed Phenomenon
 
-During an empirical audit of the orchestrated multi-agent review pipeline over a 40-defect benchmark corpus:
+During the #509 audit of the orchestrated multi-agent review pipeline, run against the #415 synthetic corpus (10 injected defects):
 
 ### 2.1 The Invisible Suppression of Verified Defects
-Out of 40 real defects flagged across security, concurrency, and path-traversal surfaces, the verifier invalidated 39 findings. Detailed analysis revealed that 16 of the 39 invalidations (41%) were **valid defects that the verifier confirmed and then dismissed**:
+In one run the verifier invalidated 39 findings. After the verifier was made to separate refutation from mitigation, invalidations fell to 16 and 16 findings were reported as mitigated with the reason shown (devops-cli #525). The dismissals included **defects that the verifier confirmed and then dismissed**:
 - In a path traversal finding, the verifier confirmed that target paths were not bounded after `resolve()`, but dismissed the finding with the verdict: *"Refuted: symlink rejection already blocks directory escape."* In reality, symlink rejection does not impede relative `../` directory climbing.
-- In a recursion depth vulnerability, the verifier confirmed unbound recursion, but dismissed it with: *"Refuted: `load_policy` includes a depth check using the `_depth` parameter."* In reality, the `_depth` parameter was the exact parameter the audited commit had removed.
+- In a recursion depth vulnerability, the verifier confirmed unbound recursion, but dismissed it with: *"Refuted: `load_policy` includes a depth check using the `_depth` parameter."* In reality, the `_depth` check was the exact check the corpus had removed.
 
 Because the verification engine only admitted binary states (`Confirmed` vs `Refuted`), any defect possessing a plausible mitigation was marked `Refuted` and stripped from the report.
 
 ### 2.2 Negative Catalog Self-Contamination
-To reduce token spend and duplicate reviews, the system maintained a persistent common hallucinations catalog. The catalog was wired to record model-invalidated findings as new suppression rules.
-- When an LLM verifier erroneously dismissed a CWE-400 (uncontrolled resource consumption via oversized file reads) by hallucinating that caller wrappers restricted file size, the catalog learned a generic matching pattern for file uploads.
-- On subsequent runs, genuine attacker-controlled file read vulnerabilities were automatically filtered at the deterministic pre-pass layer before any human or persona could inspect them.
-- Builtin catalog entries were overwritten and shadowed by widened model-generated regexes.
+To reduce token spend and duplicate reviews, the system maintained a persistent common hallucinations catalog. The catalog was wired to record LLM invalidations, and evaluation replays from `prompt_eval`, as new suppression entries (devops-cli #514).
+- A builtin CWE-400 entry (uncontrolled resource consumption via oversized file reads), together with weak ground truth, invalidated a real attacker-controlled `read_text` out of the box.
+- Findings that matched catalog entries were filtered at the deterministic pre-pass layer before any human or persona could inspect them.
+- An invalidation that scored 0.5 or more against a builtin entry added up to 30 of the finding's words to that entry's keywords and persisted a copy that shadowed the shipped entry.
 
 ### 2.3 Parochial Convention Infiltration
 The verifier was hardcoded with `devops-cli` specific rules:
 - Assuming `mypy --strict` compliance across untyped third-party libraries.
 - Disallowing RFC 1918 IP addresses in markdown documentation across repositories that specifically documented private network topologies.
-- Enforcing Python 3.14 AST syntax constraints on projects targeting Python 3.11.
+- Applying a Python 3.14 syntax rule to all code, whatever Python version the project targets.
 
 ---
 
@@ -84,8 +84,8 @@ The root cause of this breakdown is **epistemic circularity in multi-agent gover
    - **Mitigation** is an operational claim: *The defect exists, but contextual constraints reduce its exploitability or impact*.
    - When a verifier conflates these concepts, it converts speculative context into proof of absence.
 2. **The Unreliable Teacher Phenomenon**:
-   - In statistical machine learning, a model cannot reliably act as its own ground-truth oracle without an external energy function or deterministic verification baseline.
-   - Allowing stochastic model verdicts to mutate negative filtering catalogs creates an unconstrained negative feedback loop, maximizing false negatives over time.
+   - A model cannot reliably act as its own ground-truth oracle without an external, deterministic verification baseline.
+   - Allowing stochastic model verdicts to mutate negative filtering catalogs creates a self-reinforcing (positive) feedback loop that adds false negatives over time.
 3. **Parochial Context Bleed**:
    - Review engines that do not decouple host application standards from target project specifications suffer evaluation bias, measuring foreign architectures against irrelevant internal invariants.
 
@@ -93,7 +93,7 @@ The root cause of this breakdown is **epistemic circularity in multi-agent gover
 
 ## 4. Remediation & Architectural Pattern
 
-The failure was eliminated by establishing the **Tripartite Verification and Epistemic Seam Pattern**:
+The fixes in devops-cli #523, #524 and #525 establish the **Tripartite Verification and Epistemic Seam Pattern**:
 
 ```mermaid
 flowchart LR
@@ -140,15 +140,17 @@ flowchart LR
 
 ## 5. Verifiable Impact & Key Takeaways
 
-Adopting the Tripartite Verification and Epistemic Seam architecture yielded decisive improvements across the verification benchmark:
+The live checks recorded in devops-cli #524 and #525 (one run each on the #415 corpus) show these changes:
 
-| Metric | Legacy Dual-State Pipeline | Tripartite Epistemic Pipeline |
+| Metric | Before | After |
 |---|---|---|
-| **Defect Invalidation Rate** | 97.5% (39 of 40 dropped) | 40.0% (16 of 40 refuted) |
-| **Mitigations Explicitly Surfaced** | 0% (silently discarded) | 100% (16 of 16 surfaced with named mechanism) |
-| **False Mitigations Caught** | 0 (blind acceptance) | 100% (hallucinated depth checks exposed) |
-| **Negative Catalog Corruption** | Unbounded (CWE-400 blinded) | 0.0% drift (immutable builtins, human-only learning) |
-| **Cross-Project Portability** | Host-biased (failed on non-3.14 code) | 100% portable (isolated `.devops/review.md`) |
+| **Verifier invalidations** | 39 | 16 (#525) |
+| **Findings reported as mitigated, with the reason shown** | 0 | 16 (#525) |
+| **Injected defects still reported** | 6 of 10 | 6 of 10 (#524, #525) |
+| **Builtin catalog entries changed at runtime** | Yes: widened and shadowed | No; ledger copies of builtin ids are ignored at load (#523) |
+| **Project rules in shared prompts** | devops-cli house rules applied to every target | Moved to `.devops/review.md`, read from the nearest one (#524, #525) |
+
+A wrong mitigation is now visible rather than caught: the `_depth` example above is reported as mitigated with its false reason shown.
 
 ### Summary Maxim:
 > *A verifier that drops mitigated defects is an engine for burying risk. True verification refutes with citations, mitigates with mechanisms, and learns only from ground truth.*

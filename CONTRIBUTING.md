@@ -11,7 +11,8 @@ Welcome — and thank you for choosing to add signal to the noise. The `vibes` r
 git clone https://github.com/dan-petty/vibes.git
 cd vibes
 
-# Install pre-commit hooks (enforces sentinel + docs validator before push)
+# Install pre-commit hooks (sentinel, ruff and docs validator on commit and push;
+# pytest collection, fuzz replay and mypy on push only)
 # Install the repository and its tooling from the manifest, never by naming packages
 pip install --editable ".[test]"
 
@@ -33,7 +34,7 @@ python examples/ast-invariant-sentinel/sentinel.py tools examples tests benchmar
 python tools/docs_validator.py
 
 # Verify every Mermaid diagram actually renders (authoritative gate, also run in CI)
-npm install --no-save mermaid@11 jsdom
+npm install --no-save mermaid@11 jsdom@30
 node tools/verify_mermaid.mjs .
 
 # Self-healing: auto-fix Mermaid label quoting and unclosed fences
@@ -52,7 +53,7 @@ python tools/docs_validator.py --fix
 | Executable reference app | `examples/<slug>/` | `<slug>.py`, `test_<slug>.py`, `README.md` |
 | Foundational docs | `docs/` | Descriptive SCREAMING-KEBAB names |
 
-Never scatter loose files in the repo root. It holds only the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pytest.ini`, `.pre-commit-config.yaml`).
+Never scatter loose files in the repo root. It holds only the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pyproject.toml`, `pytest.ini`, `.pre-commit-config.yaml`, `.gitignore`).
 
 ---
 
@@ -131,20 +132,20 @@ Every file under `patterns/` must include:
 
 ## Quality Gates (Automated)
 
-Each gate fires at the earliest moment it can, so feedback arrives in milliseconds rather than minutes:
+Each gate fires at the earliest moment it can, so feedback arrives in seconds rather than minutes:
 
 ```mermaid
 flowchart LR
     classDef accent fill:#4527a0,color:#fff
     classDef success fill:#1b5e20,color:#fff
 
-    Edit["Edit"] --> PC["pre-commit<br/>sentinel + docs validator<br/>~200ms"]:::accent
-    PC --> PP["pre-push<br/>pytest collection<br/>~2s"]:::accent
+    Edit["Edit"] --> PC["pre-commit<br/>sentinel + ruff + docs validator<br/>under 1s for Python, ~3s with Markdown"]:::accent
+    PC --> PP["pre-push<br/>pytest collection, fuzz replay, mypy<br/>~2s"]:::accent
     PP --> CI["ci.yml<br/>full suite, sentinel sweep,<br/>docs --strict, render gate<br/>~90s"]:::accent
     CI --> PRS["pr-sentinel.yml<br/>audits changed files,<br/>posts prescriptive feedback"]:::accent
     PRS --> Cert["certified-by-sentinel"]:::success
 
-    PC -.->|"same checks, 450x faster<br/>than learning it from CI"| CI
+    PC -.->|"a subset of the CI checks,<br/>before the code leaves the machine"| CI
 ```
 
 Every pull request runs the following gates automatically via GitHub Actions:
@@ -152,7 +153,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | Gate | Tool | Threshold |
 |---|---|---|
 | **Full test suite** | `pytest tests/ examples/ benchmarks/` | 100% pass |
-| **Coverage floor** | `pytest --cov=tools --cov=examples --cov=benchmarks` | $\ge 90\%$ (currently 92%) |
+| **Coverage floor** | `pytest --cov=tools --cov=examples --cov=benchmarks` | $\ge 90\%$ (currently 94%) |
 | **AST invariant sentinel** | `sentinel.py` | Cyclomatic complexity ≤10, nesting ≤5 |
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors, including the 5-section observation structure |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |
@@ -174,10 +175,10 @@ Before committing any file:
 - [ ] **No private RFC 1918 IPs** — use RFC 5737 blocks (`192.0.2.x`, `198.51.100.x`, `203.0.113.x`) or `127.0.0.1` / `localhost`.
 - [ ] **No internal hostnames** — use `example.com` (no subdomains) or abstract role placeholders (`<worker-node>`, `<storage-host>`).
 - [ ] **No credentials or secrets** — no API keys, tokens, or `.env` contents.
-- [ ] **Abstract local paths** — use `/home/user/...` or `~/.config/...`, never `/home/dan/...`.
+- [ ] **Abstract local paths** — use `/home/user/...` or `~/.config/...`, never `/home/<name>/...`.
 - [ ] **Bounded log truncation** — trim raw exception traces to ≤256 chars in documented examples.
 
-The AST invariant sentinel enforces IP sanitization mechanically. The pre-commit hook runs it automatically.
+The AST invariant sentinel enforces IP sanitization in Python files, and `docs_validator.py` (`DOC010`) checks documentation. The pre-commit hooks run both automatically.
 
 ---
 

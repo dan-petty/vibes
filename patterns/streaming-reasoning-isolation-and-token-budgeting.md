@@ -15,7 +15,7 @@ Modern reasoning models generate chain-of-thought tokens inside XML tags (`<thin
 
 1. **Tool Execution Hijacking**: Internal reasoning fragments prepended to bash commands or SQL scripts cause immediate execution failure.
 2. **Terminal Visual Corruption**: Thought traces flood developer interfaces, burying actionable progress.
-3. **Memory Exhaustion (CWE-400)**: Unbounded thinking loops consume tens of thousands of tokens without yielding progress.
+3. **Uncontrolled Resource Consumption (CWE-400)**: Unbounded thinking loops consume tens of thousands of tokens, and the time and cost they carry, without yielding progress.
 4. **Packet Boundary Fragmentation**: Streaming network chunks split tags (`<th` + `ink>`), bypassing naive substring searches.
 
 ---
@@ -47,7 +47,7 @@ sequenceDiagram
 2. **State Transition**:
    - `EMITTING`: All non-tag characters are yielded immediately to the visible output channel.
    - `THINKING`: All enclosed characters are routed exclusively to the private telemetry accumulator.
-3. **Cap Enforcement**: Once accumulated thoughts reach `max_thought_chars` (e.g. 64KB), discard excess tokens and emit an alert to prevent memory bloat.
+3. **Cap Enforcement**: Once accumulated thoughts reach `max_thought_chars` (e.g. 64KB), discard excess characters and count them in `metrics.discarded_thought_chars` to prevent memory bloat. The reference implementation emits no alert; callers read the metric.
 4. **EOF Flush**: On stream completion, flush remaining trailing buffer characters, verifying that unclosed tags flag an anomalous stream.
 
 ---
@@ -90,7 +90,7 @@ if not sanitizer.metrics.unclosed_stream:
 ## 4. Guardrails & Anti-Patterns
 
 - ❌ **Anti-Pattern: Post-Hoc Regex on Accumulated Strings**: Waiting for the entire completion to finish before running `re.sub(r"<think>.*?</think>", "")` destroys real-time streaming user feedback.
-- ❌ **Anti-Pattern: Unbounded Thought Buffers**: Allowing models to accumulate unbounded reasoning strings in memory triggers Out-Of-Memory (OOM) kills on constrained agent hosts.
+- ❌ **Anti-Pattern: Unbounded Thought Buffers**: Allowing models to accumulate unbounded reasoning strings in memory grows memory use without limit when the model server sets no output-token cap.
 - ⚠️ **Guardrail: Zero Thought Leakage in Tool Payloads**: Always verify that strings passed to subprocess execution or JSON serializers contain zero open or closing reasoning tags.
 
 ---

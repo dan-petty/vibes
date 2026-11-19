@@ -78,13 +78,15 @@ flowchart TD
 
 ### 4. Beat 3: The Climax via 3-Way AST Reconciliation
 * Merging is not performed via naive text line matching (which causes syntax breakage).
-* The arbiter performs **3-Way Semantic AST Reconciliation** ([Observation 35](../observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md)), resolving node collisions at the AST statement and symbol level, producing a unified, mathematically validated release diff.
+* The arbiter performs **3-Way Semantic AST Reconciliation** ([Observation 35](../observations/systems/35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md)), resolving node collisions at the AST statement and symbol level and reporting the collisions it cannot resolve. Nothing proves the merged result correct; the test suite must still run on it.
 
 ---
 
 ## 3. Implementation Blueprint
 
 ### Step 1: Worktree Fleet Allocation (`examples/worktree-swarm-arbiter/worktree_arbiter.py`)
+
+Simplified sketch. The real `allocate_worktree(repo_root, lease)` waits for `.git/index.lock`, takes a `WorktreeLease`, and creates no data directory.
 
 ```python
 import subprocess
@@ -105,6 +107,8 @@ def allocate_worktree(repo_root: Path, branch_name: str, agent_id: str) -> Path:
 ```
 
 ### Step 2: 3-Way Semantic AST Collision Resolution (`examples/ast-semantic-reconciler/ast_reconciler.py`)
+
+Simplified sketch of the disjoint-addition case only. The module's entry point is `reconcile_3way(base_code, ours_code, theirs_code)`, which also handles changed and colliding symbols.
 
 ```python
 import ast

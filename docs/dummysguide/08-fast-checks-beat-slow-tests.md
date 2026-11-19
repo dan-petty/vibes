@@ -59,9 +59,9 @@ During that wait, three terrible things happen:
 
 To keep AI agents at peak speed and accuracy, disciplined engineering never asks the AI to run the entire massive test suite in its inner edit loop. Instead, testing is split into **three distinct speeds**:
 
-| Speed Tier | How Fast? | What It Checks | What Runs It? |
+| Speed Tier | Target Time | What It Checks | What Runs It? |
 |---|---|---|---|
-| **1. The Flash Check** | 30 milliseconds | Syntax errors, monster functions, leaked passwords | In-memory AST Sentinel (`sentinel.py`) |
+| **1. The Flash Check** | 30 milliseconds | Syntax errors, monster functions, private IP addresses | In-memory AST Sentinel (`sentinel.py`) |
 | **2. The Quick Check** | 300 milliseconds | The single function or file the AI just touched | Targeted unit test slice (`pytest tests/test_user.py`) |
 | **3. The Grand Review** | 1 to 3 minutes | All 1,000 tests, security scanners, multi-platform matrix | Pre-push git hooks & remote GitHub Actions CI |
 
@@ -103,12 +103,12 @@ FAILED test_calculate_tax:
   Actual output:   100.00
   Difference: Missing state tax rate (2.9%) on line 42 of tax_engine.py
 ```
-This is called a **Counterexample**. It gives the AI three crucial facts:
+This is called a **Counterexample**. (The heading's name comes from counterexample-guided inductive synthesis, CEGIS, where a verifier hands a failing input back to a program synthesizer; here a test plays the verifier.) It gives the AI three crucial facts:
 1. What went in (`amount=100.0`).
 2. What should have come out (`102.90`).
 3. Where the logic failed (`line 42`).
 
-With an algebraic clue like this, even a cheap, fast language model can fix the bug on the very first try.
+With an algebraic clue like this, even a cheap, fast language model has a good chance to fix the bug on the first try.
 
 ---
 
@@ -127,7 +127,7 @@ assert user.role == "admin"
 assert user.is_active is True
 ```
 
-In Python, every single `assert` statement is secretly an `if` statement behind the scenes (`if not (condition): raise AssertionError`). When you write ten asserts in a row, the computer's complexity meter jumps by $+10$, triggering the project's complexity alarms!
+In Python, every single `assert` statement is secretly an `if` statement behind the scenes (`if not (condition): raise AssertionError`). Some complexity meters (radon, and the `vibes` sentinel) count each one as a fork, so ten asserts in a row add $+10$ and trigger the project's complexity alarms! (Ruff's complexity check does not count asserts.)
 
 The disciplined way to write this is **Structural Tuple Consolidation**:
 
@@ -142,7 +142,7 @@ assert (user.id, user.name, user.email, user.role, user.is_active) == (
 )
 ```
 
-Both approaches check the exact same data, and Pytest will still highlight the exact attribute that didn't match. But the tuple trick keeps the function's complexity score at a crisp $M=1$, preventing your test suite from becoming a tangled mess.
+Both approaches check the exact same data, and Pytest will still highlight the exact position in the tuple that didn't match. But the tuple trick keeps the function's complexity score at a crisp $M=1$, preventing your test suite from becoming a tangled mess.
 
 ---
 
@@ -153,4 +153,4 @@ Ready to explore more fundamentals?
 - 🏛️ [**Return to Dummy's Guide Home**](./README.md)
 - 🧭 [**Chapter 9: The Cheat Sheet & Survival Kit**](./09-the-cheat-sheet-and-survival-kit.md)
 - 📜 [**Chapter 2: Test First, Code Second**](./02-tests-are-the-answer-key.md)
-- 🔬 [**71 Real-World Case Studies (Observations)**](../../observations/README.md)
+- 🔬 [**Field Observations**](../../observations/README.md)

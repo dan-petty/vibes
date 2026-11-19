@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """CEGIS Debugging Workbench.
 
-Demonstrates Counterexample-Guided Inductive Synthesis (CEGIS) for autonomous agent debugging.
-Transforms trial-and-error code patching into a formal constraint-accumulation loop.
+Demonstrates a debugging loop modeled on Counterexample-Guided Inductive Synthesis (CEGIS).
+It turns trial-and-error code patching into a constraint-accumulation loop. It is an analogy
+to CEGIS: the candidate patches are hand-written and the verifier is a list of test cases;
+no solver synthesizes a candidate.
 """
 
 from __future__ import annotations
@@ -266,7 +268,7 @@ class CEGISRunner:
         return True, None
 
     def record_counterexample(self, counterexample: ConstraintSpec) -> None:
-        """Add a failing counterexample to the formal negative constraint set."""
+        """Add a failing counterexample to the accumulated constraint set."""
         self.state.accumulated_counterexamples.append(counterexample)
         self.state.round_number += 1
 

@@ -5,7 +5,7 @@
 
 ## 1. Executive Context & Baseline
 
-`devops-cli` implements hierarchical multi-agent orchestration through several mechanisms: the `MultiAgentPipeline` (`src/devops_cli/ai/agents/pipeline.py:39-377`) sequences agents through shared context buffers, the `SubAgents` capability (`src/devops_cli/ai/harness/workflow.py:176-370`) provides `delegate_task` with call budgets and error containment, and the `AgentHarness.execute_tiered` protocol (`src/devops_cli/ai/harness/slots.py:775-831`) implements the "Big decides, small types, big checks" delegation hierarchy.
+In September 2026 (devops-cli commit 838c0d7f8, 2026-09-19), `devops-cli` implemented hierarchical multi-agent orchestration through several mechanisms: the `MultiAgentPipeline` (`src/devops_cli/ai/agents/pipeline.py:39-377`) sequences agents through shared context buffers, the `SubAgents` capability (`src/devops_cli/ai/harness/workflow.py:176-370`) provides `delegate_task` with call budgets and error containment, and the `AgentHarness.execute_tiered` protocol (`src/devops_cli/ai/harness/slots.py:775-831`) implements the "Big decides, small types, big checks" delegation hierarchy. devops-cli later removed `harness/workflow.py` and `harness/shell.py` (v0.2.39, 2026-10-23) and `agents/pipeline.py` (2026-11-09).
 
 External IDE agents (Antigravity, Copilot) independently implement their own multi-agent orchestration via `invoke_subagent`, where a parent agent decomposes tasks into child prompts and synthesizes results. This creates a double delegation boundary: the IDE agent delegates to subagents, which may in turn invoke `devops-cli` tools that internally delegate through their own pipeline — forming a 3+ layer orchestration stack where each boundary introduces epistemic loss.
 
@@ -42,9 +42,9 @@ sequenceDiagram
     Note over U,P: The claim is unsupported by anything<br/>in the transcript, and reads exactly like<br/>a claim that is.
 ```
 
-**2c. Mocked Tiered Execution Masking Real Delegation Gaps**: The `execute_tiered` protocol in `slots.py:775-831` claims to implement "Big decides, small types, big checks" — but the researcher confirmed that Tier 1 (frontier decision) and Tier 3 (frontier verification) are fabricated via string template interpolation without contacting any model API. The `SubAgentSlot` methods (`offload_ast_search`, `offload_file_scout`, `offload_symbol_catalog`) execute pure Python AST code in-process and compute "token savings" using `len(text) // 4` heuristics. The architecture is structurally correct — the slot boundaries exist — but the execution paths are stubs, meaning the real delegation failure modes remain untested.
+**2c. Mocked Tiered Execution Masking Real Delegation Gaps**: The `execute_tiered` protocol in `slots.py:775-831` claims to implement "Big decides, small types, big checks" — but the researcher confirmed that Tier 1 (frontier decision) and Tier 3 (frontier verification) are fabricated via string template interpolation without contacting any model API. The `SubAgentSlot` methods (`offload_ast_search`, `offload_file_scout`, `offload_symbol_catalog`) execute pure Python AST code in-process and compute "token savings" using `len(text) // 4` heuristics. The architecture is structurally correct — the slot boundaries exist — but the execution paths are stubs, meaning the real delegation failure modes remain untested. devops-cli later removed the template strings, and `execute_tiered` now states that it calls no model.
 
-**2d. Background Process Output Contract Violation**: The shell execution model (`shell.py:188-211`) spawns background commands with `subprocess.Popen` and `stdout=subprocess.PIPE, stderr=subprocess.PIPE`. However, `check_command` (`shell.py:203-211`) only calls `proc.poll()` — the pipes are never drained. If a background subprocess generates more than 64KB of output (the OS pipe buffer size), the write blocks and the process deadlocks. The output contract — "Report status and accumulated output" — silently breaks, and the agent loses access to the subagent's results entirely.
+**2d. Background Process Output Contract Violation**: The shell execution model (`shell.py:188-211`) spawns background commands with `subprocess.Popen` and `stdout=subprocess.PIPE, stderr=subprocess.PIPE`. However, `check_command` (`shell.py:203-211`) only calls `proc.poll()` — the pipes are never drained. If a background subprocess generates more than 64KB of output (the default Linux pipe capacity), its next write blocks and the process never finishes. The output contract — "Report status and accumulated output" — silently breaks, and the agent loses access to the subagent's results entirely.
 
 ## 3. The Underlying Failure Mode or Catalyst
 
@@ -70,7 +70,7 @@ flowchart TD
     R -.->|"every intermediate step<br/>read as plausible and complete"| U
 ```
 
-At each boundary, the transformation is "plausible" — the compressed version reads naturally and appears complete. But accumulated losses compound multiplicatively. A 3-layer delegation stack with 15% loss per layer retains only $0.85^3 \approx 61\%$ of the original intent's fidelity. The remaining 39% manifests as subtle constraint violations, missing edge case handling, and confident responses to questions the system never fully understood.
+The percentages in this diagram and below are illustrative assumptions, not measurements. At each boundary, the transformation is "plausible" — the compressed version reads naturally and appears complete. But accumulated losses compound multiplicatively. A 3-layer delegation stack with 15% loss per layer retains only $0.85^3 \approx 61\%$ of the original intent's fidelity. The remaining 39% manifests as subtle constraint violations, missing edge case handling, and confident responses to questions the system never fully understood.
 
 The pipe deadlock in `shell.py` is a physical manifestation of the same principle: the communication channel between delegator and delegate has a finite buffer, and when it overflows, information is not lost gradually — it is lost completely, with the entire process freezing rather than degrading.
 
@@ -126,9 +126,9 @@ This eliminates the deadlock and provides `check_command` with actual output con
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Pipe deadlock threshold**: Any background command producing $> 64$KB of output (e.g., `pytest -v` on a large suite, `git log`, `find / -name "*.py"`) will deadlock indefinitely under the current `shell.py` implementation.
-- **Constraint propagation arithmetic**: 3-layer delegation at 85% fidelity per boundary = 61% end-to-end fidelity. Structured constraint blocks achieve ~98% per boundary (only lossy if the child model fails to read them), yielding $0.98^3 \approx 94\%$ end-to-end.
-- **Mocked tier testing gap**: The `execute_tiered` stubs mean zero empirical data exists on how the real delegation hierarchy performs under production workloads. The architecture is correct but unvalidated.
+- **Pipe deadlock threshold**: Any background command producing $> 64$KB of output (e.g., `pytest -v` on a large suite, `git log`, `find / -name "*.py"`) blocked indefinitely under the `shell.py` implementation of September 2026.
+- **Constraint propagation arithmetic**: 3-layer delegation at 85% fidelity per boundary = 61% end-to-end fidelity. If structured constraint blocks raised per-boundary fidelity to an assumed 98% (lossy only if the child model fails to read them), a 3-layer stack would keep $0.98^3 \approx 94\%$ end-to-end. No measurement of either figure exists.
+- **Mocked tier testing gap**: In September 2026, the `execute_tiered` stubs meant that no data existed on how the real delegation hierarchy performs under production workloads. The architecture is correct but unvalidated.
 
 > **Aphorism**: Information does not cross agent boundaries — it is reconstructed at each boundary from a lossy compression of what existed before. Three layers of plausible reconstruction produce a confidently wrong answer.
 

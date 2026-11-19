@@ -18,7 +18,7 @@ This directory is the committed error budget history for the `vibes` self-improv
     "invariant_compliance": [132, 132],
     "feedback_latency": [110, 110],
     "headroom_saturation": [131, 132],
-    "toil_containment": [0, 1]
+    "toil_containment": [0, 2]
   }
 }
 ```

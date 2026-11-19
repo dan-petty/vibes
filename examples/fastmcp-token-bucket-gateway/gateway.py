@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """FastMCP Token-Bucket Rate Limiter & Tool Gateway.
 
+Despite the name, this module does not use the FastMCP library or the Model Context
+Protocol. It wraps plain async Python callables.
+
 Protects external APIs (GitHub REST/GraphQL, LLM inference endpoints, cloud APIs)
 from unthrottled agent bursts using client-side token-bucket pacing and bounded exponential
 backoff with jitter.
@@ -39,7 +42,7 @@ class GatewayTelemetry:
 
 
 class TokenBucket:
-    """Thread-safe and async-safe token bucket rate limiter."""
+    """Async-safe token bucket rate limiter for one event loop (`asyncio.Lock` is not thread-safe)."""
 
     def __init__(self, config: RateLimitConfig) -> None:
         self.config = config
@@ -150,7 +153,7 @@ class FastMCPGateway:
 
         raw_backoff = self.config.base_backoff_seconds * (2**attempt)
         capped_backoff = min(self.config.max_backoff_seconds, raw_backoff)
-        # Full jitter between 0 and capped_backoff
+        # Jitter between 0.1 s and capped_backoff
         return random.uniform(0.1, capped_backoff)
 
 

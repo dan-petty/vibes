@@ -24,9 +24,9 @@ xychart-beta
     line [4000, 8000, 12000, 16000, 20000]
 ```
 
-**2b. System Instruction Eviction Under Multi-Turn Drift**: As tool call outputs, code snippets, test tracebacks, and conversation history accumulate in a long session, the model's attention to initial system prompt instructions (such as `AGENTS.md` rules) progressively degrades. This manifests as:
-- Complexity constraints ($M \le 10$, depth $\le 5$) being ignored after 15+ turns
-- Security sanitization rules (RFC 1918 prohibition) being forgotten after context exceeds 64K tokens
+**2b. System Instruction Eviction Under Multi-Turn Drift**: As tool call outputs, code snippets, test tracebacks, and conversation history accumulate in a long session, the model's attention to initial system prompt instructions (such as `AGENTS.md` rules) progressively degrades. This manifests as (no turn or token threshold was measured):
+- Complexity constraints ($M \le 10$, depth $\le 5$) being ignored late in long sessions
+- Security sanitization rules (RFC 1918 prohibition) being forgotten as context grows
 - Formatting requirements (structural tuple assertions) being abandoned in favor of simpler patterns
 
 The `AgentMemory` auto-summarization at 96K characters is the correct defensive instinct, but summarization is lossy: the summarizer compresses older turns into bullets, discarding the precise wording of invariant constraints that the model needs verbatim.
@@ -65,7 +65,7 @@ The root cause is a **conservation of attention** problem operating across three
 
 2. **Inter-turn** (seconds to minutes): Each new turn pushes older context further from the model's focal range. The "lost in the middle" phenomenon — where models perform worst on information placed in the center of long contexts — means that mid-session architectural constraints become invisible even though they're technically still in the window.
 
-3. **Cross-session** (hours to days): Auto-summarization compresses the conversational record into lossy bullets, preserving _what was discussed_ but not _why specific constraints were established_. A rule like "use structural tuple equality assertions because each `assert` adds +1 to McCabe complexity under Python AST semantics" gets compressed to "use tuple assertions" — losing the causal rationale that enables the model to generalize the constraint to novel situations.
+3. **Cross-session** (hours to days): Auto-summarization compresses the conversational record into lossy bullets, preserving _what was discussed_ but not _why specific constraints were established_. A rule like "use structural tuple equality assertions because each `assert` adds +1 to complexity under this project's AST scanner" gets compressed to "use tuple assertions" — losing the causal rationale that enables the model to generalize the constraint to novel situations.
 
 The 256-character error truncation in `structured.py` compounds this by applying lossy compression at the feedback tier — the exact location where maximum information fidelity is needed for deterministic self-correction.
 
@@ -87,7 +87,7 @@ The 256-character error truncation in `structured.py` compounds this by applying
 }
 ```
 
-This costs more tokens per retry but achieves single-turn convergence instead of multi-turn degradation loops.
+This costs more tokens per retry but should let more retries converge in one turn (not measured).
 
 **4d. Semantic Memory Partitioning**: Partition `AgentMemory` into two tiers: (1) a _volatile_ conversation buffer subject to auto-summarization, and (2) an _invariant_ constraint store that is never summarized and always re-injected verbatim at the head of each turn. This separates ephemeral conversational flow from permanent architectural rules.
 
@@ -96,7 +96,7 @@ See pattern: [epistemic-hygiene-and-context-pruning](../../patterns/epistemic-hy
 ## 5. Verifiable Impact & Key Takeaways
 
 - **Pipeline bloat quantification**: 5-stage pipeline × 4K tokens/stage = 20K tokens accumulated, consuming 62.5% of a 32K window before the final agent begins. Stage budgeting at 4K reclaims 16K tokens.
-- **Error truncation cost**: 256-char cap forces multi-turn retry loops; structured 5-field error summaries at ~400 chars achieve 100% single-turn correction on nested validation failures.
+- **Error truncation cost**: The 256-char cap can cut a nested validation error mid-locator; a structured 5-field error summary of about 400 chars keeps every field path. No correction rate was measured for either.
 - **Memory partition precedent**: The existing `_DEFAULT_KEEP_RECENT = 10` in `memory.py:28` proves the system already distinguishes "recent = important" from "old = compressible." Extending this to "invariant = never compress" is a natural evolution.
 
 > **Aphorism**: Context is not a lake — it is a river. Information placed at the source does not survive the journey downstream without mechanical reinforcement at every bend.

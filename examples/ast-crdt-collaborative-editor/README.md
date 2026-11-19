@@ -10,9 +10,15 @@
 
 When multiple autonomous AI coding agents collaborate on the same codebase simultaneously (e.g. an Architecture Planner, an Implementation Worker, a TDD Test Author, and an Invariant Sentinel), they require real-time concurrent synchronization.
 
-Traditional text-based CRDTs (RGA, Yjs, Automerge) operate on 1D character streams. Under concurrent edits, character-level interleaving frequently splits identifier names, mangles block indentation, and fractures language grammar, resulting in a **34.2% syntax invalidation rate** in empirical benchmarks.
+Text CRDTs (RGA, and the text types of Yjs and Automerge) replicate character sequences. A merge of concurrent character edits can produce text that is not valid syntax, for example when two agents edit the same identifier or block. This repository has no benchmark that measures how often that occurs.
 
-The **Real-Time AST Tree-CRDT** treats AST syntax nodes as first-class replicated entities. Governed by Lamport timestamps, fractional sibling positioning, and commutative mutation primitives (`INSERT_NODE`, `DELETE_NODE`, `MOVE_NODE`), it guarantees **Strong Eventual Consistency (SEC)** and 100% syntactically valid code across distributed agents without central locks.
+The **AST Tree-CRDT** sketch replicates AST nodes instead of characters. It uses Lamport clocks, string sort keys for sibling order, and three operation primitives (`INSERT_NODE`, `DELETE_NODE`, `MOVE_NODE`). It is an in-process simulation: peers are Python objects, and `sync_peers()` exchanges their operation logs. There is no network transport.
+
+It is not a complete CRDT and does not guarantee Strong Eventual Consistency (SEC):
+
+- Concurrent moves that would make a cycle diverge. Each replica keeps the move that it applied first and rejects the other, so two peers end with different trees. A replicated tree with a safe move operation needs undo and redo of moves in timestamp order (Kleppmann et al., "A highly-available move operation for replicated trees", IEEE TPDS 2022).
+- An insert whose parent has not arrived attaches to `root` and is not moved when the parent arrives. A delete of a node that has not arrived is dropped. These operations commute only under causal delivery.
+- `materialize_to_source()` renders only top-level imports, functions and classes, and does not check node names. A name such as `"not valid"` produces source that `ast.parse` rejects.
 
 ---
 
@@ -31,22 +37,22 @@ sequenceDiagram
     Note over PeerA,PeerB: Network Partition / Concurrent Edits
     PeerA->>PeerB: Replicate Op(Insert: validate_token, Lamport 1)
     PeerB->>PeerA: Replicate Op(Insert: handle_request, Lamport 1)
-    Note over PeerA,PeerB: Commutative Replay (SEC Guaranteed)
-    PeerA->>PeerA: Materialize AST -> 100% Valid Python Code
-    PeerB->>PeerB: Materialize AST -> Identical AST Tree & Code
+    Note over PeerA,PeerB: Replay of exchanged operation logs
+    PeerA->>PeerA: Materialize AST -> Python source
+    PeerB->>PeerB: Materialize AST -> Same tree for these two inserts
 ```
 
 ---
 
 ## 3. Mathematical Commutativity Proof Sketch
 
-For any two concurrent operations $Op_1$ and $Op_2$ originating from distinct agents $A$ and $B$:
+This section is not a proof. It states the property that a CRDT needs and what this code does for each operation. The property is that two concurrent operations $Op_1$ and $Op_2$ commute:
 
 $$State \star Op_1 \star Op_2 \equiv State \star Op_2 \star Op_1$$
 
-1. **Insert Commutativity**: Sibling node ordering is deterministically resolved by fractional position keys $pos \in \mathbb{Q}$, with ties broken by immutable Lamport node identifiers $(agent\_id, lamport, counter)$.
-2. **Move Commutativity & Cycle Safety**: If $Op_1$ moves node $X$ under $Y$, and $Op_2$ moves $Y$ under $X$, naive execution produces a directed cycle ($X \to Y \to X$). The Tree-CRDT arbitrates using Lamport timestamps, deterministically rejecting the lower-priority move (`CRDT001`) and preserving tree acyclicity.
-3. **Delete Commutativity**: Deletions mark nodes as tombstones ($is\_tombstone = \text{True}$), which commutes monotonically with subsequent inserts or child queries.
+1. **Insert**: Siblings sort by the `pos` string, compared as text (so `"10.0"` sorts before `"2.0"`), with ties broken by the node ID string `agent_id:lamport:counter`. A repeated insert of the same node ID is ignored. Inserts commute when the parent is already present.
+2. **Move and cycle check**: If $Op_1$ moves node $X$ under $Y$ and $Op_2$ moves $Y$ under $X$, applying both makes a cycle ($X \to Y \to X$). The code rejects whichever move arrives second if it makes a cycle (`CRDT001`). It does not compare Lamport timestamps, so the two replicas keep different moves and diverge.
+3. **Delete**: A delete marks the node as a tombstone ($is\_tombstone = \text{True}$). It commutes with other operations only when the node is already present.
 
 ---
 
@@ -59,6 +65,8 @@ $$State \star Op_1 \star Op_2 \equiv State \star Op_2 \star Op_1$$
 | `CRDT003` | Causal Delivery | `warning` | Causal inversion warning: out-of-order operation arrival. |
 | `CRDT004` | Syntax Preservation | `error` | Syntactic invariant breach detected during tree materialization. |
 | `CRDT005` | Memory Compaction | `info` | Tombstone saturation threshold reached, scheduling garbage collection. |
+
+The code emits only `CRDT001` and `CRDT002`, both with severity `warning`. `CRDT003` to `CRDT005` are declared in `DiagnosticRule`, but no code path emits them: there is no causal-delivery check, no syntax check on materialization and no tombstone collection. `OpType.UPDATE_ATTR` is declared but has no handler.
 
 ---
 

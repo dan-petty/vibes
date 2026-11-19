@@ -1,6 +1,6 @@
 # Landscape Survey
 
-> **TLDR**: An outward-looking benchmarking framework that continuously scores competing AI agent tools, compares capabilities, and converts external gaps into actionable roadmap deliverables.
+> **TLDR**: An outward-looking benchmarking tool that scores comparable open-source projects (linters, sandboxes, crawlers and AI tools) from a committed GitHub snapshot, compares capabilities, and converts external gaps into actionable roadmap deliverables.
 >
 > **ELI:7b**: A tool that scans what other AI projects in the open-source world are doing so we don't reinvent the wheel or fall behind on useful features.
 >

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Counterexample-Guided Inductive Synthesis (CEGIS) Engine & Invariant Repair Oracle.
 
-Implements formal counterexample-guided inductive synthesis for autonomous AI agent
-feature development and self-improvement loops. Replaces unconstrained conversational
-"try-again" prompting with mathematically grounded negative constraint accumulation,
-monotonic convergence verification, cycle oscillation detection, and latent regression
-prevention (preventing latent security and architectural degradation).
+A CEGIS-shaped loop for agent code changes. A caller-supplied synthesizer callback
+proposes source, and an AST lint verifier (complexity, nesting, parameter count, private
+IP literals, assertion sprawl) returns violations as counterexamples, which accumulate as
+negative constraints. The engine also detects repeated violations, cycles and metric
+regressions across a trajectory. CEGIS proper (Solar-Lezama et al., ASPLOS 2006) checks
+candidates against a formal specification with a solver; this has neither, so the name is
+an analogy and nothing here is a proof.
 """
 
 from __future__ import annotations
@@ -287,7 +289,7 @@ def _scan_constant_node_for_private_ips(node: ast.AST, filename: str) -> list[Co
 
 
 def _check_string_constants_for_private_ips(tree: ast.AST, filename: str) -> list[Counterexample]:
-    """Scan string constants for private RFC 1918/RFC 4193 IP addresses."""
+    """Scan string constants for private IPv4 addresses (dotted quads only, no IPv6)."""
     violations: list[Counterexample] = []
     for node in ast.walk(tree):
         violations.extend(_scan_constant_node_for_private_ips(node, filename))

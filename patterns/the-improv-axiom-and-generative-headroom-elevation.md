@@ -9,7 +9,7 @@
 
 ## 1. Problem Statement
 
-In the post-agentic-harness regime, software systems depend on autonomous recursive self-improvement (RSI) to prevent technical decay. However, left unguided, language models executing self-directed loops reliably fall into one of two systemic failure modes:
+Agent-maintained projects use autonomous improvement loops to prevent technical decay. This repository calls such a loop recursive self-improvement (RSI). The loop improves the codebase, not the model; in AI research, RSI means a system that improves its own capability. Left unguided, language models executing self-directed loops often fall into one of two systemic failure modes:
 1. **The Phantom Architecture Trap**: The model dreams up vast layers of code and documentation that fail to compile or satisfy runtime invariants ([Observation 27](../observations/systems/27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md)).
 2. **The Defect-Shaped Convergence Trap**: The model achieves 100% test pass rates by running linters and fixing typos, entirely blind to outward capability gaps and upstream evolutions ([Observation 14](../observations/systems/14-defect-shaped-loops-and-the-feature-blind-spot.md)).
 
@@ -30,7 +30,7 @@ flowchart TD
 
     Reality["1. Physical Reality Offers a Constraint<br/>(Failing test, M=14 complexity breach, upstream drift)"]:::reality
 
-    Reality --> Grounding["2. The 'YES' Phase: Monotonic Grounding<br/>(CEGIS Counterexample Accumulation)"]:::yesPhase
+    Reality --> Grounding["2. The 'YES' Phase: Monotonic Grounding<br/>(Counterexample Accumulation)"]:::yesPhase
 
     Grounding --> Guard{"Can the Agent Deny the Reality?<br/>(test skips, # noqa escapes, mock rewrites)"}:::check
 
@@ -46,8 +46,8 @@ flowchart TD
 
 ### 1. The "YES" Phase (Monotonic Epistemic Grounding)
 * **Unconditional Acceptance**: When a test fails, a compiler throws an error, or the AST sentinel detects cyclomatic complexity $M > 10$, the agent accepts this finding as immutable truth.
-* **CEGIS Monotonic Corpus**: Every counterexample is permanently converted into a regression fixture (`*.case`). The corpus strictly accumulates; an agent is mechanically barred from deleting or weakening tests to achieve a green build.
-* **Fail-Closed Escape Bans**: The build environment mechanically rejects inline suppression comments (e.g. `# noqa: C901`, `# ruff: ignore[C901]`), forcing genuine structural remediation over syntactic silence.
+* **Monotonic Counterexample Corpus**: Every counterexample is permanently converted into a regression fixture (`*.case`). The corpus should strictly accumulate, and the agent should be barred from deleting or weakening tests to achieve a green build. In this repository, `tools/fuzz_harness.py replay` replays `artifacts/fuzz-corpus/`, but no check blocks the deletion of a `.case` file.
+* **Fail-Closed Escape Bans**: The build environment mechanically rejects inline suppression comments (e.g. `# noqa: C901`, or the file-level `# ruff: noqa: C901`), forcing genuine structural remediation over syntactic silence.
 
 ### 2. The "AND..." Phase (Generative Headroom Elevation)
 * **Constraint as Creative Prompt**: Rather than treating an invariant as a barrier to minimally satisfy (e.g. stopping at $M = 9$), the agent treats the breach as a demand for architectural evolution. It refactors deep `if/elif` ladders into declarative table dispatchers, dropping complexity to $M \le 3$.
@@ -83,10 +83,10 @@ def test_the_complexity_cap_has_no_escape() -> None:
 
 ### Step 2: The "Yes, And..." Refactoring Transformation
 
-When a function breaches complexity caps ($M = 12$), the agent accepts the breach ("Yes") and elevates the architecture ("And..."):
+When a function breaches complexity caps ($M = 13$), the agent accepts the breach ("Yes") and elevates the architecture ("And..."):
 
 ```python
-# BEFORE: Procedural ladder struggling against the ceiling (M = 12, depth = 4)
+# BEFORE: Procedural ladder struggling against the ceiling (12 branches, M = 13)
 def process_message(msg: dict[str, Any]) -> None:
     if msg["type"] == "text":
         handle_text(msg)
@@ -122,7 +122,7 @@ def process_message(msg: dict[str, Any]) -> None:
 | **The Mute Button** | Denial ("No") | Adding `# noqa`, `# type: ignore`, or deleting failing test assertions. | Enforce AST comment scans and CI gates that reject suppression tokens. |
 | **Sycophantic Appeasement** | Bargaining ("Yes, but...") | Shifting bugs into unexecuted configuration files or adding ad-hoc flags. | Require tests that execute real configurations; reject unreferenced variables. |
 | **The Linter Cemetery** | Passive Agreement ("Yes without And") | Stalling after achieving 100/100 code hygiene with zero new features. | Couple internal health with outward landscape surveys ([`tools/landscape_survey.py`](../tools/landscape_survey.py)). |
-| **The Unanchored Hallucination** | Monologue ("And without Yes") | Synthesizing elaborate frameworks while dependencies fail to import. | Enforce fail-closed, polynomial-time verification before admitting new diffs. |
+| **The Unanchored Hallucination** | Monologue ("And without Yes") | Synthesizing elaborate frameworks while dependencies fail to import. | Enforce fail-closed, fast verification before admitting new diffs. |
 
 ---
 

@@ -5,7 +5,7 @@
 > **Classification**: Software Architecture, Git Internals, Multi-Agent Concurrency, AST Engineering  
 > **Related**: [Observation 06](./06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md), [Observation 09](../devops-cli/09-mechanical-ast-rewriting-and-automated-refactoring-convergence.md), [Pattern: 3-Way AST Semantic Reconciliation](../../patterns/3-way-ast-semantic-reconciliation.md)
 > **TLDR**: Reconcile concurrent agent git collisions using commutative AST symbol graphs and 3-way import set unions rather than raw line diffs.
-> **ELI:7b**: Merge code changes from multiple AIs by analyzing the functions and classes instead of line numbers, avoiding false merge conflicts.
+> **ELI:7b**: Merge code changes from multiple AIs by comparing functions and classes instead of lines, so separate additions do not conflict. The merged file loses its comments.
 
 ---
 
@@ -13,13 +13,13 @@
 
 When scaling autonomous AI coding swarms across parallel development streams, isolated git worktrees ([`worktree-swarm-arbiter`](../../examples/worktree-swarm-arbiter/)) prevent concurrent processes from colliding on lockfiles (`.git/index.lock`). However, when individual agent topic branches reconcile back into an integration branch or release candidate, they must pass through Git's 3-way merge engine (`Base`, `Ours`, `Theirs`).
 
-Standard Git merge drivers (`diff3`, `ort`, `recursive`) evaluate textual diffs based on contiguous line offsets. While optimal for unstructured text or prose, line-oriented diffing breaks down severely when applied to structured source code manipulated by concurrent autonomous agents.
+Git's merge strategies (`ort`, `recursive`) merge file contents with the built-in `text` merge driver, which compares contiguous lines. (`diff3` is a conflict-marker style, `merge.conflictStyle`, not a driver.) While optimal for unstructured text or prose, line-oriented diffing breaks down severely when applied to structured source code manipulated by concurrent autonomous agents.
 
 ---
 
 ## 2. The Observed Breakdown Modes
 
-During multi-agent swarm execution across 50 concurrent feature branches, empirical analysis identified that **68% of merge conflicts were entirely spurious false conflicts** caused by lexical line adjacency rather than true semantic collisions:
+Line-based merges report some conflicts that come from line adjacency rather than true semantic collisions. This repository has no measurement of how often that happens. Four forms occur:
 
 ### 2.1 Commutative Function Append Clashes
 In autonomous development, subagents frequently implement distinct helper functions or tests at the bottom of a module. If Subagent A appends `def helper_alpha()` and Subagent B appends `def helper_beta()` at the same file offset, line-based merge flags a fatal conflict:
@@ -34,10 +34,10 @@ def helper_beta():
 >>>>>>> feat/subagent-b
 ```
 
-In programming language semantics, module-level function declarations are **commutative**: their relative vertical ordering has zero effect on runtime execution. Textual diff tools lack AST awareness and cannot recognize that both functions can be preserved simultaneously.
+In Python, two plain module-level `def` statements with different names and no decorators **commute**: you can swap them without a change in behavior. This is not true in general. Module code runs from top to bottom, so decorators, import-time calls and redefinitions depend on order. Textual diff tools lack AST awareness and cannot recognize that both functions can be preserved simultaneously.
 
 ### 2.2 Disjoint Class Method Additions
-When two subagents extend the same class—one adding `def pause(self)` and the other adding `def resume(self)`—line-based tools attempt to reconcile the class body textually, corrupting indentation or emitting conflicting blocks inside the class definition.
+When two subagents extend the same class—one adding `def pause(self)` and the other adding `def resume(self)`—line-based tools attempt to reconcile the class body textually and can emit a conflict block inside the class definition.
 
 ### 2.3 Import Set Cascades
 Concurrent subagents introduce new library imports at the top of a file. When both append imports to line 12, Git cannot determine whether the lines should be interleaved, unioned, or rejected, requiring human or agent manual intervention.
@@ -49,7 +49,7 @@ When line-based merge conflicts are left unresolved in working copies, tools wri
 
 ## 3. The Architectural Solution: 3-Way AST Semantic Reconciliation
 
-To eliminate false conflicts and guarantee grammatical integrity, we designed the **Autonomous 3-Way AST Semantic Reconciler** ([`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)).
+To remove false conflicts for disjoint additions and to emit only parseable output, we designed the **Autonomous 3-Way AST Semantic Reconciler** ([`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)). It writes its output with `ast.unparse`, so the result parses, but the result loses every comment and the original formatting, and the imports move to the top in sorted order.
 
 ```mermaid
 flowchart TD
@@ -75,7 +75,7 @@ flowchart TD
     subgraph "Verification & Telemetry"
         IU & CF & CM --> VAL{"Collision Detected?"}
         VAL -- "No" --> CODE["Synthesize Valid AST (ast.unparse)"]
-        VAL -- "Yes" --> DIAG["Emit Structured CEGIS Diagnostics (SARIF 2.1.0)"]
+        VAL -- "Yes" --> DIAG["Emit Collision Diagnostics (SARIF 2.1.0)"]
     end
 ```
 
@@ -104,17 +104,9 @@ If both branches add disjoint symbols ($k \notin \operatorname{dom}(S_B)$ and $k
 
 ---
 
-## 4. Empirical Evaluation & Quantitative Results
+## 4. Evaluation Status
 
-We benchmarked the 3-Way AST Semantic Reconciler against standard Git `diff3` across a testbed of 120 concurrent subagent branches:
-
-| Metric | Git `diff3` (Textual) | AST Semantic Reconciler | Delta / Improvement |
-| :--- | :---: | :---: | :---: |
-| **False Conflict Rate** | 68.2% | **0.0%** | -100% false conflicts |
-| **Import Line Collisions** | 41.5% | **0.0%** | Clean union & PEP 8 sorting |
-| **Class Method Collisions** | 29.3% | **0.0%** | Disjoint methods unified |
-| **Syntactic Validity of Output** | 31.8% (syntax errors) | **100.0%** | Zero `SyntaxError` crashes |
-| **Arbitration Latency** | 18ms | 24ms | +6ms (negligible AST cost) |
+No benchmark against Git was run. This repository holds no 120-branch testbed and no data for false-conflict rates, collision rates, output validity or latency. The 10 unit tests in `test_reconciler.py` run the reconciler on fixed three-way inputs: disjoint functions, imports, class methods and true collisions.
 
 ---
 
@@ -122,5 +114,5 @@ We benchmarked the 3-Way AST Semantic Reconciler against standard Git `diff3` ac
 
 The complete executable reference tool is located at [`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/):
 - **Executable Core**: [`ast_reconciler.py`](../../examples/ast-semantic-reconciler/ast_reconciler.py) certified compliant under AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
-- **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 10 unit tests achieving 94% test coverage.
+- **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 10 unit tests. They cover 92% of the statements in `ast_reconciler.py` (`coverage run --include=examples/ast-semantic-reconciler/ast_reconciler.py -m pytest examples/ast-semantic-reconciler`, run on 2026-11-19).
 - **Git Driver Protocol**: Integrates as a native git custom merge driver via `.gitattributes` (`*.py merge=ast-reconciler`).

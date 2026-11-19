@@ -1,7 +1,7 @@
 # Artifact: Structured Task Specification Template
 
 > **Artifact Type**: Task Tracking Specification Template  
-> **Source Project**: `devops-cli` (`docs/agent/tasks/task-template.md`)  
+> **Source Project**: adapted from the task file format in `devops-cli` `docs/agent/tasks/README.md` (September 2026); `devops-cli` has no `task-template.md`  
 > **Purpose**: Standardized schema for anchoring autonomous agent sessions into persistent task state.
 
 ---

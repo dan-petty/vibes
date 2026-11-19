@@ -33,17 +33,17 @@ flowchart TD
 
     subgraph Remediation ["Closed-Loop Adaptation"]
         AgentPatch["Agent Fixes Code Defect"]
-        SchemaRefactor["AX Oracle Refactors Interface Friction"]
+        SchemaRefactor["Developer or Agent Refactors Interface Friction"]
     end
 
     Agent -->|"Invokes Tools & Modifies Code"| Codebase
     Codebase -->|"Runs CI & Invariant Sentinels"| SoftwareGate
-    SoftwareGate -->|"CEGIS Counterexamples"| AgentPatch
+    SoftwareGate -->|"Failing Checks"| AgentPatch
     AgentPatch -->|"Self-Correction"| Agent
 
     Codebase -->|"Static AST Analysis"| AXGate
     AXGate -->|"Emits S_AX Telemetry & SARIF"| SchemaRefactor
-    SchemaRefactor -->|"Eliminates Cognitive Friction"| Codebase
+    SchemaRefactor -->|"Reduces Interface Friction"| Codebase
 
     classDef primary fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
     classDef secondary fill:#0f172a,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
@@ -94,18 +94,20 @@ python3 ax_evaluator.py tools/ --threshold 0.85
 
 ### Sample Output (Markdown Format)
 
+Output of `python3 examples/agent-experience-evaluator/ax_evaluator.py tools/ --format markdown` on this repository (2026-11-19, first 11 lines). The run reports 37 `AX002` findings (exceptions raised with a plain message string) and 6 `AX001` findings (schemas without `additionalProperties`), so the verdict is a failure:
+
 ```markdown
 # Agent Experience (AX) Evaluation Summary
 
-**Verdict**: ✅ PASSED (Score: **0.95** / Target: **0.75**)
+**Verdict**: ❌ FAILED (Score: **0.37** / Target: **0.75**)
 
 | Evaluation Metric | Observed | Target / Best | Meaning |
 |---|---|---|---|
-| **Diagnostic Actionability (DAI)** | `0.920` | `>= 0.800` | Ratio of structured error vectors to unstructured prose |
-| **Interface Friction Index (IFI)** | `0.000` | `<= 0.100` | Rate of permissive or unconstrained tool parameters |
-| **Cognitive Impedance (CIM)** | `0.965` | `>= 0.850` | Structural headroom ratio (functions with M <= 6, depth <= 3) |
-| **Total Files Analyzed** | `14` | — | Evaluated Python source modules |
-| **Total AX Findings** | `2` | `0` | Discovered friction hotspots and schema risks |
+| **Diagnostic Actionability (DAI)** | `0.075` | `>= 0.800` | Ratio of structured error vectors to unstructured prose |
+| **Interface Friction Index (IFI)** | `0.857` | `<= 0.100` | Rate of permissive or unconstrained tool parameters |
+| **Cognitive Impedance (CIM)** | `1.000` | `>= 0.850` | Structural headroom ratio (functions with M <= 6, depth <= 3) |
+| **Total Files Analyzed** | `47` | — | Evaluated Python source modules |
+| **Total AX Findings** | `43` | `0` | Discovered friction hotspots and schema risks |
 ```
 
 ---
@@ -126,7 +128,7 @@ pytest test_ax_evaluator.py -v --cov=ax_evaluator --cov-report=term-missing
 
 ## Architectural Invariant Compliance
 
-The implementation of `ax_evaluator.py` is certified against the [AST Invariant Sentinel](../ast-invariant-sentinel/):
-- **Cyclomatic Complexity**: All functions maintain $M \le 4$ (far below the $M \le 10$ gate).
-- **Block Nesting Depth**: Maximum indentation depth $\le 2$ levels across all routines.
+The implementation of `ax_evaluator.py` passes the `strict` preset of the [AST Invariant Sentinel](../ast-invariant-sentinel/):
+- **Cyclomatic Complexity**: All functions maintain $M \le 6$ (below the $M \le 10$ gate). Nine functions exceed $M \le 4$ or depth $\le 2$ (the `pedantic` preset).
+- **Block Nesting Depth**: Maximum indentation depth $\le 3$ levels across all routines.
 - **Zero-Trust Egress**: Zero external dependencies, network calls, or private infrastructure leak hazards.

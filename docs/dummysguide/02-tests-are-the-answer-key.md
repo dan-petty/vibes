@@ -94,7 +94,7 @@ When you run `pytest`, it passes in 0.02 seconds. Done.
 
 ---
 
-## Why Tests Eliminate Hallucinations
+## Why Tests Catch Hallucinations
 
 When an AI writes code without tests, it has no reality check. It might hallucinate a function called `date.to_age_in_years()` that doesn't actually exist in Python.
 
@@ -103,7 +103,7 @@ When an AI is forced to run the test:
 2. The AI reads the traceback.
 3. The AI immediately realizes the mistake and uses real Python methods.
 
-The computer catches the hallucination in milliseconds, with zero human effort required.
+The computer catches the hallucination in milliseconds, with zero human effort required, on every code path the tests run.
 
 ---
 

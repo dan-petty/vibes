@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Streaming Reasoning Token Parser & Bounded Stream Sanitizer.
 
-Provides deterministic streaming isolation of reasoning tokens (<think>...</think>,
-[reasoning]...[/reasoning]) emitted by frontier reasoning models. Prevents thinking
+Provides deterministic streaming isolation of reasoning tokens emitted by reasoning
+models: one tag pair per instance, <think>...</think> by default or another pair such
+as [reasoning]...[/reasoning] passed as open_tag/close_tag. Prevents thinking
 trace leakage into operational execution payloads, tool parameters, and user terminals.
 """
 
@@ -58,7 +59,7 @@ class StreamingReasoningSanitizer:
     Features:
     - Zero-dependency streaming finite state machine.
     - Chunk boundary splitting tolerance (e.g. '<th' followed by 'ink>').
-    - Bounded thinking buffer preventing memory exhaustion (CWE-400).
+    - Bounded thinking buffer (CWE-400, uncontrolled resource consumption).
     - Isolated extraction of thoughts for audit trails and telemetry.
     """
 

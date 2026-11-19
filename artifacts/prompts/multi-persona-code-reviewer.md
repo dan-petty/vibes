@@ -1,7 +1,7 @@
 # Artifact: Multi-Persona Code Reviewer Prompt Harness
 
 > **Artifact Type**: System Prompt Harness  
-> **Source Project**: `devops-cli` (`src/devops_cli/ai/personas/`)  
+> **Source Project**: condensed from `devops-cli` (`src/devops_cli/ai/personas/`); not its prompt text  
 > **Purpose**: Domain-specialized, multi-persona code review engine with XML prompt boundary isolation.
 
 ---
@@ -9,7 +9,7 @@
 ## Architecture Overview
 
 Generic code review prompts produce bland, generic suggestions ("add more comments", "consider type hints").
-In `devops-cli`, we partition reviews across specialized personas (`devsecops`, `architect`, `auditor`, `qa`), each operating with strict XML boundary isolation and deterministic JSON finding models.
+`devops-cli` splits reviews across personas, each with its own `role.md` and `prompt.md` under `src/devops_cli/ai/personas/`. On 2026-10-02 (commit `e6ce3db5b`) there were six: `architect`, `auditor`, `challenger`, `devsecops`, `pm` and `qa`. The template below is a generic rewrite that covers four of them; it is not the `devops-cli` prompt text. The model output is parsed into a JSON finding model, which fixes the shape of a finding but not its content.
 
 ---
 

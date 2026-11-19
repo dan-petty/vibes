@@ -1,9 +1,10 @@
 """eBPF Runtime LSM Kernel Gate & Dynamic Syscall Fuzzing Oracle.
 
-Simulates and synthesizes in-kernel Linux Security Module (BPF LSM) policy hooks
-for synchronous syscall authorization. Intercepts binary executions, sensitive
-filesystem paths, privilege escalation, and network egress before kernel dispatch.
-Features a dynamic Syzkaller-style mutation fuzzer verifying boundary resilience.
+Simulates BPF LSM (Linux Security Module) policy decisions in Python. It evaluates
+event records for binary executions, sensitive filesystem paths, privilege escalation,
+and network egress. It loads no BPF program and intercepts no real syscall. A fixed list
+of adversarial probes checks the rules; it is not syzkaller, and nothing is random. The
+BPF C and Tetragon generators emit skeletons that enforce nothing.
 
 Maintains proactive complexity headroom (M <= 4, depth <= 2, parameters <= 4).
 """
@@ -95,7 +96,7 @@ class LSMFinding:
 
 @dataclass(frozen=True)
 class FuzzReport:
-    """Summary telemetry produced by dynamic Syzkaller boundary fuzzing."""
+    """Summary telemetry produced by the fixed adversarial probe campaign."""
 
     total_probes: int
     blocked_probes: int
@@ -112,7 +113,7 @@ def _is_suspicious_evasion(target: str) -> bool:
 
 
 def _evaluate_evasion(event: LSMEvent) -> LSMFinding | None:
-    """Check for syzkaller boundary mutation and evasion attempts."""
+    """Check for evasion attempts such as traversal strings, null bytes and negative flags."""
     if event.flags < 0 or _is_suspicious_evasion(event.target):
         return LSMFinding(
             "LSM005",
@@ -225,7 +226,7 @@ def evaluate_event(event: LSMEvent, policy: LSMPolicy | None = None) -> LSMFindi
         finding = evaluator(event, pol)
         if finding is not None:
             return finding
-    return LSMFinding("LSM000", LSMVerdict.ALLOW, event, "Permitted by in-kernel LSM policy")
+    return LSMFinding("LSM000", LSMVerdict.ALLOW, event, "Permitted by simulated LSM policy")
 
 
 def generate_syz_path_mutations(base: str) -> list[str]:
@@ -264,7 +265,7 @@ def _collect_fuzz_events(base_path: str = "/workspace") -> list[LSMEvent]:
 
 
 def run_fuzz_campaign(policy: LSMPolicy | None = None, seed: int = 42) -> FuzzReport:
-    """Execute dynamic Syzkaller-style mutation fuzzing on LSM hooks."""
+    """Evaluate the fixed adversarial probe list against the policy; `seed` is unused."""
     pol = policy or LSMPolicy()
     events = _collect_fuzz_events()
     blocked = sum(1 for e in events if evaluate_event(e, pol).verdict == LSMVerdict.BLOCK)
@@ -276,7 +277,7 @@ def run_fuzz_campaign(policy: LSMPolicy | None = None, seed: int = 42) -> FuzzRe
 
 
 def generate_bpf_c(_policy: LSMPolicy | None = None) -> str:
-    """Synthesize BPF CO-RE C kernel module enforcing LSM hooks."""
+    """Emit a BPF CO-RE C skeleton whose LSM hooks return 0 (allow); it enforces nothing."""
     return """// SPDX-License-Identifier: GPL-2.0
 #include <vmlinux.h>
 #include <bpf/bpf_tracing.h>
@@ -305,7 +306,7 @@ int BPF_PROG(lsm_socket_connect, struct socket *sock, struct sockaddr *addr, int
 
 
 def generate_tetragon_policy(_policy: LSMPolicy | None = None) -> str:
-    """Synthesize Cilium Tetragon TracingPolicy CRD YAML."""
+    """Emit a Cilium Tetragon TracingPolicy that traces three LSM functions and blocks nothing."""
     return """apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
@@ -364,7 +365,7 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("--flags", type=int, default=0)
     eval_p.add_argument("--uid", type=int, default=1000)
 
-    fuzz_p = sub.add_parser("fuzz", help="Run dynamic Syzkaller boundary fuzzing campaign")
+    fuzz_p = sub.add_parser("fuzz", help="Run the fixed list of boundary probes against the simulated policy")
     fuzz_p.add_argument("--seed", type=int, default=42)
 
     gen_p = sub.add_parser("generate", help="Synthesize kernel policy code")

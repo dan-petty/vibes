@@ -8,8 +8,9 @@ headroom bottlenecks, and auto-decomposes branching structures into:
 3. Pure predicate helper functions (decomposing compound boolean expressions).
 4. Consolidated assertion tuples (reducing test suite AST complexity).
 
-Enforces strict verification invariants: transformations are validated via
-round-trip AST parsing, metric delta checks, and behavioral equivalence.
+Checks each transformation by re-parsing the result and confirming that complexity and
+nesting depth did not rise. It does not check behavioral equivalence: no test or
+execution compares the old and new code.
 """
 
 from __future__ import annotations

@@ -1,9 +1,13 @@
 """eBPF Process Tracing & Sandbox Introspection Oracle.
 
-Audits runtime execution event streams (Tetragon, Falco, bpftrace, kernel tracepoints)
-for unauthorized process execution, network egress violations, workspace escapes,
-privilege escalation, and anti-debugging evasion. Synthesizes least-privilege policies
-and exports telemetry to OASIS SARIF 2.1.0.
+Audits flat JSON event records (one object per line, with keys such as `event_type`,
+`comm`, `path`, `daddr`) for unauthorized process execution, network egress violations,
+workspace escapes, privilege escalation, and anti-debugging evasion, and exports findings
+to OASIS SARIF 2.1.0. It attaches no eBPF program and traces nothing. It cannot read the
+native nested JSON of Tetragon or Falco; convert events to the flat form first. The
+Tetragon and Falco policies it writes are drafts: for example, the Tetragon kprobe names
+`sys_enter_execve`, a tracepoint name, and adds an `allowedProcesses` field that the
+TracingPolicy CRD does not define. The `~/` path prefixes never match kernel paths.
 
 Maintains proactive complexity headroom (M <= 6, depth <= 3, parameters <= 4).
 """

@@ -1,7 +1,7 @@
 # Chapter 12: Code as Living Tissue (The Biology and Physics of AI)
 ### Why Coding Agents Behave Like Cells, Ant Colonies, and Sleep Cycles
 
-> **TLDR**: AI software systems stop behaving like inert clockwork blueprints and begin acting like living biological ecosystems—relying on homeostatic shivering deadbands, cellular apoptosis (killing runaway agents), ant-colony stigmergy, and deep-sleep memory compaction.
+> **TLDR**: AI software systems can be described, by analogy, as living biological ecosystems rather than inert clockwork blueprints—relying on homeostatic shivering deadbands, cellular apoptosis (killing runaway agents), ant-colony stigmergy, and deep-sleep memory compaction.
 >
 > **ELI:7b**: A traditional program is like a toy car made of plastic bricks: if a piece breaks, it just sits there broken. An AI-powered codebase is like a living plant: it drinks information, cleans up its own dead leaves, fights off bugs like an immune system, and takes naps to clear its brain fog.
 
@@ -18,7 +18,7 @@ If a gear slips or an edge case breaks, the clockwork stops dead. The software c
 
 When you connect autonomous AI agents to live codebases, continuous test oracles, and background monitors, **that clockwork model dies**.
 
-The codebase stops behaving like a statue and starts behaving like a **living autopoietic organism**—a biological tissue that repairs its own cuts, sheds dead cells, regulates its internal temperature, and coordinates thousands of tiny worker ants.
+The codebase starts to look less like a statue and more like a **living organism**—a biological tissue that repairs its own cuts, sheds dead cells, regulates its internal temperature, and coordinates thousands of tiny worker ants. This is an analogy: the codebase does not repair itself; agents and tools do the work.
 
 Here are the six fundamental biological and physical phenomena that explain how modern AI coding actually works.
 
@@ -79,7 +79,7 @@ When an autonomous orchestrator spawns worker subagents to test code or crawl do
 * An agent starts hallucinating non-existent files.
 * An agent leaks memory or leaves background processes running.
 
-A healthy agentic system acts like an immune system: it doesn't plead with the broken subagent or let it run forever. It triggers **deterministic cellular apoptosis**: sending a clean `SIGKILL` to the entire process group, wiping the temporary workspace, and reclaiming 100% of host resources.
+A healthy agentic system acts like an immune system: it doesn't plead with the broken subagent or let it run forever. It triggers **deterministic cellular apoptosis**: sending a clean `SIGKILL` to the entire process group, wiping the temporary workspace, and reclaiming the resources that group held.
 
 ---
 
@@ -122,10 +122,10 @@ During the day, your brain's hippocampus absorbs a firehose of raw sensory data:
 * You hallucinate.
 * You struggle to remember simple words.
 
-During **Slow-Wave Sleep**, your brain plays back the day's events at high speed, ruthlessly discards 99% of the trivial noise (what color shirt the barista wore), and transfers the distilled, essential lessons into the neocortex as permanent wisdom.
+During **Slow-Wave Sleep**, your brain plays back the day's events at high speed, discards most of the trivial noise (what color shirt the barista wore), and transfers the distilled, essential lessons into the neocortex as permanent wisdom.
 
 ### The Coding Equivalent
-Large Language Models experience exact biological brain fog, known as **Softmax Attention Dilution**:
+Large Language Models show something like biological brain fog, which this repository calls **Softmax Attention Dilution**:
 * After 30 turns of running terminal commands, reading 500-line files, and generating compiler output, the context window fills with tens of thousands of tokens of temporary garbage.
 * The model gets "sleep-deprived": it forgets earlier rules, ignores safety instructions, and starts hallucinating.
 
@@ -148,7 +148,7 @@ Instead, an ecological disaster unfolded:
 * Beavers starved because there were no willows to build dams.
 * Without beaver dams, rivers eroded, water tables dropped, and entire valleys dried up.
 
-In 1995, scientists reintroduced the wolf. The wolves kept the elk moving, willows grew back, beavers returned, dams stabilized the water table, and the geography of the rivers physically shifted. **A single strict boundary healed the entire ecosystem.**
+In 1995, scientists reintroduced the wolf. Elk numbers fell, and in some places willows and aspens grew back. Popular accounts say the wolves also brought back beavers and changed the rivers; field studies find willow recovery patchy and held back by the missing beaver dams (Marshall, Hobbs & Cooper, 2013), and scientists still debate how much the wolves caused. **The lesson for code is narrower: one strict boundary can change how a whole system grows.**
 
 ```mermaid
 flowchart TD
@@ -172,11 +172,11 @@ If you remove the rule, lazy AI models generate monstrous 15-level nested `if/el
 
 ---
 
-## 6. Simulated Annealing: Hot Brainstorming vs. Ice-Cold Verification
+## 6. Heat and Quench: Hot Brainstorming vs. Ice-Cold Verification
 
-When a blacksmith hammers high-carbon steel into a katana, they rely on the physics of **thermal annealing**:
-1. **The Hot Phase**: The steel is heated to glowing orange ($1,500^\circ\text{F}$). Atoms vibrate wildly and slide past one another. The smith can shape the curved blade freely.
-2. **The Quenching Phase**: The blade is plunged into water. The atoms suddenly lose all thermal energy and freeze into an ultra-dense, razor-sharp crystalline grid.
+When a blacksmith hammers high-carbon steel into a katana, they rely on the physics of **heat treatment**:
+1. **The Hot Phase**: The steel is heated to glowing orange ($1,500^\circ\text{F}$). Its crystal structure changes and carbon dissolves into the iron. The smith can shape the curved blade freely.
+2. **The Quenching Phase**: The blade is plunged into water. The fast cooling traps the carbon in a hard, strained crystal structure (martensite) that holds a sharp edge. (Annealing is the opposite: slow cooling that softens steel. The optimization method "simulated annealing" borrows that slow cooling.)
 
 If the smith quenches the blade too early, it shatters. If they never quench it, it stays soft and bends like lead.
 
@@ -187,7 +187,7 @@ Every task in an AI coding workflow has a physical temperature:
 |---|---|---|---|
 | **Architectural Ideation** | 🔥 **High Heat** | Temperature $0.7 - 1.0$ | Brainstorming creative features, designing user interfaces, exploring trade-offs. |
 | **Draft Synthesis** | 🌤️ **Medium Heat** | Temperature $0.2 - 0.4$ | Writing candidate functions, exploring alternative algorithms. |
-| **Compiler & Gate Check** | ❄️ **Absolute Zero** | Temperature $0.0$ (Deterministic) | Checking syntax, running tests, asserting mathematical invariants ($M \le 10$). |
+| **Compiler & Gate Check** | ❄️ **Absolute Zero** | No model: deterministic tools | Checking syntax, running tests, checking numeric limits ($M \le 10$). |
 
 When designing a feature, let the AI run warm and creative. But when the code meets the compiler, freeze the temperature to absolute zero: **no creativity allowed when checking if the bridge will hold.**
 

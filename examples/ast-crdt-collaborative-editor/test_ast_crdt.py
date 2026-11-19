@@ -1,7 +1,8 @@
 """Unit and integration test suite for Real-Time AST Tree-CRDT.
 
-Validates commutative convergence, fractional tree ordering, cycle prevention,
-orphan attachment, valid Python AST materialization, SARIF export, and CLI commands.
+Validates convergence of two concurrent inserts, string-key sibling ordering, the
+single-replica cycle check, orphan attachment, materialization of valid names, SARIF
+export, and CLI commands. No test covers concurrent moves, which diverge.
 
 Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 """

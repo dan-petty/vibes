@@ -87,8 +87,8 @@ def _git(root: Path, *args: str) -> None:
 def test_investment_counts_lines_so_a_sweep_cannot_look_like_a_build(tmp_path: Path) -> None:
     """The regression that matters.
 
-    Counting touched files reported a comfortable split for a window whose only
-    `examples/` activity was a repository-wide lint sweep across 29 files. A sweep touches
+    Counting touched files reported a comfortable split for a window whose `examples/`
+    activity was mostly a repository-wide lint sweep (29 of 34 file touches). A sweep touches
     many locations and adds almost nothing; a build does the reverse. This fixture is that
     shape: one line added across three example files, eighty added to one tool.
     """

@@ -83,12 +83,14 @@ Rules can be referenced by canonical name, rule code, or ergonomic alias:
 
 | Rule Code | Canonical Name | Aliases | Description | Waivable |
 |---|---|---|---|---|
-| `CC001` | `CyclomaticComplexity` | `complexity`, `c901`, `mccabe` | McCabe cyclomatic complexity ceiling | No |
-| `ND001` | `NestingDepth` | `nesting`, `depth` | Maximum statement nesting depth | No |
-| `ZT001` | `ZeroTrustSanitization` | `sanitization`, `security`, `egress` | RFC 1918 private IPs and mock domain subdomains | Yes |
-| `SI001` | `SyntaxIntegrity` | `syntax`, `parse` | Valid Python AST syntax parsing | No |
-| `TI001` | `TargetIntegrity` | `targets`, `paths` | Verification that all audit targets exist | No |
-| `WI001` | `WaiverIntegrity` | `waivers`, `waiver` | Auditable justification and waiver syntax | No |
+| `CC001` | `CyclomaticComplexity` | `complexity`, `c901` | McCabe cyclomatic complexity ceiling | No |
+| `ND001` | `NestingDepth` | `nesting` | Maximum statement nesting depth | No |
+| `ZT001` | `ZeroTrustSanitization` | `sanitization`, `security`, `s101` | RFC 1918 private IPs and mock domain subdomains | Yes |
+| `SI001` | `SyntaxIntegrity` | `syntax` | Valid Python AST syntax parsing | No |
+| `TI001` | `TargetIntegrity` | `targets` | Verification that all audit targets exist | No |
+| `WI001` | `WaiverIntegrity` | `waivers` | Auditable justification and waiver syntax | No |
+
+Names are matched without case. An unknown name is not rejected: it selects no rule, so `--select` with only unknown names passes every file.
 
 ```mermaid
 flowchart TD

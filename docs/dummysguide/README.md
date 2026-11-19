@@ -50,9 +50,9 @@ When you just "vibe" and hope for the best, you are asking a probabilistic machi
 | Ask the AI to write the app first | Write automated tests first (the answer key) | The AI knows exactly what passing looks like |
 | Let the AI write huge, twisty functions | Cap function complexity and nesting depth | Short code has fewer bugs and fits in AI memory |
 | Leave old, broken code in place | Delete dead and replaced code immediately | The AI won't accidentally revive dead bugs |
-| Let the AI see real tokens and network info | Mask all secrets and use dummy test domains | Zero risk of leaking private keys or Wi-Fi info |
+| Let the AI see real tokens and network info | Mask all secrets and use dummy test domains | Much less risk of leaking private keys or Wi-Fi info |
 | Work from a fuzzy chat conversation | Track tasks in a written checklist | The AI never forgets what step it is on |
-| Use one giant, expensive model for everything | Use big models for planning, fast tools for checking | Slashing costs while speeding up execution by 10x |
+| Use one giant, expensive model for everything | Use big models for planning, fast tools for checking | Lower costs and faster execution |
 
 ---
 
@@ -103,9 +103,9 @@ Explore each fundamental principle in detail, complete with real-world analogies
 
 ## 🚀 Want to Dive Deeper?
 
-When you are ready to see how these fundamentals translate into mathematical proofs, production codebases, and rigorous field studies, check out the rest of the `vibes` showcase:
+When you are ready to see how these fundamentals translate into formal definitions, working code, and field observations, check out the rest of the `vibes` showcase:
 
 - [**The Disciplined Agentic Manifesto**](../MANIFESTO.md): The formal engineering thesis behind agentic software development.
 - [**Taxonomy of Agentic Software Engineering**](../TAXONOMY.md): The full architectural classification of agent swarms, memory, and gates.
-- [**Consolidated Field Observations**](../../observations/README.md): 75 deep empirical case studies drawn from real production projects.
+- [**Consolidated Field Observations**](../../observations/README.md): Observation reports from the `devops-cli` case study and other agent runs.
 - [**Architectural Patterns**](../../README.md#reusable-engineering-patterns): Reusable blueprints and operational playbooks for autonomous agents.

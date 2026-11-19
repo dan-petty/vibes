@@ -1,8 +1,8 @@
 # Landscape Survey
 
-> **TLDR**: Automated comparative analysis of open-source agentic tools, evaluating project maturity and feature gaps against capabilities in vibes.
+> **TLDR**: Automated comparative analysis of open-source developer and AI tools, evaluating project maturity and feature gaps against capabilities in vibes.
 >
-> **ELI:7b**: A scorecard comparing this repo against 20 other AI projects to see what features they have and what we might want to build next.
+> **ELI:7b**: A scorecard comparing this repo against 30 other open-source projects (most are developer tools, not AI projects) to see what features they have and what we might want to build next.
 >
 > 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](../dummysguide/README.md).*
 
@@ -260,10 +260,8 @@ Ours: [`examples/ebpf-lsm-kernel-gate/`](../../examples/ebpf-lsm-kernel-gate/)
 
 | Feature | vibes |
 |---|---|
-| **egress_control** — Denies or restricts outbound network by default | ✅ |
-| **lsm_kernel_gate** — Synchronous in-kernel LSM policy enforcement and dynamic boundary fuzzing | ✅ |
+| **lsm_kernel_gate** — Simulates BPF LSM policy decisions in Python and fuzzes that simulated policy; loads no BPF program and enforces nothing in the kernel | ✅ |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
-| **syscall_isolation** — Confines a workload below the process boundary | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -284,10 +282,8 @@ Ours: [`examples/wasm-capability-sandbox/`](../../examples/wasm-capability-sandb
 
 | Feature | vibes |
 |---|---|
-| **egress_control** — Denies or restricts outbound network by default | ✅ |
-| **resource_caps** — Bounds memory, CPU or process count | ✅ |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
-| **wasm_sandboxing** — Sandboxes ephemeral agent tools using WASI 0.2 capability tokens and gas metering | ✅ |
+| **wasm_sandboxing** — Simulates a WASI 0.2 capability sandbox in Python (capability tokens, gas metering); runs no Wasm runtime | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.
 
@@ -297,7 +293,7 @@ Ours: [`examples/ast-crdt-collaborative-editor/`](../../examples/ast-crdt-collab
 
 | Feature | vibes |
 |---|---|
-| **ast_crdt** — Real-time conflict-free collaborative editing over abstract syntax trees across agents | ✅ |
+| **ast_crdt** — In-process simulation of concurrent AST edits by several agents; does not guarantee strong eventual consistency | ✅ |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.

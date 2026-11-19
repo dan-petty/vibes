@@ -16,7 +16,7 @@ If you aren't careful, that AI will enthusiastically commit:
 - Your home server's private network IP (such as an address in `192.168.0.0/16`).
 - Your computer's private username and file paths (`/home/user/Desktop/SecretProject`).
 
-Once those files get pushed to GitHub, **they are permanently public**. Even if you delete the commit five minutes later, automated scrapers have already copied your credentials and started attacking your accounts.
+Once those files get pushed to GitHub, **they are permanently public**. Even if you delete the commit five minutes later, automated scrapers may already have copied your credentials and started attacking your accounts.
 
 ---
 
@@ -49,7 +49,7 @@ Never let private home network or corporate IP addresses appear in your tests or
   - `198.51.100.1` (TEST-NET-2)
   - `203.0.113.1` (TEST-NET-3)
 
-These documentation IPs are mathematically guaranteed never to route across the public internet.
+RFC 5737 reserves these blocks for documentation. No real network uses them, and network operators are expected to filter them.
 
 ### 4. Abstract Your Machine Names and Paths
 
@@ -69,9 +69,9 @@ When you let an autonomous AI agent run terminal commands, you are giving an art
 
 What if the AI hallucinates a command like:
 ```bash
-rm -rf / tmp/*
+rm -rf ~ /tmp/build
 ```
-(Notice the accidental space between `/` and `tmp/*`—that deletes your entire operating system!)
+(Notice the accidental space between `~` and `/tmp/build`—that deletes your entire home folder! Modern `rm` refuses to delete `/` itself, but nothing protects `~`.)
 
 To prevent disasters, we run agents inside an **isolated sandbox**:
 
@@ -85,11 +85,11 @@ flowchart TD
         end
         Secrets["Your Real Private Keys & Personal Files"]
     end
-    Sandbox -.->|"BLOCKED: Cannot touch host files"| Secrets
+    Sandbox -.->|"BLOCKED: Cannot touch unmounted host files"| Secrets
 ```
 
-- **Containerization (Docker / Devcontainers)**: The agent runs inside a virtual container. If it breaks something, it only breaks the disposable container, not your laptop.
-- **Process Group Isolation**: When the agent launches a background worker or server, we bundle it in a dedicated process group (`os.killpg`) so when the test finishes, all spawned sub-processes are terminated cleanly. Zero zombie processes eating up your CPU!
+- **Containerization (Docker / Devcontainers)**: The agent runs inside a virtual container. It can only reach the host folders you mount into it. A devcontainer mounts your project folder, so the agent can still change your project files, but not the rest of your laptop.
+- **Process Group Isolation**: When the agent launches a background worker or server, we bundle it in a dedicated process group (`os.killpg`) so when the test finishes, all spawned sub-processes in that group are terminated. Far fewer leftover processes eating up your CPU!
 
 ---
 

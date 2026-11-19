@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Ephemeral Rootless Container Sandboxing (`docker` / `podman`), Process Group Isolation, and CIS Benchmark Control Auditing  
-> **Key Metric**: 100% CIS Rootless Container Security Benchmark compliance; sub-millisecond process tree termination; zero-trust network egress deny-all; strictly bounded stream buffers ($\le 64\text{KB}$) mitigating CWE-400  
-> **TLDR**: Isolate agent command execution in rootless containers with POSIX process groups (os.killpg) to prevent privilege escalation and zombie leaks.
+> **Key Metric**: Default policy passes 8 of 8 checks on the example's own control list (a check of the declaration, not of the run); process-group termination (SIGTERM, 50 ms wait, SIGKILL); `--network none` in container mode; returned output truncated to 65,536 characters (CWE-400)  
+> **TLDR**: Isolate agent command execution in rootless containers and POSIX process groups (os.killpg) to reduce privilege escalation and orphaned-process risk.
 > **ELI:7b**: Run AI commands inside locked-down containers without root permissions, and terminate whole process trees so runaway scripts don't hang.
 
 ---
@@ -14,7 +14,7 @@ As autonomous AI agents evolve from passive autocomplete assistants into proacti
 
 Executing untrusted, model-generated code directly on the host operating system creates critical security and reliability failure modes:
 
-1. **The Process Tree Orphan Trap**: A standard `subprocess.Popen` invocation with `proc.kill()` terminates only the immediate child process. If the agent executes a compound command (e.g. `python3 -c "import subprocess; subprocess.Popen(['sleep', '1000'])"` or shell scripts spawning daemon forks), the grandchild processes are adopted by PID 1 (`init` / `systemd`) and persist in the background, leaking workstation CPU and PID slots.
+1. **The Process Tree Orphan Trap**: A standard `subprocess.Popen` invocation with `proc.kill()` terminates only the immediate child process. If the agent executes a compound command (e.g. `python3 -c "import subprocess; subprocess.Popen(['sleep', '1000'])"` or shell scripts spawning daemon forks), the grandchild processes are adopted by PID 1 (`init` / `systemd`) or the nearest subreaper and persist in the background, leaking workstation CPU and PID slots.
 2. **Unbounded Output DOS (CWE-400)**: Runaway code emitting millions of lines of output to `stdout` or `stderr` saturates memory buffers, freezes agent UI parsers, and inflates context windows.
 3. **Host Credential & Path Leakage**: Passing the unscrubbed host environment (`os.environ`) into child processes inadvertently exposes API tokens (`GITHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY`), SSH authentication sockets, and internal paths.
 4. **Network Exfiltration & SSRF Risks**: Untrusted payloads can probe cloud metadata endpoints (`169.254.169.254`), query local Kubernetes services, or establish outbound command-and-control tunnels.
@@ -23,14 +23,14 @@ Executing untrusted, model-generated code directly on the host operating system 
 
 ## 2. The Observed Solution: Hardened Rootless Sandboxing
 
-To eliminate these vulnerabilities, we developed the **Ephemeral Rootless Container Sandbox Harness (`examples/ephemeral-container-sandbox/`)**:
+To reduce these risks, we developed the **Ephemeral Rootless Container Sandbox Harness (`examples/ephemeral-container-sandbox/`)**:
 
 ```mermaid
 flowchart TD
     Payload["Untrusted Agent Payload / Test Script"] --> Harness["ContainerSandboxHarness"]
     Harness --> Policy["SandboxSecurityPolicy"]
 
-    subgraph CIS["CIS Security Controls"]
+    subgraph CIS["Policy controls (the example's own CIS-5.x labels)"]
         Policy --> C1["CIS-5.1: Read-Only Rootfs"]
         Policy --> C2["CIS-5.2: Network None (Loopback Only)"]
         Policy --> C3["CIS-5.3: Capabilities Dropped (ALL)"]
@@ -46,7 +46,7 @@ flowchart TD
 
     PG --> Runtime{"Container Engine Available?"}
     Runtime -->|"Docker / Podman"| Container["Hardened Container Namespace"]
-    Runtime -->|"CI / Offline Fallback"| Simulator["POSIX Simulator (resource.setrlimit)"]
+    Runtime -->|"CI / Offline Fallback"| Simulator["Simulator (setrlimit + seccomp-BPF)"]
 
     Container --> Timeout{"Timeout Watcher (os.killpg)"}
     Simulator --> Timeout
@@ -55,51 +55,53 @@ flowchart TD
     Bound --> Result["SandboxExecutionResult"]
 ```
 
+The `CIS-5.1` to `CIS-5.8` labels are this example's own numbering (`CIS_CONTROL_NAMES` in `sandbox.py`). CIS publishes no "Rootless Container Security Benchmark". The CIS Docker Benchmark (v1.6.0 numbering, as `docker-bench-security` checks it) covers most of the same ideas as 4.1 (a non-root container user), 5.4 (capabilities), 5.11 (memory limit), 5.13 (read-only root filesystem), 5.26 (no new privileges) and 5.29 (PIDs cgroup limit). It has no control for `--network none` or for a `noexec` tmpfs.
+
 ---
 
 ## 3. Key Architectural Principles
 
 ### 1. POSIX Process Group Sets (`os.setsid` & `os.killpg`)
 To ensure that all descendants of a sandboxed execution are terminated when a timeout expires or an error occurs:
-- The child process calls `preexec_fn=os.setsid`, becoming the leader of a new process group.
-- On termination or timeout, the harness sends signals to the entire group using `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`, followed by `signal.SIGKILL`. This guarantees zero orphaned grandchild processes.
+- The harness starts the child with `start_new_session=True`, so the child calls `setsid()` and leads a new session and process group.
+- On termination or timeout, the harness sends signals to the entire group using `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`, waits 50 ms, and sends `signal.SIGKILL`. This kills every process still in the group. A descendant that calls `setsid()` itself (a daemonizing fork) leaves the group and survives; a PID namespace or a cgroup kill (`cgroup.kill`, Linux 5.14 and later) covers that case. In container mode the group holds only the `docker` or `podman` client: the client forwards SIGTERM to the container, but SIGKILL stops only the client.
 
 ### 2. Zero-Trust Environment Stripping
 Host environments contain hundreds of variables, many of which contain secrets or configuration overrides. The harness enforces a strict allowlist:
 ```python
 DEFAULT_SAFE_VARS = frozenset({"PATH", "LANG", "LC_ALL", "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"})
 ```
-All API keys, tokens, session IDs, and private user paths are systematically stripped before execution.
+Every variable outside the allowlist is dropped before execution, including API keys, tokens and session IDs. `PATH` is kept and can still name private user paths.
 
 ### 3. Dual-Mode Portability
 Because AI agents run in heterogeneous environments (developer laptops, Docker-in-Docker devcontainers, bare-metal CI, isolated Kubernetes pods), hard container dependencies cause brittleness.
 The harness provides seamless **dual-mode runtime switching**:
-- If `docker` or `podman` is present, it orchestrates rootless containers with full cgroups and seccomp isolation.
-- If no container socket is available, it falls back to an in-process POSIX simulator applying `resource.setrlimit` bounds (RLIMIT_AS, RLIMIT_CPU) and sanitized sub-environments.
+- If `docker` or `podman` is present, it runs `<engine> run --rm` with the policy flags. Whether the container is rootless depends on how the engine is installed.
+- If no container engine is available, it falls back to a simulator: a child process confined by `setrlimit` (RLIMIT_AS, RLIMIT_CPU, RLIMIT_NPROC, RLIMIT_CORE), `prctl(PR_SET_NO_NEW_PRIVS)` and a seccomp-BPF filter, with a sanitized environment. The simulator cannot apply a read-only root filesystem or a private `/tmp`; `RuntimeEnforcementAuditor` in `sandbox.py` reports both as unenforced.
 
 ### 4. Bounded Output Buffers (CWE-400 Mitigation)
-Standard library `subprocess.Popen.communicate()` will buffer infinite output in memory until host exhaustion. The harness applies strict stream truncation:
-$$\text{Output Length} \le 65,536 \text{ bytes}$$
-Output exceeding the threshold is split into leading and trailing head/tail chunks with an explicit truncation marker, protecting agent parsers from memory saturation.
+Standard library `subprocess.Popen.communicate()` buffers all output in memory. The harness also calls `communicate()` and truncates afterwards, so the cap protects the consumer of the result, not the harness's own memory:
+$$\text{Output Length} \le 65,536 \text{ characters}$$
+Output exceeding the threshold is split into leading and trailing head/tail chunks with an explicit truncation marker, protecting agent parsers and context windows from oversized output.
 
 ---
 
 ## 4. Empirical Containment Matrix
 
-Running the automated containment benchmark suite (`sandbox.py --demo`) demonstrates immediate, verified containment:
+`sandbox.py --demo` runs three payloads with a 0.15 s timeout. Results on 2026-11-19:
 
-| Attack / Exploit Vector | Mechanism Under Test | Sandbox Defense Result | Containment Latency |
-|---|---|---|---|
-| **Infinite Loop / Runaway CPU** | `while True: pass` | Bounded timeout + `os.killpg(SIGKILL)` | $512\text{ms}$ (strict timeout) |
-| **Output Flooding DOS (CWE-400)** | `print('X' * 200000)` | Stream head/tail truncation marker | Instant ($65,536\text{ bytes}$) |
-| **Filesystem Mutation (CWE-78)** | `open('/bin/sh', 'w')` | Read-only root filesystem (`--read-only`) | Blocked ($EACCES$) |
-| **Data Exfiltration / SSRF** | `socket.connect(('198.51.100.1', 80))` | Egress deny-all (`--network none`) | Blocked ($ENETUNREACH$) |
-| **Fork Bomb / PID Exhaustion** | Recursive fork chain | Cgroups v2 PID limit (`--pids-limit 100`) | Blocked ($EAGAIN$) |
+| Payload | Simulator (`--demo --simulator`) | Docker engine (`--demo`) |
+|---|---|---|
+| Safe computation (`print(sum(i * i for i in range(100)))`) | Passed, 68 ms | Failed |
+| Timeout (`time.sleep(10)`) | Contained at 207 ms | Contained at 202 ms, before the container started |
+| Output flooding (`print('X' * 200000)`) | Truncated to 65,535 characters | Failed, no output |
+
+In container mode, a run with a 60 s timeout exits with code 127: the harness passes the host interpreter path into the `python:3.12-slim` image, where it does not exist. The demo has no filesystem-mutation, egress or fork-bomb payload. `test_the_simulator_denies_a_payload_the_network` checks that the simulator's seccomp filter refuses `socket()` with `EPERM`. No test checks a read-only root filesystem or a PID limit at run time.
 
 ---
 
 ## 5. Takeaways for Autonomous Swarms
 
 1. **Never Execute Agent Payloads in the Ambient Process**: Running `eval()`, `exec()`, or unconstrained `subprocess.run()` in the agent's main process turns any prompt injection or code defect into an instant host compromise.
-2. **Enforce Objective CIS Benchmarks as Code**: Security policies should not be informal guidelines. Modeling them as typed dataclasses (`SandboxSecurityPolicy`) with an automated compliance auditor (`CISPolicyAuditor`) provides continuous, verifiable security assurance.
-3. **Always Isolate Process Groups**: When executing subprocesses, `os.setsid` and `os.killpg` are mandatory to prevent rogue background child processes from surviving test timeouts.
+2. **Write Security Policy as Code, and Check the Runtime Too**: Security policies should not be informal guidelines. Modeling them as typed dataclasses (`SandboxSecurityPolicy`) with a compliance auditor (`CISPolicyAuditor`) checks the declaration. `RuntimeEnforcementAuditor` checks what the engine that runs the payload enforces; a perfect policy score does not mean that the run is confined.
+3. **Always Isolate Process Groups**: When executing subprocesses, `os.setsid` and `os.killpg` stop background child processes from surviving test timeouts. They do not catch a descendant that starts its own session.

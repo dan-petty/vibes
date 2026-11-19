@@ -45,7 +45,7 @@ And who is its scene partner?
 Every time the AI writes code, the computer throws an unyielding **offer** back at it:
 * *"Exit code 1: syntax error on line 42!"*
 * *"Test failed: expected 200 OK, got 404 Not Found!"*
-* *"Complexity Warning: function `process_order` has 14 nested `if` statements (max allowed is 10)!"*
+* *"Complexity Warning: function `process_order` has complexity 14 (max allowed is 10)!"*
 * *"Egress Alert: you leaked a private local IP address into a public test!"*
 
 The computer is the most honest, uncompromising improv partner in the universe. It never lies, it never flatters, and it never forgets the rules.
@@ -101,7 +101,7 @@ A disciplined coding agent treats every error as an opportunity for architectura
 When the computer throws an error, the AI never denies it. It says:  
 > *"Yes, I accept that my code is too complex, the test failed, and I breached the rules. I will not cheat, I will not skip the test, and I will not blame the computer."*
 
-In software engineering, this is called **CEGIS (Counterexample-Guided Inductive Synthesis)**. Every failure is treated as a permanent lesson that can never be undone.
+This resembles **CEGIS (Counterexample-Guided Inductive Synthesis)**, a program-synthesis method in which a verifier returns failing inputs and each one stays as a constraint on every later attempt. Here, every failure becomes a permanent lesson in the form of a regression test.
 
 ### 2. The "AND..." (Generative Elevation)
 The AI doesn't just apply a minimal bandaid. It asks:  
@@ -115,11 +115,11 @@ The rule is not a wall; **it is a trampoline**.
 
 Look at how this plays out in real Python code.
 
-### The Problem: A Procedural Sprawl (Breaching Complexity $M = 12$)
+### The Problem: A Procedural Sprawl (Breaching Complexity $M = 13$)
 Here is a function where an AI tried to handle discount coupons using a giant, messy ladder:
 
 ```python
-# The Messy Code: McCabe complexity M = 12 (Breaches the M <= 10 cap!)
+# The Messy Code: McCabe complexity M = 13 (Breaches the M <= 10 cap!)
 def calculate_discount(customer_type: str, total: float) -> float:
     if customer_type == "bronze":
         return total * 0.05
@@ -139,7 +139,7 @@ def calculate_discount(customer_type: str, total: float) -> float:
 ```
 
 When the AST sentinel scans this, it raises a red flag:  
-`❌ Function calculate_discount breached complexity cap: M = 12 > 10`
+`❌ Function calculate_discount breached complexity cap: M = 13 > 10`
 
 ### The Bad AI's Response: Denial ("No!")
 ```python
@@ -170,8 +170,8 @@ def calculate_discount(customer_type: str, total: float) -> float:
 ```
 
 Look at what happened:
-- Cyclomatic complexity dropped from **$M = 12$ down to $M = 1$**.
-- Nesting depth dropped from **$4$ down to $1$**.
+- Cyclomatic complexity dropped from **$M = 13$ down to $M = 1$**.
+- Nesting depth, as the `vibes` sentinel counts it (each `elif` one level deeper), dropped from **$13$ down to $1$**.
 - Adding a new customer discount in the future is now a 1-line edit to a dictionary instead of an error-prone surgery on an `if/elif` chain!
 
 By saying "Yes, and...", the AI didn't just satisfy the rule—it made the codebase **delightfully simple**.
@@ -180,6 +180,6 @@ By saying "Yes, and...", the AI didn't just satisfy the rule—it made the codeb
 
 ## 🎯 The Three Golden Rules of Agentic Improv
 
-1. **Reality is your scene partner**: The compiler and the failing test are never wrong. If the test is red, accept the reality and fix your code.
+1. **Reality is your scene partner**: Treat the compiler and the failing test as right until you have checked them. If the test is red, accept the reality and fix your code; if the test itself is wrong, show why before you change it.
 2. **Never shoot the messenger**: Never delete a failing test, never add `# noqa`, and never mock away a real network connection just to get a green checkmark.
 3. **Use the error as creative fuel**: When a rule stops you, don't look for an escape hatch. Use the constraint to refactor the code into something bite-sized, table-driven, and beautiful.

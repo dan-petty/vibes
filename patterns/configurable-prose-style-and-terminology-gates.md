@@ -23,7 +23,7 @@ Existing standalone style linters (like Vale) require external Go binaries and s
 
 ## 2. The Architectural Pattern: Structured Prose Tokenization
 
-The **Configurable Prose Style and Terminology Gate** isolates prose text from code syntax before evaluation. It leverages CommonMark block parsing to ignore code fences and substitutes inline backticked code spans with neutral symbol placeholders (`__code__`):
+The **Configurable Prose Style and Terminology Gate** isolates prose text from code syntax before evaluation. It follows the CommonMark fence rules (§4.5) to skip fenced code blocks and substitutes inline backticked code spans with neutral symbol placeholders (`__code__`). The reference implementation does not skip indented code blocks (§4.4), so a code line indented by four spaces can still be flagged:
 
 ```mermaid
 flowchart TD
@@ -103,5 +103,5 @@ STYLE_TERMINOLOGY_RULES: Final[tuple[StyleTermRule, ...]] = (
 ## 4. Verification & Operational Guidelines
 
 1. **Preset Integration**: Ensure the prose style rule is registered in calibrated presets (e.g. `style_only`, `standard`, `strict`) so it runs automatically in CI.
-2. **Deterministic Remediation**: Diagnostics must include the exact replacement and style guide link, allowing automated autofix or immediate developer remediation.
+2. **Deterministic Remediation**: Diagnostics must include the exact replacement and style guide link, allowing automated autofix or immediate developer remediation. The reference implementation names the guide but gives no link.
 3. **Zero False Positives on Code**: All backtick spans (` `...` `) and fenced blocks must be strictly immune from prose terminology rejections.

@@ -3,7 +3,8 @@
 Dynamically negotiates between lightweight HTTP extraction and headless browser
 rendering, learning per-domain extraction strategies to overcome common headless
 browsing limitations (SPA hydration, bot detection flags, cookie modal obscuration,
-and resource overhead).
+and resource overhead). The default headless fetcher is a stub that runs no browser and
+returns fixed HTML; a caller supplies a real one through `headless_fetcher`.
 """
 
 from __future__ import annotations
@@ -526,8 +527,8 @@ class AdaptiveWebCrawler:
         raise ValueError(f"Redirect limit of {MAX_REDIRECTS} exceeded starting at {url}")
 
     def _default_headless_fetcher(self, url: str, wait_selector: str) -> tuple[int, str]:
-        """Fallback headless browser executor or simulated environment."""
-        # When Playwright is not present, returns a standard structured response
+        """Simulated headless browser: returns fixed HTML and runs no browser."""
+        # No Playwright or other browser code exists here; a real renderer is injected.
         logger.info("Headless browser tier invoked for %s waiting on selector '%s'", url, wait_selector)
         return (
             200,

@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — `tools/docs_validator.py`
 > **Topic**: Keyword Matching Brittleness in Document Structure Validators; Structural Enumeration as the Correct Oracle
-> **Key Metric**: First implementation rejected 26 valid observation files; structural position oracle passed all 25 existing documents and immediately caught 1 genuine defect
+> **Key Metric**: First implementation reported 26 false violations across 25 valid observation files; structural position oracle passed all 25 existing documents and caught 1 genuine defect
 > **TLDR**: Validate required document sections by structural outline position rather than fragile keyword matching against diverse natural language.
 > **ELI:7b**: Check document outlines by section numbers (1, 2, 3) instead of searching for exact words that can change across different writing styles.
 
@@ -77,7 +77,7 @@ The keywords `"verifiable impact"` and `"underlying failure mode"` were simply a
 
 ## 3. The Underlying Failure Mode or Catalyst
 
-This is a direct instance of the **brittle heuristic anti-pattern** documented in `AGENTS.md §1`:
+This is a direct instance of the **brittle heuristic anti-pattern** documented in the `devops-cli` `AGENTS.md` (line 23 at commit `acd091826`; this repository's `AGENTS.md` has no such rule):
 
 > Matching against a **limited or arbitrary subset of a larger or unknown list of possible values is strictly prohibited**.
 
@@ -158,16 +158,14 @@ Additionally, a critical edge case required a **filename predicate**: `observati
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Before**: 26 false violations against 25 valid observation files (false positive rate: 100%).
-- **After**: 0 violations against the same 25 files (false positive rate: 0%).
+- **Before**: 26 false violations against 25 valid observation files (every reported violation was false).
+- **After**: 0 false violations against the same 25 files.
 - **Genuine defect found**: Observation 12 was missing its `## 5.` section entirely — a real structural defect, correctly caught by the structural oracle and immediately remediated.
 
-The same test suite that drove out the design also serves as the regression oracle:
+The unit tests (`test_observation_structure_valid`, `test_observation_structure_missing_sections` and `test_observation_structure_non_observation_file` in `tests/test_docs_validator.py`) use temporary files. The regression oracle for the real corpus is the CI step that runs the validator over the whole repository:
 
-```python
-def test_observation_structure_real_repo_compliance() -> None:
-    """All existing observation documents pass the 5-section structure check."""
-    # 25 files → 0 violations
+```bash
+python tools/docs_validator.py --strict
 ```
 
 > The lesson: when validating document structure, the content of sections belongs to the author. The presence and count of required numbered positions belongs to the validator. Confusing the two produces an oracle that enforces style while ignoring structure.

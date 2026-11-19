@@ -2,7 +2,7 @@
 
 > **Pattern Class**: Multi-Agent Systems & Continuous Self-Hardening
 > **Problem**: Unidirectional quality assessment forces agents to silently absorb software interface friction, resulting in retry spirals, token waste, and recurring architectural degradation
-> **Solution**: A bi-directional scoring architecture that pairs deterministic software gates ($S_{\text{Agent}}$) with real-time Agent Experience scoring ($S_{\text{AX}}$), automatically inverting software friction into automated refactoring and schema-hardening deliverables
+> **Solution**: A bi-directional scoring architecture that pairs deterministic software gates ($S_{\text{Agent}}$) with Agent Experience scoring ($S_{\text{AX}}$), inverting software friction into refactoring and schema-hardening findings
 > **TLDR**: Quantify developer and agent interaction friction (DAI, IFI, CIM) to guide automated refactoring and elevate software usability for both humans and AI.
 > **ELI:7b**: Measure how often the AI trips over bad error messages or awkward APIs, and rewrite the software so both humans and bots have an easier time using it.
 > **Reference Implementation**: [`examples/agent-experience-evaluator/ax_evaluator.py`](../examples/agent-experience-evaluator/ax_evaluator.py), [`tools/cegis_engine.py`](../tools/cegis_engine.py), [`tools/ast_refactorer.py`](../tools/ast_refactorer.py), [`examples/ast-invariant-sentinel/sentinel.py`](../examples/ast-invariant-sentinel/sentinel.py)
@@ -13,14 +13,14 @@
 
 In standard automated software engineering pipelines, quality scoring is strictly one-directional: the software evaluates the agent. Compilers check syntax, test suites check behavioral regressions, and invariant sentinels enforce complexity thresholds ($M \le 10$, $\text{depth} \le 5$).
 
-While this ensures that substandard code is rejected, it treats the software interface as an immutable constant. When an agent encounters confusing error tracebacks, permissive schemas lacking `additionalProperties: false`, or deeply nested functions ($M \ge 9$), the agent has no mechanism to flag or remediate the friction.
+While this ensures that substandard code is rejected, it treats the software interface as an immutable constant. When an agent encounters confusing error tracebacks, permissive schemas lacking `additionalProperties: false`, or highly branched functions ($M \ge 9$), the agent has no mechanism to flag or remediate the friction.
 
 This creates three systemic failure modes:
 
 1. **The Silent Sufferer Trap**:
    Unlike human engineers who complain about poor Developer Experience (DX) and refactor friction points, autonomous agents silently attempt to compensate by generating verbose workarounds or complex wrappers.
-2. **Exponential Token Burn Under Diagnostic Ambiguity**:
-   When a test failure or compiler error emits unstructured conversational prose instead of machine-actionable diffs, the agent's problem-solving reduces from polynomial Counterexample-Guided Inductive Synthesis (CEGIS) to brute-force speculative search.
+2. **Token Burn Under Diagnostic Ambiguity**:
+   When a test failure or compiler error emits unstructured conversational prose instead of machine-actionable diffs, the agent cannot read the expected and actual values from the failure, so it guesses at the cause and pays a full retry for each guess.
 3. **One-Way Architectural Decay**:
    Codebases that are hard for agents to navigate become progressively more fragmented as agents add incremental shims rather than simplifying the underlying abstractions.
 
@@ -73,7 +73,7 @@ flowchart TD
    - The repository gates evaluate agent conformance ($S_{\text{Agent}}$) via deterministic AST checks and test suites.
    - The agent telemetry layer evaluates repository usability ($S_{\text{AX}}$) via the Diagnostic Actionability Index ($\text{DAI}$), Interface Friction Index ($\text{IFI}$), and Cognitive Impedance Metric ($\text{CIM}$).
 2. **Automated Friction Inversion**:
-   - Friction is never ignored or patched around. Any tool or test with an AX score below threshold ($\tau_{\text{AX}} = 0.75$) triggers an automated remediation ticket in the project backlog.
+   - Friction is never ignored or patched around. Any tool or test with an AX score below threshold ($\tau_{\text{AX}} = 0.75$) should produce a remediation ticket in the project backlog. The reference evaluator stops at a failing result, SARIF findings and remediation hints; it opens no ticket or pull request.
 3. **The Co-Evolutionary Ratchet**:
    - As software AX improves, agent reasoning velocity and zero-shot accuracy increase.
    - As agent capabilities rise, the software's mechanical invariant gates can be ratcheted tighter without increasing failure rates.
@@ -82,10 +82,10 @@ flowchart TD
 
 ## 3. Implementation Example
 
-The following reference implementation illustrates the telemetry instrumentation and evaluation contract:
+The following sketch illustrates the evaluation contract with runtime interaction telemetry. The reference implementation, [`ax_evaluator.py`](../examples/agent-experience-evaluator/ax_evaluator.py), is a static analyzer instead: it counts structured and prose diagnostics, permissive schemas and high-impedance functions in source files, then applies the same weights (0.40, 0.30, 0.30) and threshold (0.75).
 
 ```python
-"""Reference implementation of the Bi-Directional AX Scoring Evaluator."""
+"""Sketch of a runtime Bi-Directional AX Scoring Evaluator."""
 
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def compute_ax_score(telemetry: InteractionTelemetry) -> AXScoreReport:
         if ifi > 0.2:
             recommendation = "Enforce negative schemas (additionalProperties: false)"
         elif dai < 0.5:
-            recommendation = "Wrap tracebacks in structured CEGIS JSON diffs"
+            recommendation = "Wrap tracebacks in structured JSON diagnostics"
         else:
             recommendation = "Decompose nested AST blocks into table dispatch"
 
@@ -171,9 +171,9 @@ def compute_ax_score(telemetry: InteractionTelemetry) -> AXScoreReport:
 | Anti-Pattern | Operational Trap | Deterministic Guardrail |
 | :--- | :--- | :--- |
 | **The "Blaming the Compiler" Trap** | The agent flags legitimate compile or type errors as "bad AX" to excuse low-quality synthesis. | Diagnostic Actionability ($\text{DAI}$) measures *structure* (JSON/AST), never the presence of an error. A clear, typed compile error scores $1.0$. |
-| **Over-Refactoring Thrash** | The agent spends 100% of its token budget refactoring working utilities rather than delivering features. | AX refactorings are throttled by SRE error budgets ($\le 15\%$ of total agent capacity) and require prior task clearance. |
-| **Diluting the Sovereign Telos** | An agent rewrites customer-facing API contracts or business objectives under the guise of AX simplification. | Architectural changes are confined to internal implementations; public interface evolution requires human cryptographic attestation. |
-| **Permissive Schema Fallback** | Relaxing schema validation (`extra="allow"`) to artificially lower $\text{IFI}$. | Strict CI invariant forbids `extra="allow"` or permissive dictionary typing across all tool definitions. |
+| **Over-Refactoring Thrash** | The agent spends 100% of its token budget refactoring working utilities rather than delivering features. | Cap AX refactoring at a fixed share of agent capacity and require prior task clearance. This is a policy; no tool in this repository enforces it. |
+| **Diluting the Sovereign Telos** | An agent rewrites customer-facing API contracts or business objectives under the guise of AX simplification. | Architectural changes are confined to internal implementations; public interface changes require human review and approval. This is a policy; no tool in this repository enforces it. |
+| **Permissive Schema Fallback** | Relaxing schema validation (`extra="allow"`) to artificially lower $\text{IFI}$. | `ax_evaluator.py` rule `AX001` flags schema dictionaries without negative constraints and untyped `**kwargs`. CI does not run the evaluator over tool definitions. |
 
 ---
 

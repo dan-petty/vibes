@@ -74,7 +74,7 @@ The sentinel gates in `pr-sentinel.yml` did cover changed Python files — but o
 
 ## 3. The Underlying Failure Mode or Catalyst
 
-The root cause is **explicit file enumeration in CI configurations** — a code list (anti-pattern per `AGENTS.md`) applied to the domain of test suites. The domain of test suites is **open and unbounded**: it grows with every new feature, example, or benchmark added to the repository.
+The root cause is **explicit file enumeration in CI configurations** — a code list (the anti-pattern that `devops-cli` `AGENTS.md` prohibits as "matching against a limited or arbitrary subset of a larger or unknown list of possible values") applied to the domain of test suites. The domain of test suites is **open and unbounded**: it grows with every new feature, example, or benchmark added to the repository.
 
 Matching against a bounded subset of an unbounded domain is the defining property of a brittle heuristic. The CI configuration committed the same category of error as a regex matching against `["admin", "login", "dashboard"]` to detect private routes — correct today, silently wrong tomorrow.
 
@@ -133,5 +133,5 @@ The same expansion applied to sentinel and docs validation:
 
 > A CI configuration that enumerates test files by name is not CI coverage — it is a curated allowlist with a decaying validity half-life. Structure-driven discovery (`pytest tests/ examples/ benchmarks/`) is the only correct contract for a living repository.
 
-**The anti-pattern to prohibit**: Any CI `run:` step that lists specific `*.py` test files by path belongs to the same class of brittle pattern subsets prohibited by `AGENTS.md §1` — an arbitrary selection from an open, unbounded set. Use directory contracts, glob patterns, or `pytest.ini` `testpaths` instead.
+**The anti-pattern to prohibit**: Any CI `run:` step that lists specific `*.py` test files by path belongs to the same class of brittle pattern subsets prohibited by the `devops-cli` `AGENTS.md` rule on brittle pattern subsets (lines 20-24 at commit `acd091826`; this repository's `AGENTS.md` has no such rule) — an arbitrary selection from an open, unbounded set. Use directory contracts, glob patterns, or `pytest.ini` `testpaths` instead.
 

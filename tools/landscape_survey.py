@@ -346,9 +346,10 @@ def render_report(manifest: Manifest, snapshot: dict[str, RepoFacts]) -> str:
     lines = [
         "# Landscape Survey",
         "",
-        "> **TLDR**: Automated comparative analysis of open-source agentic tools, evaluating project maturity and feature gaps against capabilities in vibes.",
+        "> **TLDR**: Automated comparative analysis of open-source developer and AI tools, evaluating project maturity and feature gaps against capabilities in vibes.",
         ">",
-        "> **ELI:7b**: A scorecard comparing this repo against 20 other AI projects to see what features they have and what we might want to build next.",
+        f"> **ELI:7b**: A scorecard comparing this repo against {len(manifest.repos())} other open-source projects "
+        "(most are developer tools, not AI projects) to see what features they have and what we might want to build next.",
         ">",
         "> 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](../dummysguide/README.md).*",
         "",

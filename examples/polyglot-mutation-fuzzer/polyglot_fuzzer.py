@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Differential Polyglot AST Mutation Fuzzer.
 
-Evaluates parser resilience, boundary containment, and memory safety across
-multi-language CST/AST parsers and file loaders under adversarial structural mutations.
+Applies adversarial structural mutations to seed sources. Python mutants go
+through `ast.parse`; mutants of the other languages get only a text length and
+line-split check. Not differential fuzzing: no two implementations are compared.
 """
 
 from __future__ import annotations

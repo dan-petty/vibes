@@ -24,9 +24,9 @@ Surveying what established tools measure against what was measured here:
 | Import cycles | import-linter, pylint R0401 | no |
 | Unreferenced symbols | vulture | no |
 
-Two of twelve.
+Two of eleven.
 
-These were first written by hand, under a since-retired convention that treated zero dependencies as a virtue. Measured against `radon` on the same modules, the hand-written maintainability index ran **18 to 40 points low**: the ranking held, the absolute values did not, and the threshold calibrated to radon's scale was being applied to numbers that were not on it. `radon` and `vulture` are now adopted directly, and what remains here is what no tool provided — clone detection tuned to this corpus, LCOM4, the gating/advisory split, and the loop integration.
+These were first written by hand, under a since-retired convention that treated zero dependencies as a virtue. Measured against `radon` on the same modules, the hand-written maintainability index ran low: the ranking held, the absolute values did not, and the threshold calibrated to radon's scale was being applied to numbers that were not on it. `radon` and `vulture` are now adopted directly, and what remains here is what no tool provided — clone detection tuned to this corpus, LCOM4, the gating/advisory split, and the loop integration.
 
 ---
 
@@ -39,10 +39,11 @@ pytest test_smell_quantifier.py -v
 ```
 
 `analyze(paths, include_advisory=False)` computes only what gates. The advisory detectors
-are **94% of the runtime** on this corpus — vulture alone is roughly eight seconds against
-one for everything that gates — so a caller consuming `report.gating` and discarding the
-rest should not pay for the rest. The self-improvement loop passes it: 11.84s to 1.31s for
-identical gating output.
+take most of the runtime: `analyze([tools, examples])` at commit 5737f74 took about 10 s
+with them and about 3 s without (two runs each, 16-core host), so advisory work was about
+70% of the time, and vulture alone took about 1.8 s. A caller consuming `report.gating`
+and discarding the rest should not pay for the rest. The self-improvement loop
+(`tools/resource_iteration_workbench.py`) passes it, for identical gating output.
 
 ---
 
@@ -75,7 +76,7 @@ Each advisory smell has a known false-positive mode, stated rather than hidden:
 Thresholds are the published defaults of the tool each detector mirrors, so every number traces to a source rather than to taste. Two required empirical calibration against this corpus:
 
 - **Maintainability index floor: 20.** Radon's normalized scale grades A at 20–100, B at 10–19, C below 10. The commonly cited *65* belongs to the unnormalized SEI scale and is a transcription error; using it would mark almost every module unmaintainable.
-- **Clone node-mass floor: 40.** Statement count alone makes six consecutive imports a clone of any other six imports. Measured on this corpus, import windows peak at **27** AST nodes while code windows have a median of **128**, so a 40-node floor excludes every import run and retains 90% of real code windows.
+- **Clone node-mass floor: 40.** Statement count alone makes six consecutive imports a clone of any other six imports. Measured on six-statement windows in `tools/` and `examples/` at commit 5737f74, import windows peak at **41** AST nodes (3 of 456 reach 40) while code windows have a median of **128**, so a 40-node floor excludes nearly every import run and retains 90% of real code windows.
 
 > [!IMPORTANT]
 > A detector that cannot state its number is an opinion. Each finding carries the measured value, the threshold, and the excess, so a disagreement is about the threshold rather than about whether the thing is true.

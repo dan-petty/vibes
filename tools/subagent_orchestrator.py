@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Hierarchical Subagent Slot Offloading Orchestrator.
 
-Implements the "Big decides, small types, big checks" architectural pattern.
-Coordinates tiered delegation allocating high-level planning to frontier reasoning models,
-mechanical exploration and atomic typing to local open-weights slots, and verification
-to deterministic AST oracles. Preserves invariant constraints across delegation boundaries
-and prevents epistemic distortion.
+Models the "Big decides, small types, big checks" pattern: frontier models plan, local
+open-weights slots do mechanical work, and deterministic AST checks verify. It calls no
+model. `execute_mock_demo()` returns hard-coded task outputs, statuses and token counts,
+so its metrics are illustrative. `verify_code_invariants` checks complexity, nesting depth
+and that required symbols are still present; it does not detect loss of context between
+tiers.
 """
 
 from __future__ import annotations

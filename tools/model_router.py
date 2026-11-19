@@ -1,9 +1,10 @@
 """Dynamic Multi-Model Router & Speculative Cascade Oracle.
 
-Provides automated task complexity estimation, semantic entropy uncertainty quantification,
-and tiered model routing across Local, Fast, and Frontier models. Supports speculative
-cascading where code is drafted on lightweight models and validated by mechanical AST
-invariant oracles before escalating to frontier tiers.
+Provides task complexity estimation, an entropy score, and tiered routing decisions across
+Local, Fast, and Frontier models. The entropy score is Shannon entropy over meaning-cluster
+probabilities that the caller supplies: it samples and clusters nothing, so it is only the
+last step of semantic entropy (Kuhn, Gal and Farquhar, ICLR 2023). The speculative cascade
+checks caller-supplied drafts with AST invariant checks; this module calls no model.
 """
 
 from __future__ import annotations
@@ -155,7 +156,7 @@ def select_tier(complexity: float, entropy: float, security_critical: bool) -> t
 
 
 def check_egress_invariants(code_str: str) -> tuple[bool, str]:
-    """Detect private RFC 1918 / RFC 4193 network addresses in code."""
+    """Detect private RFC 1918 IPv4 addresses in code (IPv6 is not checked)."""
     rfc1918_pat = r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})\b"
     if re.search(rfc1918_pat, code_str):
         return (False, "Zero-Trust Egress: Private RFC 1918 address detected")

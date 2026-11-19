@@ -54,7 +54,7 @@ def test_default_security_policy_values_and_immutability() -> None:
 
 
 def test_cis_policy_auditor_perfect_score() -> None:
-    """Verify default policy scores 100% on CIS container benchmark audit."""
+    """Verify the default policy passes all eight CIS-Docker-modeled controls."""
     policy = SandboxSecurityPolicy()
     report: CISAuditReport = CISPolicyAuditor.audit(policy)
     assert (

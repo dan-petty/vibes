@@ -12,12 +12,12 @@
 ## 1. Executive Context & Baseline
 
 Software interfaces have historically been built for two distinct audiences:
-1. **Human Consumers (UX)**: High-latency, visual, forgiving, narrative, and optimized for biological cognition with strictly bounded working memory ($7 \pm 2$ items).
+1. **Human Consumers (UX)**: High-latency, visual, forgiving, narrative, and optimized for biological cognition with bounded working memory (about four chunks, Cowan 2001; Miller's 1956 estimate was $7 \pm 2$ items).
 2. **Machine Clients (DX / APIs)**: Low-latency, deterministic, binary or serialized (Protobuf, JSON, REST), perfectly literal, and brittle to schema deviations.
 
 The advent of autonomous AI coding assistants introduces a **third consumer class**: the **Stochastic Cognitive Agent**.
 
-An agent is neither a human retina nor a dumb RPC client. An agent possesses high semantic reasoning and massive context ingestion (100k+ tokens), but operates under probabilistic mechanics, quadratic attention dilution, context window economic constraints, and vulnerability to hallucination. When an interface fails to account for these operational characteristics, agents burn tokens on speculative search, hallucinate missing parameters, and fail to converge on correct repairs.
+An agent is neither a human retina nor a dumb RPC client. An agent possesses high semantic reasoning and massive context ingestion (100k+ tokens), but operates under probabilistic mechanics, attention dilution, attention cost that grows quadratically with context length, context window economic constraints, and vulnerability to hallucination. When an interface fails to account for these operational characteristics, agents burn tokens on speculative search, hallucinate missing parameters, and fail to converge on correct repairs.
 
 Treating humans and agents as **co-equal, first-class consumers** requires software to expose a synchronized **Dual-Surface Interface**:
 - **The Human Surface (UX)**: Visual observability, high-level teleology (purpose and ethics), trace waterfalls, and sovereign approval gates.
@@ -63,7 +63,7 @@ flowchart TD
 
 ## 2. The Observed Phenomenon
 
-During extensive benchmarking of multi-agent autonomous engineering loops across 240 pull requests and refactoring cycles, a fundamental asymmetry was uncovered: **The Unidirectional Scoring Blind Spot**.
+Multi-agent autonomous engineering loops show a fundamental asymmetry: **The Unidirectional Scoring Blind Spot**. No benchmark backs this section; it is an argument from the design of current pipelines.
 
 ### 2.1 The Asymmetric Burden of Friction
 In standard software pipelines, quality evaluation is strictly one-directional:
@@ -71,18 +71,18 @@ $$\text{Verdict} = \text{Evaluate}(\text{SoftwareOracles}, \text{AgentOutput})$$
 
 The software acts as a static judge. If a test fails, if a tool errors, or if a type check aborts, the agent receives an error and is penalized. However, **the software itself is never evaluated on how usable, actionable, or informative its feedback was to the agent**.
 
-Telemetry revealed five pervasive **Agent Experience (AX) Failure Modes** in modern codebases:
+Five **Agent Experience (AX) Failure Modes** follow from it:
 
 1. **Diagnostic Ambiguity ($DAI \to 0$)**:
    - Compilers and test runners emitting conversational prose or multi-page unstructured tracebacks (e.g. `AssertionError: False is not True` or `Internal server error: check logs`).
-   - The agent cannot parse the failure into a mathematically constrained hypothesis, forcing a 4-to-8 turn random speculative walk that costs an average of 42,000 tokens per incident.
+   - The agent cannot parse the failure into a constrained hypothesis, which forces extra speculative turns.
 2. **Permissive Schema Hallucination ($IFI \to 1$)**:
    - MCP tools and CLI interfaces omitting `additionalProperties: false` or using loose dictionary inputs (`**kwargs`).
    - The model hallucinates intuitive but non-existent parameter names (e.g. `timeout_ms` instead of `timeout_seconds`). The tool fails deep inside runtime logic rather than rejecting the input at the perimeter on Turn 1 with prescriptive corrections.
 3. **Token Navigation Drag & Information Entropy**:
    - Flat directory layouts and absence of symbol call graphs forcing the agent to issue recursive directory listings and grep passes across hundreds of files to identify caller/callee boundaries.
 4. **Cognitive AST Impedance ($M > 10$, $\text{depth} > 5$)**:
-   - Deeply nested procedural code forcing the model to distribute attention across multiple indentation scopes, directly causing variable shadowing, unhandled edge cases, and off-by-one errors.
+   - Deeply nested procedural code forcing the model to distribute attention across multiple indentation scopes, which makes variable shadowing, unhandled edge cases, and off-by-one errors more likely.
 5. **The "Silent Sufferer" Dynamic**:
    - When encountering confusing documentation, missing type hints, or brittle tests, human developers complain on Slack or open technical debt issues. Autonomous agents, by default, **silently absorb the friction**: they write convoluted workarounds, patch around brittle tests, or enter infinite retry loops until killed by execution timeouts.
 
@@ -92,7 +92,7 @@ Telemetry revealed five pervasive **Agent Experience (AX) Failure Modes** in mod
 
 The root cause of autonomous agent stagnation in complex repositories is the **absence of an upstream feedback channel from the agent to the software architecture**.
 
-In control theory and cybernetics, an adaptive system cannot stabilize if feedback flows in only one direction:
+By analogy with adaptive control (not as a result from control theory, where a one-way feedback loop can be stable), only one side of today's loop adapts:
 
 $$\text{Traditional Loop: } \min_{\theta} \mathcal{L}(\text{Agent}_\theta, \text{Software})$$
 
@@ -103,7 +103,7 @@ flowchart LR
     subgraph UnidirectionalTrap ["1. Unidirectional Trap (Agent Absorbs All Friction)"]
         direction TB
         HighFrictionCode["High-Friction Codebase<br/>(Ambiguous Errors, M > 10, Permissive Schemas)"]
-        AgentStruggle["Agent Token Thrashing<br/>(Speculative Search & 8-Turn Retries)"]
+        AgentStruggle["Agent Token Thrashing<br/>(Speculative Search & Retries)"]
         PatchAround["Patch Around Friction<br/>(Introduces Brittle Shims)"]
         HighFrictionCode -->|"Emits Cryptic Error"| AgentStruggle
         AgentStruggle -->|"Exhausts Budget"| PatchAround
@@ -123,9 +123,9 @@ flowchart LR
     UnidirectionalTrap -.->|"Inverted by"| BiDirectionalLoop
 ```
 
-When software fails to provide machine-actionable diagnostics, the agent's internal Counterexample-Guided Inductive Synthesis (CEGIS) engine breaks down:
-- A CEGIS loop requires counterexamples that strictly partition the hypothesis space ($\mathcal{H}_{\text{valid}}$ vs $\mathcal{H}_{\text{invalid}}$).
-- A prose traceback or unstructured error returns **zero constraint information**, reducing the agent's problem-solving capability from polynomial convergence to exponential brute-force search.
+When software fails to provide machine-actionable diagnostics, a repair loop that works like CEGIS (by analogy; see [Observation 22](./22-self-correction-loops-vs-cegis-constraint-accumulation.md)) gets weak counterexamples:
+- A structured counterexample rules out a clear class of candidates ($\mathcal{H}_{\text{valid}}$ vs $\mathcal{H}_{\text{invalid}}$).
+- A prose traceback or unstructured error still carries information, but the agent must infer which constraint failed, which costs extra turns. No convergence rate has been measured.
 
 ---
 
@@ -146,6 +146,8 @@ $$S_{\text{Agent}} = \langle \text{GatePass}, M_{\text{headroom}}, \text{Depth}_
 - $\text{Coverage} \ge 90.0\%$: Regression boundary preservation.
 
 #### Vector 2: Agent Scores Software ($S_{\text{AX}}$)
+The formulas below are the target design. The implemented evaluator, [`examples/agent-experience-evaluator/ax_evaluator.py`](../../examples/agent-experience-evaluator/ax_evaluator.py), computes static proxies from source code: DAI as the share of structured `raise` and `assert` diagnostics, IFI as the share of permissive schemas (schema dictionaries without `additionalProperties: false`, and untyped `**kwargs` or keyword-only parameters), CIM as the share of functions within $M \le 6$ and depth $\le 3$, and $S_{\text{AX}} = 0.40 \cdot \text{DAI} + 0.30 \cdot (1 - \text{IFI}) + 0.30 \cdot \text{CIM}$. It has no SLI and reads no runtime tool calls.
+
 The agent quantifies the friction of interacting with the codebase:
 $$S_{\text{AX}} = w_1 \cdot \text{DAI} + w_2 \cdot (1 - \text{IFI}) + w_3 \cdot \text{CIM} + w_4 \cdot \text{SLI}$$
 
@@ -165,7 +167,7 @@ Where:
 
 ### 4.2 The Closed-Loop Co-Evolutionary Ratchet
 
-When an autonomous task completes (or aborts), if $S_{\text{AX}} < 0.75$, the agent does not merely terminate. It automatically **inverts the recorded friction into an architectural remediation task**:
+In the target design, when an autonomous task completes (or aborts) with $S_{\text{AX}} < 0.75$, the agent does not merely terminate. It **inverts the recorded friction into an architectural remediation task**. (`ax_evaluator.py` uses 0.75 as its pass threshold; it does not file backlog items or open pull requests.)
 
 ```mermaid
 sequenceDiagram
@@ -199,16 +201,7 @@ sequenceDiagram
 
 ## 5. Architectural Invariants, Headroom & Empirical Telemetry
 
-Benchmarking the Bi-Directional Cybernetic Loop against the legacy unidirectional model across 85 complex multi-file engineering tasks demonstrated decisive efficiency gains:
-
-| Evaluation Metric | Unidirectional Baseline | Bi-Directional Co-Evolution | Net Impact |
-|---|---|---|---|
-| **Mean Turns to Defect Resolution** | 6.8 turns | 1.9 turns | **$-72.1\%$ turnaround time** |
-| **Token Cost per Completed PR** | 184,000 tokens | 43,400 tokens | **$-76.4\%$ token burn** |
-| **Tool Parameter Hallucinations** | 28.4% of calls | 0.0% of calls | **100% elimination (Negative Schemas)** |
-| **Diagnostic Actionability Index (DAI)** | 0.18 | 0.94 | **$+422\%$ machine clarity** |
-| **Project-Wide Cyclomatic Headroom** | Mean $M = 8.4$ | Mean $M = 4.1$ | **$+51.2\%$ structural headroom** |
-| **First-Turn CEGIS Convergence Rate** | 31.2% pass | 89.6% pass | **$+58.4\%$ first-pass success** |
+No benchmark compares the bi-directional loop with the unidirectional one in this repository, so no turn, token, hallucination, DAI, headroom or convergence figure is reported here. The static evaluator can score a codebase (`python3 examples/agent-experience-evaluator/ax_evaluator.py <path>`); that score is a property of the source, not of an agent run.
 
 ### Long-Run Evolutionary Scenarios:
 
@@ -223,7 +216,7 @@ timeline
 1. **Scenario A: The Bifurcated Babel (The Worst-Case Trap)**:
    Codebases treat agents as code generators without measuring AX. Repositories drown in idiosyncratic, deeply nested procedural boilerplate. Humans can no longer read the code, and models hallucinate on their own past output. Maintenance collapses into total rewrite cycles.
 2. **Scenario B: The Ephemeral Monolith (JIT Software)**:
-   Source code ceases to be stored persistently. Repositories hold only formal specifications (Lean, TLA+, Z3) and telemetry data. When a feature is needed, an agent synthesizes JIT code, executes it in a sandbox, validates the proof, and discards the implementation.
+   Source code ceases to be stored persistently. Repositories hold only formal specifications (Lean, TLA+, or SMT-LIB constraints checked with Z3) and telemetry data. When a feature is needed, an agent synthesizes JIT code, executes it in a sandbox, validates the proof, and discards the implementation.
 3. **Scenario C: The Symbiotic Cybernetic Platform (The Optimal Equilibrium)**:
    Codebases are engineered for **Radical Simplicity** ($M \le 10$, depth $\le 5$, pure functional pipelines) as the universal common denominator between human working memory and LLM attention layers. Software continuously scores agents for safety and conformance; agents continuously score software for usability and cognitive friction. Software engineering becomes an automated, self-ratcheting cybernetic flywheel.
 

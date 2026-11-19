@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Documentation Syntax, Code Fence Nesting, Mermaid AST, and Link Validator for Vibes.
+"""Documentation Syntax, Code Fence Nesting, Mermaid, and Link Validator for Vibes.
 
 Performs static validation of markdown documentation:
 1. Code Fences: Unclosed code blocks and premature termination via inner 3-backtick fences.
-2. Mermaid Blocks: Node labels with unquoted special characters (parentheses, brackets) and valid diagram types.
+2. Mermaid Blocks: Node labels with unquoted special characters (parentheses, brackets) and valid diagram types,
+   checked as text. `tools/verify_mermaid.mjs` is the parser-based check.
 3. Tables: Row column count alignment with proper delimiter and backtick handling.
 4. Links & Anchors: Broken relative file links, local anchor slugs, and host-specific URIs.
 5. Code Snippets: Syntactic correctness for embedded Python, JSON, and YAML blocks.

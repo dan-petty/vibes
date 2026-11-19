@@ -145,7 +145,7 @@ def test_syzkaller_evasion_mitigation() -> None:
 
 
 def test_dynamic_syzkaller_fuzz_campaign() -> None:
-    """Assert monotonic containment under dynamic mutation fuzzing."""
+    """Assert containment over the fixed list of mutated events (no random fuzzing)."""
     report = run_fuzz_campaign(LSMPolicy())
     mut_paths = generate_syz_path_mutations("/workspace")
     mut_socks = generate_syz_socket_mutations()

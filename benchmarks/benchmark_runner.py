@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Multi-Agent Benchmark Suite for Agentic Software Engineering.
 
-Standardized benchmark runner evaluating agent performance across three dimensions:
-1. Complexity Refactoring Efficiency: Measures reduction of McCabe complexity and nesting depth.
-2. CEGIS Defect Convergence Velocity: Measures rounds and constraint accumulation to resolve bugs.
-3. Token Economy Efficiency: Compares monolithic frontier prompting vs. local subagent offloading.
+Deterministic scorecard over fixed inputs in this repository. No agent or model runs.
+1. Complexity Refactoring: approximate McCabe complexity of two hard-coded samples.
+2. CEGIS Defect Convergence: a simulated loop that counts 5 fixed rounds.
+3. Token Economy: savings computed from hard-coded token counts.
+4. Rust Type-State: text checks on rust/src/lib.rs plus ``cargo test``.
 """
 
 from __future__ import annotations

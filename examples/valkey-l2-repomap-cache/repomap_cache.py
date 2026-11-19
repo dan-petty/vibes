@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Valkey L2 Caching for AST Repomaps & Embedding Drift Auditor.
 
-Implements high-throughput multi-tier AST symbol table caching and semantic
+Implements multi-tier AST symbol table caching and structural
 drift auditing across subagent invocations:
-1. L1 Fast Memory Cache (sub-millisecond in-process LRU cache).
+1. L1 Fast Memory Cache (in-process FIFO cache; a hit does not refresh a key).
 2. L2 Valkey / Redis-compatible Distributed Cache (content-addressed by SHA-256).
 3. Pure Python RESP (REdis Serialization Protocol) client with fallback store.
 4. AST Feature Embedding Generator (normalized 8-dimensional structural vector).
 5. Embedding Drift Auditor measuring cosine distance and symbol topology changes.
 
-Enforces zero-trust standards: dummy endpoints use RFC 5737 and example.com.
+The default endpoint is localhost:6379; when nothing answers there, an in-process dict
+stands in for L2.
 """
 
 from __future__ import annotations
@@ -191,7 +192,7 @@ def decode_resp_response(data: bytes) -> tuple[Any, int]:
 
 
 class ValkeyL2Client:
-    """High-throughput Valkey / Redis client with in-memory mock fallback."""
+    """Valkey / Redis RESP client (one TCP connection per command) with in-memory fallback."""
 
     def __init__(
         self, host: str = CANONICAL_MOCK_HOST, port: int = DEFAULT_VALKEY_PORT, timeout: float = 0.5

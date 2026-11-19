@@ -153,7 +153,7 @@ investment/20 (lines added): 5726 unit(s)  # where the last twenty commits went
   quality      4864    85%
 ```
 
-A single blended number would have averaged a balanced portfolio against an unbalanced release and reported something reassuring about neither. **Count added lines, not touched files**: the first version counted touches and reported a comfortable 52/48 for a window whose only `examples/` activity was a repository-wide lint sweep across 29 files.
+A single blended number would have averaged a balanced portfolio against an unbalanced release and reported something reassuring about neither. **Count added lines, not touched files**: the first version counted touches and reported a comfortable 52/48 for a window in which 29 of the 34 `examples/` file touches came from one repository-wide lint sweep.
 
 **Steer, never gate.** Balance is a ratio over an arbitrary window; a single well-justified instrument commit would breach any threshold set on it. It is a compass, and [`AGENTS.md` §1](../../AGENTS.md) carries the rule it is a compass for: *neither side may go a milestone without work*.
 
@@ -173,7 +173,7 @@ A single blended number would have averaged a balanced portfolio against an unba
 | Capability investment, window ending at the factory | 350 lines, 6% | 862 lines, 15% |
 | Capability lines added by the factory, counted as such | 0 of 512 | 512 of 512 |
 
-The survey's top three proposals are now `Sandbox: confines a workload below the process boundary`, `Trace generator: follows published semantic conventions for ai spans` and `Web crawler: emits text shaped for direct model consumption` — and three of the twenty-four gaps are against the application factory itself, so the instrument that chooses work can now propose application features *against* the factory as well as *through* it.
+The survey's top three proposals are now `App factory: collects values from the author interactively`, `Sandbox: confines a workload below the process boundary` and `Trace generator: follows published semantic conventions for ai spans` — and three of the twenty-four gaps are against the application factory itself, so the instrument that chooses work can now propose application features *against* the factory as well as *through* it.
 
 > [!IMPORTANT]
 > **The correction for a blind spot is the most likely place to find the blind spot.** It is designed by the same author, inside the same frame, at the moment that frame is least visible — and because it is the correction, its output is read as the resolution rather than as evidence.

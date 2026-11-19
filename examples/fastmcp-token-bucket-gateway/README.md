@@ -1,6 +1,6 @@
 # Sample App: FastMCP Token-Bucket Gateway
 
-An asynchronous, client-side token-bucket rate limiter and tool gateway for Model Context Protocol (FastMCP) AI agents.
+An asynchronous, client-side token-bucket rate limiter and tool gateway for AI agent tool calls. It does not import FastMCP or speak the Model Context Protocol: `FastMCPGateway` wraps any registered async Python callable, and "FastMCP" is only part of its name.
 
 ---
 
@@ -30,19 +30,21 @@ sequenceDiagram
     API-->>A: 200 OK
 
     A->>B: acquire (6th call)
-    B-->>A: wait 0.4s for refill
+    B-->>A: wait 0.1s for refill
     Note over B: Pacing happens locally, before<br/>the request is ever sent.
 
     A->>API: 6th call
     API-->>A: 429 Too Many Requests
     A->>B: register backoff
-    B-->>A: sleep 1s + jitter
+    B-->>A: sleep Retry-After if sent, else jittered backoff
 
     Note over A,API: Jitter decorrelates retries across<br/>concurrent agents. Without it, every<br/>client retries on the same tick and<br/>rebuilds the spike that caused the 429.
 
     A->>API: retry
     API-->>A: 200 OK
 ```
+
+The wait in the diagram matches the demo config (burst 5, 10 tokens per second). Jitter applies only when a 429 carries no `Retry-After`. With `Retry-After`, the gateway sleeps exactly that long, so concurrent callers that get the same value retry on the same tick.
 
 ---
 

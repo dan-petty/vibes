@@ -10,14 +10,16 @@
 ## 1. Problem Statement
 
 Autonomous software engineering systems face two thermodynamic failure modes:
-1. **Architectural Heat Death (Lehman’s Curse)**: Every added feature introduces edge-case branching and procedural loops. Without active entropy export, cyclomatic complexity $M$ and nesting depth ratchet upward until the codebase becomes unmaintainable.
-2. **Allometric Metabolic Starvation**: Deploying high-mass frontier reasoning models to perform mechanical syntax edits, file searches, and lint checks incurs unsustainable token costs (\$20–\$50/hour) and introduces high-latency bottlenecks.
+1. **Architectural Heat Death (Lehman's law of increasing complexity)**: Every added feature introduces edge-case branching and procedural loops. Without active entropy export, cyclomatic complexity $M$ and nesting depth ratchet upward until the codebase becomes unmaintainable.
+2. **Allometric Metabolic Starvation**: Deploying high-mass frontier reasoning models to perform mechanical syntax edits, file searches, and lint checks incurs high token costs and introduces high-latency bottlenecks.
 
 ---
 
 ## 2. Core Mechanics
 
-This pattern models software engineering as an open, non-equilibrium dissipative ecosystem:
+This pattern models software engineering as an open, non-equilibrium dissipative ecosystem.
+
+These terms are analogies, not mechanisms. In thermodynamics, a dissipative structure (Prigogine) keeps its internal entropy low by exporting entropy: $dS = d_eS + d_iS$ with $d_iS \ge 0$. Kleiber's law says that an animal's basal metabolic rate scales with its body mass to the power 3/4. A reaction-diffusion system (Turing 1952; activator-inhibitor form by Gierer and Meinhardt 1972) forms patterns when the inhibitor diffuses faster than the activator. Nothing here measures entropy, metabolism or diffusion: the "entropy pump" is code deletion, "allometric routing" is a rule that sends routine tasks to a smaller model, and the "inhibitor" is a complexity gate. Lehman's second law of software evolution is the real basis of the heat-death claim: the complexity of an evolving system increases unless work is done to reduce it (Lehman, Proc. IEEE 68(9), 1980).
 
 ```mermaid
 flowchart TD
@@ -29,10 +31,10 @@ flowchart TD
 
     Task["1. Inbound Architectural Roadmap Task<br/>(High Cognitive Potential)"]:::input
 
-    Task --> Router{"Allometric Task Classifier<br/>(Kleiber Scaling: B proportional to M^0.75)"}
+    Task --> Router{"Allometric Task Classifier<br/>(rule: task type and complexity M)"}
 
-    Router -->|"Routine Syntactic Edit"| Shrew["2A. The Shrew Tier<br/>(Local 7B/14B Silicon @ 150 tok/sec)"]:::shrew
-    Router -->|"Architectural Synthesis"| Whale["2B. The Whale Tier<br/>(Frontier Reasoning @ 15 tok/sec)"]:::whale
+    Router -->|"Routine Syntactic Edit"| Shrew["2A. The Shrew Tier<br/>(Small Local Model)"]:::shrew
+    Router -->|"Architectural Synthesis"| Whale["2B. The Whale Tier<br/>(Frontier Reasoning Model)"]:::whale
 
     Shrew --> Sentinel["3. Turing Inhibitor Sentinel<br/>(Assert M <= 10, Depth <= 5)"]
     Whale --> Sentinel
@@ -40,19 +42,19 @@ flowchart TD
     Sentinel -->|"Breach Detected"| Prune["4. Entropy Export Engine<br/>(Delete-On-Sight Zombie Pruning, AST Table Refactor)"]:::export
     Prune --> Sentinel
 
-    Sentinel -->|"Passed: |de S| > di S"| Monotonic["5. Monotonic Rejuvenation<br/>(Codebase simpler than before change)"]:::output
+    Sentinel -->|"Passed: within caps"| Monotonic["5. Change Accepted<br/>(caps hold, simpler code is not checked)"]:::output
 ```
 
 ### The Three Ecological Pillars:
 
 ### 1. The Non-Equilibrium Entropy Pump ($|d_e S| > d_i S$)
-* Total entropy reduction is achieved by making the **Delete-On-Sight rule** a mandatory pre-commit invariant.
+* Size and complexity go down only if the **Delete-On-Sight rule** is applied at every commit. In this repository it is a written rule (`AGENTS.md` §7); no pre-commit hook enforces it.
 * When an agent refactors an abstraction, all obsolete shims, legacy fallbacks, and commented-out code must be pruned in the exact same commit.
-* Code bloat is treated as metabolic waste, automatically compacted back to baseline.
+* Code bloat is treated as metabolic waste and removed in the same commit.
 
 ### 2. Allometric Shrew-Whale Swarm Partitioning
 * Model capabilities are partitioned according to Kleiber’s Law:
-  - **The Shrew Tier (Local Silicon / 7B/14B)**: Fast, high-tempo, zero-cost reflexes handling single-line fixes, AST checks, docstrings, and formatting.
+  - **The Shrew Tier (Local Silicon / 7B/14B)**: Fast reflexes with no per-token fee, handling single-line fixes, AST checks, docstrings, and formatting.
   - **The Whale Tier (Frontier Models)**: High-altitude, slow, expensive cognitive mass handling strategic telos, complex schema reconciliation, and architectural trade-offs.
 
 ### 3. Turing Reaction-Diffusion Gates
@@ -64,14 +66,14 @@ flowchart TD
 
 ## 3. Implementation Blueprint
 
-### Step 1: Allometric Model Routing (`examples/fastmcp-token-bucket-gateway/gateway.py`)
+### Step 1: Allometric Model Routing (sketch; a scored router is in [`tools/model_router.py`](../tools/model_router.py))
 
 ```python
 from enum import Enum
 
 class TaskMetabolism(Enum):
-    SHREW = "local_quantized_fast"    # 150 tok/sec, $0 cost
-    WHALE = "frontier_reasoning_deep" # 15 tok/sec, high leverage
+    SHREW = "local_quantized_fast"    # small local model, no per-token fee
+    WHALE = "frontier_reasoning_deep" # frontier model, per-token fee
 
 def route_task(task_type: str, cyclomatic_complexity: int) -> TaskMetabolism:
     """Match cognitive mass to task tempo using allometric scaling."""
@@ -82,7 +84,7 @@ def route_task(task_type: str, cyclomatic_complexity: int) -> TaskMetabolism:
     return TaskMetabolism.SHREW
 ```
 
-### Step 2: Non-Equilibrium Entropy Export via Pre-Commit Gate
+### Step 2: Non-Equilibrium Entropy Export via Pre-Commit Gate (sketch; not installed as a hook)
 
 ```python
 def assert_zero_zombie_sediment(repo_path: Path) -> None:
