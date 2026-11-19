@@ -43,9 +43,9 @@ flowchart TD
 
     subgraph "Synthesis & Telemetry Engine"
         IR & SA & MR --> CC{"Conflict Free?"}
-        CC -- "Yes" --> CG["AST Unparse & Re-parse (ast.unparse, ast.parse)"]
+        CC -- "Yes" --> CG["AST Unparse & Compile (ast.unparse, compile)"]
         CC -- "No" --> CR["Structured Collision Diagnostics (SARIF 2.1.0)"]
-        CG -- "Parse fails" --> CR
+        CG -- "Compile fails" --> CR
     end
 ```
 
@@ -62,13 +62,14 @@ flowchart TD
    - The class docstring comes first. The other members follow the order of ours, then the members that only theirs adds.
    - A change to the class header (decorators, bases, keywords) from one branch is kept. Different header changes from both branches are a collision on the class.
 3. **Deterministic Import Set Union**:
-   - Computes 3-way set differences (`(base & ours & theirs) | (ours - base) | (theirs - base)`), deduplicating the import lines and sorting them as plain strings. It does not apply the PEP 8 grouping of standard library, third-party and local imports.
+   - Computes 3-way set differences (`(base & ours & theirs) | (ours - base) | (theirs - base)`), deduplicating the import lines. The `from __future__` imports come first, right after the module docstring, because Python requires that. The reconciler sorts the other import lines as plain strings. It does not apply the PEP 8 grouping of standard library, third-party and local imports.
 4. **Structured Collision Diagnostics**:
    - When a true semantic collision occurs (both branches modified the exact same function body incompatibly), the reconciler avoids emitting invalid syntax markers and instead produces structured diagnostic telemetry with exact AST node snippets and OASIS SARIF 2.1.0 output.
    - A collision inside a class names the class and the member, for example `Service.start`.
-5. **Single Docstring and Re-parse Check**:
+5. **Single Docstring and Compile Check**:
    - The module docstring and each class docstring are merged like other symbols, so each appears once.
-   - The reconciler parses the merged code again with `ast.parse`. If the parse fails, it reports a `<module>` collision and writes no code.
+   - The reconciler compiles the merged code with `compile(source, "<merged>", "exec")`. It does not run the code. If the compile fails, it reports a `<module>` collision and writes no code.
+   - `compile` finds errors that `ast.parse` accepts. Examples are a `from __future__` import after other statements, and a class body where one branch adds `y = x` and the other branch adds `global x`.
 
 ---
 

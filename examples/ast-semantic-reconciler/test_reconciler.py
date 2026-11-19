@@ -1,7 +1,7 @@
 """Unit and integration test suite for Autonomous 3-Way AST Semantic Reconciler.
 
 Validates commutative disjoint symbol reconciliation, import sets unification,
-class member arbitration, docstrings, the re-parse check, and semantic collision
+class member arbitration, docstrings, the compile check, and semantic collision
 detection under SARIF 2.1.0.
 
 Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
@@ -360,8 +360,36 @@ def test_reconcile_reports_merge_that_does_not_parse(monkeypatch: pytest.MonkeyP
     )
 
 
+_FUTURE_BASE = '"""Module docs."""\n\nfrom __future__ import annotations\n\nfrom . import a\n\n\ndef f() -> int:\n    return 1\n'
+
+
+def test_reconcile_keeps_future_import_first() -> None:
+    """Verify that a `from __future__` import stays first after the docstring, so the merge compiles."""
+    ours = _FUTURE_BASE + "\n\ndef g() -> int:\n    return 2\n"
+    theirs = _FUTURE_BASE.replace("from . import a", "from . import a\nimport os")
+    res = reconcile_3way(_FUTURE_BASE, ours, theirs)
+    compile(res.merged_code, "<merged>", "exec")
+    first = ast.parse(res.merged_code).body[1]
+    assert (res.collisions, ast.unparse(first)) == ([], "from __future__ import annotations")
+
+
+def test_reconcile_reports_merge_that_does_not_compile() -> None:
+    """Verify that a merge that parses but does not compile becomes a collision, not output."""
+    base = "class C:\n    a = 1\n"
+    ours = "class C:\n    a = 1\n    y = x\n"
+    theirs = "class C:\n    global x\n    a = 1\n"
+    res = reconcile_3way(base, ours, theirs)
+    names = [(c.symbol_name, c.symbol_kind) for c in res.collisions]
+    assert (res.status, res.merged_code, names) == (
+        ReconciliationStatus.SEMANTIC_COLLISION,
+        "",
+        [("<module>", SymbolKind.MODULE)],
+    )
+
+
 _CLEAN_MERGES = [
     ("x = 1\n", "x = 1\ny = 2\n", "x = 1\nz = 3\n"),
+    (_FUTURE_BASE, _FUTURE_BASE, _FUTURE_BASE),
     (_COUNTER, _COUNTER, _COUNTER),
     (_COUNTER, _COUNTER + "\n    def reset(self):\n        return 0\n", _COUNTER),
     (
@@ -379,7 +407,8 @@ _CLEAN_MERGES = [
 
 
 @pytest.mark.parametrize(("base", "ours", "theirs"), _CLEAN_MERGES)
-def test_every_clean_merge_parses(base: str, ours: str, theirs: str) -> None:
-    """Verify that each clean merge in the table returns code that parses."""
+def test_every_clean_merge_compiles(base: str, ours: str, theirs: str) -> None:
+    """Verify that each clean merge in the table returns code that compiles."""
     res = reconcile_3way(base, ours, theirs)
-    assert (res.collisions, isinstance(ast.parse(res.merged_code), ast.Module)) == ([], True)
+    code = compile(res.merged_code, "<merged>", "exec")
+    assert (res.collisions, code.co_name) == ([], "<module>")
