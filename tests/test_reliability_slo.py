@@ -1,6 +1,7 @@
 """Unit tests for the Reliability SLO engine."""
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -98,25 +99,65 @@ def test_exhausted_budget_freezes_proactive_work() -> None:
     """Past the objective, remediation takes the whole priority."""
     objective = ServiceLevelObjective("gate_pass_rate", target=0.99, window_iterations=10, rationale="r")
     state = evaluate_objective(objective, _history("gate_pass_rate", [(90, 100)] * 10))
-    assert state.status is BudgetStatus.EXHAUSTED
+    assert (state.status, state.consumed, state.remaining) == (
+        BudgetStatus.EXHAUSTED,
+        pytest.approx(10.0),
+        0.0,
+    )
     assert decide_phase([state]).phase is LoopPhase.REACTIVE_REMEDIATION
 
 
 def test_zero_budget_objective_trips_on_first_breach() -> None:
     """A 1.0 target reserves no budget: invariants have no acceptable failure rate."""
     objective = ServiceLevelObjective("invariant_compliance", target=1.0, window_iterations=20, rationale="r")
-    assert evaluate_objective(objective, _history("invariant_compliance", [(99, 100)])).status is BudgetStatus.EXHAUSTED
-    assert evaluate_objective(objective, _history("invariant_compliance", [(100, 100)])).status is BudgetStatus.HEALTHY
+    breach = evaluate_objective(objective, _history("invariant_compliance", [(99, 100)]))
+    clean = evaluate_objective(objective, _history("invariant_compliance", [(100, 100)]))
+    assert (breach.status, breach.burn_rate, breach.consumed) == (BudgetStatus.EXHAUSTED, math.inf, math.inf)
+    assert (clean.status, clean.burn_rate, clean.consumed) == (BudgetStatus.HEALTHY, 0.0, 0.0)
+
+
+def _gate_objective() -> ServiceLevelObjective:
+    """Return the default gate_pass_rate shape: target 0.98 over a 20-iteration window."""
+    return ServiceLevelObjective("gate_pass_rate", target=0.98, window_iterations=20, rationale="r")
+
+
+def test_burn_rate_is_the_error_ratio_over_the_allowed_ratio() -> None:
+    """SRE Workbook ch. 5: the elapsed part of the window does not divide the burn rate."""
+    state = evaluate_objective(_gate_objective(), _history("gate_pass_rate", [(98, 100)] * 3))
+    assert (state.burn_rate, state.consumed, state.status) == (
+        pytest.approx(1.0),
+        pytest.approx(0.15),
+        BudgetStatus.HEALTHY,
+    )
+
+
+def test_half_the_allowed_error_rate_early_in_the_window_is_healthy() -> None:
+    """Three of twenty iterations at half the allowed rate spend 7.5% of the window's budget."""
+    state = evaluate_objective(_gate_objective(), _history("gate_pass_rate", [(99, 100)] * 3))
+    assert (state.status, state.burn_rate, state.consumed) == (
+        BudgetStatus.HEALTHY,
+        pytest.approx(0.5),
+        pytest.approx(0.075),
+    )
+
+
+def test_full_window_at_the_slo_rate_spends_exactly_the_whole_budget() -> None:
+    """Burn rate 1 for a full window consumes the budget exactly, no more and no less."""
+    state = evaluate_objective(_gate_objective(), _history("gate_pass_rate", [(98, 100)] * 20))
+    assert (state.burn_rate, state.consumed) == (pytest.approx(1.0), pytest.approx(1.0))
 
 
 def test_single_iteration_does_not_trigger_burn_alert() -> None:
-    """This engine's burn rate divides by the elapsed window, so early failures look catastrophic."""
-    objective = ServiceLevelObjective("gate_pass_rate", target=0.98, window_iterations=20, rationale="r")
-    early = evaluate_objective(objective, _history("gate_pass_rate", [(985, 1000)]))
-    assert (early.status, early.burn_rate > 2.0) == (BudgetStatus.HEALTHY, True)
+    """Early in a window the burn rate rests on few events, so one high reading is not an alert."""
+    early = evaluate_objective(_gate_objective(), _history("gate_pass_rate", [(940, 1000)]))
+    assert (early.status, early.burn_rate, early.consumed) == (
+        BudgetStatus.HEALTHY,
+        pytest.approx(3.0),
+        pytest.approx(0.15),
+    )
 
-    sustained = evaluate_objective(objective, _history("gate_pass_rate", [(985, 1000)] * 4))
-    assert sustained.status is BudgetStatus.BURNING
+    sustained = evaluate_objective(_gate_objective(), _history("gate_pass_rate", [(940, 1000)] * 3))
+    assert (sustained.status, sustained.consumed) == (BudgetStatus.BURNING, pytest.approx(0.45))
 
 
 def test_permanently_unspent_budget_is_itself_a_finding() -> None:
@@ -273,6 +314,35 @@ def test_gating_objective_blocks_release(tmp_path: Path, capsys: pytest.CaptureF
 
     assert main(["slo", "status", "--history", str(ledger)]) == 1
     assert "Release gate: BLOCKED" in capsys.readouterr().out
+
+
+def _reject_constant(name: str) -> float:
+    """Refuse `Infinity`, `-Infinity` and `NaN`, which RFC 8259 JSON does not allow."""
+    raise ValueError(f"not strict JSON: {name}")
+
+
+def test_cli_status_json_is_strict_when_a_zero_budget_breaks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An infinite burn rate has no JSON form, so the status reports null and says why."""
+    ledger = tmp_path / "slo_history.json"
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(_report([_resource(health="CRITICAL", complexity_violations=["f: M=12"])])),
+        encoding="utf-8",
+    )
+    main(["slo", "record", str(report), "--history", str(ledger)])
+    capsys.readouterr()
+
+    assert main(["slo", "status", "--history", str(ledger), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out, parse_constant=_reject_constant)
+    invariant = next(o for o in payload["objectives"] if o["objective"]["sli"] == "invariant_compliance")
+    assert (invariant["status"], invariant["burn_rate"], invariant["consumed"], bool(invariant["reason"])) == (
+        "EXHAUSTED",
+        None,
+        None,
+        True,
+    )
 
 
 def test_only_defect_indicators_gate_the_release() -> None:
