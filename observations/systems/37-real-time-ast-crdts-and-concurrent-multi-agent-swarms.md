@@ -4,7 +4,7 @@
 > **Environment**: Distributed AI coding swarms, real-time collaborative editing, AST Tree-CRDTs  
 > **Classification**: Distributed Systems, CRDTs, Multi-Agent Concurrency, AST Engineering  
 > **Related**: [Observation 06](./06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md), [Observation 35](./35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md), [Pattern: AST-CRDTs for Real-Time Agent Collaboration](../../patterns/ast-crdts-for-real-time-agent-collaboration.md)
-> **TLDR**: Avoid character-level interleaving under concurrent multi-agent editing by replicating AST nodes instead of characters; the reference example converges for inserts and deletes, but not for concurrent moves.
+> **TLDR**: Avoid character-level interleaving under concurrent multi-agent editing by replicating AST nodes instead of characters; the reference example converges under causal delivery, also for concurrent moves.
 > **ELI:7b**: Allow multiple AI coders to edit code in real time like Google Docs, using syntax tree nodes instead of raw characters. The example tracks only the names of imports, functions and classes.
 
 ---
@@ -67,11 +67,11 @@ flowchart TD
 ### 3.1 First-Class Replicated AST Nodes
 Rather than synchronizing characters, the Tree-CRDT synchronizes typed AST nodes:
 - Each node holds a globally unique Lamport identifier: `agent_id:lamport:counter`.
-- Sibling nodes within a parent are ordered by a position string `pos`, compared as text, with the node ID as tie-breaker. The order does not depend on arrival sequence, but it is lexicographic, not numeric: `"10"` sorts before `"9"`. A fractional-indexing scheme must generate keys that sort correctly as text.
-- Insert and delete operations commute: an insert is ignored if its node ID exists, and a delete sets a tombstone. Move operations do not commute: `_apply_move()` applies moves in arrival order and ignores their Lamport timestamps.
+- Sibling nodes within a parent are ordered by a position `pos`, an exact rational number in a string (`"2.5"` or `"5/2"`), with the node ID as tie-breaker. The order does not depend on arrival sequence, and it is numeric: `"10"` sorts after `"9"`. `position_between()` returns the midpoint of two positions, so a key is always available between two siblings.
+- Insert and delete operations commute: an insert is ignored if its node ID exists, and a delete sets a tombstone. Move operations converge: `_apply_move()` keeps a log of moves in Lamport timestamp order, with the agent ID as tie-breaker, and applies each new move at its place in that order.
 
 ### 3.2 Cycle Avoidance Arbitration (`CRDT001`)
-In tree structures, concurrent move operations can induce cycles (e.g. moving node $A$ into child $B$ while concurrently moving $B$ into $A$). The example checks the ancestry chain and rejects a move that would make a node its own ancestor, so each replica stays a tree. It does not use the Lamport timestamps to choose a winner. In that two-move case, peer A keeps its own move and rejects B's, and peer B does the reverse, so the replicas diverge (checked with `apply_operation` and `sync_peers` on 2026-11-19). A move operation that converges needs an algorithm such as Kleppmann et al., "A highly-available move operation for replicated trees" (IEEE TPDS, 2022), which orders moves by timestamp and undoes and redoes them.
+In tree structures, concurrent move operations can induce cycles (e.g. moving node $A$ into child $B$ while concurrently moving $B$ into $A$). The example checks the ancestry chain and rejects a move that would make a node its own ancestor, so each replica stays a tree. It applies moves with the algorithm of Kleppmann et al., "A highly-available move operation for replicated trees" (IEEE TPDS, 2022). When a move arrives, the replica undoes each logged move with a later timestamp, applies the new move, and redoes the undone moves. Each apply and each redo runs the cycle check. In that two-move case, both peers apply the earlier move and reject the later one, so the replicas converge. `test_concurrent_moves_converge` checks this property for 200 seeded random sets of ten moves, each delivered to three replicas in different orders.
 
 ---
 
@@ -84,7 +84,7 @@ No collaborative editing scenarios were run. The matrix compares properties of t
 | **Unit of Replication** | Characters | Import, function and class nodes |
 | **Character Interleaving** | Possible in Logoot and LSEQ | Not possible: no characters are replicated |
 | **Materialized Syntax** | Can be invalid | Fixed templates (`def name(): pass`); names are not validated |
-| **Concurrent Moves** | Not applicable | Replicas can diverge |
+| **Concurrent Moves** | Not applicable | Converge: timestamp order with undo and redo |
 
 ---
 

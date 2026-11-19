@@ -1,10 +1,12 @@
 """Real-Time AST Conflict-Free Replicated Data Type (Tree-CRDT).
 
 In-process simulation of a replicated AST tree for concurrent edits by several agents.
-It replicates tree operations instead of characters. It does not guarantee Strong
-Eventual Consistency: concurrent moves that would form a cycle diverge across replicas,
-and inserts and deletes commute only under causal delivery. Materialized source is not
-syntax-checked.
+It replicates tree operations instead of characters. Moves apply in timestamp order with
+the move operation of Kleppmann et al., "A highly-available move operation for replicated
+trees" (IEEE TPDS 2022): undo later moves, apply, redo. Replicas that receive the same
+moves therefore converge on one tree, also when moves form cycles. Sibling positions are
+exact rational numbers. The tree converges only under causal delivery: each operation
+must arrive after the inserts that it refers to. Materialized source is not syntax-checked.
 
 Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 """
@@ -12,11 +14,13 @@ Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from fractions import Fraction
 from typing import Any
 
 
@@ -87,6 +91,9 @@ class InsertTarget:
     name: str = ""
 
 
+_POSITIONED_OPS = frozenset({OpType.INSERT_NODE, OpType.MOVE_NODE})
+
+
 @dataclass(frozen=True)
 class CRDTOperation:
     """Commutative mutation message."""
@@ -98,6 +105,23 @@ class CRDTOperation:
     attrs: dict[str, str]
     lamport: int
     agent_id: str
+
+    def __post_init__(self) -> None:
+        """Reject an insert or move whose position is not a number."""
+        if self.op_type in _POSITIONED_OPS:
+            position_key(self.pos)
+
+
+@dataclass(frozen=True)
+class MoveRecord:
+    """Entry of the move log: a move and the location that it replaced.
+
+    ``old`` is ``None`` when the move had no effect: its node was absent, or the
+    move would have made a cycle.
+    """
+
+    op: CRDTOperation
+    old: tuple[str, str] | None
 
 
 @dataclass(frozen=True)
@@ -113,6 +137,24 @@ class Finding:
 def create_node_id(agent_id: str, lamport: int, counter: int) -> str:
     """Mint a canonical node ID string."""
     return NodeId(agent_id, lamport, counter).to_string()
+
+
+def position_key(pos: str) -> Fraction:
+    """Parse a sibling position, such as "2.5" or "7/3", as an exact rational number.
+
+    Raises ValueError when the position is not a finite number.
+    """
+    return Fraction(pos)
+
+
+def position_between(left: str, right: str) -> str:
+    """Return the exact midpoint of two positions, which sorts strictly between them."""
+    return str((position_key(left) + position_key(right)) / 2)
+
+
+def move_timestamp(op: CRDTOperation) -> tuple[int, str, str, str, str]:
+    """Total order of moves: Lamport clock, then agent ID, then the move target."""
+    return (op.lamport, op.agent_id, op.node_id, op.parent_id, op.pos)
 
 
 def create_insert_op(
@@ -173,6 +215,7 @@ class ASTTreeCRDT:
     counter: int = 0
     node_map: dict[str, CRDTNode] = field(default_factory=dict)
     op_log: list[CRDTOperation] = field(default_factory=list)
+    move_log: list[MoveRecord] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -245,20 +288,63 @@ def _apply_delete(crdt: ASTTreeCRDT, op: CRDTOperation) -> None:
         node.is_tombstone = True
 
 
-def _apply_move(crdt: ASTTreeCRDT, op: CRDTOperation) -> None:
-    """Apply node move with cycle prevention (CRDT001)."""
+def _report_cycle(crdt: ASTTreeCRDT, op: CRDTOperation) -> None:
+    """Record a CRDT001 finding once per rejected move, also when a redo rejects it again."""
+    finding = Finding(
+        rule=DiagnosticRule.CRDT001,
+        message=(
+            f"Cycle induction prevented: '{op.node_id}' is ancestor of '{op.parent_id}' "
+            f"(move at Lamport {op.lamport} by '{op.agent_id}')"
+        ),
+        target=op.node_id,
+    )
+    if finding not in crdt.findings:
+        crdt.findings.append(finding)
+
+
+def _do_move(crdt: ASTTreeCRDT, op: CRDTOperation) -> MoveRecord:
+    """Move a node unless the node is absent or the move makes a cycle (CRDT001)."""
     node = crdt.node_map.get(op.node_id)
     if not node:
-        return
+        return MoveRecord(op, None)
     if is_ancestor(crdt.node_map, op.node_id, op.parent_id):
-        crdt.findings.append(Finding(
-            rule=DiagnosticRule.CRDT001,
-            message=f"Cycle induction prevented: '{op.node_id}' is ancestor of '{op.parent_id}'",
-            target=op.node_id,
-        ))
-        return
+        _report_cycle(crdt, op)
+        return MoveRecord(op, None)
+    old = (node.parent_id, node.pos)
     node.parent_id = op.parent_id
     node.pos = op.pos
+    return MoveRecord(op, old)
+
+
+def _undo_move(crdt: ASTTreeCRDT, record: MoveRecord) -> None:
+    """Put a moved node back at the location that the move replaced."""
+    if record.old is not None:
+        node = crdt.node_map[record.op.node_id]
+        node.parent_id, node.pos = record.old
+
+
+def _is_logged(log: list[MoveRecord], index: int, key: tuple[int, str, str, str, str]) -> bool:
+    """Check if the move log already holds this move, for example from a repeated sync."""
+    return index < len(log) and move_timestamp(log[index].op) == key
+
+
+def _apply_move(crdt: ASTTreeCRDT, op: CRDTOperation) -> None:
+    """Apply a move in timestamp order: undo later moves, apply this move, redo them.
+
+    This is the move operation of Kleppmann et al. (IEEE TPDS 2022). Every replica
+    applies its moves in one total order, so replicas with the same moves converge.
+    """
+    log = crdt.move_log
+    key = move_timestamp(op)
+    index = bisect.bisect_left(log, key, key=lambda record: move_timestamp(record.op))
+    if _is_logged(log, index, key):
+        return
+    later = log[index:]
+    del log[index:]
+    for record in reversed(later):
+        _undo_move(crdt, record)
+    log.append(_do_move(crdt, op))
+    log.extend(_do_move(crdt, record.op) for record in later)
 
 
 _OP_DISPATCH: dict[OpType, Callable[[ASTTreeCRDT, CRDTOperation], None]] = {
@@ -293,7 +379,7 @@ def get_active_children(crdt: ASTTreeCRDT, parent_id: str) -> list[CRDTNode]:
         n for n in crdt.node_map.values()
         if n.parent_id == parent_id and not n.is_tombstone
     ]
-    return sorted(nodes, key=lambda n: (n.pos, n.node_id))
+    return sorted(nodes, key=lambda n: (position_key(n.pos), n.node_id))
 
 
 def materialize_to_source(crdt: ASTTreeCRDT) -> str:

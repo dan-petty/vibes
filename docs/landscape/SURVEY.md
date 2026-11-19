@@ -293,7 +293,7 @@ Ours: [`examples/ast-crdt-collaborative-editor/`](../../examples/ast-crdt-collab
 
 | Feature | vibes |
 |---|---|
-| **ast_crdt** — In-process simulation of concurrent AST edits by several agents; does not guarantee strong eventual consistency | ✅ |
+| **ast_crdt** — In-process simulation of concurrent AST edits by several agents; replicas converge under causal delivery, with concurrent moves in timestamp order | ✅ |
 | **sarif_output** — Emits SARIF for code scanning and security dashboards | ✅ |
 
 Legend: ✅ cited capability · — assessed absent · ? not assessed.

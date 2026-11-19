@@ -266,7 +266,7 @@ flowchart TD
         S6["Agent 2C: Traces capture<br/>CST token parsing latency"]:::beat2
     end
 
-    G2["Group Game 2: Spatial Worktree Rebase Arbitration<br/>(Tree-CRDT Merge, simulated; replicas can diverge)"]:::group
+    G2["Group Game 2: Spatial Worktree Rebase Arbitration<br/>(Tree-CRDT Merge, simulated in process)"]:::group
 
     C["Beat 3: The Climax & Unification<br/>(3-Way Semantic AST Reconciliation -> Atomic PR Release)"]:::climax
 
