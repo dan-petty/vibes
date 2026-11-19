@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Kinetic probe execution engine and invariant leash registry.
 
-Runs each counterexample script in a plain subprocess with a timeout and maps the exit
-code to a verdict, and tracks mitigation dependencies across commits. The subprocess is
-not a sandbox: it inherits the parent environment and has full file and network access,
-and `DEFAULT_MEMORY_LIMIT_BYTES` is defined but never applied.
+Runs each counterexample script in a child process with a timeout and an address-space
+limit, and maps the exit code to a verdict. It also tracks mitigation dependencies across
+commits. The child runs in its own POSIX process group, and a timeout kills that group.
+The child is not a sandbox: it inherits the parent environment and has full file and
+network access.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -25,6 +28,24 @@ from typing import Any, Final
 DEFAULT_TIMEOUT_SECONDS: Final[float] = 5.0
 DEFAULT_MEMORY_LIMIT_BYTES: Final[int] = 128 * 1024 * 1024
 
+# The child runs this bootstrap with `python -c`. It sets the address-space limit before
+# the probe runs, and it exits with 70 (EX_SOFTWARE in sysexits.h) on an uncaught
+# exception, so that a crash cannot look like the deliberate exit 1 of a refuting probe.
+# A preexec_fn is not used because it can deadlock a multithreaded parent at fork.
+_PROBE_BOOTSTRAP: Final[str] = """\
+import resource, runpy, sys, traceback
+try:
+    limit = int(sys.argv[1])
+    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+    sys.argv = sys.argv[2:]
+    runpy.run_path(sys.argv[0], run_name="__main__")
+except SystemExit:
+    raise
+except BaseException:
+    traceback.print_exc()
+    sys.exit(70)
+"""
+
 
 class ProbeVerdict(StrEnum):
     """Kinetic verification outcomes derived from process execution."""
@@ -32,7 +53,16 @@ class ProbeVerdict(StrEnum):
     EXPLOIT_CONFIRMED = "confirmed"
     KINETICALLY_REFUTED = "refuted"
     RESOURCE_EXHAUSTION = "exhaustion"
+    INCONCLUSIVE = "inconclusive"
     PROBE_ERROR = "error"
+
+
+# Only these two exit codes are verdicts on the claim. Any other exit (an uncaught
+# exception, a MemoryError at the limit, a signal) means that the probe broke.
+_EXIT_VERDICTS: Final[dict[int, ProbeVerdict]] = {
+    0: ProbeVerdict.EXPLOIT_CONFIRMED,
+    1: ProbeVerdict.KINETICALLY_REFUTED,
+}
 
 
 @dataclass(frozen=True)
@@ -67,8 +97,37 @@ class _ProcessOutcome:
     output: str
 
 
+def _await_probe(proc: subprocess.Popen[str], timeout: float) -> _ProcessOutcome:
+    """Wait for the probe, kill its process group on timeout, and map its exit code."""
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_process_group(proc)
+        return _ProcessOutcome(
+            verdict=ProbeVerdict.RESOURCE_EXHAUSTION,
+            exit_code=-1,
+            output="Probe timed out: resource exhaustion detected",
+        )
+    return _ProcessOutcome(
+        verdict=_EXIT_VERDICTS.get(proc.returncode, ProbeVerdict.INCONCLUSIVE),
+        exit_code=proc.returncode,
+        output=(stdout + stderr).strip(),
+    )
+
+
+def _kill_process_group(proc: subprocess.Popen[str]) -> None:
+    """Kill the process group that the probe leads, then reap the probe.
+
+    The probe starts a new session, so its process group ID is its own PID. The probe is
+    not reaped before the kill, so that ID cannot belong to another group.
+    """
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait()
+
+
 class KineticProbeEngine:
-    """Executes synthesized counterexample probes in a plain subprocess with a timeout."""
+    """Executes counterexample probes in a child process group with time and memory limits."""
 
     def __init__(self, workspace_root: Path | None = None) -> None:
         self.workspace_root: Final[Path] = (workspace_root or Path.cwd()).resolve()
@@ -102,34 +161,28 @@ class KineticProbeEngine:
                 tmp_path.unlink()
 
     def _execute_subprocess(self, script_path: Path, timeout: float) -> _ProcessOutcome:
-        """Run the script in a subprocess bounded only by a timeout."""
+        """Run the script in a new process group under the memory limit and the timeout."""
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.workspace_root)
+        command = [
+            sys.executable,
+            "-c",
+            _PROBE_BOOTSTRAP,
+            str(DEFAULT_MEMORY_LIMIT_BYTES),
+            str(script_path),
+        ]
         try:
-            proc = subprocess.run(
-                [sys.executable, str(script_path)],
+            with subprocess.Popen(
+                command,
                 cwd=self.workspace_root,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
                 env=env,
-                check=False,
-            )
-            verdict = (
-                ProbeVerdict.EXPLOIT_CONFIRMED if proc.returncode == 0 else ProbeVerdict.KINETICALLY_REFUTED
-            )
-            return _ProcessOutcome(
-                verdict=verdict,
-                exit_code=proc.returncode,
-                output=(proc.stdout + proc.stderr).strip(),
-            )
-        except subprocess.TimeoutExpired:
-            return _ProcessOutcome(
-                verdict=ProbeVerdict.RESOURCE_EXHAUSTION,
-                exit_code=-1,
-                output="Probe timed out: resource exhaustion detected",
-            )
-        except Exception as exc:
+                start_new_session=True,
+            ) as proc:
+                return _await_probe(proc, timeout)
+        except OSError as exc:
             return _ProcessOutcome(
                 verdict=ProbeVerdict.PROBE_ERROR,
                 exit_code=-2,
