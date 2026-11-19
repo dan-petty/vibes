@@ -33,6 +33,8 @@ MAX_SAFETENSORS_HEADER_BYTES: Final[int] = 10 * 1024 * 1024
 HASH_CHUNK_SIZE: Final[int] = 64 * 1024
 
 GGUF_MAGIC: Final[bytes] = b"GGUF"
+# Transformers documents the trust_remote_code risk on the Auto classes page.
+TRUST_REMOTE_CODE_DOC_URL: Final[str] = "https://huggingface.co/docs/transformers/en/model_doc/auto"
 CANONICAL_MOCK_HOST: Final[str] = "example.com"
 
 HEX_SHA_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -272,7 +274,10 @@ def _check_trust_remote_code(call: ast.Call, path: str, line: int) -> SecurityFi
             line_number=line,
             title="Dangerous trust_remote_code=True Enabled",
             message="Model loader explicitly enables remote Python code execution from untrusted model repos.",
-            recommendation="Audit model repository or set trust_remote_code=False to prevent RCE (CVE-2024-4372).",
+            recommendation=(
+                "Audit model repository or set trust_remote_code=False to prevent RCE"
+                f" (see {TRUST_REMOTE_CODE_DOC_URL})."
+            ),
         )
     return None
 
