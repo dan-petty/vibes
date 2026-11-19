@@ -21,6 +21,7 @@ from lsm_gate import (
     generate_syz_socket_mutations,
     generate_tetragon_policy,
     main,
+    resolve_blocked_paths,
     run_fuzz_campaign,
 )
 
@@ -34,6 +35,25 @@ NORMALIZATION_VARIANTS: Final[tuple[tuple[str, str], ...]] = (
     ("//etc/shadow", "LSM003"),
     ("/repo/.git/./hooks/pre-commit", "LSM003"),
 )
+
+# Default-policy verdicts at and next to an absolute or home-relative blocked entry.
+# A sibling that only starts with the same characters, such as `/rootfs`, is not protected.
+COMPONENT_CASES: Final[dict[str, LSMVerdict]] = {
+    "/root": LSMVerdict.BLOCK,
+    "/root/x": LSMVerdict.BLOCK,
+    "/rootfs/x": LSMVerdict.ALLOW,
+    "/rootkit": LSMVerdict.ALLOW,
+    "/etc/shadow": LSMVerdict.BLOCK,
+    "/etc/shadow-": LSMVerdict.BLOCK,
+    "/etc/shadowed": LSMVerdict.ALLOW,
+    "/home/user/.ssh/id_ed25519": LSMVerdict.BLOCK,
+    "/home/user/.sshkeys/id_ed25519": LSMVerdict.ALLOW,
+    "/home/user/.aws/config": LSMVerdict.BLOCK,
+    "/root/.aws/credentials": LSMVerdict.BLOCK,
+}
+
+# How Tetragon applies the string operators that the file selectors use.
+TETRAGON_STRING_OPS: Final[dict[str, Any]] = {"Equal": str.__eq__, "Prefix": str.startswith}
 
 
 def test_bprm_check_security_rules() -> None:
@@ -89,7 +109,7 @@ def test_file_open_sensitive_paths() -> None:
     pol = LSMPolicy()
     ev_safe = LSMEvent(LSMHookType.FILE_OPEN, "runner", "/workspace/src/app.py")
     ev_shadow = LSMEvent(LSMHookType.FILE_OPEN, "runner", "/etc/shadow")
-    ev_ssh = LSMEvent(LSMHookType.FILE_OPEN, "runner", "~/.ssh/id_rsa")
+    ev_ssh = LSMEvent(LSMHookType.FILE_OPEN, "runner", "/home/user/.ssh/id_rsa")
     ev_hook = LSMEvent(LSMHookType.FILE_OPEN, "runner", "/repo/.git/hooks/post-commit")
 
     r_safe = evaluate_event(ev_safe, pol)
@@ -165,7 +185,7 @@ def test_dynamic_syzkaller_fuzz_campaign() -> None:
         (report.total_probes, report.blocked_probes, report.allowed_probes),
         len(mut_paths),
         len(mut_socks),
-    ) == (True, (31, 30, 1), 21, 6)
+    ) == (True, (35, 34, 1), 25, 6)
 
 
 def test_file_open_normalizes_path_variants() -> None:
@@ -216,10 +236,82 @@ def _selector_summary(kprobe: dict[str, Any]) -> list[tuple[list[tuple[int, str,
     ]
 
 
+def _verdicts(paths: Any, policy: LSMPolicy | None = None) -> dict[str, LSMVerdict]:
+    """Evaluate a file open of each path and map the path to its verdict."""
+    return {p: evaluate_event(LSMEvent(LSMHookType.FILE_OPEN, "runner", p), policy).verdict for p in paths}
+
+
+def test_file_open_matches_whole_path_components() -> None:
+    """Assert that an entry blocks the path itself and paths below it, never a sibling with the same first characters."""
+    relative = _verdicts(["/repo/.git/hooks/pre-commit", "/repo/x.git/hooks/pre-commit", "/repo/.git/hooksx"])
+
+    assert (_verdicts(COMPONENT_CASES), relative) == (
+        COMPONENT_CASES,
+        {
+            "/repo/.git/hooks/pre-commit": LSMVerdict.BLOCK,
+            "/repo/x.git/hooks/pre-commit": LSMVerdict.ALLOW,
+            "/repo/.git/hooksx": LSMVerdict.ALLOW,
+        },
+    )
+
+
+def test_file_open_expands_home_relative_entries() -> None:
+    """Assert that `~` entries become absolute paths under each configured home directory."""
+    pol = LSMPolicy(blocked_paths=("~/.ssh", "~"), home_dirs=("/home/agent", "/srv/home/"))
+    _, kprobes = _kprobes(LSMPolicy(blocked_paths=("~/.aws",), home_dirs=("/home/agent",)))
+
+    assert (
+        resolve_blocked_paths(LSMPolicy()),
+        resolve_blocked_paths(pol),
+        _verdicts(["/home/agent/.ssh/id_ed25519", "/srv/home/notes", "/home/user/.ssh/id_ed25519"], pol),
+        _selector_summary(kprobes["security_file_open"]),
+    ) == (
+        ("/etc/shadow", "/etc/shadow-", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", ".git/hooks", "/proc/kcore"),
+        ("/home/agent", "/srv/home"),
+        {
+            "/home/agent/.ssh/id_ed25519": LSMVerdict.BLOCK,
+            "/srv/home/notes": LSMVerdict.BLOCK,
+            "/home/user/.ssh/id_ed25519": LSMVerdict.ALLOW,
+        },
+        [
+            ([(0, "Equal", ["/home/agent/.aws"])], ["Sigkill"]),
+            ([(0, "Prefix", ["/home/agent/.aws/"])], ["Sigkill"]),
+        ],
+    )
+
+
+def _kernel_kills(kprobe: dict[str, Any], path: str) -> bool:
+    """Apply the selectors of a file kprobe to a path the way Tetragon does: OR over selectors, AND over matches."""
+    return any(
+        all(any(TETRAGON_STRING_OPS[m["operator"]](path, v) for v in m["values"]) for m in sel["matchArgs"])
+        for sel in kprobe["selectors"]
+    )
+
+
+def test_tetragon_file_selectors_match_whole_components() -> None:
+    """Assert that the file selectors kill where the simulation blocks, and hold no `~` and no bare prefix."""
+    text = generate_tetragon_policy()
+    _, kprobes = _kprobes()
+    file_open = kprobes["security_file_open"]
+    prefixes = [v for sel in file_open["selectors"] for m in sel["matchArgs"] if m["operator"] == "Prefix" for v in m["values"]]
+
+    assert (
+        "~" in text,
+        [v for v in prefixes if not v.endswith("/")],
+        {p: _kernel_kills(file_open, p) for p in COMPONENT_CASES},
+    ) == (
+        False,
+        [],
+        {p: v == LSMVerdict.BLOCK for p, v in COMPONENT_CASES.items()},
+    )
+
+
 def test_tetragon_policy_enforces_with_sigkill() -> None:
     """Assert that each generated kprobe kills a caller that matches the default policy."""
     doc, kprobes = _kprobes()
     binaries = ["/chattr", "/nc", "/ncat", "/netcat", "/socat", "/tcpdump", "/telnet"]
+    # `/root/.ssh` and `/root/.aws` lie below `/root`, so the generator emits only `/root`.
+    file_paths = ["/etc/shadow", "/etc/shadow-", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", "/proc/kcore"]
 
     assert (
         doc["kind"],
@@ -238,7 +330,10 @@ def test_tetragon_policy_enforces_with_sigkill() -> None:
         },
         {
             "security_bprm_check": [([(0, "Postfix", binaries)], ["Sigkill"])],
-            "security_file_open": [([(0, "Prefix", ["/etc/shadow", "/etc/sudoers", "/root", "/proc/kcore"])], ["Sigkill"])],
+            "security_file_open": [
+                ([(0, "Equal", file_paths)], ["Sigkill"]),
+                ([(0, "Prefix", [f"{p}/" for p in file_paths])], ["Sigkill"]),
+            ],
             "security_socket_connect": [
                 ([(1, "Family", ["AF_INET", "AF_INET6"]), (1, "NotSAddr", ["127.0.0.0/8", "::1/128"])], ["Sigkill"])
             ],
@@ -248,7 +343,7 @@ def test_tetragon_policy_enforces_with_sigkill() -> None:
 
 def test_tetragon_policy_follows_custom_policy() -> None:
     """Assert that the generator reads the policy and drops a kprobe that has nothing to match."""
-    pol = LSMPolicy(blocked_binaries=frozenset({"curl"}), blocked_paths=("~/.aws",), allow_loopback_only=False)
+    pol = LSMPolicy(blocked_binaries=frozenset({"curl"}), blocked_paths=(".git/hooks",), allow_loopback_only=False)
     _, kprobes = _kprobes(pol)
 
     assert {call: _selector_summary(k) for call, k in kprobes.items()} == {
