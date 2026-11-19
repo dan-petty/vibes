@@ -44,6 +44,7 @@ COMPONENT_CASES: Final[dict[str, LSMVerdict]] = {
     "/rootfs/x": LSMVerdict.ALLOW,
     "/rootkit": LSMVerdict.ALLOW,
     "/etc/shadow": LSMVerdict.BLOCK,
+    "/etc/shadow-": LSMVerdict.BLOCK,
     "/etc/shadowed": LSMVerdict.ALLOW,
     "/home/user/.ssh/id_ed25519": LSMVerdict.BLOCK,
     "/home/user/.sshkeys/id_ed25519": LSMVerdict.ALLOW,
@@ -184,7 +185,7 @@ def test_dynamic_syzkaller_fuzz_campaign() -> None:
         (report.total_probes, report.blocked_probes, report.allowed_probes),
         len(mut_paths),
         len(mut_socks),
-    ) == (True, (31, 30, 1), 21, 6)
+    ) == (True, (35, 34, 1), 25, 6)
 
 
 def test_file_open_normalizes_path_variants() -> None:
@@ -265,7 +266,7 @@ def test_file_open_expands_home_relative_entries() -> None:
         _verdicts(["/home/agent/.ssh/id_ed25519", "/srv/home/notes", "/home/user/.ssh/id_ed25519"], pol),
         _selector_summary(kprobes["security_file_open"]),
     ) == (
-        ("/etc/shadow", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", ".git/hooks", "/proc/kcore"),
+        ("/etc/shadow", "/etc/shadow-", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", ".git/hooks", "/proc/kcore"),
         ("/home/agent", "/srv/home"),
         {
             "/home/agent/.ssh/id_ed25519": LSMVerdict.BLOCK,
@@ -310,7 +311,7 @@ def test_tetragon_policy_enforces_with_sigkill() -> None:
     doc, kprobes = _kprobes()
     binaries = ["/chattr", "/nc", "/ncat", "/netcat", "/socat", "/tcpdump", "/telnet"]
     # `/root/.ssh` and `/root/.aws` lie below `/root`, so the generator emits only `/root`.
-    file_paths = ["/etc/shadow", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", "/proc/kcore"]
+    file_paths = ["/etc/shadow", "/etc/shadow-", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", "/proc/kcore"]
 
     assert (
         doc["kind"],

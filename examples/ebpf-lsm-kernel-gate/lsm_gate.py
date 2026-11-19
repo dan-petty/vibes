@@ -38,6 +38,7 @@ DEFAULT_ALLOWED_BINARIES: Final[frozenset[str]] = frozenset(
 
 BLOCKED_PATH_PREFIXES: Final[tuple[str, ...]] = (
     "/etc/shadow",
+    "/etc/shadow-",  # the backup copy that shadow-utils writes; it holds the same hashes
     "/etc/sudoers",
     "/root",
     "~/.ssh",

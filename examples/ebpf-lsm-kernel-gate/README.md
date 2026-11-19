@@ -1,6 +1,6 @@
 # eBPF Runtime LSM Kernel Gate & Dynamic Syscall Fuzzing Oracle
 
-A zero-dependency Python **simulation** of BPF LSM (Linux Security Module) policy decisions. It loads no BPF program and touches no kernel: `evaluate_event` applies Python rules to event records that the caller builds. A list of 31 adversarial probes checks the rules; the path probes come from the policy. That list is not syzkaller (a coverage-guided kernel fuzzer): nothing is mutated or randomized.
+A zero-dependency Python **simulation** of BPF LSM (Linux Security Module) policy decisions. It loads no BPF program and touches no kernel: `evaluate_event` applies Python rules to event records that the caller builds. A list of 35 adversarial probes checks the rules; the path probes come from the policy. That list is not syzkaller (a coverage-guided kernel fuzzer): nothing is mutated or randomized.
 
 > [!IMPORTANT]
 > **Enforcement mode.** The Python code enforces nothing. Kernel enforcement comes from Cilium Tetragon: `lsm_gate.py generate` prints a Tetragon `TracingPolicy` with `Sigkill` selectors (annotation `agent-lsm-gate/mode: enforce`). The example ships no BPF C. No test here loads the policy into a kernel.
@@ -42,7 +42,7 @@ The diagram shows the kernel design that this exhibit models. In this code, the 
 |---|---|---|---|
 | `LSM001` | Unauthorized Binary Execution | Binary not in allowlist or explicitly in blocklist (`nc`, `socat`, `telnet`) | `BLOCK` (`-EPERM`) |
 | `LSM002` | Network Egress Violation | Socket destination targets private RFC 1918/4193 addresses or metadata (`169.254.169.254`) | `BLOCK` (`-EPERM`) |
-| `LSM003` | Sensitive Path Access | Normalized path is a blocked entry or lies below it, compared by whole path components: `/etc/shadow`, `/root`, `~/.ssh` and `~/.aws` in each home directory, and `.git/hooks` at any depth. `/root/x` is blocked; `/rootfs/x` is allowed | `BLOCK` (`-EPERM`) |
+| `LSM003` | Sensitive Path Access | Normalized path is a blocked entry or lies below it, compared by whole path components: `/etc/shadow`, its backup `/etc/shadow-`, `/root`, `~/.ssh` and `~/.aws` in each home directory, and `.git/hooks` at any depth. `/root/x` is blocked; `/rootfs/x` is allowed | `BLOCK` (`-EPERM`) |
 | `LSM004` | Privilege Escalation | Subprocess attempts `setuid(0)` or requests administrative capabilities (`CAP_SYS_ADMIN`) | `BLOCK` (`-EPERM`) |
 | `LSM005` | Adversarial Syscall Evasion | Evasion pattern detected: a null byte or literal `\0`, a parent-directory step (`/..`, `..//`), or negative flags | `BLOCK` (`-EPERM`) |
 
@@ -54,13 +54,13 @@ The diagram shows the kernel design that this exhibit models. In this code, the 
 
 ## Adversarial Probe List
 
-The exhibit includes a list of 31 adversarial probes for the simulated gate. It is not a fuzzer in the syzkaller sense: no input is generated at random, and `--seed` has no effect.
-- **Path Spellings (16)**: `generate_syz_path_mutations` takes each absolute blocked path of the policy and writes it four ways: plain, with `/./`, with `//`, and with a `..` step (`/etc/shadow`, `/etc/./shadow`, `/etc//shadow`, `/etc/../etc/shadow`). A new absolute blocked path adds four probes.
+The exhibit includes a list of 35 adversarial probes for the simulated gate. It is not a fuzzer in the syzkaller sense: no input is generated at random, and `--seed` has no effect.
+- **Path Spellings (20)**: `generate_syz_path_mutations` takes each absolute blocked path of the policy and writes it four ways: plain, with `/./`, with `//`, and with a `..` step (`/etc/shadow`, `/etc/./shadow`, `/etc//shadow`, `/etc/../etc/shadow`). A new absolute blocked path adds four probes.
 - **Evasion Paths (5)**: Fixed probes under `/workspace` (`/workspace//..//root`, `/workspace/.../etc/sudoers`, a literal `\0`).
 - **Network Permutations (6)**: IPv6 Unique Local Addresses (`fd00::1`), RFC 1918 subnets, the AWS metadata endpoint, and loopback.
 - **Binary and Privilege Probes (4)**: `nc`, `socat`, an unlisted binary, and a `setuid` to UID 0.
 
-The campaign passes when at most one probe is allowed (`allowed <= 1` in `run_fuzz_campaign`). The expected pass is the loopback connect to `127.0.0.1`. `lsm_gate.py fuzz --seed 42` blocks 30 of 31 probes (rate 0.968). This checks the rules against these 31 inputs only; it proves nothing about other inputs.
+The campaign passes when at most one probe is allowed (`allowed <= 1` in `run_fuzz_campaign`). The expected pass is the loopback connect to `127.0.0.1`. `lsm_gate.py fuzz --seed 42` blocks 34 of 35 probes (rate 0.971). This checks the rules against these 35 inputs only; it proves nothing about other inputs.
 
 ---
 
@@ -101,7 +101,7 @@ Limits of the generated policy:
 - **Whole path components**: A Tetragon selector matches only when all of its argument matches hold, and the kprobe acts when any one of its selectors matches. Thus the file kprobe has one `Equal` selector and one `Prefix` selector. Each `Prefix` value ends with `/`, so `/root/` matches `/root/x` and not `/rootfs`.
 - **Home directories**: The generator writes each `~` entry below each directory of `home_dirs` (default `/root` and `/home/user`), so the policy holds no `~`. Tetragon has no wildcard operator for a path, so `/home/*` cannot be written; list each home directory by name.
 - **Simulation-only rules**: The binary allowlist, the relative path `.git/hooks`, `LSM004` and `LSM005` have no kernel selector. With `allow_loopback_only=False`, the policy blocks only the link-local range that holds the metadata endpoint; the private ranges stay a simulation check.
-- **Value count**: The Tetragon limits page gives at most 8 path values in one `file` match on kernel 5.3 and later. The default policy emits 6 paths in each selector. A policy with more absolute paths needs more selectors, and Tetragon allows at most 5 selectors in one kprobe.
+- **Value count**: The Tetragon limits page gives at most 8 path values in one `file` match on kernel 5.3 and later. The default policy emits 7 paths in each selector. A policy with more absolute paths needs more selectors, and Tetragon allows at most 5 selectors in one kprobe.
 - **Resolved paths**: Tetragon reads the path from the kernel `struct file`, so `/etc/./shadow` reaches the `Prefix` match as `/etc/shadow`. It also follows symbolic links, so a program that links to another name, such as `nc` to `nc.openbsd`, needs that name in `blocked_binaries`.
 - **Sigkill**: `Sigkill` stops the calling process in the kernel. The [Tetragon enforcement page](https://tetragon.io/docs/concepts/enforcement/) states that a signal does not always stop the operation itself. To make the call fail with an error, add an `Override` action with `argError: -1` (`-EPERM`); `Override` needs a kernel built with `CONFIG_BPF_KPROBE_OVERRIDE`.
 

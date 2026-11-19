@@ -69,10 +69,10 @@ flowchart TD
 Unlike passive kprobes, BPF LSM hooks (`bpf_lsm_file_open`, `bpf_lsm_bprm_check_security`, `bpf_lsm_socket_connect`) execute *synchronously* within the kernel's authorization path. A BPF LSM program that implements the policy returns `-EPERM` for a violating event, and the syscall fails: the file does not open, the socket does not connect, or `execve` does not start the new program. (`bprm_check_security` runs inside `execve`, after the fork.) In the example, this decision is a Python return value.
 
 ### 3.2 Fixed Mutation List (Syzkaller-Inspired)
-To test the policy against path and address tricks, `run_fuzz_campaign()` evaluates 31 events: 16 spellings of the policy's absolute blocked paths (plain, `/./`, `//` and `..`), 5 fixed evasion paths, 6 socket targets, 3 binaries and 1 `setuid`. This is not syzkaller. It does not generate syscalls from descriptions, use coverage feedback, mutate inputs or run a kernel, and its `seed` argument is unused. A fixed list cannot show that no bypass exists.
+To test the policy against path and address tricks, `run_fuzz_campaign()` evaluates 35 events: 20 spellings of the policy's absolute blocked paths (plain, `/./`, `//` and `..`), 5 fixed evasion paths, 6 socket targets, 3 binaries and 1 `setuid`. This is not syzkaller. It does not generate syscalls from descriptions, use coverage feedback, mutate inputs or run a kernel, and its `seed` argument is unused. A fixed list cannot show that no bypass exists.
 - Lists path variations (`/./`, `//`, `..//`, `.../`, NUL bytes).
 - Lists private RFC 1918/4193 addresses and the link-local metadata endpoint (`169.254.169.254`).
-- Asserts **Monotonic Containment**: at most one of the 31 events may be allowed. On the default policy, 30 are blocked and the loopback connect is allowed (`python examples/ebpf-lsm-kernel-gate/lsm_gate.py fuzz`).
+- Asserts **Monotonic Containment**: at most one of the 35 events may be allowed. On the default policy, 34 are blocked and the loopback connect is allowed (`python examples/ebpf-lsm-kernel-gate/lsm_gate.py fuzz`).
 
 The simulated `file_open` check normalizes `.`, `..` and repeated slashes, then compares whole path components: `/root` covers `/root/x` but not `/rootfs`. It writes each `~` entry below each configured home directory. It does not resolve symbolic links, so it keeps the symbolic-link weakness that Section 2.2 describes.
 
