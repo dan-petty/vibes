@@ -11,7 +11,9 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
+
+import pytest
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -33,6 +35,33 @@ from ebpf_tracer import (
     parse_events_jsonl,
     parse_trace_event,
 )
+
+# One `process_exec` record in the JSON that Tetragon writes (`tetra getevents -o json` and
+# the export file): field names from api/v1/tetragon/events.proto and tetragon.proto, v1.8.0.
+TETRAGON_PROCESS_EXEC: Final[dict[str, Any]] = {
+    "process_exec": {
+        "process": {
+            "exec_id": "ZXhhbXBsZS1ub2RlOjQyNDI=",
+            "pid": 4242,
+            "uid": 1000,
+            "cwd": "/workspace",
+            "binary": "/usr/bin/nc",
+            "arguments": "-lvp 4444",
+            "flags": "execve clone",
+            "start_time": "2026-11-19T10:00:00.123456789Z",
+            "auid": 4294967295,
+            "pod": {"namespace": "default", "name": "agent-sandbox"},
+            "parent_exec_id": "ZXhhbXBsZS1ub2RlOjQyMDA=",
+            "tid": 4242,
+        },
+        "parent": {"pid": 4200, "binary": "/bin/bash", "arguments": "-c ./run.sh"},
+    },
+    "node_name": "<worker-node>",
+    "time": "2026-11-19T10:00:00.123456789Z",
+}
+
+# How Tetragon applies the string operators of the `sys_execve` selectors.
+TETRAGON_STRING_OPS: Final[dict[str, Any]] = {"Equal": str.__eq__, "Postfix": str.endswith}
 
 
 def test_parse_trace_event_normalization() -> None:
@@ -71,6 +100,31 @@ def test_parse_events_jsonl_stream() -> None:
     assert (len(events), types) == (
         2,
         [EbpfEventType.EXECVE, EbpfEventType.FILE_OPEN],
+    )
+
+
+def test_parse_native_tetragon_process_exec() -> None:
+    """Verify that a native Tetragon `process_exec` record becomes one execve event that the audit reads."""
+    flat_line = '{"event_type": "file_open", "pid": 7, "comm": "cat", "path": "/etc/shadow"}'
+    events = parse_events_jsonl(json.dumps(TETRAGON_PROCESS_EXEC) + "\n" + flat_line + "\n")
+    summary = EbpfSandboxTracer(TracerPreset.STRICT).audit_events(events)
+
+    assert (
+        parse_trace_event(TETRAGON_PROCESS_EXEC),
+        [e.event_type for e in events],
+        [(f.rule_id, f.pid) for f in summary.findings],
+    ) == (
+        EbpfTraceEvent(
+            event_type=EbpfEventType.EXECVE,
+            pid=4242,
+            process_name="nc",
+            command_line="/usr/bin/nc -lvp 4444",
+            target_path="/usr/bin/nc",
+            syscall="execve",
+            timestamp=1795082400.123456,
+        ),
+        [EbpfEventType.EXECVE, EbpfEventType.FILE_OPEN],
+        [("EBPF001", 4242), ("EBPF003", 7)],
     )
 
 
@@ -195,6 +249,57 @@ def test_ebpf004_privilege_escalation_syscall() -> None:
     )
 
 
+def _file_open_rules(tracer: EbpfSandboxTracer, paths: list[str]) -> dict[str, list[str]]:
+    """Audit a file open of each path and map the path to the rule IDs of its findings."""
+    return {
+        p: [f.rule_id for f in tracer.audit_event(EbpfTraceEvent(EbpfEventType.FILE_OPEN, 1, "cat", target_path=p))]
+        for p in paths
+    }
+
+
+def test_ebpf003_expands_home_and_matches_whole_components() -> None:
+    """Verify that `~/` entries match below each configured home directory, by whole path components."""
+    paths = [
+        "/home/agent/.ssh/id_ed25519",
+        "/home/agent/.sshkeys/id_ed25519",
+        "/home/agent/.config/gcloud/credentials.db",
+        "/opt/.ssh/config",
+        "/root/.ssh/config",
+        "/rootfs/etc/hosts",
+        "/etc/shadowed",
+        "/etc/./shadow",
+        "src/.ssh/config",
+    ]
+
+    assert (
+        _file_open_rules(EbpfSandboxTracer(TracerPreset.STRICT, home_dirs=("/home/agent",)), paths),
+        _file_open_rules(EbpfSandboxTracer(TracerPreset.STRICT), ["/root/.ssh/config", "/home/agent/.ssh/id_ed25519"]),
+    ) == (
+        {
+            "/home/agent/.ssh/id_ed25519": ["EBPF003"],
+            "/home/agent/.sshkeys/id_ed25519": [],
+            "/home/agent/.config/gcloud/credentials.db": ["EBPF003"],
+            "/opt/.ssh/config": [],
+            "/root/.ssh/config": ["EBPF003"],
+            "/rootfs/etc/hosts": [],
+            "/etc/shadowed": [],
+            "/etc/./shadow": ["EBPF003"],
+            "src/.ssh/config": [],
+        },
+        {"/root/.ssh/config": ["EBPF003"], "/home/agent/.ssh/id_ed25519": []},
+    )
+
+
+def test_ebpf004_capset_is_a_syscall_and_cap_set_proc_is_not() -> None:
+    """Verify that the kernel syscall `capset` fires EBPF004 and the libcap function `cap_set_proc` does not."""
+    tracer = EbpfSandboxTracer(TracerPreset.STRICT)
+    rules = {
+        name: [f.rule_id for f in tracer.audit_event(EbpfTraceEvent(EbpfEventType.UNKNOWN, 1, "x", syscall=name))]
+        for name in ("capset", "cap_set_proc")
+    }
+    assert rules == {"capset": ["EBPF004"], "cap_set_proc": []}
+
+
 def test_ebpf005_anti_debugging_evasion() -> None:
     """Verify ptrace anti-debugging invocation triggers EBPF005."""
     events = [
@@ -264,17 +369,67 @@ def test_policy_synthesis_tetragon_and_falco() -> None:
 
     assert (
         tetragon_crd["kind"],
-        tetragon_crd["metadata"]["name"],
-        "python3" in tetragon_crd["spec"]["allowedProcesses"],
-        "git" in tetragon_crd["spec"]["allowedProcesses"],
+        tetragon_crd["metadata"],
         "rule: custom_agent_rule" in falco_rules,
     ) == (
         "TracingPolicy",
-        "custom-agent-policy",
-        True,
-        True,
+        {"name": "custom-agent-policy", "annotations": {"ebpf-tracer/observed-binaries": "git,python3"}},
         True,
     )
+
+
+def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
+    """Verify the syscall kprobe and that each key is a field of the Tetragon TracingPolicy CRD.
+
+    Field names and enums follow the CRD of Tetragon v1.8.0
+    (pkg/k8s/apis/cilium.io/client/crds/v1alpha1/cilium.io_tracingpolicies.yaml). The CRD
+    has no `allowedProcesses` field; `kubectl apply` rejects an unknown field.
+    """
+    policy = generate_tetragon_policy([EbpfTraceEvent(EbpfEventType.EXECVE, 1, "python3")])
+    kprobe = policy["spec"]["kprobes"][0]
+    binaries = ["chattr", "nc", "ncat", "netcat", "nmap", "socat", "tcpdump", "telnet", "wireshark"]
+
+    assert (
+        sorted(policy),
+        sorted(policy["spec"]),
+        len(policy["spec"]["kprobes"]),
+        (kprobe["call"], kprobe["syscall"], kprobe["args"]),
+        kprobe["selectors"],
+    ) == (
+        ["apiVersion", "kind", "metadata", "spec"],
+        ["kprobes"],
+        1,
+        ("sys_execve", True, [{"index": 0, "type": "string"}]),
+        [
+            {
+                "matchArgs": [{"index": 0, "operator": "Equal", "values": binaries}],
+                "matchActions": [{"action": "Sigkill"}],
+            },
+            {
+                "matchArgs": [{"index": 0, "operator": "Postfix", "values": [f"/{b}" for b in binaries]}],
+                "matchActions": [{"action": "Sigkill"}],
+            },
+        ],
+    )
+
+
+def _kernel_kills(kprobe: dict[str, Any], path: str) -> bool:
+    """Apply the selectors of a kprobe to a path the way Tetragon does: OR over selectors, AND over matches."""
+    return any(
+        all(any(TETRAGON_STRING_OPS[m["operator"]](path, v) for v in m["values"]) for m in sel["matchArgs"])
+        for sel in kprobe["selectors"]
+    )
+
+
+def test_tetragon_selectors_kill_where_the_audit_flags() -> None:
+    """Verify that the `sys_execve` selectors kill the paths that EBPF001 flags, and no other path."""
+    kprobe = generate_tetragon_policy([])["spec"]["kprobes"][0]
+    tracer = EbpfSandboxTracer(TracerPreset.STRICT)
+    paths = ["/usr/bin/nc", "/bin/ncat", "nc", "./socat", "/usr/bin/ncal", "/usr/bin/nc.openbsd", "/usr/bin/python3"]
+
+    assert {p: _kernel_kills(kprobe, p) for p in paths} == {
+        p: bool(tracer.audit_event(EbpfTraceEvent(EbpfEventType.EXECVE, 1, p))) for p in paths
+    }
 
 
 def test_sarif_export_structure() -> None:
@@ -370,4 +525,24 @@ def test_cli_end_to_end_with_temp_files(tmp_path: Path) -> None:
         tetragon_file.is_file(),
         falco_file.is_file(),
     ) == (1, True, True, True, True, True)
+
+
+def test_cli_home_dir_option(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify that `--home-dir` sets the home directories of the `~/` entries and needs an absolute path."""
+    trace_file = tmp_path / "agent_events.jsonl"
+    trace_file.write_text(
+        '{"event_type": "file_open", "pid": 1, "comm": "cat", "path": "/home/agent/.aws/credentials"}\n',
+        encoding="utf-8",
+    )
+    default_code = main([str(trace_file)])
+    agent_code = main([str(trace_file), "--home-dir", "/srv", "--home-dir", "/home/agent"])
+    with pytest.raises(SystemExit) as relative:
+        main([str(trace_file), "--home-dir", "home/agent"])
+
+    assert (default_code, agent_code, relative.value.code, "not an absolute path" in capsys.readouterr().err) == (
+        0,
+        1,
+        2,
+        True,
+    )
 
