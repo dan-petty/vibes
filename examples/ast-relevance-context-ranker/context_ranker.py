@@ -2,9 +2,9 @@
 
 Extracts abstract syntax tree (AST) symbol graphs from repository source trees,
 computes Personalized PageRank centrality over symbol dependencies and call graphs,
-and packs maximal relevant context within strict token budgets without syntax truncation.
+and packs the highest-ranked whole symbols into an estimated token budget.
 
-Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2, params <= 4).
+Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
 
 from __future__ import annotations

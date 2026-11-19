@@ -4,8 +4,8 @@
 > **Environment**: Distributed AI coding swarms, real-time collaborative editing, AST Tree-CRDTs  
 > **Classification**: Distributed Systems, CRDTs, Multi-Agent Concurrency, AST Engineering  
 > **Related**: [Observation 06](./06-multi-agent-concurrency-shared-workspace-hazards-and-swarm-coordination.md), [Observation 35](./35-3-way-ast-semantic-reconciliation-and-worktree-collision-arbitration.md), [Pattern: AST-CRDTs for Real-Time Agent Collaboration](../../patterns/ast-crdts-for-real-time-agent-collaboration.md)
-> **TLDR**: Eliminate character-level syntax errors under concurrent multi-agent editing using replicated AST-CRDT nodes with Lamport clocks and fractional ordering.
-> **ELI:7b**: Allow multiple AI coders to edit code in real time like Google Docs, using syntax tree nodes instead of raw characters so code stays valid.
+> **TLDR**: Avoid character-level interleaving under concurrent multi-agent editing by replicating AST nodes instead of characters; the reference example converges for inserts and deletes, but not for concurrent moves.
+> **ELI:7b**: Allow multiple AI coders to edit code in real time like Google Docs, using syntax tree nodes instead of raw characters. The example tracks only the names of imports, functions and classes.
 
 ---
 
@@ -19,26 +19,26 @@ While git worktrees ([`worktree-swarm-arbiter`](../../examples/worktree-swarm-ar
 
 ## 2. The Breakdown of Textual CRDTs Under Code Synthesis
 
-Standard distributed collaborative editing relies on sequence CRDTs (RGA, LSEQ, Yjs, Automerge) designed for prose text. When applied to structured code authored by concurrent LLMs, empirical testing revealed severe failure modes:
+Standard distributed collaborative editing relies on text CRDTs (RGA, LSEQ, and the text types of Yjs and Automerge), which replicate character sequences. When applied to structured code authored by concurrent LLMs, these failure modes can occur:
 
 ### 2.1 The Token Interleaving Trap
-Sequence CRDTs operate on flat 1D arrays of characters. When Agent A introduces a type annotation (`def parse(x: int)`) and Agent B concurrently introduces a default parameter (`def parse(x=10)`), character-by-character interleaving produces ungrammatical gibberish:
+Sequence CRDTs operate on flat 1D arrays of characters. Some of them (Logoot, LSEQ) can interleave two concurrent insertions character by character; RGA does not (Kleppmann et al., "Interleaving anomalies in collaborative text editors", PaPoC 2019). When Agent A introduces a type annotation (`def parse(x: int)`) and Agent B concurrently introduces a default parameter (`def parse(x=10)`), an interleaving CRDT can produce:
 ```text
 def parse(x: =i1n0t):
 ```
-Text CRDTs lack symbol awareness, corrupting lexemes and halting downstream compiler pipelines.
+Without interleaving, the two runs can still merge as `def parse(x=10: int)`, which is not valid Python. Text CRDTs lack symbol awareness, so they can corrupt lexemes and halt downstream compiler pipelines.
 
 ### 2.2 Scope and Indentation Fractures
 In indentation-sensitive grammars (Python, YAML), concurrent character insertions near block boundaries shift the relative indentation level of subsequent lines. An insert by Agent A can inadvertently capture Agent B's unrelated statements inside an `if` block or class definition.
 
-### 2.3 Empirical Failure Rates
-Across 300 simulated collaborative editing sessions between pairs of concurrent coding agents, text-based CRDTs suffered a **34.2% syntax invalidation rate**, requiring expensive downstream error-correction turns.
+### 2.3 No Measured Failure Rate
+This repository has no harness that simulates collaborative editing sessions, so it has no measured syntax invalidation rate for text CRDTs.
 
 ---
 
 ## 3. The Architectural Solution: AST Tree-CRDTs
 
-To eliminate lexical syntax breakage, we designed the **Real-Time AST Tree-CRDT** ([`examples/ast-crdt-collaborative-editor/`](../../examples/ast-crdt-collaborative-editor/)).
+To remove character-level breakage, we designed the **Real-Time AST Tree-CRDT** ([`examples/ast-crdt-collaborative-editor/`](../../examples/ast-crdt-collaborative-editor/)). The example models only top-level imports, functions and classes. `materialize_to_source()` renders each function and class with an empty `pass` body, and it does not model parameters, annotations or bodies, so the conflict in 2.1 cannot be expressed in it.
 
 ```mermaid
 flowchart TD
@@ -67,25 +67,24 @@ flowchart TD
 ### 3.1 First-Class Replicated AST Nodes
 Rather than synchronizing characters, the Tree-CRDT synchronizes typed AST nodes:
 - Each node holds a globally unique Lamport identifier: `agent_id:lamport:counter`.
-- Sibling nodes within a parent are ordered using fractional index keys ($pos \in \mathbb{Q}$), ensuring deterministic ordering regardless of arrival sequence.
-- Operations commute deterministically: $State \star Op_A \star Op_B \equiv State \star Op_B \star Op_A$.
+- Sibling nodes within a parent are ordered by a position string `pos`, compared as text, with the node ID as tie-breaker. The order does not depend on arrival sequence, but it is lexicographic, not numeric: `"10"` sorts before `"9"`. A fractional-indexing scheme must generate keys that sort correctly as text.
+- Insert and delete operations commute: an insert is ignored if its node ID exists, and a delete sets a tombstone. Move operations do not commute: `_apply_move()` applies moves in arrival order and ignores their Lamport timestamps.
 
 ### 3.2 Cycle Avoidance Arbitration (`CRDT001`)
-In tree structures, concurrent move operations can induce cycles (e.g. moving node $A$ into child $B$ while concurrently moving $B$ into $A$). The Tree-CRDT checks ancestry chains and deterministically resolves conflicts using Lamport timestamps, ensuring the resulting data structure is always a valid Directed Acyclic Graph (DAG).
+In tree structures, concurrent move operations can induce cycles (e.g. moving node $A$ into child $B$ while concurrently moving $B$ into $A$). The example checks the ancestry chain and rejects a move that would make a node its own ancestor, so each replica stays a tree. It does not use the Lamport timestamps to choose a winner. In that two-move case, peer A keeps its own move and rejects B's, and peer B does the reverse, so the replicas diverge (checked with `apply_operation` and `sync_peers` on 2026-11-19). A move operation that converges needs an algorithm such as Kleppmann et al., "A highly-available move operation for replicated trees" (IEEE TPDS, 2022), which orders moves by timestamp and undoes and redoes them.
 
 ---
 
-## 4. Empirical Telemetry & Comparison Matrix
+## 4. Comparison Matrix
 
-Evaluating 300 multi-agent collaborative editing scenarios comparing textual sequence CRDTs against the AST Tree-CRDT produced the following metrics:
+No collaborative editing scenarios were run. The matrix compares properties of the two approaches:
 
-| Metric | Sequence CRDT (Yjs / Text) | AST Tree-CRDT (`ast-crdt`) |
+| Property | Sequence CRDT (Text) | AST Tree-CRDT Example (`ast-crdt`) |
 |---|---|---|
-| **Syntax Invalidation Rate** | 34.2% | **0.0% (Zero Syntax Errors)** |
-| **Token Interleaving Clashes** | 48 occurrences | **0 occurrences (Guaranteed by Schema)** |
-| **Cycle Induction Crashes** | N/A (Text-only) | **0 (Deterministic Lamport Resolution)** |
-| **Convergence Latency** | 2.8 ms | **0.85 ms** |
-| **Downstream Repair Turns Required** | 103 turns | **0 turns** |
+| **Unit of Replication** | Characters | Import, function and class nodes |
+| **Character Interleaving** | Possible in Logoot and LSEQ | Not possible: no characters are replicated |
+| **Materialized Syntax** | Can be invalid | Fixed templates (`def name(): pass`); names are not validated |
+| **Concurrent Moves** | Not applicable | Replicas can diverge |
 
 ---
 

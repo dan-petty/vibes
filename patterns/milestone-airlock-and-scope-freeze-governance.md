@@ -64,7 +64,7 @@ flowchart TD
 
 1. **Phase Transition Ratchet**:
    - `INTAKE`: Open admission for all verified user stories, architecture spikes, and bug fixes. Sizing warning triggered at 50 issues; critical alert at 100 issues (`MLS003`).
-   - `AIR_LOCKED`: Transitioned when core deliverables are code-complete and the release enters verification. **Non-P0 admissions are prohibited (`MLS002`)**. Incoming enhancements are automatically tagged with `vNext`.
+   - `AIR_LOCKED`: Transitioned when core deliverables are code-complete and the release enters verification. **Non-P0 admissions are prohibited (`MLS002`)**. The governor lists incoming enhancements as rollover candidates for `vNext`. It does not edit issues on GitHub.
    - `FROZEN`: Transitioned when cutting release candidates. Exactly zero open items are permitted. Any open work remaining must be resolved or partitioned into rollover.
    - `CLOSED`: Milestone tagged, binaries published, and milestone closed.
 
@@ -74,8 +74,9 @@ flowchart TD
    $$C_R = \frac{V_{\text{burn}}}{\max(V_{\text{scope}}, 0.01)}$$
 
    - **Healthy Convergence**: $C_R \ge 1.2$ ($V_{\text{burn}} > V_{\text{scope}}$).
-   - **Scope Live-Lock**: $C_R \le 1.0$ ($V_{\text{scope}} \ge V_{\text{burn}}$). Triggers `MLS001` error.
-   - **Projected Completion Time**:
+   - **Scope Live-Lock**: $V_{\text{burn}} - V_{\text{scope}} \le 0.05$ issues per day over a 7-day window. Triggers `MLS001` as an error in `AIR_LOCKED` and `FROZEN` and as a warning in `INTAKE`.
+   - **Slow Convergence**: $C_R < 1.2$ without live-lock. Triggers an `MLS001` warning.
+   - **Projected Completion Time** (only when $V_{\text{burn}} - V_{\text{scope}} > 0.05$):
 
    $$T_{\text{conv}} = \frac{I_{\text{open}}}{V_{\text{burn}} - V_{\text{scope}}}$$
 
@@ -90,7 +91,7 @@ flowchart TD
 
 | Rule ID | Invariant Name | Level | Trigger Condition |
 | :--- | :--- | :--- | :--- |
-| `MLS001` | `ScopeExpansionLiveLock` | Error / Warn | $V_{\text{scope}} \ge V_{\text{burn}}$ ($C_R \le 1.0$) |
+| `MLS001` | `ScopeExpansionLiveLock` | Error / Warn | $V_{\text{burn}} - V_{\text{scope}} \le 0.05$/day (error in `AIR_LOCKED`/`FROZEN`), or $C_R < 1.2$ (warning) |
 | `MLS002` | `AirLockBoundaryBreach` | Error | Non-P0 issue open during `AIR_LOCKED` or any issue open in `FROZEN` |
 | `MLS003` | `MegaMilestoneSizingAlert` | Error / Warn | Total issues $> 100$ (Error) or $> 50$ (Warning) |
 | `MLS004` | `StagnantHorizonRatchet` | Warning | Completion $70\% - 90\%$ with $\ge 15$ open issues |
@@ -114,6 +115,6 @@ python tools/milestone_governor.py milestone_36.json --rollover-to "v0.2.24" --j
 
 ## Verifiable Impact
 
-- **Eliminates Release Live-Locks**: Provides mathematical proof of release convergence before tagging release candidates.
+- **Detects Release Live-Locks**: Flags milestones whose burn velocity does not exceed scope velocity over the rolling window. The ratio projects from past velocity; it does not prove that a release will converge.
 - **Protects Autonomous Exploration**: Autonomous agents are never instructed to ignore bugs; instead, discoveries are routed cleanly to future milestone vehicles (`vNext`), preventing scope cascades from stalling active shipments.
-- **Lowers Cognitive Sizing Friction**: Enforces milestone sizing caps ($\le 50$ issues) to keep release choreography agile and manageable.
+- **Lowers Cognitive Sizing Friction**: Warns above 50 issues and fails above 100 issues (`MLS003`) to keep milestones small.

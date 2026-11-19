@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Closed-Loop PR Review Thread Synchronizer & Atomic Resolver.
+"""Closed-Loop PR Review Thread Synchronizer & Resolver.
 
-Synchronizes GitHub PR review discussion threads with local AST code state,
-correlating review feedback with mechanical invariant oracles (complexity,
-nesting, sanitization), verifying whether defects have been resolved, and
-synthesizing atomic resolution plans and GraphQL mutations.
+Reads GitHub PR review threads from a supplied JSON payload (it makes no network
+call), correlates review feedback with local AST state and mechanical invariant
+oracles (complexity, nesting, sanitization), checks whether defects have been
+resolved, and writes resolution plans and GraphQL mutation text. The reply and
+resolve mutations are not atomic: GraphQL runs mutation fields in order, with no
+transaction.
 """
 
 from __future__ import annotations

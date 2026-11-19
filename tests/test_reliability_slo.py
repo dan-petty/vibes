@@ -110,7 +110,7 @@ def test_zero_budget_objective_trips_on_first_breach() -> None:
 
 
 def test_single_iteration_does_not_trigger_burn_alert() -> None:
-    """Burn rate divides by elapsed window, so early iterations always look catastrophic."""
+    """This engine's burn rate divides by the elapsed window, so early failures look catastrophic."""
     objective = ServiceLevelObjective("gate_pass_rate", target=0.98, window_iterations=20, rationale="r")
     early = evaluate_objective(objective, _history("gate_pass_rate", [(985, 1000)]))
     assert (early.status, early.burn_rate > 2.0) == (BudgetStatus.HEALTHY, True)

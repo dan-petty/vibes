@@ -20,7 +20,7 @@ When multiple autonomous AI agents execute tasks simultaneously against a shared
 
 ## 2. Core Mechanics
 
-The Multi-Agent Codebase Concurrency pattern guarantees deterministic, collision-free execution across concurrent agents through five foundational pillars:
+The Multi-Agent Codebase Concurrency pattern reduces collisions between concurrent agents through five foundational pillars:
 
 ```mermaid
 flowchart TD
@@ -51,9 +51,9 @@ flowchart TD
         W1 --> FIFO["FIFO PR Queue (Oldest PR First)"]
         W2 --> FIFO
         W3 --> FIFO
-        FIFO --> RebaseCheck["In-Memory Dry-Rebase Simulation"]
+        FIFO --> RebaseCheck["In-Memory Merge Check (git merge-tree)"]
         RebaseCheck --> Sentinel["Invariant Sentinel (M <= 10, Depth <= 5)"]
-        Sentinel --> Mainline["Mainline Merge (Zero Regressions)"]
+        Sentinel --> Mainline["Mainline Merge"]
     end
 ```
 
@@ -104,7 +104,7 @@ import signal
 import subprocess
 
 def run_isolated_agent_command(cmd: list[str], cwd: str, timeout: float) -> str:
-    """Execute command in isolated POSIX process group to prevent zombie leaks."""
+    """Execute command in isolated POSIX process group to prevent orphaned child processes."""
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -127,8 +127,9 @@ def run_isolated_agent_command(cmd: list[str], cwd: str, timeout: float) -> str:
 
 ### 3. In-Memory Dry-Rebase Verification
 ```bash
-# Verify mergeability in memory before attempting remote rebase
-devops pr check-readiness <pr-number> --dry-rebase
+# Verify mergeability in memory before attempting remote rebase (git >= 2.38)
+git fetch origin main
+git merge-tree --write-tree --name-only origin/main HEAD
 ```
 
 ---
@@ -141,5 +142,5 @@ devops pr check-readiness <pr-number> --dry-rebase
 | **Shared SQLite Coverage File** | Running `pytest --cov` across multiple agents targeting `.coverage`, causing `sqlite3.OperationalError: no such table: file`. | Partition data via `DEVOPS_CLI_DATA_DIR=.data/agent/<agent-id>`. |
 | **Unordered PR Rebasing** | Agents racing to rebase onto `main`, causing exponential rebase churn and PR starvation. | Strict FIFO pull request processing queue (oldest PR processed first). |
 | **Unthrottled GPU Inference** | Multiple agents issuing parallel generation requests to Ollama, causing VRAM thrashing and timeouts. | Token-bucket rate limiting, concurrency semaphores, and model prewarming. |
-| **Zombie Process Leaks** | Terminating subprocesses with simple `proc.kill()`, leaking background daemons to PID 1. | POSIX process group isolation (`start_new_session=True`) and `os.killpg`. |
+| **Orphan Process Leaks** | Terminating subprocesses with simple `proc.kill()`, leaking background daemons to PID 1. | POSIX process group isolation (`start_new_session=True`) and `os.killpg`. |
 

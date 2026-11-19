@@ -1,8 +1,8 @@
 //! Rust Type-State Pattern & Zero-Cost Abstraction Invariant Benchmark.
 //!
 //! Evaluates the enforcement of state-machine invariants at compile time:
-//! 1. State transitions consume ownership (affine types), preventing use-after-free and reuse bugs.
-//! 2. Zero-sized marker types guarantee zero runtime memory overhead (`size_of::<State>() == 0`).
+//! 1. State transitions consume ownership (move semantics), so the compiler rejects reuse of a moved state.
+//! 2. The state markers are zero-sized types (`size_of::<State>() == 0`), so they add no bytes to `Connection`.
 //! 3. Invalid transitions (e.g. sending before authentication or double-connecting) are compile errors.
 //!
 //! Strictly enforces memory safety: `#![forbid(unsafe_code)]`.

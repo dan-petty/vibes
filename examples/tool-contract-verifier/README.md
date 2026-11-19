@@ -1,6 +1,8 @@
 # Sample App: Formal Tool Contract Verification Gate
 
-An executable Python reference application and schema verification engine that enforces negative assertions, type safety, and bounded length invariants on agent tool calls (JSON Schema Draft 2020-12 / OpenAPI compatible).
+An executable Python reference application that enforces negative assertions, type safety, and bounded length invariants on agent tool calls. It checks each call against its own `ParameterContract` records (type, required, `maxLength`, `minimum`, `maximum`, no extra keys) and can export a contract as a JSON Schema 2020-12 `parameters` object. It does not run a JSON Schema validator.
+
+"Formal" in the name does not mean formal verification: nothing is proved. The gate is a runtime check of each call.
 
 ---
 
@@ -14,7 +16,7 @@ In agentic software engineering and tool-use architectures (e.g. FastMCP, OpenAI
 4. **Unbounded String Payloads (CWE-400)**: Unconstrained user- or agent-generated strings cause log bloat, database saturation, and memory spikes.
 5. **Output Contract Drift**: Tool handlers returning unstructured or altered payload formats corrupt subsequent subagent parsing steps.
 
-The **Formal Tool Contract Verification Gate** sits directly in the execution path, rejecting malformed calls *before* execution and emitting structured, prescriptive error prompts that allow the LLM to zero-shot self-correct in the next turn.
+The **Formal Tool Contract Verification Gate** sits directly in the execution path, rejecting malformed calls *before* execution and emitting structured, prescriptive error prompts meant to let the LLM correct the call in the next turn. No model run in this repository measures how often that works.
 
 ```mermaid
 flowchart LR
@@ -22,27 +24,27 @@ flowchart LR
     classDef success fill:#1b5e20,color:#fff
     classDef accent fill:#4527a0,color:#fff
 
-    Model["LLM emits tool call"] --> Gate{"Validate against<br/>JSON Schema 2020-12"}:::accent
+    Model["LLM emits tool call"] --> Gate{"Validate against<br/>ParameterContract"}:::accent
     Gate -->|"Valid"| Exec["Handler executes"]:::success
     Exec --> Out{"Response matches<br/>output contract?"}:::accent
     Out -->|"Yes"| Return["Result to agent"]:::success
-    Out -->|"No"| Drift["OUTPUT_CONTRACT_DRIFT"]:::failure
+    Out -->|"No"| Drift["OUTPUT_CONTRACT_VIOLATION"]:::failure
 
     Gate -->|"Unknown key"| H["HALLUCINATED_PARAM"]:::failure
     Gate -->|"Absent key"| M["MISSING_REQUIRED_PARAM"]:::failure
     Gate -->|"Wrong type"| T["TYPE_MISMATCH"]:::failure
-    Gate -->|"Over 256 chars"| L["LENGTH_BOUND_EXCEEDED"]:::failure
+    Gate -->|"Over max_length"| L["LENGTH_BOUND_EXCEEDED"]:::failure
 
-    H --> Prompt["Prescriptive error prompt:<br/>names the violation and<br/>enumerates allowed parameters"]:::accent
+    H --> Prompt["Prescriptive error prompt:<br/>names each violation and<br/>its corrective action"]:::accent
     M --> Prompt
     T --> Prompt
     L --> Prompt
     Drift --> Prompt
-    Prompt -.->|"zero-shot self-correction<br/>on the next turn"| Model
+    Prompt -.->|"correction attempt<br/>on the next turn"| Model
 ```
 
 > [!NOTE]
-> The rejection is the cheap half. A gate that returns `invalid arguments` teaches the model nothing and buys another malformed call; one that returns the exact allowed parameter list closes the loop in a single turn.
+> The rejection is the cheap half. A gate that returns `invalid arguments` gives the model nothing to act on. This gate names each bad key and the action to take. The allowed parameter list is in each violation's `expected_spec` (see `ContractValidationReport.to_dict()`), not in `feedback_message`.
 
 ---
 
@@ -50,10 +52,10 @@ flowchart LR
 
 | Violation Kind | Description | Defensive Countermeasure |
 |---|---|---|
-| **`HALLUCINATED_PARAM`** | Model passes argument not defined in tool schema. | Strict mode (`additionalProperties: false`) rejects call and prescribes exact allowed parameter list. |
+| **`HALLUCINATED_PARAM`** | Model passes argument not defined in tool schema. | Strict mode (`additionalProperties: false`) rejects the call and tells the model to remove the key; `expected_spec` holds the allowed parameter list. |
 | **`MISSING_REQUIRED_PARAM`** | Model omits an argument required by the contract. | Fails fast with descriptive hint specifying missing field and expected type. |
 | **`TYPE_MISMATCH`** | Model passes incorrect type (e.g. string for integer). | Strictly checks type matching without silent loose coercion. |
-| **`LENGTH_BOUND_EXCEEDED`** | String argument exceeds declared upper bound cap. | Rejects strings $> \text{max\_length}$ (default 256 chars) to prevent CWE-400 / log injection. |
+| **`LENGTH_BOUND_EXCEEDED`** | String argument exceeds declared upper bound cap. | Rejects strings $> \text{max\_length}$ (default 256 chars) to limit resource use (CWE-400). A length cap does not neutralize log injection (CWE-117). |
 | **`VALUE_OUT_OF_RANGE`** | Numeric parameter falls outside declared `[min, max]` interval. | Validates bounds and instructs agent on valid range. |
 | **`OUTPUT_CONTRACT_VIOLATION`** | Tool execution return value mismatches declared return type. | Prevents corrupted return structures from propagating into subagent contexts. |
 
@@ -76,7 +78,7 @@ When a malformed tool call is intercepted, `ToolContractVerifier` formats an act
    👉 Prescriptive Action: Remove 'secret_token_leak' from tool arguments.
 2. [TYPE_MISMATCH] Parameter 'replicas' expected integer, received str.
    👉 Prescriptive Action: Coerce value to integer.
-3. [LENGTH_BOUND_EXCEEDED] Parameter 'service_name' length 61 exceeds maximum 32 characters.
+3. [LENGTH_BOUND_EXCEEDED] Parameter 'service_name' length 63 exceeds maximum 32 characters.
    👉 Prescriptive Action: Truncate string to <= 32 characters.
 --------------------------------------------------------------------------------
 Please re-issue the tool invocation adhering strictly to the schema contract.

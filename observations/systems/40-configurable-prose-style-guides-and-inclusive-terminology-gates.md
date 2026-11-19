@@ -87,7 +87,7 @@ sequenceDiagram
 ### 4.1 Key Architecture Invariants
 
 1. **Non-Destructive Code Span Tokenization**: `_strip_inline_code(line)` substitutes backticked spans with a neutral symbol token (`__code__`). This preserves syntactic separation between adjacent prose tokens, preventing false doubled-word matches while ensuring code identifiers are completely immune.
-2. **Fenced Block Skipping**: `fenced_line_flags(lines)` leverages the CommonMark fence parser to guarantee zero checks occur inside embedded code blocks.
+2. **Fenced Block Skipping**: `fenced_line_flags(lines)` in `tools/doc_core.py` tracks CommonMark §4.5 fences, so no prose check runs inside a fenced code block. Indented code blocks (§4.4) are not skipped.
 3. **Structured Attribution**: Every terminology rule declares its canonical guide (`StyleTermRule(..., guide="Google/Microsoft Developer Style Guide")`), providing descriptive, prescriptive remediation suggestions (`Use 'allowlist' per Google/Microsoft Developer Style Guide`).
 4. **Preset Calibration**: Preset `style_only` enables focused prose auditing during editorial reviews, while the `standard` and `strict` presets enforce style compliance alongside structural and link gates.
 
@@ -99,10 +99,10 @@ Integrating native prose style rules directly into `DocsValidator` completes the
 
 | Metric | Unchecked Prose / Naive Regex | Native `DOC014` Prose Style Gate |
 |---|---|---|
-| **Non-Inclusive Terms Detected** | 0 (Unchecked) or High False Alarms | **100% True Positives (9 real terms cleaned)** |
-| **Code Span False Positive Rate** | > 40% (flags `--whitelist`, code symbols) | **0.0% (Zero false alarms via `__code__`)** |
-| **External Dependency Burden** | Heavy (`vale` Go binary + package sync) | **Zero (Pure Python standard library AST)** |
-| **Execution Performance** | > 3.5s external subshell invocation | **< 250ms for 150 documents** |
+| **Non-Inclusive Terms Detected** | 0 (Unchecked) or false alarms on code | **6 occurrences in 5 files replaced in the same change (commit `773fe00`)** |
+| **Code Span Handling** | Flags `--whitelist` and code symbols | **Masked as `__code__` before matching** |
+| **External Dependency Burden** | `vale` Go binary + style packages (`vale sync`) | **None beyond the Python standard library `re` module** |
+| **Execution Time** | Not measured | **189 files in 0.74 s wall time, including interpreter start (`docs_validator.py --preset style_only`, 2026-11-19)** |
 
 ### Core Engineering Invariants
 - **Separate Prose from Code**: Never apply natural language style rules to technical code tokens or fenced examples; use structured masking to insulate code spans.

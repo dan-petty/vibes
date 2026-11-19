@@ -5,9 +5,9 @@
 
 ## 1. Executive Context & Baseline
 
-`devops-cli` exposes a rich MCP tool surface — over 100 FastMCP tools spanning `k8s_*`, `argo_*`, `docker_*`, `scan_*`, `gh_*`, `ai_*`, `vault_*`, `tf_*`, and `sandbox_*` namespaces — plus an internal `ToolSlot` registry (`src/devops_cli/ai/harness/slots.py:235-300`) and a `SkillSlot` capped at 20 dynamically loaded capability packages (`slots.py:150`). Each tool carries a full JSON Schema definition serialized into the system prompt or tool manifest.
+`devops-cli` exposes a rich MCP tool surface — over 100 FastMCP tools (155 listed in `docs/MCP_TOOLS.md` on 2026-09-22) spanning `k8s_*`, `argo_*`, `docker_*`, `scan_*`, `gh_*`, `ai_*`, `vault_*`, `tf_*`, and `sandbox_*` namespaces — plus an internal `ToolSlot` registry (`src/devops_cli/ai/harness/slots.py:235-300`) and a `SkillSlot` capped at 20 dynamically loaded capability packages (`slots.py:150`). Each tool carries a full JSON Schema definition serialized into the system prompt or tool manifest.
 
-When IDE agents (Copilot, Claude, Antigravity) connect to the FastMCP server, the entire tool schema corpus is hydrated into the model's context window before any user request is processed. This creates a structural tax: hundreds of `"type": "object", "properties": {...}, "required": [...]` blocks consuming thousands of tokens before the agent reasons about a single line of code.
+When IDE agents (Copilot, Claude, Antigravity) connect to an MCP server that advertises every tool, the entire tool schema corpus is hydrated into the model's context window before any user request is processed. Until PR #442 (2026-09-22), `devops-cli` did this; since then it advertises only the eager domains `ai`, `review`, `config` and `workspace` plus a `hydrate_tool_domain` tool (`CONST_MCP_EAGER_DOMAINS`). Eager hydration creates a structural tax: hundreds of `"type": "object", "properties": {...}, "required": [...]` blocks consuming thousands of tokens before the agent reasons about a single line of code.
 
 ## 2. The Observed Phenomenon
 
@@ -26,7 +26,7 @@ pie showData
     "Remaining for instructions, code, history" : 24000
 ```
 
-**2c. Pretraining Prior Override**: Models override explicit schema parameter names in favor of pretraining priors. The `devops-cli` tool `review_path` requires `path` as a parameter, but models frequently hallucinate `file_path`, `filepath`, or `target` — names more common in pretraining corpora. The negative schema assertion (`additionalProperties: false` / `extra="forbid"`) from Observation 10 catches these at validation time, but the root cause is attention dilution across too many competing schema definitions.
+**2c. Pretraining Prior Override**: Models can override explicit schema parameter names in favor of pretraining priors, for example by sending `path` or `file_path` where a tool takes another name. In `devops-cli`, `review_path` takes `target`, `pattern` and `persona` (`docs/MCP_TOOLS.md`); no log of models renaming its parameters was recorded. A negative schema assertion (`additionalProperties: false`, as in the Observation 10 example) catches such names at validation time; `devops-cli` source declared none in September 2026. The root cause is attention dilution across too many competing schema definitions.
 
 ## 3. The Underlying Failure Mode or Catalyst
 
@@ -43,13 +43,13 @@ This is compounded by **semantic namespace collision**. When 7 tools share the `
 
 ## 4. Remediation & Architectural Pattern
 
-**4a. Lazy Schema Hydration**: Rather than loading all 100+ tool schemas at session initialization, hydrate tool schemas on-demand based on the user's task domain. The MCP protocol already supports this via lazy-loaded tool discovery — `devops-cli` implements it with the `Lazy:` tool category in its MCP server manifest. Extend this pattern to eagerly load only a core subset (~10-15 high-frequency tools) and lazily resolve domain-specific tools when the agent's reasoning trajectory enters that namespace.
+**4a. Lazy Schema Hydration**: Rather than loading all 100+ tool schemas at session initialization, hydrate tool schemas on-demand based on the user's task domain. The MCP protocol supports this through tool-list change notifications — `devops-cli` implements it since PR #442 (2026-09-22): the server advertises four eager domains and adds a domain's tools when a client calls `hydrate_tool_domain`. Extend this pattern to eagerly load only a core subset (~10-15 high-frequency tools) and lazily resolve domain-specific tools when the agent's reasoning trajectory enters that namespace.
 
-**4b. Hierarchical Tool Namespacing with Dispatcher**: Replace flat tool registries with a two-tier dispatch pattern. Expose a single `dispatch` meta-tool that accepts a `domain` parameter (`k8s`, `scan`, `gh`, `ai`, `docker`, `vault`, `tf`). The dispatcher returns the specific tool schemas for that domain only, amortizing schema hydration across the conversation rather than front-loading it.
+**4b. Hierarchical Tool Namespacing with Dispatcher**: Replace flat tool registries with a two-tier dispatch pattern (`devops-cli`'s `hydrate_tool_domain` is one form of it). Expose a single `dispatch` meta-tool that accepts a `domain` parameter (`k8s`, `scan`, `gh`, `ai`, `docker`, `vault`, `tf`). The dispatcher returns the specific tool schemas for that domain only, amortizing schema hydration across the conversation rather than front-loading it.
 
-**4c. Schema Compression via Structural Minimization**: Strip verbose `description` fields from tool schemas after the initial hydration turn. Models retain tool semantics from the first exposure; subsequent turns need only the structural skeleton (parameter names, types, required flags). This can reduce per-tool token cost from ~80 to ~30 tokens.
+**4c. Schema Compression via Structural Minimization**: Strip verbose `description` fields from tool schemas after the initial hydration turn. Models retain tool semantics from the first exposure; subsequent turns need only the structural skeleton (parameter names, types, required flags). This can reduce per-tool token cost, by a rough estimate from ~80 to ~30 tokens; nothing here measures it. Changing tool definitions between turns also invalidates the prompt cache.
 
-**4d. Negative Namespace Disambiguation**: For tools with overlapping prefixes, inject a concise disambiguation preamble: `"scan_trivy: CVE vulnerabilities. scan_semgrep: SAST code patterns. scan_gitleaks: leaked secrets."` This costs ~50 tokens total but eliminates the vacillation failure mode by providing a dense discriminative signal.
+**4d. Negative Namespace Disambiguation**: For tools with overlapping prefixes, inject a concise disambiguation preamble: `"scan_trivy: CVE vulnerabilities. scan_semgrep: SAST code patterns. scan_gitleaks: leaked secrets."` This costs ~50 tokens total and reduces vacillation by providing a dense discriminative signal (not measured).
 
 Together these invert the hydration order: the window pays for the namespace the agent is actually working in, not for every namespace it might.
 
@@ -84,8 +84,8 @@ See pattern: [tool-cardinality-budget-management](../../patterns/tool-cardinalit
 ## 5. Verifiable Impact & Key Takeaways
 
 - **Budget arithmetic**: 100 tools × 80 tokens/schema = 8,000 tokens of fixed overhead (25% of a 32K window). Lazy hydration reduces this to ~1,200 tokens (15 core tools), reclaiming ~6,800 tokens for code context.
-- **Vacillation elimination**: Namespace disambiguation preambles provide $O(1)$ discriminative signal versus $O(N)$ schema scanning, converting probabilistic tool selection into deterministic lookup.
-- **The `SkillSlot` cap precedent**: The existing `max_skills = 20` ceiling in `slots.py:150` is the correct engineering instinct — cardinality must be bounded — but it applies only to skills while leaving the tool surface unbounded.
+- **Vacillation reduction**: Namespace disambiguation preambles give the model a short discriminative signal in place of scanning every schema. Tool selection stays probabilistic; the preamble makes the right choice more likely.
+- **The `SkillSlot` cap precedent**: The existing `max_skills = 20` ceiling in `slots.py:150` is the correct engineering instinct — cardinality must be bounded. It applies only to skills; the advertised tool surface had no bound until PR #442 gated it by domain.
 
 > **Aphorism**: A model with 100 tools in its prompt has zero tools it can reliably select. Cardinality is the enemy of precision; lazy hydration is the antidote.
 

@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — Pre-Commit Hook Infrastructure
 > **Topic**: The Compliance Gap Between Documented Mandates and Mechanical Enforcement; Converting Social Convention into Invariant Gates
-> **Key Metric**: Zero prior mechanical enforcement of pre-push quality standards despite explicit `AGENTS.md §8` mandate; `.pre-commit-config.yaml` closes gap with 4 automated gates, zero human compliance overhead
+> **Key Metric**: No local (pre-commit or pre-push) enforcement despite the explicit `AGENTS.md §8` mandate, and CI checks only after a push; `.pre-commit-config.yaml` closed the local gap with 4 hooks (commit 63ffc9aed, 2026-09-18)
 > **TLDR**: Convert human-written documentation guidelines and prompt conventions into automated AST linters and fail-closed CI gates.
 > **ELI:7b**: Don't just write rules in an instruction file and hope the AI reads them. Write an automated checker script that blocks rule-breaking commits.
 
@@ -36,8 +36,8 @@ flowchart LR
     end
 
     subgraph Enforced["Actually Enforced (pre-audit)"]
-        E1["pr-sentinel.yml: diff-scoped .py checks on PR open"]
-        E2["ci.yml: 5-file subset test run on push (stale)"]
+        E1["pr-sentinel.yml: diff-scoped .py checks on PR open (never ran)"]
+        E2["ci.yml on push: 6-file test subset, partial sentinel scope"]
     end
 
     subgraph Gap["The Compliance Gap"]
@@ -48,21 +48,21 @@ flowchart LR
     end
 
     D1 -.->|"No enforcement"| G1
-    D2 -.->|"Only on PR open"| E1
-    D3 -.->|"Only on PR open"| E1
+    D2 -.->|"Only after push"| E2
+    D3 -.->|"Only after push"| E2
     D4 -.->|"Partial, stale"| E2
 
     style Gap fill:#f7d9d7,color:#000
     style Enforced fill:#d8ead9,color:#000
 ```
 
-The invariant sentinel only ran in CI at **pull request open time** — after code was already pushed to a remote branch. A developer or agent could:
+The invariant sentinel ran only in CI, **after code was already pushed**. `ci.yml` ran it on each push to `main` over `examples/`, `tools/project_tooling.py` and `benchmarks/benchmark_runner.py`. `pr-sentinel.yml` would run it on pull requests, but it had never run: every commit went straight to `main` until PR #1 on 2026-09-22. A developer or agent could:
 
 1. Write code with $M = 15$, or a hardcoded RFC 1918 address.
 2. Run `git push origin feature-branch`.
-3. Open a PR. *Only now* does the sentinel run and post a violation comment.
+3. *Only now*, in CI, does the sentinel run and report the violation.
 
-This creates a reactive remediation loop that consumes CI compute, clutters PR history, and delays feedback by minutes rather than milliseconds. The correct design inverts this: **reject non-compliant commits at the moment of creation**, before they ever leave the local machine.
+This creates a reactive remediation loop that consumes CI compute, clutters PR history, and delays feedback by tens of seconds rather than milliseconds. The correct design inverts this: **reject non-compliant commits at the moment of creation**, before they ever leave the local machine.
 
 The same gap existed for documentation validation — `docs_validator.py` existed and worked correctly but was never run automatically. Mermaid label issues, unclosed fences, or broken links could merge undetected indefinitely.
 
@@ -80,7 +80,7 @@ This is the same principle behind TDD. A comment in a function saying `# Make su
 |---|---|
 | `AGENTS.md §8.2`: "Run sentinel before push" | `.pre-commit-config.yaml` hook: runs sentinel on every `git commit` |
 | `docs/CURATION_GUIDELINES.md`: "Validate markdown" | `pre-commit` hook: runs `docs_validator.py` before commit |
-| `CONTRIBUTING.md`: "Run full test suite" | `pre-push` hook: runs `pytest --collect-only` before `git push` |
+| `CONTRIBUTING.md`: "Run full test suite" | `pre-push` hook: runs `pytest --collect-only` before `git push` (collection only; CI runs the full suite) |
 
 ---
 
@@ -123,6 +123,8 @@ repos:
         pass_filenames: true
 ```
 
+As first written, the `json-schema-lint` hook ran `python -m json.tool` with `pass_filenames: true`. `json.tool` reads its second positional argument as the output file, so a commit that staged two schema files overwrote the second one. PR #73 replaced the entry with a read-only `json.load` check.
+
 Installed with:
 ```bash
 pip install pre-commit
@@ -136,18 +138,18 @@ Each hook now fires **automatically at the correct lifecycle moment** without ag
 - `pytest-collection-check`: fires on `git push` (pre-push stage), confirming all test files are importable.
 - `json-schema-lint`: fires on `git commit` for changed JSON schema files.
 
-This inversion — from post-push CI correction to pre-commit prevention — is the same architectural pattern as structural Tuple Equality Consolidation (from `AGENTS.md §10.2`): move the boundary condition earlier in the lifecycle so violations are impossible to persist, rather than detected after the fact.
+This inversion — from post-push CI correction to pre-commit prevention — is the same architectural pattern as structural Tuple Equality Consolidation (from `AGENTS.md §10.2`): move the boundary condition earlier in the lifecycle so violations are caught before they persist, rather than detected after the fact. A contributor can still skip the hooks with `git commit --no-verify` or by not installing them, so CI stays the backstop.
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Feedback latency**: Pre-push sentinel feedback from CI: ~90 seconds (workflow queue + checkout + pip install + run). Pre-commit sentinel feedback from git hook: ~200 milliseconds.
-- **Compliance surface**: Social convention requires every agent session to independently re-read and re-follow the mandate. Mechanical enforcement requires installation once; correctness is guaranteed structurally thereafter.
+- **Feedback latency**: `ci.yml` runs on 2026-09-17 and 2026-09-18 took 19 to 34 seconds from creation to completion (GitHub Actions run records). The sentinel hook takes about 90 milliseconds on one file (`python examples/ast-invariant-sentinel/sentinel.py tools/sarif_report.py`, 2026-11-19).
+- **Compliance surface**: Social convention requires every agent session to independently re-read and re-follow the mandate. Mechanical enforcement requires installation once; the check then runs on every commit unless someone skips it with `--no-verify`.
 - **CI offload**: With pre-commit hooks catching local violations, CI becomes a **second line of defense** for cross-platform and multi-Python-version correctness — not a first-pass linter.
 - **Discovery**: The gap between documented mandate and mechanical enforcement was invisible from inside normal development flow. It was only surfaced by a systematic change management research audit that compared every documented requirement against the actual enforcement infrastructure.
 
-> Instructions in documentation are aspirations. Invariants in pre-commit hooks are guarantees. The distance between them is the compliance gap — and in agentic environments, every inch of that gap is an opportunity for entropy to accumulate silently.
+> Instructions in documentation are aspirations. Invariants in pre-commit hooks are enforced by default. The distance between them is the compliance gap — and in agentic environments, every inch of that gap is an opportunity for entropy to accumulate silently.
 
 **The pattern to replicate**: For every quality gate documented in `AGENTS.md` or `CONTRIBUTING.md`, ask: "Is this enforced mechanically, or only by convention?" If only by convention, add a git hook, CI step, or automated validator. A mandate that can be skipped will eventually be skipped.
 

@@ -14,10 +14,10 @@
 Autonomous AI coding assistants operate via probabilistic next-token generation. When left unconstrained or guided solely by natural language instructions, agents predictably succumb to **five recurring cognitive pitfalls**:
 
 1. **The AST `elif` Nesting Illusion**: Assuming a flat visual `if/elif` ladder is flat in AST representation, inadvertently creating deep recursive AST nesting ($depth > 8$) that breaches architectural limits.
-2. **Linear Assertion Complexity Sprawl**: Writing sequential `assert` statements in unit tests without realizing each assert increments McCabe cyclomatic complexity ($M+1$), tripping $M \le 10$ quality gates on linear test code.
+2. **Linear Assertion Complexity Sprawl**: Writing sequential `assert` statements in unit tests without realizing that, under radon's counting (which this repository's sentinel follows), each assert increments cyclomatic complexity ($M+1$), tripping $M \le 10$ quality gates on linear test code. Checkers built on `mccabe`, such as ruff `C901`, do not count asserts.
 3. **Permissive Tool Schema Hallucination**: Permissive JSON schemas (`additionalProperties: true`) silently accept hallucinated tool parameters, causing silent logical errors or cyclic retry loops.
-4. **Process Tree Orphan Escapes**: Terminating subprocesses with simple `proc.kill()` leaves child subshells and grandchild workers running as zombie background leaks adopted by PID 1.
-5. **Minified Polyglot Bundles & Symlink Recursion**: Unbounded filesystem ingestion chokes on 25MB minified JavaScript/CSS bundles or enters infinite loops on circular directory symlinks (`ELOOP`).
+4. **Process Tree Orphan Escapes**: Terminating subprocesses with simple `proc.kill()` leaves child subshells and grandchild workers running as orphan background processes adopted by PID 1 (or a subreaper).
+5. **Minified Polyglot Bundles & Symlink Recursion**: Unbounded filesystem ingestion fills the context with large minified JavaScript/CSS bundles or enters infinite loops on circular directory symlinks (`ELOOP`).
 
 Prompt engineering alone cannot solve these problems. Stochastic tokens must be bound by **deterministic mechanical oracles**. Furthermore, once blockers are resolved, agents must not stall; they must proactively invert their focus from reactive defect remediation to proactive architectural headroom elevation.
 
@@ -57,11 +57,13 @@ flowchart TD
 
 ### The 5 Deterministic Mechanical Oracles
 
+The reference implementation, `tools/resource_iteration_workbench.py`, runs the scan, run and review loop and measures complexity and nesting. It does not implement the five oracles below: dispatch rewriting and tuple consolidation are in [`tools/ast_refactorer.py`](../tools/ast_refactorer.py); process groups and the 5 MB cap are in [`examples/agentic-ide-hook-sentinel/`](../examples/agentic-ide-hook-sentinel/).
+
 1. **Table-Driven Dictionary Dispatch**: Decomposes `if/elif` equality ladders into module-level constant dictionaries (`_<FN>_DISPATCH.get(key, fallback)`), collapsing cyclomatic complexity from $M \ge 8$ to $M = 1$ and nesting depth from $8$ to $1$.
 2. **Structural Tuple Equality Consolidation**: Replaces 10 sequential scalar assertions with a single structural tuple comparison (`assert (a, b, c) == (x, y, z)`), collapsing decision branches from $M = 11$ to $M = 1$ while fully preserving Pytest element-level diff diagnostics.
-3. **Negative Schema Assertions & Prescriptive Prompts**: Configures tool schemas with strict parameter boundaries (`additionalProperties: false` or Pydantic v2 `extra="forbid"`). On violation, the oracle synthesizes prescriptive error feedback detailing allowable parameters for deterministic zero-shot self-correction.
-4. **POSIX Process Group Containment**: Spawns untrusted subprocesses with `start_new_session=True` (avoiding `preexec_fn=os.setsid` fork-deadlocks in multithreaded runtimes) and terminates the entire tree via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM/SIGKILL)`, eliminating orphaned grandchild processes.
-5. **Pre-Flight File Size Caps & Defensive Symlink Verification**: Enforces an $O(1)$ size guard (`MAX_FILE_SIZE_BYTES = 5MB`) before reading file buffers and verifies `path.resolve().is_relative_to(base_root)` to reject circular symlinks and workspace traversal escapes.
+3. **Negative Schema Assertions & Prescriptive Prompts**: Configures tool schemas with strict parameter boundaries (`additionalProperties: false` or Pydantic v2 `extra="forbid"`). On violation, the oracle synthesizes prescriptive error feedback detailing allowable parameters, so that the model can correct the call on its next turn.
+4. **POSIX Process Group Containment**: Spawns untrusted subprocesses with `start_new_session=True` (avoiding `preexec_fn=os.setsid` fork-deadlocks in multithreaded runtimes) and terminates the entire tree via `os.killpg(os.getpgid(proc.pid), signal.SIGTERM/SIGKILL)`, so grandchild processes in the same group stop too. A grandchild that starts its own session leaves the group and escapes this.
+5. **Pre-Flight File Size Caps & Defensive Symlink Verification**: Enforces an $O(1)$ size guard (`MAX_FILE_SIZE_BYTES = 5MB`) before reading file buffers and verifies `path.resolve().is_relative_to(base_root)` to reject workspace traversal escapes. This check does not stop circular symlinks: a link to an ancestor inside the workspace resolves inside `base_root`, and since Python 3.13 a non-strict `resolve()` no longer raises on a loop. Do not follow directory symlinks, or track visited `(st_dev, st_ino)` pairs.
 
 ### The Feedback Inversion Dynamic
 
@@ -131,7 +133,7 @@ def run_isolated_command(cmd: list[str], timeout_s: float = 10.0) -> str:
 | Anti-Pattern | Operational Risk | Deterministic Countermeasure |
 |---|---|---|
 | **Prompt-Only Invariants** | Relying on system prompts to keep functions simple. LLMs drift under context noise. | Enforce AST complexity ($M \le 10$) and nesting ($\le 5$) via mechanical pre-push gates. |
-| **Operating at the Ceiling** | Leaving functions at $M = 9$ or $10$. Any future 1-line edit breaks CI. | Enforce proactive headroom optimization to $M \le 6$ during Phase 2. |
+| **Operating at the Ceiling** | Leaving functions at $M = 9$ or $10$. A one-line edit can then break CI. | Enforce proactive headroom optimization to $M \le 6$ during Phase 2. |
 | **Loose Tool Schemas** | Permissive schemas (`additionalProperties: true`) allow hallucinated tool args. | Enforce `extra="forbid"` and synthesize prescriptive error prompts. |
 | **Simple `proc.kill()`** | Leaves grandchild workers running indefinitely on host nodes. | Enforce `start_new_session=True` and `os.killpg(pgid, SIGKILL)`. |
 | **Unbounded File Ingestion** | Ingesting minified bundles crashes agent tools with OOM (CWE-400). | Enforce pre-flight `st_size <= 5MB` check before reading into memory. |

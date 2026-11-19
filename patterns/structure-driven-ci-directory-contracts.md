@@ -39,7 +39,7 @@ flowchart TD
         R1["ci.yml: pytest tests/ examples/ benchmarks/"]
         R2["New module added: examples/new-module/test_new.py"]
         R3["pytest discovers test_new.py automatically via naming convention"]
-        R4["CI coverage is always complete"]
+        R4["CI collects every file that matches the naming convention"]
         R1 --> R2 --> R3 --> R4
     end
 
@@ -61,10 +61,10 @@ flowchart TD
 2. **Rely on `pytest.ini` `testpaths`** for canonical directory registration:
    ```ini
    [pytest]
-   testpaths = tests, examples, benchmarks
+   testpaths = tests examples benchmarks
    asyncio_mode = strict
    ```
-   With `testpaths` configured, bare `pytest` with no arguments is equivalent to `pytest tests/ examples/ benchmarks/`.
+   With `testpaths` configured, bare `pytest` with no arguments, run from the rootdir, is equivalent to `pytest tests/ examples/ benchmarks/`. Separate the entries with spaces, not commas. pytest splits the value on whitespace, so `testpaths = tests, examples, benchmarks` names the missing paths `tests,` and `examples,`, and pytest silently collects only `benchmarks`.
 
 3. **Apply the same principle to linters and validators**:
    ```yaml
@@ -79,10 +79,19 @@ flowchart TD
 4. **Verify completeness with a CI manifest audit**:
    Write a test that enumerates `pytest.ini testpaths` and asserts that each discoverable `test_*.py` file would be collected:
    ```python
+   import configparser
+   from pathlib import Path
+
    def test_ci_covers_all_test_suites():
        """All test_*.py files are reachable from pytest.ini testpaths."""
-       # This test passes by existing — pytest discovers it automatically
-       assert True
+       cfg = configparser.ConfigParser()
+       cfg.read("pytest.ini")
+       roots = [Path(p) for p in cfg["pytest"]["testpaths"].split()]
+       stray = [
+           p for p in Path(".").rglob("test_*.py")
+           if ".venv" not in p.parts and not any(p.is_relative_to(r) for r in roots)
+       ]
+       assert stray == []
    ```
 
 ---
@@ -104,5 +113,5 @@ flowchart TD
 
 - **[Observation 16](../observations/devops-cli/16-ci-staleness-and-milestone-freeze-anti-pattern.md)**: The Milestone Freeze anti-pattern that motivated this pattern.
 - **[Observation 06](../observations/devops-cli/06-rate-limits-and-anti-brittle-heuristics.md)**: The prohibition on brittle partial pattern subsets — same principle applied to CI file enumeration.
-- **[`AGENTS.md §1`](../AGENTS.md)**: "Matching against a limited or arbitrary subset of a larger or unknown list of possible values is strictly prohibited."
+- **devops-cli `AGENTS.md`** (added in v0.2.18, commit 46472f3a9, 2026-09-16; removed 2026-10-23): "Matching against a limited or arbitrary subset of a larger or unknown list of possible values is strictly prohibited."
 

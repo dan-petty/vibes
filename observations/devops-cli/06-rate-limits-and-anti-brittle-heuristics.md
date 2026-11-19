@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli`  
 > **Topic**: Surviving External API Quotas & Eliminating Ad-Hoc Pattern Guessing  
-> **Key Metric**: Zero 429 quota exhaustion errors, zero regressions from brittle string slicing  
-> **TLDR**: Survive external API quotas using client-side token buckets and eliminate brittle string pattern matching in favor of deterministic symbol parsers.
+> **Key Metric**: Quota exhaustion still occurred (issue #180, GraphQL "API rate limit already exceeded"); brittle subset lists still existed after the rule (issue #431)  
+> **TLDR**: Survive external API quotas with client-side request pacing derived from the server's remaining quota, and replace brittle string pattern matching with deterministic symbol parsers.
 > **ELI:7b**: Pace API calls so external servers don't lock you out, and use real code parsers instead of sloppy regex guesswork to find functions.
 
 ---
@@ -21,12 +21,12 @@ In `devops-cli`, we encountered two related hazards that threatened autonomous s
 ## 2. The Observed Phenomenon
 
 ### Failure A: The Burst Rate Lockout
-An autonomous agent tasked with triaging 20 pull requests fired dozens of concurrent GraphQL queries in tight loops. GitHub's secondary rate limiter intervened, returning HTTP 403 / 429 errors. Without rate limiting, the agent entered an aggressive retry loop, exacerbating the lockout and stalling development for an hour.
+Issue #180 (2026-09-12) records `devops pr threads list` failing with an unhandled `GitHubOperationError`: "GitHub GraphQL query failed: gh: API rate limit already exceeded". The fix added a REST fallback. GitHub's secondary rate limiter returns HTTP 403 or 429; an agent that retries in a tight loop extends the lockout.
 
 ### Failure B: The Arbitrary Subset Fallacy
-When classifying domains or filtering identifiers, the agent authored heuristics like:
+When classifying domains or filtering identifiers, agents author heuristics like the illustrative sketch below. The real `devops-cli` case (issue #431, 2026-09-22) was the network-reference extractor in `security/reference_extractor.py`, which guessed hostnames with identifier-prefix and property-suffix lists from `config/constants.py`:
 ```python
-# The Brittle Antipattern: Arbitrary Subsets
+# Illustrative brittle antipattern: arbitrary subsets
 KNOWN_TLDS = [".com", ".org", ".net", ".io"]
 if any(url.endswith(tld) for tld in KNOWN_TLDS):
     ...
@@ -50,24 +50,25 @@ In `devops-cli`, we introduced two strict architectural mandates in `AGENTS.md`:
 
 ```mermaid
 flowchart TD
-    Op[Agent GitHub Operation] --> Limiter[Client-Side Token-Bucket Rate Limiter]
-    Limiter --> Check{Tokens Available?}
+    Op[Agent GitHub Operation] --> Limiter["Client-Side Pacer (delay = time to reset / remaining)"]
+    Limiter --> Check{Quota Known and Remaining?}
     Check -- No --> Backoff[Bounded Exponential Backoff with Jitter]
     Backoff --> Limiter
-    Check -- Yes --> Cache{Idempotent & in L2 Cache?}
-    Cache -- Yes --> Serve[Return Cached Response from Valkey]
+    Check -- Yes --> Cache{Idempotent & in TTL Cache?}
+    Cache -- Yes --> Serve["Return Cached Response (memory or disk)"]
     Cache -- No --> Network[Execute GitHub API Call via FastMCP]
     Network --> Update[Update Quota Budget & Cache]
 ```
 
 ### 1. Mandatory Rate-Limiter Scaffolding (`run_gh`)
 - **Strict Prohibition of Bare `gh` Invocations**: Agents are forbidden from invoking raw `gh` commands directly. All GitHub operations must route through native rate-managed commands (`devops gh`, `devops pr`) or FastMCP tools.
-- **Client-Side Token-Bucket Pacing**: Requests are metered locally before hitting the wire.
-- **Bounded Exponential Backoff with Jitter**: If HTTP 429 occurs, the harness automatically respects `Retry-After` headers or backs off with randomized jitter.
-- **Valkey L2 Response Caching**: Idempotent read operations (issue lists, project cards, view specs) are cached locally to reduce network round-trips.
+- **Client-Side Pacing**: Requests are metered locally before hitting the wire. `devops-cli` docs call this "token-bucket pacing", but `GitHubRateLimiter` (`src/devops_cli/github/rate_limiter.py`) is not a token bucket: it spaces requests by "time until next quota reset / remaining requests", from quota the server reports, with "no initial quotas ... default request rate, or bursting". Only its async path adds an `aiolimiter.AsyncLimiter` (60 requests per 60 s).
+- **Bounded Exponential Backoff with Jitter**: If HTTP 429 or a rate-limit 403 occurs, the harness waits for the reset window or backs off with randomized jitter.
+- **TTL Response Caching**: Idempotent read operations (issue lists, project cards, view specs) are cached in process memory and on disk to reduce network round-trips. This cache does not use Valkey.
 
 ### 2. Strict Prohibition of Brittle Pattern Subsets
-- Matching against a list of strings or regular expressions is **ONLY acceptable if it covers 100% of possible scenarios** (i.e. mathematically bounded, closed domains defined by RFCs or deterministic language grammars).
+Paraphrased from `devops-cli` `AGENTS.md` lines 20-24 at commit `acd091826`:
+- Matching against a list of strings or regular expressions is **ONLY acceptable if it covers 100% of possible scenarios** (i.e. mathematically bounded, closed, exhaustive domains defined by official RFCs or deterministic language grammars).
 - Matching against an arbitrary subset of a larger or unknown domain is **strictly prohibited**.
 - Instead of partial string matching, the agent must use:
   - Language symbol parsers (Python AST, Tree-Sitter).
@@ -79,9 +80,9 @@ flowchart TD
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Zero API Lockouts**: Automated workflows operate continuously without triggering GitHub secondary rate limits.
-- **Elimination of Fragile String Bugs**: Replacing naive substring matching with AST visitors and standard parsers eliminated an entire class of recurring regressions.
+- **Fewer API Lockouts**: Pacing and backoff reduce rate-limit failures; they do not remove them. GraphQL quota exhaustion still occurs and needs the REST fallback (issue #180).
+- **Fewer Fragile String Bugs**: Replacing substring matching with AST visitors and standard parsers removes this class of bug where it is applied. Issue #431 shows subset lists that survived the rule until they were found.
 - **Transparent Quota Telemetry**: Agents proactively inspect `devops gh rate-limit` before launching bulk operations.
 
 > [!IMPORTANT]
-> **Key Rule for Agentic Engineering**: Never let an agent guess with arbitrary lists. If the domain is closed, enforce RFC coverage; if open, use an established parser. Protect your APIs with client-side token-bucket limiters.
+> **Key Rule for Agentic Engineering**: Never let an agent guess with arbitrary lists. If the domain is closed, enforce RFC coverage; if open, use an established parser. Protect your APIs with client-side rate limiting.

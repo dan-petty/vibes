@@ -12,7 +12,7 @@ When people first discover AI coding tools, it feels like magic. You type a sent
 
 Naturally, you think: *"Why stop there? Why not build my entire company's product by just chatting with the AI?"*
 
-This is what Silicon Valley popularized as **"vibe coding"**:
+Andrej Karpathy named this **"vibe coding"** in a post on X on 2 February 2025:
 - You don't read the documentation.
 - You don't write tests.
 - You don't look closely at the generated code.
@@ -61,7 +61,7 @@ Instead of treating the AI as an all-knowing oracle, you treat it like an extrem
 
 Human beings are terrible at reviewing hundreds of lines of AI-generated code. Our eyes glaze over, we miss subtle off-by-one errors, and we get tired after ten minutes.
 
-Computers, on the other hand, never get tired. A test runner like `pytest` or an AST linter like `ruff` can check 1,000 files in half a second and tell you with 100% mathematical certainty whether every single requirement was met.
+Computers, on the other hand, never get tired. A linter like `ruff` can check 1,000 files in well under a second, and a test runner like `pytest` tells you exactly which tests passed. They check only the rules and assertions you gave them, but they check them the same way every time.
 
 > **The Golden Rule**: Never ask a human to review something a computer script could have checked automatically. And never let an AI declare a task finished until the computer script agrees.
 

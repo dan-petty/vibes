@@ -6,7 +6,7 @@ NVIDIA/garak and promptfoo/promptfoo. Supports multi-provider execution across:
 1. MockModelProvider: Deterministic, zero-network mock provider for offline testing and CI.
 2. OpenAIProvider: OpenAI-compatible endpoints (/v1/chat/completions) for cloud and local services.
 3. AnthropicProvider: Anthropic Claude messages API (/v1/messages).
-4. OllamaProvider: Local Ollama service (/api/generate and /api/chat).
+4. OllamaProvider: Local Ollama service (/api/generate).
 5. GenericRestProvider: Configurable REST generator matching arbitrary JSON payloads.
 """
 

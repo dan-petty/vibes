@@ -27,11 +27,11 @@ They take a pen, cross off each item in the store aisle, and return with exactly
 
 ## Why AIs Suffer from Brain Fog
 
-In machine learning papers, you will hear terms like **"Lost-in-the-Middle Attention Decay"** or **"Context Accumulation Drift"**.
+In machine learning papers, you will read results such as **"Lost in the Middle"** (Liu et al., 2024): models use information in the middle of a long input less reliably than information at its start or end.
 
 In plain English, it means:
 
-> **When a chat gets too long, the AI forgets what it was told at the beginning.**
+> **When a chat gets too long, the AI starts to lose track of what it was told.**
 
 Every AI model has a **context window**—a limited capacity for how much text it can see at once. As the conversation progresses:
 1. You run a command that outputs 200 lines of terminal logs.
@@ -89,7 +89,7 @@ When you or the AI write a task description or pull request checklist, **author 
 - Mark items complete (`- [x]`) as you verify them with real test runs.
 - Never open "administrative" cleanup tasks just to change a status label after the work is already merged.
 
-Keep it simple, keep it written down, and the AI will never suffer from brain fog again.
+Keep it simple, keep it written down, and the AI will lose its place far less often.
 
 ---
 

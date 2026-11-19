@@ -71,7 +71,7 @@ def render_json_report(data):
     return render_report(data, fmt="json")
 ```
 
-One declaration carries both halves: the metadata a static gate enforces, and the `DeprecationWarning` the caller experiences at runtime. The decorator refuses to construct an incomplete contract, so an under-specified deprecation fails at import rather than at the release that was meant to remove it.
+One declaration carries both halves: the metadata a static gate enforces, and the `DeprecationWarning` raised at runtime. Python's default warning filters hide `DeprecationWarning` unless the calling code is in `__main__` ([PEP 565](https://peps.python.org/pep-0565/)). Test runners such as pytest show it, and `-W error::DeprecationWarning` turns it into an error. Many callers therefore never see the warning, which is why the release gate, not the warning, enforces the deadline. The decorator refuses to construct an incomplete contract, so an under-specified deprecation fails at import rather than at the release that was meant to remove it.
 
 At release time:
 

@@ -1,8 +1,10 @@
 # Artifact: Sample Completed Task Specification
 
-> **Artifact Type**: Concrete Completed Task Specification  
-> **Source Project**: `devops-cli` (`docs/agent/tasks/task-218-fix-release-draft-pr-description-generator.md`)  
-> **Purpose**: Exemplary reference showing how an autonomous agent documented and certified a completed task.
+> **Artifact Type**: Illustrative Completed Task Specification  
+> **Source Project**: modeled on `devops-cli` task 218 (`docs/agent/tasks/task-218-fix-release-draft-pr-description-generator.md`)  
+> **Purpose**: Example of how an agent can record and check a completed task.
+
+The real task 218 fixed milestone deliverable queries, duplicated changelog notes and the release checklist, and its draft PR was #217. The problem, function name, test files, branch and log below are illustrative. They are not taken from that task: `devops-cli` had no `extract_clean_issue_title` and no `tests/commands/` directory.
 
 ---
 
@@ -12,7 +14,7 @@
 - **Milestone**: v0.2.19
 - **Branch**: release/v0.2.19
 - **Pull Request**: #219
-- **Assignee**: AI Agent (Pair Programmed with Dan Petty)
+- **Assignee**: AI Agent
 
 ---
 
@@ -41,7 +43,7 @@ When generating release pull request descriptions via `devops release draft`, th
 - [x] **Step 1: Test Specification**: Authored `tests/commands/test_release_title_scrubbing.py` with 5 counterexample test cases. Verified failure (`Red`).
 - [x] **Step 2: Source Implementation**: Updated `src/devops_cli/commands/release.py` with `extract_clean_issue_title`.
 - [x] **Step 3: Verification**: Re-ran targeted test suite; all 5 tests passed (`Green`).
-- [x] **Step 4: Quality Gate Certification**: Ran `uv run devops ci`. All 10 checks passed with exit code 0 and 93.4% coverage.
+- [x] **Step 4: Quality Gate Certification**: Ran `uv run devops ci`. All 10 checks passed with exit code 0.
 
 ---
 

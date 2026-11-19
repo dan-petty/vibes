@@ -4,7 +4,7 @@
 > **Topic**: Loops That Manufacture Work; Why a New Instrument's First Reading Measures the Instrument
 > **Key Metric**: 4 of 5 backlog items were measurement error, not work; 6 separate first readings across one session were artifacts of the instrument rather than facts about the system
 > **TLDR**: Treat inbound review findings as unproven hypotheses; verify and reproduce the defect with an executable test before attempting a fix.
-> **ELI:7b**: Never blindly patch a bug reported by an AI reviewer. Write a test that reproduces it first to prove the bug is actually real.
+> **ELI:7b**: Never blindly patch a bug that an automated checker reports. Write a test that reproduces it first to prove the bug is actually real.
 
 ---
 
@@ -29,7 +29,7 @@ This repository's loop scans every resource, ranks the findings, and hands an ag
 
 The test-parity check tested for a companion *filename*. Satisfying it meant creating three redundant test files to match a naming pattern, proving nothing and adding maintenance. An agent that trusted the finding would have produced pure waste that looked exactly like progress — three new files, three green checkmarks, a shrinking backlog.
 
-**The same failure had already occurred five other times in the session, each time on a newly built instrument:**
+**The same failure occurred six other times in the session, most of them on a newly built instrument:**
 
 | Instrument | First reading | What it was measuring |
 |---|---|---|
@@ -50,7 +50,7 @@ Three mechanisms, and they compound.
 
 **A proxy breaks exactly where the system is unusual.** Every one of these instruments measures something cheap that correlates with something expensive: a filename for verification, wall-clock for work done, a decorated function for public API. The correlation holds across the ordinary corpus, which is why the proxy survived review. It breaks on the unusual case — a module tested through its façade, a closure inside a factory, a suite whose cost is interpreter boot. Unusual is precisely what new work is, so the proxy fails most often on exactly the code the loop was built to examine.
 
-**A new instrument's first reading has no prior.** A metric derived from a window, a rate, or a ratio is least stable when it has the least data, and that is exactly when it is first consulted. Burn rate divides by elapsed window; on iteration one it reads catastrophic by construction. A ratio over three events reads `0.000` the moment one fails. There is nothing to compare against, so the reading is accepted.
+**A new instrument's first reading has no prior.** A metric derived from a window, a rate, or a ratio is least stable when it has the least data, and that is exactly when it is first consulted. This repository's burn rate divides by the elapsed window (an SRE burn rate does not); on iteration one it reads catastrophic by construction. A ratio over three events reads `0.000` the moment one fails. There is nothing to compare against, so the reading is accepted.
 
 **A work-generating loop has no cost signal for generating wrong work.** The half of the loop that finds work is rewarded for finding things. Nothing in the system penalises a finding that turns out to be phantom, because the agent that acts on it produces a diff, the diff passes the gates, and the backlog shrinks. The feedback loop is closed on *activity*, not on *whether the activity was needed*.
 
@@ -97,7 +97,7 @@ A fifth check applies to the objectives themselves: **what does a breach mean?**
 | Measure | Result |
 |---|---|
 | Backlog before verification | 5 items |
-| Backlog after fixing the instruments | 0 items |
+| Backlog after fixing the instruments and the genuine items | 0 items |
 | Items that were measurement error | 4 of 5 |
 | Redundant test files avoided | 3 |
 | First readings across the session that measured the instrument | 6 |

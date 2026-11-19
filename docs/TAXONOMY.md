@@ -37,17 +37,17 @@ flowchart TD
 
 ### 1.1 Single-Shot Prompting (Generation Without Scaffolding)
 - **Definition**: Directly requesting the model to produce an entire file or diff without intermediate verification steps.
-- **Failure Profile**: High risk of hallucinated imports, syntax regressions, and unhandled edge cases beyond ~200 lines of code.
+- **Failure Profile**: High risk of hallucinated imports, syntax regressions, and unhandled edge cases, growing with the length of the generated output.
 
 ### 1.2 Tool-Augmented Agent (ReAct / Step-by-Step Loop)
-- **Definition**: An agent equipped with structured tool definitions (e.g. Model Context Protocol / FastMCP) that operates via an iterative *Thought -> Action -> Observation -> Reflection* loop.
+- **Definition**: An agent equipped with structured tool definitions (e.g. Model Context Protocol / FastMCP) that operates via an iterative *Thought -> Action -> Observation* loop (ReAct, Yao et al., ICLR 2023). An added *Reflection* step comes from Reflexion (Shinn et al., NeurIPS 2023).
 - **Key Advantage**: Ability to read actual compiler errors, inspect directory trees, and iteratively fix test failures.
 
 ### 1.3 Multi-Tier Agent Constellations ("Own the Sensitive, Rent the Frontier")
 - **Definition**: Partitioning execution into swappable roles across multiple model tiers:
   - **Frontier Models (Claude Opus, GPT-4o, Gemini Pro)**: Used exclusively for architectural synthesis, ambiguous problem decomposition, and final verification reviews.
   - **Local Open-Weight Models (Granite, Qwen, DeepSeek)**: Used for token-heavy, mechanical tasks such as AST symbol indexing, code parsing, documentation cross-referencing, and draft test authoring.
-- **Economics**: Yields 80–90% token cost reduction while maintaining high architectural quality.
+- **Economics**: Moves token-heavy work to cheaper models. This repository has no measurement of the saving.
 
 ---
 
@@ -98,7 +98,7 @@ flowchart LR
 - Rejects procedural bloat automatically.
 
 ### 3.5 The 4-Tier Verification Pyramid Architecture
-As codebases scale past hundreds of tests, monolithic test execution latency balloons from $500\text{ms} \to 45\text{s}+$, triggering the Verification Horizon Latency Cliff where agent single-turn convergence collapses from $94.7\% \to 18.2\%$. Disciplined systems decouple validation depth from iteration cadence via four stratified tiers:
+As codebases scale past hundreds of tests, running the whole suite on every edit becomes slow, and slow feedback lowers how often an agent converges in a single turn (the Verification Horizon Latency Cliff; no measurement in this repository backs a specific rate). Disciplined systems decouple validation depth from iteration cadence via four stratified tiers:
 
 ```mermaid
 flowchart TD
@@ -121,8 +121,8 @@ flowchart TD
 - **Layer 3: Gated Remote Matrix CI ($1\text{m} - 5\text{m}$)**: Full repository CI matrix across multiple runtime versions and environments.
 
 ### 3.6 Structural Tuple Consolidation in Test Suites
-- Under Python AST semantics, every `assert expr` statement compiles to an implicit conditional branch (`if not (expr): raise AssertionError`), adding $+1$ to the test function's McCabe cyclomatic complexity $M$.
-- Linear assertion sprawl causes comprehensive test functions to breach architectural complexity limits ($M \le 10$).
+- An `assert expr` statement compiles to a conditional branch (`if not (expr): raise AssertionError`). Radon and this repository's AST sentinel count each `assert` as one decision, adding $+1$ to the test function's cyclomatic complexity $M$; Ruff's C901 rule does not (a function with four asserts scores 5 in radon and 1 in Ruff 0.17.6).
+- Under those counters, linear assertion sprawl causes comprehensive test functions to breach architectural complexity limits ($M \le 10$).
 - **Structural Tuple Consolidation** (`assert (actual_a, actual_b) == (expected_a, expected_b)`) and collection predicates (`assert all(...)`) compress multi-property checks down to $M=1$ while fully preserving pytest diff diagnostics.
 
 ---
@@ -139,26 +139,28 @@ flowchart TD
 | **Information Leakage** | Leaking private IP addresses, homelab hostnames, or keys into commits. | A concrete LAN address, or credentials, embedded in documentation. | Automated sanitization scanners; mandatory use of RFC 5737 and `example.com`. |
 | **The Phantom Architecture Trap** | LLMs describe idealized systems in docs that exceed implementation reality. | Downstream agents treat phantom doc interfaces as truth, calling nonexistent flags. | Tier 1 mechanical AST/reflection extraction; never let an LLM generate API reference tables. |
 | **Circular Self-Consistency Trap** | Generating code, tests, and documentation simultaneously in a closed loop. | Internal gates pass 100% while code completely diverges from external physical realities. | Ground assertions in physical oracles (exit codes, network traces, external standards). |
-| **Attention Dilution / Context Rot** | Narrative prose bloats context, pushing invariants into the lost-in-the-middle dead zone. | Agents violate core security rules while obsessively adhering to narrative formatting rules. | Active context compaction ($ADI \le 1.5$); enforce concise intent and bounded string caps. |
+| **Attention Dilution / Context Rot** | Narrative prose bloats context, pushing invariants into the lost-in-the-middle dead zone. | Agents violate core security rules while obsessively adhering to narrative formatting rules. | Active context compaction (keep ADI low; ADI is a heuristic with no calibrated target); enforce concise intent and bounded string caps. |
 | **CommonMark Linebreak Degradation** | Formatters strip intentional double-space hard line breaks (`  \n`). | Markdown renders broken blockquotes and unreadable soft-wrapped lists. | Pre-commit `--markdown-linebreak-ext=md` and deterministic `DOC012` linebreak validator. |
 | **Defect-Shaped Loop Myopia** | Internal verification loop only fixes what exists, blind to what should exist next. | Backlog reaches 0 items while capabilities fall behind external ecosystem conventions. | Outward landscape surveys (`landscape_survey.py`) and autonomous roadmap ingestion. |
-| **Stochastic RSI Divergence** | Autonomous self-improvement loop generates code, tests, and goals without invariant bounds. | Compounding hallucinations and degrading architectural headroom across generations. | Invariant-grounded RSI: asymmetric AST gating ($P$ vs $NP$) and monotonic CEGIS constraint accumulation. |
+| **Stochastic RSI Divergence** | Autonomous self-improvement loop generates code, tests, and goals without invariant bounds. | Compounding hallucinations and degrading architectural headroom across generations. | Invariant-grounded RSI: gates that are much cheaper to run than the generation they check, and monotonic CEGIS-style accumulation of past counterexamples as regression tests. |
 | **Unusable Visualization Sprawl** | Mermaid diagrams sprawl into unbranched vertical towers (>3:1) or flat ribbons (<1:3). | Multi-page vertical scrolling distortion or microscopic text scaling in GitHub viewports. | Bounded aspect ratio invariant ($1:3 \le H/W \le 3:1$) via 2D matrix and column layouts. |
 | **Mitigation-Refutation Conflation** | Verifier confirms a defect but dismisses it based on a contextual mitigation, marking it refuted. | Critical security and concurrency flaws are silently dropped from developer reports. | Tripartite verification (Confirmed, Refuted with Line Citation, Mitigated with Named Mechanism). |
 | **Unreliable Teacher Contamination** | Negative filtering catalogs learn from stochastic model invalidation verdicts. | Model agreement widens suppression rules, permanently blinding the system to genuine defects. | Epistemic Seam: negative catalogs learn strictly from deterministic AST checks or human verification. |
 | **Evaluator Parochialism** | Universal review and verification engines judge external repositories against host house rules. | Foreign codebases receive false-positive violations for conventions they do not declare. | Nearest-root convention scoping (`.devops/review.md`) and agnostic verifier prompts. |
 | **The Language Game Trap** | Verifiers debate code correctness in open-ended prose, accepting semantic vocabulary as proof of safety. | Models accept plausible excuses for unbound buffers or path traversals without executing code. | Kinetic falsification: replace prose arguments with minimal executable counterexample probes. |
-| **The Kolmogorov Verification Gap** | Spending thousands of tokens attempting symbolic safety proofs instead of searching for minimal counterexamples. | Verification stalls in multi-turn debate while program correctness remains unproven. | Exploits are minimal ($NP$-complete search); synthesize ephemeral test cases and evaluate exit codes. |
+| **The Kolmogorov Verification Gap** | Spending thousands of tokens attempting symbolic safety proofs instead of searching for minimal counterexamples. | Verification stalls in multi-turn debate while program correctness remains unproven. | A counterexample is cheap to check once found; search for one, synthesize ephemeral test cases, and evaluate exit codes. |
 | **Mitigation Perimeter Decay** | Dormant vulnerabilities mitigated by external perimeters detonate when refactors modify the wrapper. | Refactoring API routing removes request size limits, detonating an unindexed parser vulnerability. | Invariant leashing: link defect mitigations to perimeter files and re-trigger probes on mutation. |
 | **Instruction Ratchet Bloat** | Monotonic accumulation of system prompt rules without empirical retention audits or pruning. | Prompts expand past 30k tokens, consuming context budgets and driving up inference latency. | JIT instruction governance, token weight auditing, and counterfactual rule ablation (`instruction_governor.py`). |
 | **Lost-in-the-Middle Invariant Extinction** | Crucial rules positioned in the central third of monolithic instruction sets suffer steep attention decay. | Models routinely violate middle-prompt security and formatting invariants despite presence in prompt. | Two-tier JIT decomposition: bounded ($\le 2$k) Tier 1 Invariant Envelope with dynamic Tier 2 domain overlays. |
-| **The Verification Horizon / Latency Cliff** | Monolithic test suites ($> 900$ tests) run on every edit induce tool timeouts ($14.6\%$), poll loops, and attention dilution. | Monotonic repair loops collapse into thrashing; models forget original architectural constraints during background waits. | 4-Tier Verification Pyramid: Layer 0 AST sentinel ($\le 50\text{ms}$), Layer 1 focused slice oracle ($\le 500\text{ms}$), Layer 2 pre-commit, Layer 3 gated CI. |
-| **The Assertion Density Complexity Trap** | Linear `assert expr` statements compile to `if not (expr): raise`, adding $+1$ to McCabe complexity $M$ per assertion. | Purely linear test functions breach $M \le 10$ complexity invariants despite zero nested branching. | Structural tuple equality consolidation: `assert (a, b) == (x, y)` preserving pytest element diffs with $M=1$. |
-| **The Milestone Horizon Inflation Trap** | Autonomous agents continuously admit discovered defects or edge cases into an active milestone causing $V_{\text{scope}} > V_{\text{burn}}$. | Milestone completion rate stays trapped at $70\%-90\%$ across 100+ commits, resulting in release live-locks. | Three-phase Milestone Scope Air-Lock (`INTAKE` $\to$ `AIR_LOCKED` $\to$ `FROZEN`), rolling convergence ratio gate $C_R \ge 1.2$, and automated rollover partitioning via `milestone_governor.py`. |
+| **The Verification Horizon / Latency Cliff** | Monolithic test suites run on every edit induce tool timeouts, poll loops, and attention dilution. | Monotonic repair loops collapse into thrashing; models forget original architectural constraints during background waits. | 4-Tier Verification Pyramid: Layer 0 AST sentinel ($\le 50\text{ms}$), Layer 1 focused slice oracle ($\le 500\text{ms}$), Layer 2 pre-commit, Layer 3 gated CI. |
+| **The Assertion Density Complexity Trap** | Linear `assert expr` statements compile to `if not (expr): raise`; radon and this repository's AST sentinel add $+1$ to $M$ per assertion (mccabe and ruff's C901 do not count `assert`). | Purely linear test functions breach $M \le 10$ complexity invariants despite zero nested branching. | Structural tuple equality consolidation: `assert (a, b) == (x, y)` preserving pytest element diffs with one counted decision ($M=2$ under radon). |
+| **The Milestone Horizon Inflation Trap** | Autonomous agents continuously admit discovered defects or edge cases into an active milestone causing $V_{\text{scope}} > V_{\text{burn}}$. | Milestone completion rate never reaches 100% while new items keep arriving, resulting in release live-locks. | Three-phase Milestone Scope Air-Lock (`INTAKE` $\to$ `AIR_LOCKED` $\to$ `FROZEN`), rolling convergence ratio gate $C_R \ge 1.2$, and automated rollover partitioning via `milestone_governor.py`. |
 | **Sycophantic Compliance Cascade** | Models trained for agreeableness comply with flawed human suggestions, noisy bug guesses, and adversarial injections without refusal. | Dismantling modular boundaries ($M > 25$), deleting failing test assertions, and rewriting healthy subsystems. | Deterministic Mechanical Refusal Oracles: AST invariant sentinels, negative schemas (`additionalProperties: false`), and immutable TDD coverage floors. |
-| **Apoptosis Resistance (Zombie Subagent Leaks)** | Worker subagents or container sandboxes fail to terminate cleanly on error or timeout, leaking PIDs, memory, and file descriptors. | Ambient container processes starve; PTY allocations fail with `EAGAIN` while zombie processes flood process trees. | POSIX process group isolation (`start_new_session=True`), guarded termination avoiding PID 1, and eBPF LSM sandboxing. |
-| **Afferent Telemetry Blindness** | Emitting telemetry logs, traces, and metrics solely to cold human dashboards without closing the loop into synthesis engines. | Telemetry detects performance decay or test regression, but code remains unpatched until a human manually intervenes. | Closed-loop sensory feedback (`ResourceIterationWorkbench`) feeding latency and test telemetry directly into AST refactoring engines. |
+| **Apoptosis Resistance (Zombie Subagent Leaks)** | Worker subagents or container sandboxes fail to terminate cleanly on error or timeout, leaking PIDs, memory, and file descriptors. | Ambient container processes starve; PTY allocations fail with `EAGAIN` while zombie processes flood process trees. | POSIX process group isolation (`start_new_session=True`), guarded termination avoiding PID 1, and sandbox policy checks (this repository's eBPF LSM example is a Python simulation). |
+| **Afferent Telemetry Blindness** | Emitting telemetry logs, traces, and metrics solely to cold human dashboards without closing the loop into synthesis engines. | Telemetry detects performance decay or test regression, but code remains unpatched until a human manually intervenes. | Closed-loop sensory feedback: `ResourceIterationWorkbench` measures latency, test results and AST metrics and turns them into remediation guidance for the agent; it does not refactor code itself. |
 | **Epistemic Oscillation (Hyper-Metabolic Churn)** | Autonomous agents mutate healthy code in response to transient environmental noise without deadband hysteresis. | Endless micro-refactor PRs oscillate back and forth under fluctuating network latency or VM noisy-neighbor jitter. | Homeostatic deadband damping, rolling SRE error budget windows (`reliability_slo.py`), and CEGIS monotonic constraint accumulation. |
+
+"CEGIS" in this table and below names a loop in which every failing input an agent meets becomes a permanent regression test. That is an analogy. CEGIS proper, counterexample-guided inductive synthesis (Solar-Lezama et al., ASPLOS 2006), pairs a synthesizer that proposes candidate programs with a verifier that returns counterexample inputs.
 
 ---
 
@@ -167,17 +169,17 @@ flowchart TD
 | Concept | Definition & Operational Scope | Machine Role vs. Human Role |
 |---|---|---|
 | **The Sovereign Human Triad** | The three non-synthetic anchors that cannot be automated: **Telos** (purpose & ethics), **Capital & Boundaries** (economic & physical constraints), and **Sovereign Attestation** (cryptographic release authority). | Machine optimizes within the boundary; Human defines the boundary and bears legal/moral liability. |
-| **Autonomous Invariant Discovery** | Mining execution telemetry, commit trajectories, and AST metrics to formulate new mathematical invariants ($M \le 10$, parameter cardinality, structural tuples) rather than relying on human prompt faith. | Machine discovers the mathematical ceilings that maximize zero-shot recovery; Human ratifies them as constitutional rules. |
-| **Cybernetic Risk Modulation** | SRE/PID control over error budgets (`reliability_slo.py`), dynamically modulating loop velocity, speculative refactoring, and reactive repair based on real-time invariant compliance. | Machine regulates velocity continuously without emotion; Human calibrates risk tolerance ceilings. |
+| **Autonomous Invariant Discovery** | Mining execution telemetry, commit trajectories, and AST metrics to formulate new invariant thresholds ($M \le 10$, parameter cardinality, structural tuples) rather than relying on human prompt faith. | Machine proposes the thresholds that best support recovery; Human ratifies them as constitutional rules. |
+| **Cybernetic Risk Modulation** | SRE error-budget policy (`reliability_slo.py` maps budget state to a loop phase through one table; it has no PID controller), dynamically modulating loop velocity, speculative refactoring, and reactive repair based on real-time invariant compliance. | Machine regulates velocity continuously without emotion; Human calibrates risk tolerance ceilings. |
 | **The Epistemic Seam** | The rigid barrier between non-deterministic token generation and deterministic physical truth, prohibiting stochastic models from mutating their own verification catalogs. | Machine operates within the seam; Human arbitrates ambiguous value cliffs. |
-| **Rule Attribution Mapping** | Bijective mapping between deterministic mechanical gate codes (`CC001`, `DOC012`, `AIBOM001`, `ROT002`) and instruction sections, verifying automated coverage. | Machine computes mechanical coverage and token savings; Human retires redundant prose guidelines. |
+| **Rule Attribution Mapping** | Maps each deterministic mechanical gate code (`CC001`, `DOC012`, `AIBOM001`, `ROT002`) to the first instruction section that names it or matches its keywords (`tools/instruction_governor.py`), verifying automated coverage. Several codes can share one section, so the map is not bijective. | Machine computes mechanical coverage and token savings; Human retires redundant prose guidelines. |
 | **JIT Instruction Decomposition** | Modularizing instructions into a universal invariant kernel ($\le 2$k tokens) and dynamically hydrated domain overlays based on active diff target paths. | Machine resolves file types and scopes prompts just in time; Human establishes core invariant kernel. |
 
 ---
 
 ## 6. The Metabolic & Biological Execution Topology (Autopoietic Systems)
 
-When software systems gain the ability to recursively inspect, evaluate, mutate, verify, and select their own code and runtime states against formal invariants, they transcend mechanical automation and behave as **autopoietic, metabolic digital organisms**.
+When software systems gain the ability to recursively inspect, evaluate, mutate, verify, and select their own code and runtime states against formal invariants, they can be described, by analogy, as **autopoietic, metabolic digital organisms**. Autopoiesis (Maturana & Varela) properly names a system that produces its own components and boundary. A codebase does neither: agents and tools outside it make every change.
 
 ```mermaid
 flowchart LR
@@ -185,7 +187,7 @@ flowchart LR
         direction TB
         S1["OpenTelemetry Spans & Traces"]
         S2["AST Headroom Deltas (M, Depth)"]
-        S3["eBPF Runtime Kernel Signals"]
+        S3["Sandbox Policy Signals (simulated eBPF LSM)"]
     end
 
     subgraph Homeostasis ["Central Autonomic Homeostasis"]
@@ -218,7 +220,7 @@ flowchart LR
 
 ### 6.3 Cellular Immunology & Targeted Apoptosis
 - Biological survival requires that infected or corrupted cells undergo programmed cell death (apoptosis) rather than poisoning the host.
-- In agentic swarms, misbehaving subagents, hallucinated reasoning loops, and rogue background processes are strictly sandboxed (eBPF LSM, POSIX process groups).
+- In agentic swarms, misbehaving subagents, hallucinated reasoning loops, and rogue background processes are sandboxed in POSIX process groups. (This repository's eBPF LSM example is a Python simulation: it loads no BPF program.)
 - Breaches trigger immediate apoptosis: process groups are killed, corrupted worktrees are discarded, and execution fails over to clean invariant snapshots.
 
 ### 6.4 The Synthetic Nervous System: Afferent vs. Efferent Signaling
@@ -264,7 +266,7 @@ flowchart TD
         S6["Agent 2C: Traces capture<br/>CST token parsing latency"]:::beat2
     end
 
-    G2["Group Game 2: Spatial Worktree Rebase Arbitration<br/>(Tree-CRDT Conflict Resolution)"]:::group
+    G2["Group Game 2: Spatial Worktree Rebase Arbitration<br/>(Tree-CRDT Merge, simulated; replicas can diverge)"]:::group
 
     C["Beat 3: The Climax & Unification<br/>(3-Way Semantic AST Reconciliation -> Atomic PR Release)"]:::climax
 
@@ -303,7 +305,7 @@ flowchart TD
 
 ### 7.6 The Eloquent Pause (The Art of Non-Generation)
 - Intelligence is measured by the entropy eliminated per token, not by raw token volume.
-- Eliminating compulsive token generation (preambles, redundant ASCII art, apologetic conversational filler) preserves softmax attention budgets ($ADI \le 1.5$) and prevents context rot.
+- Eliminating compulsive token generation (preambles, redundant ASCII art, apologetic conversational filler) leaves more of the context for instructions and reduces the risk of context rot.
 
 ### 7.7 Brechtian Verfremdungseffekt (Anti-Magic Software)
 - Exposing the stage machinery (OpenTelemetry traces, token budgets, AST complexity metrics, and explicit falsification criteria) eliminates the superstition of "AI magic" and establishes verifiable, observable engineering.
@@ -312,7 +314,7 @@ flowchart TD
 
 ## 8. The Ecological & Thermodynamic Topology (Dissipative Structures & Natural Cybernetics)
 
-When software codebases are maintained continuously by autonomous agent swarms, their dynamics are accurately governed by non-equilibrium thermodynamics, evolutionary ecology, and cellular biology:
+When software codebases are maintained continuously by autonomous agent swarms, their dynamics can be described with analogies from non-equilibrium thermodynamics, evolutionary ecology, and cellular biology. These are metaphors, not physical laws that govern code:
 
 ```mermaid
 flowchart TD
@@ -331,42 +333,42 @@ flowchart TD
     end
 ```
 
-### 8.1 Prigogine's Dissipative Structures: Defying the Second Law
-- Classical thermodynamics dictates that closed software repositories accumulate entropy, rotting into spaghetti legacy code.
-- Under Ilya Prigogine's formulation of non-equilibrium open systems ($dS = d_i S + d_e S$), an agentic codebase continuously imports computational energy (tokens, GPU cycles) and **exports technical debt** ($d_e S < 0$) by compacting context, deleting dead shims, and refactoring procedural sprawl.
-- When $|d_e S| > d_i S$, the total entropy of the system decreases monotonically: the codebase grows cleaner and faster as it ages.
+### 8.1 Prigogine's Dissipative Structures: Local Order Within the Second Law
+- Thermodynamics does not govern source code. The software-engineering result is Lehman's law of increasing complexity (*Proceedings of the IEEE*, 1980): as a program is changed, its complexity increases unless work is done to maintain or reduce it.
+- By analogy with Ilya Prigogine's formulation of non-equilibrium open systems ($dS = d_i S + d_e S$, where $d_i S \ge 0$ is entropy produced inside the system and $d_e S$ is entropy exchanged with the surroundings), an agentic codebase continuously imports computational energy (tokens, GPU cycles) and **exports technical debt** ($d_e S < 0$) by compacting context, deleting dead shims, and refactoring procedural sprawl.
+- In Prigogine's open systems, when $-d_e S > d_i S$ the system's own entropy falls while the entropy of its surroundings rises by more, so the second law still holds. For a codebase the analogy says only that cleanup must outpace the decay that changes cause; this repository does not measure either.
 
 ### 8.2 Alan Turing's Morphogenesis in Architecture
-- Alan Turing (1952) proved that uniform biological tissue self-organizes into complex patterns (stripes, spots) via the reaction-diffusion of two chemicals: a local **Activator** and a fast-diffusing **Inhibitor**.
+- Alan Turing (1952, *"The Chemical Basis of Morphogenesis"*) showed mathematically that two reacting and diffusing chemicals can turn a nearly uniform state into a stable pattern (stripes, spots). The activator–inhibitor form, a short-range **Activator** with a fast-diffusing long-range **Inhibitor**, is from Gierer and Meinhardt (1972).
 - In agentic architecture:
   - **The Activator**: The generative model, constantly striving to synthesize code and expand capability horizons.
   - **The Inhibitor**: The AST Invariant Sentinel ($M \le 10$, depth $\le 5$) and lint oracles, rapidly diffusing across the repository to suppress sprawl.
   - Bounded together, they produce self-differentiating, modular architecture without requiring monolithic upfront blueprints.
 
 ### 8.3 Physarum Polycephalum: Slime Mold Context Routing
-- The plasmodial slime mold *Physarum polycephalum* networks food sources with mathematical optimality through pulsatile peristalsis: tubes with heavy nutrient flow thicken and reinforce, while inactive paths wither and detach.
+- The plasmodial slime mold *Physarum polycephalum* connects food sources with networks whose efficiency, fault tolerance and cost are comparable to the Tokyo-area rail network (Tero et al., *Science*, 2010). It builds them through pulsatile peristalsis: tubes with heavy nutrient flow thicken and reinforce, while inactive paths wither and detach.
 - Agentic context routers mirror this dynamic: paths with active invariant friction or compiler errors swell into sharp AST focus, while irrelevant modules are pruned, discovering the geodesic path through symbol space.
 
 ### 8.4 Mycorrhizal Underground Networks: The FastMCP Root Mesh
-- Forest trees share nutrients, carbon, and distress signals across miles of subterranean fungal mycelium (the Wood Wide Web).
-- In autonomous development environments, the Language Server Protocol (LSP) and Model Context Protocol (FastMCP) form the shared fungal root mesh. When an interface shifts in one file, diagnostic signals propagate across the entire repository before the compiler is invoked.
+- Mycorrhizal fungi connect the roots of many forest trees (common mycorrhizal networks, the "Wood Wide Web"). Popular accounts say trees share nutrients, carbon, and distress signals through them; a 2023 review (Karst, Jones & Hoeksema, *Nature Ecology & Evolution*) found the field evidence for these claims weak.
+- In autonomous development environments, the Language Server Protocol (LSP) and the Model Context Protocol (MCP; FastMCP is one Python framework for it) form the shared fungal root mesh. When an interface shifts in one file, diagnostic signals propagate across the entire repository before the compiler is invoked.
 
 ### 8.5 Kleiber's Law & Swarm Metabolism (Shrews vs. Whales)
 - Max Kleiber (1932) demonstrated that metabolic rate scales as $B \propto M^{3/4}$. A 2g shrew beats its heart 1,500 times a minute in a hyperactive sprint; a blue whale beats its heart 6 times a minute with majestic thermodynamic efficiency.
 - In multi-model constellations:
-  - Local quantized models (7B/14B) act as the shrews: high-tempo, 150 tok/sec reflex handling routine AST sweeps, formatting, and single-line fixes at near-zero marginal cost.
+  - Local quantized models (7B/14B) act as the shrews: high-tempo reflex handling routine AST sweeps, formatting, and single-line fixes at near-zero marginal cost.
   - Frontier reasoning models act as the blue whales: reserved exclusively for high-dimensional architectural synthesis, cross-domain taxonomy, and long-horizon governance.
 
 ### 8.6 Lynn Margulis & Endosymbiosis: Tool Engulfment
 - Evolutionary leaps occur when a host cell engulfs a specialized bacterium that becomes an organelle (e.g. the mitochondrion).
-- Rather than reimplementing static analysis or maintainability metrics via fragile prompt rules, disciplined agents execute endosymbiosis: engulfing established open-source tools (e.g. `radon`, `vulture`, `networkx`) behind rigid FastMCP schemas.
+- Rather than reimplementing static analysis or maintainability metrics via fragile prompt rules, disciplined agents execute endosymbiosis: engulfing established open-source tools instead (this repository imports `radon`, `vulture`, and `networkx` as Python libraries in `examples/code-smell-quantifier/smell_quantifier.py`).
 
 ### 8.7 Circadian & Ultradian Nested Clocks
 - Biological life coordinates activity across nested temporal cycles: ultradian focus periods (90m), circadian repair cycles (24h), and seasonal shifts.
 - Autonomous CI/CD breathes in nested harmonics: sub-second AST editor sentinels (reflex), pre-commit hooks (pulse), pre-push Gated validation (breath), nocturnal fuzzing and landscape audits (deep sleep), and milestone release airlocks (seasons).
 
 ### 8.8 The Yellowstone Trophic Cascade: Apex Invariants
-- Reintroducing wolves to Yellowstone stabilized deer populations, restored willow forests, brought back beavers, and physically anchored river geography.
+- Wolves were reintroduced to Yellowstone in 1995–96. Some studies credit them with fewer elk and local willow and aspen recovery; others find tall-willow recovery the exception, held back by the loss of beaver dams and lower water tables (Marshall, Hobbs & Cooper, *Proc. R. Soc. B*, 2013). The size of the cascade is still debated.
 - Hard complexity caps ($M \le 10$, depth $\le 5$) serve as the repository's apex predators. Left unconstrained, code grows wild, tangled procedural brush. The apex rule forces functions into lean, table-driven elegance.
 
 ### 8.9 Superconductivity & Friction-Free Table Dispatch
@@ -374,7 +376,7 @@ flowchart TD
 - Procedural `if/elif` ladders create high cognitive and computational resistance ($T > T_c$). Refactoring into declarative dictionary tables creates a superconducting AST state ($M \le 3$), allowing tokens and subagents to traverse logic with zero resistance.
 
 ### 8.10 Serotiny & Controlled Burns (The Delete-On-Sight Law)
-- Lodgepole pines require the heat of forest fires to melt the resin sealing their serotinous cones, clearing dead brush so new saplings can take root.
+- Many lodgepole pines bear serotinous cones that stay sealed with resin until the heat of a fire melts it. The fire also clears dead brush so new saplings can take root.
 - In pre-1.0 software, backward-compatibility shims act as dead brush. Controlled burning—deleting zombie code on sight—keeps the cognitive soil fertile and clean.
 
 

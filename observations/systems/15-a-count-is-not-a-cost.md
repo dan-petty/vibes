@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — Feedback Loop & Instrumentation
 > **Topic**: Why Two Successive Measurements Both Misidentified the Same Bottleneck
-> **Key Metric**: A profiler attributed 11.4s to a function that ran for well under one; the syscall count that corrected it was then read as exonerating the true cause, which was 60% of the runtime
+> **Key Metric**: A profiler attributed 11.4s to a function that ran for well under one; the syscall count that corrected it was then read as exonerating the true cause, about 1.0s of the 2.64s runtime (547 calls at ~1.8ms)
 > **TLDR**: Distinguish raw item counts from operational resource costs; measure latency, token volume, and execution tax rather than naive file numbers.
 > **ELI:7b**: Ten tiny, fast tests are much cheaper than one slow, tangled test. Measure actual runtime and token costs rather than just counting items.
 
@@ -80,6 +80,6 @@ Applied to the actual defect, this identified two distinct sources of the same o
 
 - **Corpus sweep 2.60s → 0.61s**; the enclosing test file 4.00s → ~1.1s across three runs, back under the 2.0s fast-feedback ceiling that raised the finding.
 - **Filesystem round trips 560 → 322**, with the survivors shared across all 95 documents instead of repeated per document.
-- **The unit cost is now recorded in the code** — `~1.8ms per stat here against ~0.001ms on tmpfs` — so the next reader inherits the measurement rather than the intuition it displaced.
+- **The unit cost is now recorded in the code** — `tools/doc_core.py` states that a stat costs ~1.8ms on the virtualised mount against ~0.001ms on tmpfs — so the next reader inherits the measurement rather than the intuition it displaced.
 - **Scoping a cache is a design decision, not an implementation detail.** The expensive version was not missing a cache; it had one, correctly implemented, built fresh for each of 95 documents. Correct code at the wrong scope reads as optimised.
 - **Two wrong diagnoses did not cost anything, because neither was acted on.** Verifying before fixing ([Observation 13](./13-verify-the-finding-before-you-fix-it.md)) is what converted both errors into cheap intermediate steps instead of a refactor of the wrong module — the same discipline, applied one level deeper, to the explanation rather than the finding.

@@ -2,7 +2,7 @@
 
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Deterministic Structural Refactoring via AST Transformation vs. Non-Deterministic LLM Prompting  
-> **Key Metric**: Net McCabe complexity reduction $\Delta M \ge 7$ per equality ladder; $100\%$ syntactic and behavioral invariance preserved; $0$ prompt-induced semantic regressions  
+> **Key Metric**: $\Delta M = 7$ on the 7-branch equality ladder in `test_refactor_table_dispatch`; syntax and metric monotonicity are checked, behavior is not (the guard-clause transform can change return values)  
 > **TLDR**: Apply deterministic AST transformations to flatten complex equality ladders and nested guards without introducing non-deterministic LLM hallucinations.
 > **ELI:7b**: Use a rule-based computer script to safely untangle messy code instead of asking an AI to rewrite it and hoping it doesn't change the meaning.
 
@@ -14,13 +14,13 @@ In autonomous agentic software development, codebases inevitably accumulate stru
 1. **Procedural Branching Ladders**: Multi-case string matching (`if protocol == "http": ... elif protocol == "https": ...`) expands linearly with every new domain entity.
 2. **Deep Nesting Pyramids**: Nested validations (`if user: if role: if active: ...`) push indentation depth toward or past the project ceiling ($\le 5$).
 3. **Compound Boolean Logic**: Complex validation expressions (`if a and b and not c or d:`) inflate cyclomatic complexity and obscure intent.
-4. **Chained Unit Test Assertions**: In Python's Abstract Syntax Tree, each `assert` node contributes $+1$ to McCabe complexity ($ast.Assert$), inadvertently driving test functions near or beyond complexity ceilings.
+4. **Chained Unit Test Assertions**: Radon, the `devops-cli` scanner and this repository's scanners count each `assert` node ($ast.Assert$) as $+1$ complexity, which drives test functions near or beyond complexity ceilings. The `mccabe` package behind flake8's C901 treats `assert` as a plain statement and adds nothing.
 
 When tasked with "refactoring complex functions to reduce cyclomatic complexity," **frontier LLM prompting suffers from non-deterministic drift**:
 - Models frequently rename variables, alter docstrings, drop edge-case branches, or hallucinate subtle semantic changes.
 - Multi-turn conversational refactoring consumes thousands of tokens and runs the risk of introducing behavioral regressions.
 
-To overcome this bottleneck, we engineered the **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**—a zero-dependency, mechanical rewriting engine that consumes `PROACTIVE_REFACTOR` opportunities directly from the SDLC feedback loop and applies mathematically provable transformations with zero prompt variance.
+To overcome this bottleneck, we engineered the **Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**—a zero-dependency, mechanical rewriting engine in `vibes` that consumes `PROACTIVE_REFACTOR` opportunities directly from the SDLC feedback loop and applies rule-based transformations with zero prompt variance. Nothing proves the transformations preserve behavior; section 4 shows what the gate checks.
 
 ---
 
@@ -55,9 +55,9 @@ FunctionDef(name='get_port')
 ```
 
 ### The Invariant Consequence
-A naive 7-branch `if/elif/...` ladder has an **AST nesting depth of 8**! Even though the source file visually appears flat, the structural AST depth violates the project's invariant ceiling ($Depth \le 5$).
+A naive 7-branch `if/elif/...` ladder with an `else` has an **AST nesting depth of 8** under `calculate_nesting_depth` in `tools/ast_refactorer.py`, which counts the function body as level 1 (the `devops-cli` scanner, which starts at 0, reports 7). Even though the source file visually appears flat, the structural AST depth violates the project's invariant ceiling ($Depth \le 5$). Not every tool counts this way: Pylint's `too-many-nested-blocks` does not count an `elif` as a new level.
 
-This explains why procedural branching ladders are fundamentally hostile to static analysis, and why the `AGENTS.md` mandate—**"Replace procedural dispatchers and `if/elif` ladders with dictionary mappings, registry lookups, or table-driven dispatch"**—is not merely aesthetic, but a mathematical necessity for AST compliance.
+This explains why procedural branching ladders trip AST-depth gates of this kind, and why the `devops-cli` `AGENTS.md` mandate—**"Replace procedural dispatchers and `if/elif` ladders with dictionary mappings, registry lookups, or table-driven dispatch"**—is needed to pass them, not only a matter of style.
 
 ---
 
@@ -105,6 +105,7 @@ flowchart TD
 - **Transformation**: Inverts the condition using a closed relational operator mapping:
   $$\text{Eq} \leftrightarrow \text{NotEq}, \quad \text{Lt} \leftrightarrow \text{GtE}, \quad \text{Is} \leftrightarrow \text{IsNot}, \quad \text{In} \leftrightarrow \text{NotIn}$$
   Emits an early-return guard clause and unindents the main logic by one full indentation level ($Depth \rightarrow Depth - 1$).
+- **Behavior change**: The transform is not equivalent in two cases. First, the guard returns `None`, so statements that followed the original `if` no longer run when the condition is false. With `def f(x): total = 0; if x > 0: (two statements); <loop that adds 10>; return total`, the original `f(-1)` returns `10` and the refactored `f(-1)` returns `None`; `refactor_source` reports `success=True`. Second, inverting `<` to `>=` is wrong for NaN, where both comparisons are false.
 
 ### Strategy 3: Pure Predicate Extraction (`PREDICATE_EXTRACTION`)
 - **Diagnosis**: Identifies compound `ast.BoolOp` nodes inside conditional expressions with multiple operands.
@@ -122,6 +123,7 @@ flowchart TD
   # After: M = 2
   assert (resp_code, resp_status, resp_body) == (200, "OK", "payload")
   ```
+  The merged form is close to, but not exactly, the original. It evaluates every operand before it compares, and tuple equality checks identity first, so a `float("nan")` element compares equal to itself inside a tuple although `nan == nan` is false.
 
 ---
 
@@ -158,7 +160,7 @@ def _verify_safety(
     return True, final_c, final_d, None
 ```
 
-In our unit tests (`test_safety_verifier_rejection`), syntactically invalid input or non-applicable refactorings are deterministically rejected with `success = False`, leaving the original source completely untouched.
+In our unit tests (`test_safety_verifier_rejection`), syntactically invalid input or non-applicable refactorings are deterministically rejected with `success = False`, leaving the original source completely untouched. The gate does not run the code, so it cannot detect a change in behavior (see the guard-clause example in section 3).
 
 ---
 
@@ -188,14 +190,14 @@ sequenceDiagram
 ### Empirical Results
 - **Initial State**: Functions containing 7-branch equality ladders operated at $M = 8$ and $Depth = 8$.
 - **Transformed State**: Converted to table dispatch, achieving $M = 1$ and $Depth = 1$ ($\Delta M = -7$).
-- **Execution Equivalence**: In `test_refactor_table_dispatch`, both original and refactored functions were executed against multiple test keys (`"http"`, `"https"`, `"ssh"`, `"dns"`, `"redis"`, `"unknown"`), verifying $100\%$ identical output mapping.
-- **Repository Score**: All 25 resources across `vibes` certified at **100.0/100 score** with 0 AST violations and 111 passing tests.
+- **Execution Equivalence**: In `test_refactor_table_dispatch`, both original and refactored functions were executed against six test keys (`"http"`, `"https"`, `"ssh"`, `"dns"`, `"redis"`, `"unknown"`) and returned identical outputs. This covers the table-dispatch transform on those keys only; an unhashable argument would make `dict.get` raise where the ladder returned `0`.
+- **Repository Score**: No run output for a repository-wide score is kept. At commit `f4137d1`, the workbench scan reports 0 complexity violations and 8 functions in the `PROACTIVE_REFACTOR` band.
 
 ---
 
 ## 6. Key Engineering Recommendations
 
-1. **Prefer Deterministic Mechanical AST Rewriting Over Prompting for Structural Refactoring**: When restructuring syntax (dispatch tables, early returns, assertions), use standard library `ast` tools rather than conversational LLM generation. Mechanical AST operations are instantaneous, token-free, and mathematically bounded.
-2. **Beware the AST `elif` Indentation Illusion**: Remember that Python parses `elif` as nested `orelse` children. Always decompose multi-branch ladders into dictionary registries to protect AST nesting budgets.
-3. **Always Gate Automated Refactorings with Monotonicity Checks**: An automated refactoring must only be accepted if it strictly reduces or preserves cyclomatic complexity and nesting depth while passing round-trip parsing.
+1. **Prefer Deterministic Mechanical AST Rewriting Over Prompting for Structural Refactoring**: When restructuring syntax (dispatch tables, early returns, assertions), use standard library `ast` tools rather than conversational LLM generation. Mechanical AST operations are fast and token-free; they still need tests that run the code, because a syntax and metric gate does not check behavior.
+2. **Beware the AST `elif` Indentation Illusion**: Remember that Python parses `elif` as nested `orelse` children. Where the depth gate counts them, decompose multi-branch ladders into dictionary registries to protect AST nesting budgets.
+3. **Always Gate Automated Refactorings with Monotonicity Checks and Tests**: An automated refactoring must only be accepted if it strictly reduces or preserves cyclomatic complexity and nesting depth, passes round-trip parsing, and passes the tests of the code it changed.
 4. **Link Backlog to Tool Automation**: Design tools to consume structured feedback formats (`.data/sdlc_backlog.json`) so agents can execute end-to-end self-healing cycles without human orchestration.

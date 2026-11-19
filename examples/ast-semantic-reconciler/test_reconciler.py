@@ -3,7 +3,7 @@
 Validates commutative disjoint symbol reconciliation, import sets unification,
 class method arbitration, and semantic collision detection under SARIF 2.1.0.
 
-Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
+Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
 
 from __future__ import annotations

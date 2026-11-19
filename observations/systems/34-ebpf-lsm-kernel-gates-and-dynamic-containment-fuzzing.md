@@ -1,11 +1,11 @@
 # Observation 34: eBPF LSM Kernel Gates and Dynamic Containment Fuzzing
 
 > **Project**: Kernel-Enforced Agent Containment & Sandbox Isolation
-> **Environment**: Unprivileged subagent sandboxes, Linux Security Module (BPF LSM) hooks, Syzkaller syscall fuzzing
+> **Environment**: Unprivileged subagent sandboxes, Linux Security Module (BPF LSM) hook design, Python policy simulation
 > **Classification**: Kernel Security, eBPF, Invariant Gating, Adversarial Robustness
 > **Related**: [Observation 24](./24-ebpf-process-tracing-for-agent-sandbox-introspection.md), [Observation 30](./30-kinetic-falsification-and-the-ephemeral-exploit-harness.md), [Pattern: Kernel-Enforced LSM Sandbox Containment](../../patterns/kernel-enforced-lsm-sandbox-containment.md)
-> **TLDR**: Enforce synchronous pre-execution denial (-EPERM) and zero race windows for agent sandboxes using in-kernel BPF LSM security hooks.
-> **ELI:7b**: Stop rogue AI commands right inside the Linux kernel before they execute, making it impossible for scripts to escape their sandbox.
+> **TLDR**: In-kernel BPF LSM hooks can deny an agent's syscall synchronously with -EPERM, before it takes effect; the reference example simulates those policy decisions in Python.
+> **ELI:7b**: A small program inside the Linux kernel can stop a risky command before it runs. The example here only acts out those decisions in Python.
 
 ---
 
@@ -24,27 +24,28 @@ Furthermore, **passive audit logs are inherently reactive**. In a multi-tenant o
 
 ## 2. The Observed Breakdown Modes
 
-Empirical security audits of autonomous agent sandbox environments revealed three critical failure modes under adversarial execution:
+Three failure modes follow from how user-space and asynchronous enforcement work. No audit data backs them:
 
 ### 2.1 The Asynchronous Detection Race Window
-In tracepoint-based or auditd architectures, security daemons read events from a kernel perf buffer asynchronously. In benchmarks, the delta between syscall invocation and user-space alarm ranged from $12\text{ms}$ to $65\text{ms}$. During this window, an untrusted script can transmit credentials over an open socket or modify files before the tracer can issue a `SIGKILL`.
+In tracepoint-based or auditd architectures, security daemons read events from a kernel perf buffer asynchronously. The delay between the syscall and the user-space alarm depends on buffer polling and system load. During this window, an untrusted script can transmit credentials over an open socket or modify files before the tracer can issue a `SIGKILL`.
 
 ### 2.2 Path Normalization & Symlink Obfuscation
-User-space scanners matching regexes against `/etc/shadow` or `~/.ssh` were readily bypassed by subagent scripts utilizing alternate path structures:
-- Relative traversal tricks: `/workspace/..//..//etc/shadow`
-- Triple dot sequences and directory aliases: `/workspace/.../etc/sudoers`
-- Null-byte string termination and embedded escapes: `/workspace/\x00etc/shadow`
+User-space scanners that match regexes against `/etc/shadow` or `~/.ssh` miss paths that reach the same file by another route:
+- Relative traversal: `/workspace/..//..//etc/shadow` resolves to `/etc/shadow`.
+- Symbolic links: `/workspace/notes` can be a link to `/etc/shadow`.
 
-Because user-space inspectors evaluate raw string arguments rather than canonical VFS inode paths, malicious accesses succeeded undetected.
+Other strings only confuse a scanner and reach nothing: `...` is an ordinary file name on Linux, and the kernel reads a path argument only up to its first NUL byte.
+
+Because user-space inspectors evaluate raw string arguments rather than the resolved file, such accesses can pass undetected.
 
 ### 2.3 Binary Execution Smuggling
-Untrusted workloads constrained to "safe" developer tools often invoked unauthorized utilities (`nc`, `socat`, `telnet`) via disguised symlinks or shell scripts, bypassing static wrapper allowlists.
+Untrusted workloads constrained to "safe" developer tools can invoke unauthorized utilities (`nc`, `socat`, `telnet`) via disguised symlinks or shell scripts, bypassing static wrapper allowlists.
 
 ---
 
 ## 3. The Architectural Solution
 
-To eliminate detection latency and ensure absolute containment, we introduced **Synchronous In-Kernel LSM Policy Enforcement** paired with **Dynamic Syzkaller Boundary Fuzzing** ([`examples/ebpf-lsm-kernel-gate/`](../../examples/ebpf-lsm-kernel-gate/)).
+The design pairs **Synchronous In-Kernel LSM Policy Enforcement** with **mutation tests of the policy**. The reference example ([`examples/ebpf-lsm-kernel-gate/`](../../examples/ebpf-lsm-kernel-gate/)) is a Python simulation of that design. It loads no BPF program and touches no kernel interface: `evaluate_event()` in `lsm_gate.py` applies the policy to `LSMEvent` objects in user space. Its `generate_bpf_c()` emits a CO-RE C skeleton in which all three hooks `return 0;`, so that program, if loaded, would allow every operation.
 
 ```mermaid
 flowchart TD
@@ -65,27 +66,28 @@ flowchart TD
 ```
 
 ### 3.1 Synchronous Pre-Execution Denial (`-EPERM`)
-Unlike passive kprobes, BPF LSM hooks (`bpf_lsm_file_open`, `bpf_lsm_bprm_check_security`, `bpf_lsm_socket_connect`) execute *synchronously* within the kernel's authorization path. If an event violates the declared `LSMPolicy`, the BPF program immediately returns `-EPERM`. The kernel cancels the syscall before any disk read, socket handshake, or process fork occurs.
+Unlike passive kprobes, BPF LSM hooks (`bpf_lsm_file_open`, `bpf_lsm_bprm_check_security`, `bpf_lsm_socket_connect`) execute *synchronously* within the kernel's authorization path. A BPF LSM program that implements the policy returns `-EPERM` for a violating event, and the syscall fails: the file does not open, the socket does not connect, or `execve` does not start the new program. (`bprm_check_security` runs inside `execve`, after the fork.) In the example, this decision is a Python return value.
 
-### 3.2 Dynamic Syzkaller-Style Mutation Fuzzing
-To guarantee that the policy cannot be bypassed by path traversal or flag manipulation, the runtime employs a dynamic mutation engine inspired by Syzkaller:
-- Synthesizes adversarial path variations (`..//`, `.../`, null bytes).
-- Injects non-routable, private RFC 1918/4193 addresses and link-local metadata endpoints (`169.254.169.254`).
-- Asserts **Monotonic Containment**: 100% of malicious variations must be synchronously rejected by the kernel gate.
+### 3.2 Fixed Mutation List (Syzkaller-Inspired)
+To test the policy against path and address tricks, `run_fuzz_campaign()` evaluates a fixed list of 15 events: 5 path variants, 6 socket targets, 3 binaries and 1 `setuid`. This is not syzkaller. It does not generate syscalls from descriptions, use coverage feedback, mutate inputs or run a kernel, and its `seed` argument is unused. A fixed list cannot show that no bypass exists.
+- Lists path variations (`..//`, `.../`, NUL bytes).
+- Lists private RFC 1918/4193 addresses and the link-local metadata endpoint (`169.254.169.254`).
+- Asserts **Monotonic Containment**: at most one of the 15 events may be allowed. On the default policy, 14 are blocked and the loopback connect is allowed (`python examples/ebpf-lsm-kernel-gate/lsm_gate.py fuzz`).
+
+The simulated `file_open` check matches path strings (prefix or substring). It does not resolve symbolic links or canonical paths, so it has the weakness that Section 2.2 describes.
 
 ---
 
-## 4. Quantitative Telemetry & Comparative Benchmarks
+## 4. Comparison of Mechanisms
 
-Evaluating passive tracing vs. synchronous BPF LSM gating under 1,000 synthetic adversarial executions yielded definitive empirical results:
+No benchmark was run. The comparison below follows from where each mechanism runs:
 
-| Metric | Passive Audit / Kprobe Tracing | Synchronous BPF LSM Kernel Gate | Delta / Impact |
-|---|---|---|---|
-| **Interception Point** | Post-Execution Tracepoint | Pre-Execution LSM Hook | **Synchronous Blocking** |
-| **Detection-to-Block Latency** | $34.2\text{ms}$ (asynchronous) | $0.0\text{ms}$ (in-kernel `-EPERM`) | **Complete Race Elimination** |
-| **Syscall Latency Overhead** | $0.8\mu\text{s}$ | $1.4\mu\text{s}$ | Negligible ($\le 0.001\%$) |
-| **Path Traversal Bypass Rate** | 24.6% (string regex evasion) | 0.0% (canonical VFS checks) | **100% Monotonic Containment** |
-| **Data Leakage Under Attack** | Vulnerable (data sent before kill) | Zero Bytes Leaked | **Absolute Data Protection** |
+| Property | Passive Audit / Kprobe Tracing to User Space | BPF LSM Program in the Kernel |
+|---|---|---|
+| **Interception Point** | After the event, read from a ring buffer | Inside the kernel's authorization check |
+| **Blocking** | A user-space daemon must react (for example with `SIGKILL`) | The hook returns `-EPERM` and the syscall fails |
+| **Path Evaluation** | Raw string arguments | Kernel objects (`struct file`, inode) after path resolution |
+| **Data Leakage Under Attack** | Data can leave before the daemon reacts | The denied operation does not start |
 
 ---
 
@@ -93,5 +95,5 @@ Evaluating passive tracing vs. synchronous BPF LSM gating under 1,000 synthetic 
 
 1. **Pre-Execution Denial Over Post-Mortem Logging**: In agentic autonomy, reactive logging is equivalent to failure. Security constraints must run in-line with execution, returning immediate error codes before state modification.
 2. **Canonical VFS Resolution Over String Matching**: Never evaluate filesystem paths using raw text prefixes. Inode-level and canonical VFS evaluation at the LSM layer stops traversal escapes by construction.
-3. **Continuous Mutation Fuzzing as a Quality Gate**: Static rules are brittle. Hardening requires dynamic, Syzkaller-style mutation suites that actively attempt boundary escapes during CI verification.
+3. **Mutation Tests as a Quality Gate**: Static rules are brittle. Run a list of known escape forms against the policy in CI. For coverage-guided kernel fuzzing, use syzkaller itself.
 

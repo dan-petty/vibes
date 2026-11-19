@@ -41,13 +41,13 @@ stateDiagram-v2
 |---|---|---|
 | **`MissingMetadata`** | A deprecation declares `since`, `remove_in`, and `replacement`. | A deprecation without a removal version is a promise no one made; one without a replacement asks callers to guess. |
 | **`OverdueRemoval`** | A deprecation whose `remove_in` has arrived must be deleted. | Otherwise the deadline is decorative and the debt is permanent. |
-| **`NonMajorRemoval`** | Post-1.0, removal happens in a major bump. | SemVer promises callers that no minor or patch release removes what they depend on. |
+| **`NonMajorRemoval`** | Post-1.0, `remove_in` has a higher major version than `since`. The check does not require an `X.0.0` release, so `remove_in="2.3.0"` passes. | SemVer promises callers that no minor or patch release removes what they depend on. |
 | **`SilentDeprecation`** | The runtime emits a `DeprecationWarning`. | Callers who never read the changelog otherwise learn at build-break time. |
 | **`UnmigratedCallSite`** | The project's own code does not call what it deprecated. | Owners migrate before asking downstream callers to. |
 | **Missing target** | A path that does not exist fails the audit. | A gate that certifies zero files as clean is worse than no gate. |
 
 > [!NOTE]
-> Rules that bind after 1.0 do not bind before it. `NonMajorRemoval` is deliberately inert while the major version is `0`, so a pre-1.0 repository keeps its freedom to delete on sight and inherits the discipline automatically at the 1.0 boundary.
+> Rules that bind after 1.0 do not bind before it. `NonMajorRemoval` is deliberately inert while the major version of `since` is `0`, so a pre-1.0 repository keeps its freedom to delete on sight and inherits the discipline automatically at the 1.0 boundary.
 
 ---
 
@@ -76,7 +76,7 @@ def render_json_report(data):
     return render_report(data, fmt="json")
 ```
 
-The decorator carries both halves of the contract in one place: the metadata the sentinel enforces statically, and the `DeprecationWarning` the caller experiences at runtime. It refuses to construct an incomplete contract, so the failure arrives at import time rather than at the release that was supposed to remove the symbol.
+The decorator carries both halves of the contract in one place: the metadata the sentinel enforces statically, and the `DeprecationWarning` raised at runtime, which Python's default filters hide unless the calling code is in `__main__` ([PEP 565](https://peps.python.org/pep-0565/)). It refuses to construct an incomplete contract, so the failure arrives at import time rather than at the release that was supposed to remove the symbol.
 
 ---
 

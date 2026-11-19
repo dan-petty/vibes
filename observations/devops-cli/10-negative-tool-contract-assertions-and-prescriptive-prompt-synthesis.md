@@ -1,9 +1,9 @@
 # Observation 10: Negative Tool Contract Assertions & Prescriptive Prompt Synthesis
 
 > **Project**: `devops-cli` & `vibes`  
-> **Topic**: JSON Schema Draft 2020-12 Verification Gates, Negative Schema Assertions, and Closed-Loop Agent Zero-Shot Self-Correction  
-> **Key Metric**: 100% detection of hallucinated tool parameters; 0 multi-turn parameter correction loops; bounded string length caps ($\le 256$ chars) mitigating CWE-400 log bloat  
-> **TLDR**: Enforce JSON Schema negative assertions (additionalProperties: false) to detect hallucinated tool parameters and synthesize prescriptive error prompts for zero-shot recovery.
+> **Topic**: JSON Schema Draft 2020-12 Verification Gates, Negative Schema Assertions, and Closed-Loop Agent Self-Correction  
+> **Key Metric**: Every argument key absent from the contract is rejected (by construction, `examples/tool-contract-verifier/verifier.py`); bounded string length caps ($\le 256$ chars) mitigating CWE-400 log bloat; no model was run, so no self-correction rate exists  
+> **TLDR**: Enforce JSON Schema negative assertions (additionalProperties: false) to detect hallucinated tool parameters and synthesize prescriptive error prompts that give the model what it needs to correct the call on the next turn.
 > **ELI:7b**: Forbid extra made-up parameters on AI tools. When the AI hallucinates an argument, give it an exact error message showing the valid parameters.
 
 ---
@@ -25,7 +25,7 @@ However, in production agentic workflows, **frontier language models exhibit sys
 
 ## 2. The Observed Phenomenon: Negative Schema Assertions
 
-To systematically resolve tool hallucination, we implemented the **Formal Tool Contract Verification Gate (`examples/tool-contract-verifier/`)**.
+To systematically resolve tool hallucination, we implemented the **Formal Tool Contract Verification Gate (`examples/tool-contract-verifier/`)** in `vibes`. It is a hand-written Python validator, not a JSON Schema engine; it can export each contract as a Draft 2020-12-style `parameters` object with `additionalProperties: false`. In September 2026, `devops-cli` source had no `additionalProperties` declaration (`git grep additionalProperties acd091826 -- src` finds nothing).
 
 ```mermaid
 flowchart TD
@@ -41,7 +41,7 @@ flowchart TD
     Err1 --> Synth["Prescriptive Error Prompt Synthesizer"]
     Err2 --> Synth
     Err3 --> Synth
-    Synth --> ZeroShot["Agent Zero-Shot Self-Correction (Turn 2)"]
+    Synth --> ZeroShot["Agent Corrects the Call (Turn 2)"]
 ```
 
 ### The Invariant Distinction: Permissive vs. Negative Schemas
@@ -67,6 +67,7 @@ TypeError: int() argument must be a string, a bytes-like object or a real number
 *Agent Reaction*: Often hallucinates code modifications, apologizes unnecessarily, or repeats the same tool call with slightly different phrasing.
 
 ### Prescriptive Prompt Synthesis (The Disciplined Pattern)
+Abridged illustration; the verifier's actual message numbers each violation and adds a `Prescriptive Action` line:
 ```text
 TOOL CONTRACT VIOLATION for 'k8s_deploy_stack':
 - Parameter 'replicas': Value must be an integer, got string ('2'). Coerce 'replicas' to integer.
@@ -76,7 +77,7 @@ TOOL CONTRACT VIOLATION for 'k8s_deploy_stack':
 Action: Update argument dictionary to satisfy contract before re-invoking.
 ```
 
-When evaluated in `test_verifier.py`, language models receiving prescriptive contract feedback achieve **100% zero-shot self-correction on the immediately following turn**, eliminating multi-turn parameter debugging loops.
+`test_verifier.py` checks that the verifier detects each violation and builds this feedback (`test_verifier_corrective_feedback_generation`). It calls no language model, so it does not measure how often a model corrects the call on the next turn.
 
 ---
 
@@ -96,7 +97,7 @@ TYPE_PREDICATES: dict[ParameterType, Callable[[Any], bool]] = {
 }
 ```
 
-Replacing procedural `if/elif` ladders with registry lookups dropped function cyclomatic complexity from $M = 9$ down to $M = 2$, perfectly aligning with `AGENTS.md` engineering principles.
+Replacing procedural `if/elif` ladders with registry lookups keeps the type check (`_check_type_match`) to a single lookup. The earlier ladder version was not kept, so no before/after complexity figure exists.
 
 ---
 

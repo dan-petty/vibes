@@ -3,7 +3,7 @@
 > **Pattern Class**: Swarm Orchestration & Delivery Lifecycle
 > **Problem**: Concurrent pull requests starve and cascade into merge conflicts when every agent opens work and none closes it
 > **Solution**: Strict FIFO shepherding: the oldest open pull request is driven to merge before any new work is started
-> **TLDR**: Shepherd pull requests through a strict first-in, first-out queue with automated rebase verification to eliminate branch collision live-locks.
+> **TLDR**: Shepherd pull requests through a strict first-in, first-out queue, rebasing each onto `main` before merge, to reduce repeated conflict-and-rebase cycles between branches.
 > **ELI:7b**: Merge pull requests one at a time in order. When one merges, update the next one so nobody runs into nasty merge surprises.
 
 ---
@@ -74,7 +74,7 @@ devops pr threads resolve PRRT_kwDO...
 
 | Anti-Pattern | Why It Fails | FIFO Guardrail |
 |---|---|---|
-| **PR Leapfrogging** | Merging PR #105 before PR #101. | Causes git merge conflicts on PR #101. Enforce strict FIFO queue. |
+| **PR Leapfrogging** | Merging PR #105 before PR #101. | Can cause git merge conflicts on PR #101 when both change the same lines. Enforce strict FIFO queue. |
 | **Silent Abandonment** | Leaving a PR with red CI checks to start another task. | Banned. Agents must shepherd the PR until all CI gates pass. |
 | **Resolving Threads Without Replying** | Clicking "Resolve" without explanation. | Banned. Always post the fixing commit SHA and rationale in the thread. |
 

@@ -135,7 +135,7 @@ def test_shields_badge_json_failed_color() -> None:
 
 
 def test_generate_attestation_payload() -> None:
-    """Verify cryptographic in-toto statement attestation payload structure."""
+    """Verify the structure of the unsigned in-toto statement attestation payload."""
     result = evaluate_living_standard(REPO_ROOT, repo_name="vibes_attest")
     attestation = generate_attestation_payload(result)
 

@@ -46,7 +46,7 @@ Here is the secret that frees you from fear:
 
 > **Git already remembers everything you have ever written.**
 
-You do not need to keep commented-out code in your active files. Git keeps an exact, permanent snapshot of every commit, branch, and change forever. If you ever need that old algorithm from last Tuesday, you can find it in git history in five seconds.
+You do not need to keep commented-out code in your active files. Git keeps an exact snapshot of every commit you make on a branch you keep. If you ever need that old algorithm from last Tuesday, you can find it in git history in five seconds.
 
 Leaving dead code in your active files is like keeping all your past garbage bags in the living room because you might want to look at an old cereal box. Throw it out!
 
@@ -80,8 +80,8 @@ When a codebase has zero zombie code:
 - Files are short and easy to navigate.
 - The AI only sees active, working patterns.
 - There are no confusing duplicate function names.
-- Token consumption drops by 30% to 50%.
-- Bug fixes happen in minutes instead of hours.
+- Token consumption drops.
+- Bug fixes happen faster.
 
 Be ruthless. Delete dead code on sight!
 

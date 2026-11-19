@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — Mechanical Enforcement Infrastructure
 > **Topic**: Gates That Pass Without Auditing; Oracles That Measure Their Own Scaffolding; Verdicts That Depend on Invocation Shape
-> **Key Metric**: 1 of 3 supplied files actually audited per pre-commit invocation (`✅ All architectural invariants PASSED!` printed over the other 2); 6 of 41 Python modules ungated in CI; top-ranked repository defect (score 370.0) was 81% interpreter boot
+> **Key Metric**: 1 of 3 supplied files actually audited per pre-commit invocation (`✅ All architectural invariants PASSED!` printed over the other 2); 7 of 41 Python modules ungated in CI; top-ranked repository defect (score 370.0) was 81% interpreter boot
 > **TLDR**: Ensure verification gates fail closed and audit their own execution to prevent silent certification passes on untested or skipped inputs.
 > **ELI:7b**: A checker tool that skips a file must fail the build. A gate should never report success when it didn't actually check anything.
 
@@ -51,7 +51,7 @@ def _collect_py_targets(root_path: Path, skip_tests: bool) -> list[Path]:
 
 `sentinel.py tests/` skipped the module that `sentinel.py tests/test_x.py` audited. The same code received opposite verdicts depending on how it was named on the command line.
 
-**(d) Nothing was audited, successfully.** A nonexistent path expanded to zero files and reported a clean audit. Fixing (b) then exposed (c), which exposed a fourth gap: `ci.yml` enumerated `examples`, `tools`, and one benchmark file, leaving all 6 modules in `tests/` ungated — the [structure-driven CI directory contract](../../patterns/structure-driven-ci-directory-contracts.md) anti-pattern this repository already documents, recurring in the very workflow that enforces it.
+**(d) Nothing was audited, successfully.** A nonexistent path expanded to zero files and reported a clean audit. Fixing (b) then exposed (c), which exposed a fourth gap: `ci.yml` enumerated `examples`, `tools`, and one benchmark file, leaving the 6 modules in `tests/` and `benchmarks/test_benchmark_runner.py` ungated — the [structure-driven CI directory contract](../../patterns/structure-driven-ci-directory-contracts.md) anti-pattern this repository already documents, recurring in the very workflow that enforces it.
 
 ```mermaid
 flowchart TD
@@ -63,7 +63,7 @@ flowchart TD
     end
 
     subgraph Actual["What Was Actually True"]
-        A1["6 of 41 modules never audited"]
+        A1["7 of 41 modules never audited in CI"]
         A2["1 of N staged files inspected"]
         A3["17 findings suppressed by invocation shape"]
         A4["Top defect was 81% interpreter boot"]
@@ -86,7 +86,7 @@ flowchart TD
 
 Three structural catalysts:
 
-1. **Asymmetric review attention.** Detection logic is the interesting part and gets tested thoroughly — `test_sentinel.py` had 10 tests covering complexity, nesting, RFC 1918 IPs, and subdomain rules, and zero tests covering `main()`. Plumbing is assumed correct because it is boring, and it is precisely the plumbing that decides how much code the interesting logic ever sees.
+1. **Asymmetric review attention.** Detection logic is the interesting part and gets tested thoroughly — `test_sentinel.py` had 6 tests covering complexity, nesting, RFC 1918 IPs, and subdomain rules, and zero tests covering `main()`. Plumbing is assumed correct because it is boring, and it is precisely the plumbing that decides how much code the interesting logic ever sees.
 2. **Harness/artifact conflation.** An oracle that observes a subprocess measures the subprocess, not the artifact inside it. Wall-clock around `python -m pytest` is a legitimate number that answers a question nobody asked. The metric was never wrong; it was never *about* the test suite.
 3. **Contract drift between instruction and implementation.** `AGENTS.md` said `<modified_files>`; the code said `argv[1]`. The prose and the implementation disagreed for as long as both existed, and nothing compared them — the instruction file is not itself under test.
 
@@ -110,7 +110,7 @@ The countermeasure is [Gate Integrity & Total Input Coverage](../../patterns/gat
    ```
 
    Waivers are read from real `COMMENT` tokens via `tokenize`, so a pragma smuggled into a string literal cannot disarm the gate, and are honored only within the first 15 lines where a reviewer sees them above the code they cover. **Only `ZeroTrustSanitization` is waivable** — `CyclomaticComplexity` and `NestingDepth` are not, because a metric you can opt out of is not an invariant. A malformed waiver, one naming a non-waivable invariant, or one carrying under 12 characters of justification raises `WaiverIntegrity` *and* leaves the original finding reported.
-5. **Directory contracts over enumeration.** `ci.yml`, `pr-sentinel.yml`, and `CONTRIBUTING.md` run one consolidated audit over `tools examples tests benchmarks`.
+5. **Directory contracts over enumeration.** `ci.yml` and `CONTRIBUTING.md` run one consolidated audit over `tools examples tests benchmarks`. `pr-sentinel.yml` passes every changed Python file to one sentinel invocation.
 
 ---
 
@@ -119,7 +119,7 @@ The countermeasure is [Gate Integrity & Total Input Coverage](../../patterns/gat
 | Gate | Before | After |
 |---|---|---|
 | Sentinel files audited per invocation | 1 of N supplied | All N, deduplicated |
-| Repository modules under audit | 35 of 41 (`tests/` ungated) | 41 of 41 |
+| Repository modules under audit | 34 of 41 (`tests/` and one benchmark test ungated) | 41 of 41 |
 | Findings surfaced by uniform auditing | 0 (suppressed) | 17, all classified as fixtures and waived with written justification |
 | Structural violations in test modules | Unknown (never audited) | 0 — §10.2 discipline was holding unmeasured |
 | Latency ceiling measures | Subprocess wall-clock (~1.66s floor) | Test execution only |

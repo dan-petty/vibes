@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — Autonomous SDLC & Multi-Model Empirical Evaluation
 > **Topic**: Overcoming the Inward-Looking Agentic Trap: Why Self-Improvement Loops Collapse Without Outward Information Foraging, and How Patch Minimality Reins In Diff Sprawl
-> **Key Metric**: Frontier models (Claude 3.5 Sonnet, GPT-4o) achieve 100% Pass@1 and high invariant compliance ($M \le 2$, depth $\le 2$) at $\$0.002-\$0.010$ per task; high-efficiency open-weights models (DeepSeek-V3, Qwen-2.5-Coder-32B) match $>83\%$ invariant satisfaction at **10× to 20× lower cost** ($\$0.0001-\$0.0006$); while ungrounded self-improvement loops suffer an **"Over-Editing Trap"** where whole-file rewrites degrade patch minimality from $0.90 \to 0.40$ and introduce latent regressions.
+> **Key Metric**: In the built-in sample leaderboard (`python3 tools/model_leaderboard.py sample`), the open-weights entries (DeepSeek-V3, Qwen-2.5-Coder-32B) cost **10× to 20× less per task** than the frontier entries (Claude 3.5 Sonnet, GPT-4o) at the same 83.3% invariant score. No model is called: the four entries share one hand-written patch and fixed token counts, so the equal score is by construction and the cost ratio comes from the pricing table. The **"Over-Editing Trap"**, where whole-file rewrites lower patch minimality, is stated qualitatively; no command measures it.
 > **TLDR**: Ground agent self-improvement in external web search and documentation foraging to prevent stale knowledge and circular reasoning traps.
 > **ELI:7b**: Let the AI search the web for updated documentation and libraries so it doesn't rely on outdated training memory.
 
@@ -19,7 +19,7 @@ When an autonomous AI agent is tasked with feature development, refactoring, and
 2. **The Over-Editing Trap**: Attempting to resolve minor lint or complexity warnings by rewriting entire files, generating sprawling diff noise that dilutes reviewability, invalidates git blame history, and increases latent regression risk.
 3. **Economic Blindness**: Operating without model cost awareness, burning expensive frontier reasoning tokens on atomic type annotations or routine syntactic scaffolding while ignoring high-efficiency distilled alternatives.
 
-To quantify and counter these failure modes, we built and deployed [`tools/model_leaderboard.py`](../../tools/model_leaderboard.py) to measure multi-model performance across AST invariants, compute AST-aware **Patch Minimality**, and establish the **Cost-Per-Invariant (CPI) Index**.
+To quantify and counter these failure modes, we built [`tools/model_leaderboard.py`](../../tools/model_leaderboard.py). It scores supplied run records (code before and after, test result, token counts) against AST invariants, computes a line-diff **Patch Minimality** score, and computes the **Cost-Per-Invariant (CPI) Index**. It calls no model.
 
 ---
 
@@ -27,12 +27,12 @@ To quantify and counter these failure modes, we built and deployed [`tools/model
 
 ### 2.1 The Inward-Looking Trap vs. Outward Information Foraging
 
-Across autonomous SDLC iterations, agent trajectories were audited to evaluate how problem-solving strategies diverge when outward internet research is withheld versus when it is actively incorporated into the self-improvement loop.
+The table contrasts the two modes. It is an illustrative summary of the argument, not the result of a recorded trajectory audit.
 
 | Operating Mode | Information Source | Architectural Strategy | Failure Mode Observed |
 |---|---|---|---|
-| **Purely Inward Loop** | Local codebase, AST sentinel, local test runner | Synthesizes custom algorithms from scratch based on prompt instructions alone | Reinvented custom URL parsers and manual seccomp structures that missed edge cases; spent 4 turns debugging AST mutations. |
-| **Outward-Grounded Loop** | Web search, live benchmarks (Aider, SWE-bench), official specs | Searches external registries, upstream libraries, and reference implementations | Identified standard AST visitor patterns, leveraged Mozilla Public Suffix List references, and adopted industry-standard patch minimality metrics. |
+| **Purely Inward Loop** | Local codebase, AST sentinel, local test runner | Synthesizes custom algorithms from scratch based on prompt instructions alone | Reinvented custom URL parsers and manual seccomp structures that missed edge cases. |
+| **Outward-Grounded Loop** | Web search, live benchmarks (Aider, SWE-bench), official specs | Searches external registries, upstream libraries, and reference implementations | Identified standard AST visitor patterns, leveraged Mozilla Public Suffix List references, and defined a patch minimality metric. |
 
 When agents forage outwardly before designing solutions, they escape the temporal cutoff of their weights and avoid the inward trap of treating the existing repository as the sole authority on software design.
 
@@ -45,9 +45,8 @@ In continuous automated engineering, a model's pass/fail test outcome is an inco
 def compute_total(items: list[int]) -> int:
     return sum(x for x in items if x > 0)
 
-# Observed Over-Editing Failure:
-# Model rewrote the entire 80-line module, reformatted comments, renamed variables,
-# and converted list comprehensions into procedural for-loops to pass complexity checks:
+# Illustrative over-edit (not a recorded model output): a whole-module rewrite
+# that reformats comments, renames variables and turns the generator into a loop:
 def compute_total(items: list[int]) -> int:
     total = 0
     for item in items:
@@ -56,17 +55,17 @@ def compute_total(items: list[int]) -> int:
     return total
 ```
 
-While the rewritten code passed unit tests, it generated 65 lines of diff churn for a 2-line requirement. This diff churn obscures code review, increases merge conflicts in multi-agent swarms, and introduces subtle behavioral shifts.
+When such a rewrite spans a whole module, it passes the unit tests but produces a diff far larger than the requirement. This diff churn obscures code review, increases merge conflicts in multi-agent swarms, and introduces subtle behavioral shifts.
 
 To mechanically penalize over-editing, we introduced the **Patch Minimality Score** ($P_{\text{min}} \in [0.0, 1.0]$):
 
-$$P_{\text{min}} = \frac{N_{\text{essential}}}{N_{\text{essential}} + N_{\text{churn}}} \times \left(1.0 - \frac{\text{Diff Lines}}{2 \times \text{Original Lines}}\right)$$
+$$P_{\text{min}} = \frac{N_{\text{diff}} - N_{\text{noise}}}{N_{\text{diff}}} \times \left(1.0 - 0.5 \times \min\left(1, \frac{N_{\text{diff}}}{2 \times \text{Original Lines}}\right)\right)$$
 
-Where $N_{\text{essential}}$ represents semantic AST statement modifications and $N_{\text{churn}}$ measures comment additions, whitespace reflows, and gratuitous line reordering. Surgical patches achieve $P_{\text{min}} \ge 0.80$, while sprawling file rewrites fall below $0.50$.
+Where $N_{\text{diff}}$ is the number of added and removed lines in a `difflib` unified diff and $N_{\text{noise}}$ is the number of those lines that are blank or comment-only (`_calculate_minimality_score` in `tools/model_leaderboard.py`). The score parses no AST. In the built-in sample, the clean patch scores $0.625$ and the sprawling rewrite scores $0.583$.
 
 ### 2.3 The Multi-Model Economic Landscape
 
-Frontier reasoning models and local open-weights models exhibit markedly different cost-to-invariant profiles. Running full multi-file invariant benchmark suites across leading models reveals the empirical tradeoffs:
+Frontier reasoning models and local open-weights models have different prices per token. The chart is illustrative output of `python3 tools/model_leaderboard.py sample` on built-in sample data; no model was run:
 
 ```mermaid
 quadrantChart
@@ -88,9 +87,9 @@ quadrantChart
 
 ## 3. Telemetry & Empirical Findings
 
-Using [`tools/model_leaderboard.py`](../../tools/model_leaderboard.py), five model tiers were benchmarked across standard autonomous refactoring and invariant-compliance tasks.
+The table below is illustrative output of `python3 tools/model_leaderboard.py sample` on built-in sample data (`generate_sample_benchmark_runs()`). The data is one task: the four cloud entries share one hand-written clean patch, the local entry gets a hand-written sprawling patch, and the token counts are fixed numbers. No model was called.
 
-### 3.1 Empirical Multi-Model Benchmark Results
+### 3.1 Sample Leaderboard Output
 
 | Model | Provider | Pass@1 | Invariants % | Headroom ($M \le 6$) | Mean $M$ | Patch Minimality | Cost / Task ($) | Cost / Inv ($) | Composite Score |
 |---|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -102,9 +101,9 @@ Using [`tools/model_leaderboard.py`](../../tools/model_leaderboard.py), five mod
 
 ### 3.2 Key Telemetry Insights
 
-1. **The Cost-Per-Invariant Gap**: High-efficiency open-weights models (DeepSeek-V3, Qwen-2.5-Coder-32B) deliver identical invariant compliance ($83.3\%$) and AST headroom ($M=1.0$) as frontier models, but at **13× to 20× lower token expenditure** ($\$0.00018$ vs $\$0.00237$ per invariant).
-2. **Local Model Nesting Traps**: While local 7B models achieved 100% Pass@1 on functional tests, their generated code exhibited significantly higher cyclomatic complexity ($M=5.0$) and failed the proactive headroom gate ($M \le 6$, depth $\le 2$). Without deterministic AST oracles, local model generations steadily accumulate structural debt.
-3. **The Minimality Ceiling**: Models without explicit patch-minimality guidance achieve an average minimality of ~0.62, leaving ~38% of diff lines as unnecessary structural churn.
+1. **The Cost-Per-Invariant Gap**: In the sample, the open-weights entries (DeepSeek-V3, Qwen-2.5-Coder-32B) have the same invariant score ($83.3\%$) and AST headroom ($M=1.0$) as the frontier entries at **13× to 20× lower cost per invariant** ($\$0.00012$ and $\$0.00018$ vs $\$0.00237$). The equal score is by construction, because all four entries share one patch; the ratio comes from the pricing table and the fixed token counts.
+2. **Local Model Nesting Traps**: The sample assigns the sprawling patch to the local 7B entry, so that entry scores $M=5.0$ and fails the proactive headroom gate ($M \le 6$, depth $\le 2$). This shows how the gate scores such a patch, not how a 7B model behaves.
+3. **The Minimality Ceiling**: The sample's mean minimality is about 0.62. The score is not a share of diff lines, so it does not mean that 38% of the lines are churn.
 
 ---
 
@@ -137,23 +136,23 @@ flowchart TD
 
 ### 4.1 Automated Patch Minimality Oracle
 
-Implemented in [`tools/model_leaderboard.py`](../../tools/model_leaderboard.py), `compute_patch_minimality` operates directly on unified diffs and AST syntax trees:
-- It ignores comment churn and blank line reflows.
-- It calculates the ratio of essential statement transformations to total line additions and deletions.
-- If $P_{\text{min}} < 0.70$, the code review triage bot (`tools/pr_triage_bot.py`) flags the pull request with a `WARNING: excessive diff churn detected`.
+Implemented in [`tools/model_leaderboard.py`](../../tools/model_leaderboard.py), `compute_patch_minimality` operates on a `difflib` unified diff of the two sources, or on a supplied diff. It parses no AST:
+- It counts blank and comment-only diff lines as noise, which lowers the score.
+- It multiplies the share of non-noise diff lines by a size penalty that grows with the diff size relative to the original file.
+- A score below $0.70$ fails one of the six invariants that `_count_invariants` counts. No other tool reads the score; `tools/pr_triage_bot.py` does not use it.
 
 ### 4.2 Hierarchical Model Routing ("Big Decides, Small Types, Big Checks")
 
-Empirical telemetry confirms that burning frontier tokens on routine typing and single-line syntax updates is an anti-pattern:
+The price gap in the pricing table, not a measured trial, is the reason to avoid frontier tokens for routine typing and single-line syntax updates:
 - **Planning & Architecture (Frontier Reasoning)**: Claude 3.5 Sonnet / DeepSeek-R1 formulate multi-file architectural strategy and design invariants.
 - **Atomic Typing & Refactoring (Efficient / Local Tier)**: Qwen-2.5-Coder-32B / DeepSeek-V3 implement localized edits, documentation, and AST refactorings at negligible cost.
-- **Verification (Deterministic Mechanical Oracles)**: Local Python AST visitors, link integrity validators, and pytest runners enforce mathematical compliance with zero hallucination.
+- **Verification (Deterministic Mechanical Oracles)**: Local Python AST visitors, link integrity validators, and pytest runners apply deterministic checks that give the same result on every run.
 
 ---
 
 ## 5. Architectural Invariants & Synthesis
 
-From the empirical analysis of multi-model benchmarks and information foraging loops, five architectural invariants are codified:
+From the sample leaderboard and the information foraging argument above, five architectural invariants are codified:
 
 1. **Dual-Loop Grounding Invariant**: An autonomous self-improvement loop must never optimize purely against internal repository signals. Feature design, upstream dependencies, and security boundaries must forage outward against external RFCs, established open-source registries, and polyglot benchmarks.
 2. **Patch Minimality Invariant ($P_{\text{min}} \ge 0.70$)**: Code generators must be evaluated not only on functional correctness (Pass@1), but also on structural conciseness. Wholesale file rewrites for localized changes are treated as architectural smell.

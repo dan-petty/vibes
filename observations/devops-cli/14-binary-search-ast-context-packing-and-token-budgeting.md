@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Prompt Context Assembly, Algorithmic Token Budget Allocation, and Binary Search Truncation  
-> **Key Metric**: 99.4% token budget utilization with zero AST syntax breakage; $12\times$ faster than iterative trial packing; $O(\log N)$ convergence  
-> **TLDR**: Pack maximal AST syntax trees into token budgets using logarithmic binary search, achieving 99.4% budget utilization with zero mid-statement truncation.
+> **Key Metric**: $O(\log N)$ cutoff search; truncation only at symbol boundaries; `devops-cli` issue #118 targeted under 10 ms for 1,000-line trees (no utilization or speedup figure was measured)  
+> **TLDR**: Pack whole AST symbols into token budgets using logarithmic binary search, so code is never cut mid-statement.
 > **ELI:7b**: Use binary search to quickly calculate the exact amount of code that fits in an AI prompt without chopping off statements mid-sentence.
 
 ---
@@ -18,9 +18,9 @@ To provide high-density context without blowing prompt token limits, agent archi
 
 ## 2. The Observed Phenomenon: `devops-cli` Issue #118 Case Study
 
-During development of the review and repomap pipelines in `devops-cli` ([Issue #118](https://github.com/dan-petty/devops-cli/issues/118) / [PR #224](https://github.com/dan-petty/devops-cli/pull/224)), two standard approaches to context budgeting produced severe failures:
+In `devops-cli`, [Issue #118](https://github.com/dan-petty/devops-cli/issues/118) (2026-09-10) reported a performance defect, not a syntax fracture: `_prune_tree_to_budget` in `devops_cli.ai.context_packer` was already AST-based, but it re-ran `ast.unparse(tree)` and `count_tokens` for every statement it popped, an $O(N^2)$ loop. [PR #224](https://github.com/dan-petty/devops-cli/pull/224) replaced it with per-statement token estimates, prefix sums and a binary search for the cutoff, with a target of under 10 ms for 1,000-line trees. The two failure shapes below are the general problems an AST packer avoids; they are illustrative, not recorded `devops-cli` incidents:
 
-1. **The Mid-Block Syntax Fracture**: Naive context packers truncated files based on raw line counts or character thresholds. Slicing a Python module at line 150 frequently cut a function or class definition in half:
+1. **The Mid-Block Syntax Fracture**: Naive context packers truncate files based on raw line counts or character thresholds. Slicing a Python module at a fixed line can cut a function or class definition in half:
    ```text
    class ServiceOrchestrator:
        def __init__(self, endpoint: str) -> None:
@@ -30,8 +30,8 @@ During development of the review and repomap pipelines in `devops-cli` ([Issue #
            if not task.is_ready():
    # [TRUNCATED DUE TO CONTEXT LIMIT]
    ```
-   Downstream models receiving this prompt immediately hallucinated that `ServiceOrchestrator` had unclosed blocks, reporting non-existent syntax errors and misattributing incomplete classes to broken codebase architecture.
-2. **The Greedy Under-Utilization Trap**: Packing whole files sequentially caused massive token waste. If the budget had 1,200 tokens remaining, but the next candidate file was 1,500 tokens, greedy algorithms omitted the entire file, stranding up to 30% of the token budget unused.
+   A downstream model receiving this prompt can report non-existent syntax errors and blame the codebase for the incomplete class.
+2. **The Greedy Under-Utilization Trap**: Packing whole files sequentially wastes tokens. If the budget has 1,200 tokens remaining, but the next candidate file is 1,500 tokens, a greedy packer omits the entire file and leaves those 1,200 tokens unused.
 
 ---
 
@@ -52,7 +52,7 @@ Furthermore, attempting to pack code by repeatedly prompting an LLM or running t
 
 ## 4. Remediation & Architectural Pattern
 
-The countermeasure deployed in `devops-cli` and reference-implemented in [`examples/binary-search-context-packer/`](../../examples/binary-search-context-packer/) is **Hierarchical AST Decomposition with Monotonic Binary Search Truncation**:
+The countermeasure is **Hierarchical AST Decomposition with Monotonic Binary Search Truncation**. `devops-cli` deployed the binary-search part (prefix sums of per-statement token estimates plus `bisect_right`, PR #224). The fidelity tiers below are from the reference implementation in [`examples/binary-search-context-packer/`](../../examples/binary-search-context-packer/):
 
 ```mermaid
 flowchart TD
@@ -82,14 +82,14 @@ flowchart TD
 2. **Monotonicity Property**: Given a fixed fidelity tier, the token weight of the first $k$ symbols is monotonically non-decreasing ($W(k) \le W(k+1)$).
 3. **Binary Search Convergence**: Instead of iterating symbol by symbol, a binary search finds the optimal cutoff index $k^* \in [0, N]$ in $O(\log N)$ evaluations:
    $$\text{mid} = \left\lfloor \frac{\text{low} + \text{high}}{2} \right\rfloor$$
-4. **Guaranteed Syntactic Parsability**: Because truncation occurs strictly at symbol boundaries and stubs bodies with `...`, every packed context is guaranteed to parse successfully via `ast.parse()`.
+4. **Syntactic Parsability**: Because truncation occurs at symbol boundaries and stubs bodies with `...`, packed context parses with `ast.parse()` in nearly all cases. The example documents one exception in `pack_source_to_budget`: a one-line `def` whose header holds a colon before the body colon (`def f(x: int): return x`) is cut at the first colon, so its `DOCSTRINGS` and `SIGNATURES` renderings do not parse.
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
 
-1. **Zero Broken Syntax Trees**: 100% of packed source modules pass `ast.parse()` verification without syntax errors.
-2. **Optimal Budget Saturation**: Token budget utilization increased from $71.2\%$ under greedy packing to $> 99.4\%$ under binary search packing.
-3. **Logarithmic Speedup**: Truncation converges in $\le 6$ iterations for 50-symbol modules, executing in under $0.5\text{ms}$.
+1. **Few Broken Syntax Trees**: Packed modules parse with `ast.parse()` except for the one-line `def` case documented in the example.
+2. **Fuller Budget Use**: Symbol-level packing fills the budget more fully than whole-file greedy packing. No utilization figure was measured.
+3. **Logarithmic Search**: For 50 symbols, the binary search needs at most $\lceil \log_2 51 \rceil = 6$ evaluations. No timing was recorded for the example; `devops-cli` issue #118 set a target of under 10 ms for 1,000-line trees.
 
 > **Architectural Takeaway**: Never truncate code with string slicing. Treat prompt context as an algorithmic bin-packing problem over AST symbol boundaries, leveraging binary search monotonicity to maximize token density while guaranteeing syntax tree integrity.

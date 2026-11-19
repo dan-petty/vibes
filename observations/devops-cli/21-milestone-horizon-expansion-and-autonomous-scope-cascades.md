@@ -2,7 +2,7 @@
 
 > **Project**: `devops-cli`
 > **Topic**: Milestone Horizon Inflation Trap, Scope Live-Locks, Autonomous Agent Triage Cascades, and Release Air-Lock Governance
-> **Key Metric**: Milestone 36 (`v0.2.23`) expanded to 196 total issues (167 closed, 29 open) across 9 days with peak scope velocity $V_{\text{scope}} = 81$ issues/day, trapping completion rate at $85.2\%$ despite 167 completed deliverables; resolved through mathematical convergence tracking ($C_R = V_{\text{burn}} / V_{\text{scope}}$) and three-phase release air-lock partitioning.
+> **Key Metric**: Milestone 36 (`v0.2.23`) expanded to 196 items, issues and pull requests counted together (167 closed, 29 open on 2026-09-28), across 9 days with peak scope velocity $V_{\text{scope}} = 81$ items/day, holding completion at $85.2\%$; the proposed remedy is convergence tracking ($C_R = V_{\text{burn}} / V_{\text{scope}}$) and a three-phase air-lock in the `vibes` tool `tools/milestone_governor.py`, which `devops-cli` never adopted.
 > **TLDR**: Halt runaway milestone creep using convergence velocity metrics (C_R >= 1.2) and a 3-phase air-lock ratchet that rolls secondary tasks to vNext.
 > **ELI:7b**: Stop release dates from slipping forever by locking the door to non-critical feature ideas and moving extra tasks to the next version.
 
@@ -14,7 +14,7 @@ In software development assisted by autonomous AI agents, throughput increases b
 
 When AI agents operate with high autonomy, their code exploration, automated reviews, invariant scanners, and integration tests constantly surface valid improvements, refactor opportunities, sub-tasks, and latent edge cases. If incoming issues and discovered defects are continuously admitted into the *active milestone* without strict admission gates, the milestone boundary recedes faster than work can be burned down.
 
-Milestone 36 (`v0.2.23`) of `devops-cli` represents a canonical empirical case study of this dynamic in a production agentic environment.
+Milestone 36 (`v0.2.23`) of `devops-cli` is an empirical case study of this dynamic in an agentic development environment.
 
 ---
 
@@ -23,6 +23,8 @@ Milestone 36 (`v0.2.23`) of `devops-cli` represents a canonical empirical case s
 During the `v0.2.23` release cycle, a target milestone intended for core infrastructure enhancements and FastMCP migrations expanded into an uncurated mega-milestone containing **196 issues and pull requests**.
 
 ### Empirical Telemetry: Creation Velocity Over Time
+
+The snapshot below was taken on 2026-09-28; GitHub's issues API returns pull requests too, so "issues" here means issues and pull requests. The milestone closed later that day. On 2026-11-19 it holds 171 items (102 issues, 69 pull requests), created 1, 17, 19, 74, 30, 4, 10 and 16 per day over the same dates; the others moved to later milestones.
 
 ```text
 Milestone 36 (v0.2.23) Issue Creation Timeline:
@@ -63,7 +65,7 @@ flowchart TD
     style Closed fill:#1b5e20,color:#fff
 ```
 
-Despite closing 167 items in just 9 days—an extraordinary burn-down velocity $V_{\text{burn}} \approx 18.5$ issues/day—the milestone remained incomplete because new issues were admitted at peak rates exceeding 80 issues/day.
+Despite closing 167 items in just 9 days—a burn-down velocity $V_{\text{burn}} \approx 18.6$ items/day ($167 / 9$)—the milestone remained incomplete because new issues were admitted at peak rates exceeding 80 issues/day.
 
 ---
 
@@ -97,7 +99,7 @@ $$\frac{d I_{\text{open}}}{dt} = V_{\text{scope}} - V_{\text{burn}} = -V_{\text{
 
 ## 4. Remediation & Architectural Pattern: The Milestone Scope Air-Lock
 
-To restore determinism to release cycles without throttling autonomous agent exploration, we establish the **Milestone Scope Air-Lock Pattern**.
+To restore determinism to release cycles without throttling autonomous agent exploration, we propose the **Milestone Scope Air-Lock Pattern**. It is implemented in `vibes` as `tools/milestone_governor.py`, which reads a local JSON export of milestone issues and prints a plan; it does not move issues. `devops-cli` did not adopt it: its roadmap later marked v0.2.24 "Air-Locked", but "no code reads that word, and six PRs (#727, #731, #733, #734, #736, #738) merged into `release/v0.2.24` after it" (`docs/ROADMAP.md` at commit `ef2178563`, 2026-10-01, roadmap item for issue #739). Its glossary (`CONTEXT.md`) now names the event a "cut" and lists "air-lock" under _Avoid_.
 
 ```mermaid
 stateDiagram-v2
@@ -143,8 +145,8 @@ stateDiagram-v2
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Clear Release Boundary**: By partitioning `devops-cli` `v0.2.23`'s 29 open issues, the actual release blockers (reproducible memory leaks, CI stability) are isolated to 3 critical items, allowing immediate release candidate creation, while 26 non-essential improvements cleanly roll over to `v0.2.24`.
-- **Mathematical Sizing & Convergence Assurance**: Milestones are mathematically bounded. If $C_R < 1.2$ or issue count exceeds 50, the governor alerts before a 196-issue mega-milestone can form.
+- **Clear Release Boundary**: Partitioning `v0.2.23`'s 29 open items separates release blockers from non-essential work that can move to `v0.2.24`. No run of `milestone_governor.py` on that milestone is recorded, and no record names which items were blockers; the milestone closed on 2026-09-28 with 0 open items.
+- **Sizing & Convergence Alerts**: If $C_R < 1.2$ or the item count exceeds 50, the governor warns, early enough to act before a 196-item mega-milestone forms. The warning does not bound the milestone; a person or job must act on it.
 - **Agent Intake Grounding**: Autonomous agents continue to record discoveries and file issues, but routing is decoupled from the active release vehicle:
 
 > Discovery of new work is an asset; admitting unbounded discovery into an active release vehicle is a project management failure. Separate *discovery velocity* from *milestone admission*.

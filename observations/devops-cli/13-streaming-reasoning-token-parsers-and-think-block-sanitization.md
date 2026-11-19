@@ -2,7 +2,7 @@
 
 > **Project**: `devops-cli` & `vibes`  
 > **Topic**: Reasoning Model Integration, `<think>` Token Leakage Prevention, and Streaming FSM Sanitizers  
-> **Key Metric**: 100% containment of leaked reasoning tokens; sub-millisecond per-chunk streaming latency; zero stream deadlocks on unclosed tags  
+> **Key Metric**: Reasoning blocks stripped in every case the example's tests cover (including tags split across chunks) and in a single-character-chunk run; about 0.003 ms per 5-character chunk on one workstation; an unclosed tag at EOF is flushed, not held  
 > **TLDR**: Sanitize streaming reasoning tokens with finite-state machines to prevent internal thinking blocks from leaking into downstream tools or user output.
 > **ELI:7b**: Filter out the AI's internal 'thinking' monologue in real time so private reasoning doesn't accidentally get passed to shell commands or API calls.
 
@@ -21,16 +21,16 @@ In autonomous agent architectures such as [`devops-cli`](https://github.com/dan-
 
 ## 2. The Observed Phenomenon: `devops-cli` Issue #128 Case Study
 
-During autonomous operations in `devops-cli` ([Issue #128](https://github.com/dan-petty/devops-cli/issues/128) / [PR #241](https://github.com/dan-petty/devops-cli/pull/241)), reasoning models began exhibiting severe downstream failures when streaming responses:
+In `devops-cli`, [Issue #128](https://github.com/dan-petty/devops-cli/issues/128) (2026-09-10) was a feature request, not an incident report. It stated that `<think>` blocks from models such as DeepSeek-R1, QwQ and Gemma "can leak into raw review comments or markdown reports", and that unbounded SSE streams can exhaust memory. [PR #241](https://github.com/dan-petty/devops-cli/pull/241) added `StreamingTokenProcessor` in `devops_cli.ai.client.streaming`. The failure shapes below are illustrative of what such a parser must handle; they are not recorded `devops-cli` incidents:
 
-1. **Tool Argument Poisoning**: Leaked thought tokens were accidentally included in shell execution commands:
+1. **Tool Argument Poisoning**: Leaked thought tokens could be included in shell execution commands:
    ```bash
    # Leaked model reasoning prepended to git commit command:
    <think>The user wants to commit the recent changes to the repository.</think> git commit -m "docs: update roadmap"
    ```
-   The shell attempted to execute `<think>` as an invalid XML input redirection, crashing the background process.
-2. **Chunk Boundary Tag Splitting**: Network streaming chunks frequently fragmented tags across packet boundaries (e.g. Chunk 1 ended with `<th`, Chunk 2 started with `ink>`). Naive substring finders (`"<think>" in chunk`) missed the tag entirely, allowing the entire thinking trace to leak directly into the visible user terminal.
-3. **Unclosed Reasoning Stream Deadlocks**: When inference hit token budget caps or network timeouts while the model was still actively "thinking", the parser remained trapped in the thinking state, suppressing the entire completion from being returned to the caller.
+   A POSIX shell reads `<think` as an input redirection from a file named `think` and `>The` as an output redirection, so the command fails before `git` runs.
+2. **Chunk Boundary Tag Splitting**: Network streaming chunks can fragment tags across packet boundaries (e.g. Chunk 1 ends with `<th`, Chunk 2 starts with `ink>`). Naive substring finders (`"<think>" in chunk`) miss the tag entirely, allowing the entire thinking trace to leak directly into the visible user terminal.
+3. **Unclosed Reasoning Stream Deadlocks**: When inference hits token budget caps or network timeouts while the model is still "thinking", a naive parser stays in the thinking state and suppresses the entire completion.
 
 ---
 
@@ -52,7 +52,7 @@ Because network chunk boundaries do not align with token boundaries or semantic 
 
 ## 4. Remediation & Architectural Pattern
 
-The engineering countermeasure deployed in `devops-cli` and demonstrated in [`examples/streaming-reasoning-sanitizer/`](../../examples/streaming-reasoning-sanitizer/) is a **Streaming Finite State Machine (FSM) with Boundary-Aware Buffering**:
+The engineering countermeasure deployed in `devops-cli` (`StreamingTokenProcessor`, PR #241) and demonstrated in [`examples/streaming-reasoning-sanitizer/`](../../examples/streaming-reasoning-sanitizer/) is a **Streaming Finite State Machine (FSM) with Boundary-Aware Buffering**. The constants and names in the guarantees below belong to the `vibes` example:
 
 ```mermaid
 flowchart TD
@@ -80,8 +80,8 @@ flowchart TD
 
 ## 5. Verifiable Impact & Key Takeaways
 
-1. **Zero Thought Leakage**: 100% of tested reasoning traces (`<think>`, `[reasoning]`) are completely stripped from execution payloads and tool arguments.
-2. **Sub-Millisecond Overhead**: The pure-Python FSM processes streaming chunks in $< 0.1\text{ms}$ per chunk, introducing zero perceptible latency to terminal streaming.
-3. **Robust Partial Chunk Handling**: Flawless handling of edge cases where tags are split into single-character packets (`<`, `t`, `h`, `i`, `n`, `k`, `>`).
+1. **No Thought Leakage in Tested Cases**: Every reasoning trace in the example's tests (`<think>`, `[reasoning]`) is stripped from the visible stream.
+2. **Low Overhead**: `sanitize_reasoning_stream` processed 20,000 five-character chunks at about 0.003 ms per chunk on one workstation (2026-11-19). No measurement was made inside `devops-cli`.
+3. **Partial Chunk Handling**: Tags split into single-character packets (`<`, `t`, `h`, `i`, `n`, `k`, `>`) are handled: `sanitize_reasoning_stream(list("A<think>secret</think>B"))` returns visible `"AB"` and thought `"secret"`. The test suite covers two-part splits only.
 
 > **Architectural Takeaway**: Never treat reasoning models as plain text generators. In an agentic toolchain, internal reasoning must be treated as a privileged, isolated out-of-band telemetry stream separated from operational execution buffers by deterministic streaming state machines.

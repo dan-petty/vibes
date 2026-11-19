@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Live Multi-Model Leaderboard & Cost-Per-Invariant Index.
+"""Multi-Model Leaderboard & Cost-Per-Invariant Index.
 
-Evaluates and ranks frontier and open-weights models across autonomous engineering
-invariants: Pass@1, McCabe cyclomatic complexity (M <= 10), nesting depth (<= 5),
+Scores and ranks models from benchmark-run JSON that the caller supplies, or from
+`generate_sample_benchmark_runs()`. It calls no model and is not live. Criteria: Pass@1, McCabe cyclomatic complexity (M <= 10), nesting depth (<= 5),
 patch minimality, docstring/type completeness, and cloud token expenditure.
 """
 

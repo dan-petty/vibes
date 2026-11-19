@@ -188,7 +188,7 @@ def generate_handshake_certificate(
     response: SubagentResponse,
     loss: float,
 ) -> dict[str, Any]:
-    """Generate an attested cryptographic completion token."""
+    """Generate a completion token: an unkeyed SHA-256 digest, not a signature."""
     raw = f"{envelope.envelope_id}:{response.subagent_id}:{loss}:{time.time()}"
     signature = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     return {

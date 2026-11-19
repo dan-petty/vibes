@@ -23,18 +23,18 @@ However, a notable capability gap existed when compared against `rubik/radon`: t
 
 In long-lived systems, a module can maintain an acceptable aggregate maintainability index (MI $\ge 20.0$, Grade $A$) even when it harbors a severely complex function.
 
-Because radon's module-level maintainability formula dampens cyclomatic complexity across total lines of code and Halstead volume:
+Because radon's module-level maintainability formula dampens cyclomatic complexity across total lines of code and Halstead volume (radon 6.0.1, `radon.metrics.mi_compute`):
 
-$$\text{MI} = 171 - 5.2 \ln(V) - 0.23 (C) - 16.2 \ln(\text{SLOC}) + 50 \sin(\sqrt{2.4 \times C_P})$$
+$$\text{MI} = \max\left(0, \min\left(100, \frac{100}{171}\left(171 - 5.2 \ln V - 0.23\,G - 16.2 \ln L + 50 \sin\sqrt{2.46\,C_{\text{rad}}}\right)\right)\right)$$
 
-a 400-line module containing many trivial getters and a single monolithic dispatcher ($M = 24$, Grade $D$) still computes an aggregate MI of $35.0$ (Grade $A$). The high complexity function remains invisible to module-level metrics until it breaches the hard architectural gate ($M > 10$).
+where $V$ is the Halstead volume, $G$ the module's total cyclomatic complexity, $L$ the SLOC, and $C_{\text{rad}}$ the comment-line percentage converted to radians. A module of many trivial getters and a single monolithic dispatcher ($M = 24$, Grade $D$) can still score Grade $A$: a generated 368-line module of 80 getters and one such dispatcher scores MI 25.5 (radon 6.0.1 `mi_visit`, run on 2026-11-19). The high complexity function remains invisible to module-level metrics until it breaches the hard architectural gate ($M > 10$).
 
 ```mermaid
 flowchart TD
     subgraph ModuleLevel["Module-Level Metric (Aggregate)"]
-        M1["Module SLOC: 420"]
-        M2["Halstead Volume: 2,400"]
-        M3["Calculated MI: 36.4 (Rank A - Good)"]
+        M1["Module SLOC"]
+        M2["Halstead Volume"]
+        M3["Calculated MI: Rank A (Good)"]
         M1 & M2 --> M3
     end
 
@@ -53,7 +53,7 @@ flowchart TD
 
 Why did earlier smell quantifier iterations omit block-level cyclomatic complexity detection?
 
-1. **Paraphrase vs. Upstream Standard**: Early prototypes attempted to calculate custom AST branch counts, producing numbers that deviated from radon's reference implementation. As noted in Observation 19, recomputing an upstream metric creates an opinion rather than an objective measurement.
+1. **Paraphrase vs. Upstream Standard**: Early prototypes computed a hand-written maintainability index from radon's published formulae. On this repository it ran below radon's on the same modules (docstring of `module_metrics` in `smell_quantifier.py`); no surviving code or data records by how much. As noted in Observation 19, recomputing an upstream metric creates an opinion rather than an objective measurement.
 2. **AST Compatibility Assumption**: Radon's command-line interface (`radon cc`) traditionally parses source text from disk. Re-tokenizing raw source strings for every file in a large repository added redundant I/O overhead.
 3. **Decoupled Architecture**: Repository gate sentinels checked complexity independently, leading to the assumption that a smell quantifier only needed to track metrics that had no standalone gate. In reality, a comprehensive smell inventory must unify all dimensions of structural decay into one coherent diagnostic report.
 

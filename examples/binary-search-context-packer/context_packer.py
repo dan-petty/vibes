@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """High-Performance AST Context Packer with Binary Search Truncation.
 
-Packs multi-symbol Python source files into an exact prompt context token budget
-without breaking AST syntactic validity or producing truncated function/class blocks.
+Packs the top-level imports, functions and classes of a Python source file into an
+estimated prompt context token budget without producing truncated function/class blocks.
 Uses binary search boundary convergence over structured symbol units.
 """
 
@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
-# tiktoken's rule of thumb is roughly four *bytes* per token, not four code points. Applied
-# to `len(text)` it under-counted every non-ASCII source by up to four times: a Japanese
-# docstring measured 19 tokens against a real 76, so the packer reported a budget met and
-# handed over four times what was asked for.
+# The common rule of thumb is about four characters of English text per token. For ASCII,
+# characters and UTF-8 bytes are the same. Applied to `len(text)`, the rule under-counted
+# non-ASCII source, where one character takes up to four UTF-8 bytes, so this estimate
+# divides the UTF-8 byte count by four. It is a heuristic, not a tokenizer count.
 DEFAULT_TOKEN_CHAR_RATIO: Final[int] = 4
 
 
@@ -190,7 +190,9 @@ def pack_source_to_budget(
     """Pack source code to fit token budget, dynamically degrading detail levels if needed.
 
     Levels evaluated: FULL -> DOCSTRINGS -> SIGNATURES.
-    Guarantees that the resulting output forms a valid Python module syntax tree.
+    Aims for output that parses as a Python module. Known exception: a one-line def whose
+    header holds a colon before the body colon (`def f(x: int): return x`) is cut at the
+    first colon, so its DOCSTRINGS and SIGNATURES renderings do not parse.
     """
     symbols = extract_ast_symbols(source_code)
     if not symbols or budget_tokens <= 0:

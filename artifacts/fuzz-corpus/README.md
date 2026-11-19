@@ -2,7 +2,8 @@
 
 Every file under this directory is an input that once broke one of this repository's
 instruments. Together they are the gate: [`tools/fuzz_harness.py`](../../tools/fuzz_harness.py)
-`replay` re-runs all of them on every push and every pull request, and the set only grows.
+`replay` re-runs all of them on every push to `main`, every pull request to `main` and the
+pre-push hook, and the set only grows.
 
 ## Why the corpus is the gate and the search is not
 
@@ -12,9 +13,9 @@ the commit under test. So the two are split:
 
 | Command | When | Deterministic | Gates a release |
 |---|---|---|---|
-| `replay` | every push, every pull request, pre-push hook | yes | yes |
+| `replay` | every push and pull request to `main`, pre-push hook | yes | yes |
 | `run` | [`fuzz.yml`](../../.github/workflows/fuzz.yml), daily | no | no |
-| `crosscheck` | `fuzz.yml`, daily | yes, per hash seed | yes, when seeds disagree |
+| `crosscheck` | `fuzz.yml`, daily | yes, per hash seed | no; it fails the scheduled run when seeds disagree |
 
 A scheduled `run` that finds something uploads the minimized input as a workflow artifact.
 It does not commit. A new corpus entry is a claim that an instrument is broken, and that

@@ -1,11 +1,11 @@
 # Observation 36: WASI Component Models and Capability-Based Tool Sandboxing
 
 > **Project**: Autonomous Agent Runtime Isolation & Capability Sandboxing  
-> **Environment**: WASI 0.2 Component Model, WebAssembly linear memory, POSIX ambient authority  
+> **Environment**: WASI 0.2 Component Model design, Python capability simulation, POSIX ambient authority  
 > **Classification**: Systems Engineering, Sandboxing, Security Architecture, WebAssembly  
 > **Related**: [Observation 07](./07-agentic-ide-protocols-and-lsp-mcp-convergence.md), [Observation 34](./34-ebpf-lsm-kernel-gates-and-dynamic-containment-fuzzing.md), [Pattern: Capability-Based Wasm Sandboxing](../../patterns/capability-based-wasm-sandboxing.md)
-> **TLDR**: Execute agent tools with sub-millisecond cold starts, deterministic gas metering, and zero ambient authority using WASI 0.2 WebAssembly sandboxes.
-> **ELI:7b**: Run AI plugins in tiny WebAssembly modules where each tool only has access to the exact files you grant it, with a strict time/CPU limit.
+> **TLDR**: WASI 0.2 runtimes give a guest no ambient authority and can meter its fuel; the reference example simulates capability checks and an instruction budget in Python and runs no WebAssembly.
+> **ELI:7b**: Run AI plugins in WebAssembly modules where each tool can reach only the files you grant it, with an instruction budget. The example here checks those rules in Python and does not run WebAssembly.
 
 ---
 
@@ -13,13 +13,13 @@
 
 Autonomous software engineering agents increasingly generate and execute ephemeral helper utilities, format converters, and data scrapers during complex multi-step tasks. In traditional architectures, these tools run either:
 1. **Directly on the Host via Ambient Processes** (`python -c`, `bash`, `subprocess.Popen`): The spawned tool inherits the ambient authority of the parent agent, with full access to user dotfiles, SSH keys, cloud tokens, and unrestricted network sockets.
-2. **Inside Ephemeral Container Sandboxes** (`docker run`, cgroups v2): While secure, container cold-starts consume 150ms–400ms and 50MB+ memory per invocation, creating a massive latency tax in iterative verification loops.
+2. **Inside Ephemeral Container Sandboxes** (`docker run`, cgroups v2): While secure, container cold-starts add start-up latency and memory to every invocation, creating a massive latency tax in iterative verification loops.
 
 ---
 
 ## 2. The Breakdown of Ambient Authority & Container Latency
 
-Empirical benchmarking across 200 automated agent tool executions revealed two critical operational failure modes:
+Two operational failure modes apply. No benchmark data backs them:
 
 ### 2.1 The Ambient Authority Vulnerability (CWE-250 / CWE-200)
 When an agent is allowed to execute arbitrary scripts under ambient authority, minor prompt drift or hallucinated imports can lead to catastrophic data exfiltration:
@@ -28,16 +28,13 @@ When an agent is allowed to execute arbitrary scripts under ambient authority, m
 - Ambient network sockets allow unauthorized outbound beacons to arbitrary endpoints.
 
 ### 2.2 Container Startup Latency Penalty
-In iterative test-driven generation (e.g. CEGIS loops testing 50 candidate regexes or data transformations), container startup overhead dominated runtime:
-- **Container Overhead**: 285ms median cold start, 62MB baseline RSS.
-- **Task Computation Time**: Only 2.4ms.
-- Over 99% of execution time was wasted initializing container namespaces, veth pairs, and daemon handshakes.
+In iterative test-driven generation (e.g. generate-and-test loops that try 50 candidate regexes or data transformations), container startup can dominate runtime: namespaces, network setup and daemon calls can take far longer than a short task's computation. This repository has no measurement of that ratio.
 
 ---
 
 ## 3. The Architectural Solution: WASI 0.2 Object Capabilities
 
-To eliminate ambient authority while achieving sub-millisecond execution, we introduced the **WASI 0.2 Capability-Based Sandbox Gateway** ([`examples/wasm-capability-sandbox/`](../../examples/wasm-capability-sandbox/)).
+The design routes tools through a **WASI 0.2 Capability-Based Sandbox Gateway**. The reference example ([`examples/wasm-capability-sandbox/`](../../examples/wasm-capability-sandbox/)) is a Python simulation of it. It checks the Wasm header magic and section IDs, parses WIT text, and checks requested paths and hosts against capability handles. It does not load or run any WebAssembly, and it has no Wasm runtime dependency.
 
 ```mermaid
 flowchart TD
@@ -55,7 +52,7 @@ flowchart TD
 
     Agent -->|"Submit Bytecode & WIT"| Gateway
     Gateway -->|"Request Explicit Scopes"| Broker
-    Broker -->|"Mint Unforgeable Token"| Gateway
+    Broker -->|"Mint Capability Handle"| Gateway
     Gateway -->|"Inject Scoped Handles"| Table
     Engine -->|"Run Guest within Gas Budget"| Guest
     Guest -->|"Resource Request"| Table
@@ -63,24 +60,22 @@ flowchart TD
 ```
 
 ### 3.1 Object-Capability Discipline
-In WASI 0.2, a Wasm module begins execution with **zero capabilities**. There is no ambient `open()`, `connect()`, or `getenv()`. The host runtime explicitly injects preopened directory handles (`wasi:filesystem/preopens`) and specific monotonic clocks (`wasi:clocks/monotonic-clock`). Any attempt to access an ungranted path or network host triggers immediate deterministic denial (`CAP001`, `CAP002`).
+In WASI 0.2, a component begins execution with **zero capabilities**. There is no ambient `open()`, `connect()`, or `getenv()`. The host runtime explicitly injects preopened directory handles (`wasi:filesystem/preopens`) and specific monotonic clocks (`wasi:clocks/monotonic-clock`). A real runtime makes handles unforgeable: they are resource handles that guest code cannot fabricate. The example only simulates this. `check_filesystem_access()` and `check_network_dial()` return `CAP001` or `CAP002` for an ungranted path or host. Its handle ID is a SHA-256 of kind, scope and a fixed default salt (`create_capability()`), so anyone can recompute it, and the checks compare only kind and scope.
 
 ### 3.2 Deterministic Gas Budgeting & Halting Defense (CWE-400)
-To prevent non-terminating loops from hanging the host, each instruction decrements an instruction gas counter. If the budget exhausts, the engine traps with `CAP003` (`GAS_EXHAUSTED`), guaranteeing finite execution without relying on asynchronous OS signals.
+Fuel (gas) metering is a runtime feature, not part of WASI. For example, Wasmtime's `Config::consume_fuel` decrements fuel as the guest runs and traps when it reaches zero, which bounds execution without asynchronous OS signals. The example simulates this: `run_metered_workload()` steps through a Python list of `(op, cost)` tuples and returns `CAP003` (`GAS_EXHAUSTED`) when the budget runs out.
 
 ---
 
-## 4. Empirical Telemetry & Comparison Matrix
+## 4. Comparison Matrix
 
-Benchmarking ambient host execution, rootless containers, and WASI 0.2 capability sandboxing across 500 tool executions produced the following metrics:
+No benchmark was run, so the matrix has no latency or memory figures. It compares the isolation properties of each mechanism:
 
-| Metric | Ambient Host Process | Rootless Container (Docker) | WASI 0.2 Capability Sandbox |
+| Property | Ambient Host Process | Rootless Container (Docker) | WASI 0.2 Component |
 |---|---|---|---|
-| **Cold Start Latency** | 18.2 ms | 312.4 ms | **0.42 ms (420 \(\mu\)s)** |
-| **Memory Overhead** | 22.4 MB | 64.0 MB | **0.12 MB (128 KB)** |
-| **Ambient Authority** | Unrestricted (CWE-250) | Confined | **Zero Ambient Authority** |
-| **Halting Protection** | OS SIGKILL / Timeout | cgroup CPU quota | **Deterministic Gas Metering** |
-| **Egress Containment** | Host Network | Bridge / `--network none` | **Token-Gated Sockets** |
+| **Ambient Authority** | Unrestricted (CWE-250) | Confined | **None: only granted handles** |
+| **Halting Protection** | OS SIGKILL / Timeout | cgroup CPU quota | **Fuel metering or epoch interruption (runtime feature)** |
+| **Egress Containment** | Host Network | Bridge / `--network none` | **Only granted `wasi:sockets` handles** |
 
 ---
 

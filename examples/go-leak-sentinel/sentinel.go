@@ -155,14 +155,16 @@ func WithTimeout(d time.Duration) Option {
 	}
 }
 
-// WithToleratedDelta allows a bounded number of acceptable background delta goroutines.
+// WithToleratedDelta records a tolerated goroutine delta. Check and VerifyTestMain do not
+// apply it yet: AwaitVerification always calls CheckLeaked(0).
 func WithToleratedDelta(delta int) Option {
 	return func(c *verifyConfig) {
 		c.toleratedDelta = delta
 	}
 }
 
-// IgnoreGoroutine excludes goroutines whose stack traces contain the given substring.
+// IgnoreGoroutine records a stack-trace substring filter. Check and VerifyTestMain do not
+// apply it yet: they compare goroutine counts only.
 func IgnoreGoroutine(substr string) Option {
 	return func(c *verifyConfig) {
 		c.ignoredFilters = append(c.ignoredFilters, substr)
@@ -189,7 +191,8 @@ func Check(t TestingT, opts ...Option) func() {
 	}
 }
 
-// VerifyNone fails t immediately if any goroutines leaked relative to current baseline.
+// VerifyNone takes a baseline and checks it at once, so it does not find goroutines
+// that leaked before the call.
 func VerifyNone(t TestingT, opts ...Option) {
 	Check(t, opts...)()
 }

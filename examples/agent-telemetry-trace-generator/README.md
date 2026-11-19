@@ -6,7 +6,7 @@ An executable generator modeling autonomous multi-turn agent sessions into OpenT
 
 ## Why This Exists
 
-As autonomous AI agents execute multi-step workflows (such as architectural planning, AST symbol extraction, CEGIS defect patching, and invariant validation), understanding **where time and tokens are spent** is critical:
+As autonomous AI agents execute multi-step workflows (such as architectural planning, AST symbol extraction, test-guided defect patching, and invariant validation), understanding **where time and tokens are spent** is critical:
 - Which step spent the most tokens?
 - Was token-heavy symbol exploration properly offloaded to local models?
 - Where are the execution latency bottlenecks?
@@ -25,7 +25,7 @@ sequenceDiagram
     F->>S: delegate AST symbol catalog
     activate S
     S->>T: parse repository
-    T-->>S: 412 symbols
+    T-->>S: symbol list
     S-->>F: compact catalog
     deactivate S
     S->>O: span: gen_ai.usage.input_tokens / output_tokens,<br/>gen_ai.provider.name, gen_ai.request.model
@@ -77,21 +77,23 @@ pytest test_generator.py -v
 
 ## Sample ASCII Waterfall Output
 
+Output of `python3 generator.py` on its built-in sample session. The trace ID changes on each run.
+
 ```text
 ==============================================================================
-📊 AGENT WATERFALL TRACE [TraceID: 3a9f81d4...]
+📊 AGENT WATERFALL TRACE [TraceID: 3acb0040...]
 Goal: Refactor legacy parser with CEGIS & AST complexity constraints
-Total Duration: 1045.0ms
+Total Duration: 1095.0ms
 ==============================================================================
 SPAN NAME                          | DURATION  | TIMELINE WATERFALL
 ------------------------------------------------------------------------------
-AgentSession                       | 1045.0ms  | ████████████████████████████████████████
-  FrontierPlanning                 |  450.0ms  | ███████████████
-  LocalSubAgentOffload:ASTExplore  |  180.0ms  |                 ██████
-  CEGISConstraintLoop              |  320.0ms  |                        ███████████
-  ASTInvariantSentinel             |   45.0ms  |                                   █
+invoke_workflow Refactor legacy pa | 1095.0ms | ████████████████████████████████████████
+  chat claude-3-5-sonnet           |  450.0ms | ████████████████
+  chat qwen2.5-coder:14b           |  180.0ms |                  ██████
+  chat claude-3-5-sonnet           |  320.0ms |                         ███████████
+  execute_tool ast_invariant_senti |   45.0ms |                                      █
 ------------------------------------------------------------------------------
-Tokens: Prompt=51600, Completion=2530, Cached=18000 (Total: 54130)
+Tokens: Input=51600, Output=2530, Cached=18000 (Total: 54130)
 ==============================================================================
 ```
 

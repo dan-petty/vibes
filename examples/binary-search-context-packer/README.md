@@ -1,6 +1,6 @@
 # High-Performance AST Context Packer with Binary Search Truncation
 
-Reference implementation of an algorithmic prompt context packing engine that packs multi-symbol Python source files into an exact token budget window without breaking AST syntactic validity or producing truncated function/class blocks.
+Reference implementation of an algorithmic prompt context packing engine that packs the top-level imports, functions and classes of a Python source file into a token budget without producing truncated function/class blocks. The budget is in estimated tokens (UTF-8 bytes divided by 4); no tokenizer is called. Other top-level statements are dropped.
 
 ---
 
@@ -18,6 +18,8 @@ Two failure modes consistently degrade LLM reasoning:
 
 Rather than treating source code as flat text, the engine parses code into top-level structural units (`AstSymbol`) using Python's `ast` module. It then evaluates three hierarchical fidelity tiers (`FULL`, `DOCSTRINGS`, `SIGNATURES`) and executes a monotonic binary search to maximize token utilization in $O(\log N)$ iterations.
 
+The output is meant to parse as Python, and the test suite checks that for its sample sources. It is not guaranteed: a one-line `def` with an annotated parameter (`def f(x: int): return x`) is cut at its first colon, and its DOCSTRINGS and SIGNATURES renderings do not parse.
+
 ```mermaid
 flowchart TD
     Source["Python Source Code"] --> Parse["Parse into Top-Level Symbols: ast.parse()"]
@@ -34,14 +36,14 @@ flowchart TD
     CountCheck2 -->|"Yes (100% Symbols Fit)"| EmitDocstrings["Return Signatures + Docstrings Context"]
     CountCheck2 -->|No| CheckTier
 
-    BinarySearch3 --> EmitSignatures["Return Maximal Signatures Context (Guaranteed Parsable)"]
+    BinarySearch3 --> EmitSignatures["Return Maximal Signatures Context"]
 ```
 
 ---
 
 ## 🚀 Usage
 
-### Packing to an Exact Token Budget
+### Packing to an Estimated Token Budget
 
 ```python
 from context_packer import pack_source_to_budget

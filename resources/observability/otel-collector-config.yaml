@@ -11,6 +11,7 @@ receivers:
   prometheus:
     config:
       scrape_configs:
+        # localhost:8888 is the collector's own internal telemetry, not agent workloads.
         - job_name: "agent_workloads"
           scrape_interval: 10s
           static_configs:

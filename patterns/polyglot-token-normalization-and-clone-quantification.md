@@ -2,7 +2,7 @@
 
 > **Pattern Class**: Multi-Language Static Analysis & Quality Measurement  
 > **Problem**: Monoglot AST analyzers cannot inspect multi-language repositories, missing copy-paste duplication and structural decay across TypeScript, Go, Rust, and Bash modules without heavy foreign runtime dependencies  
-> **Solution**: Standardize on a zero-dependency Type-2 regex token normalizer that strips comments, erases identifiers and literals to generic placeholders, slides statement windows across polyglot source trees, and computes language-agnostic Halstead volume and normalized maintainability indices  
+> **Solution**: Standardize on a pure-Python Type-2 regex token normalizer that strips comments, erases identifiers and literals to generic placeholders, slides statement windows across polyglot source trees, and computes language-agnostic Halstead volume and normalized maintainability indices  
 > **TLDR**: Normalize polyglot code tokens to generic placeholders across TS, Go, Rust, and Bash to detect copy-paste duplication and quantify smells.
 > **ELI:7b**: Find copy-pasted code across different programming languages by wiping variable names to generic tokens and comparing the remaining structure.
 > **Reference Implementation**: [`examples/code-smell-quantifier/smell_quantifier.py`](../examples/code-smell-quantifier/smell_quantifier.py)
@@ -63,7 +63,7 @@ flowchart TD
 
 The normalization pipeline processes every non-empty line according to deterministic grammar rules:
 
-1. **Comment Elimination**: Strips comments based on language conventions (`#` for Python/Bash/YAML, `//` for TypeScript/Go/Rust/C++).
+1. **Comment Elimination**: Drops lines that start with the language's line-comment prefix (`#` for Python/Bash/YAML, `//` for TypeScript/Go/Rust/C++). The reference implementation does not remove trailing comments or `/* */` block comments.
 2. **Control-Flow Preservation**: Keywords (`if`, `else`, `for`, `while`, `return`, `function`, `match`, `class`) and structural punctuation (`{`, `}`, `(`, `)`, `;`, `+`, `==`) are preserved unchanged to reflect the underlying algorithmic skeleton.
 3. **Identifier Normalization**: All user-defined variable, function, and parameter identifiers are replaced with `<ID>`.
 4. **Literal Normalization**: All numeric constants, string literals, and template strings are replaced with `<LIT>`.
@@ -96,8 +96,8 @@ produce identical line-by-line structural token streams, enabling deterministic 
 
 | Dimension | Polyglot Token Normalization | Dedicated Per-Language Linters (e.g. `jscpd`) |
 | :--- | :--- | :--- |
-| **Toolchain Dependencies** | **Zero dependencies** (pure Python standard library) | Node.js, npm packages, or JVM runtimes |
-| **Execution Speed** | Sub-second across hundreds of files | Multi-second runtime startup and compilation |
+| **Toolchain Dependencies** | Python only (the module imports `radon`, `vulture` and `networkx`; the normalizer itself uses only `re`) | Node.js, npm packages, or JVM runtimes |
+| **Execution Speed** | Clone detection plus metrics took about 2 s for 154 files (66,000 lines) on the audit machine; a full `smell_quantifier.py --languages all .` run took 53 s | Multi-second runtime startup and compilation |
 | **Detection Quality** | Accurate Type-2 structural clones | Accurate Type-2 clones |
-| **Metric Portability** | Normalized to standard Radon 0–100 MI scale | Proprietary, non-comparable metric indices |
+| **Metric Portability** | Radon's 0–100 MI formula without its comment term; inputs are regex token counts, so values do not match radon's Python results | No maintainability index (`jscpd` reports clones only) |
 | **CI Integration** | Native execution in existing Python gates | Fragmented exit codes and report artifacts |

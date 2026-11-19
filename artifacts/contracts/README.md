@@ -29,8 +29,9 @@ operations:
         description: Absolute difference tolerated before a discrepancy is reported.
 ```
 
-Every argument is required unless it says otherwise. Types are JSON Schema primitives, so
-the emitted schema and the emitted runtime check cannot disagree about what they mean.
+Every argument is required unless it says otherwise. Types are JSON Schema primitives, and
+the emitted runtime check maps each one to a Python type. They agree except at one edge:
+JSON Schema counts `1.0` as an `integer`, and the runtime check refuses it as a `float`.
 
 ## Variables
 
@@ -56,8 +57,8 @@ terminal. Each generation records what it was told in `.factory-answers.yaml` be
 application, so a regeneration replays the dialogue instead of repeating it:
 
 ```bash
-python3 tools/app_factory.py new --contract invoice-reconciler.yaml --set entity=shipment
-python3 tools/app_factory.py new --contract invoice-reconciler.yaml \
+python3 tools/app_factory.py new --contract artifacts/contracts/invoice-reconciler.yaml --set entity=shipment
+python3 tools/app_factory.py new --contract artifacts/contracts/invoice-reconciler.yaml \
   --answers invoice-reconciler/.factory-answers.yaml
 ```
 
@@ -76,7 +77,7 @@ answer can do is be a longer string. It is a single pass, so an answer that itse
 
 ## Published Template Ecosystem
 
-The repository provides a library of pre-declared contract templates covering core architectural patterns:
+The repository provides four contract templates. Each declares operations and arguments only: the generated `handlers.py` holds typed stubs that return `{"status": "unimplemented"}`, so no template generates routing, token checks, rate limits or any other domain logic.
 
 | Template Slug | Module | Description | Operations |
 |---|---|---|---|

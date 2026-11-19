@@ -2,7 +2,7 @@
 
 <!-- docs: allow[sanitization] — the blocked-egress example must name a private address to demonstrate the block -->
 
-Reference implementation of a zero-trust lifecycle interception engine for Agentic IDE control planes (VS Code, Google Antigravity, Cursor). Intercepts tool execution calls, file writes, and compiler diagnostics to enforce deterministic safety boundaries around autonomous coding assistants.
+Reference implementation of zero-trust policy checks that a lifecycle hook in an agentic IDE (for example VS Code, Google Antigravity or Cursor) can call. It checks tool execution calls, file writes, and compiler diagnostics to enforce deterministic safety boundaries around autonomous coding assistants. It includes no adapter for the hook API of any IDE: the caller passes each event to the `IdeHookSentinel` methods.
 
 ---
 
@@ -10,8 +10,8 @@ Reference implementation of a zero-trust lifecycle interception engine for Agent
 
 When an autonomous AI agent is given tool-calling agency inside an IDE, unrestricted execution creates critical security and stability hazards:
 1. **Secret & Credential Infiltration**: Agents can inadvertently read or overwrite `.env`, `~/.ssh/id_rsa`, or `/etc/shadow` when exploring unfamiliar projects.
-2. **Private Network Egress / SSRF**: Prompts or hijacked tools can probe private RFC 1918 subnets (`10.0.0.0/8`, `192.168.0.0/16`) or internal metadata endpoints.
-3. **Runaway Zombie Processes**: Terminal commands executed via standard `proc.kill()` leave grandchild background processes running as unmonitored zombies.
+2. **Private Network Egress / SSRF**: Prompts or hijacked tools can probe private RFC 1918 subnets (`10.0.0.0/8`, `192.168.0.0/16`) or internal metadata endpoints. The guard below scans tool arguments for IP literals only (dotted decimal, leading-zero octal and IPv6). It allows `169.254.169.254` (listed in `ALLOWED_TEST_NETWORKS`) and does not catch host names, hex octets such as `0x0a.0.0.1`, or integer addresses such as `167772161`.
+3. **Runaway Orphan Processes**: Terminal commands stopped via standard `proc.kill()` leave grandchild background processes running as orphans, reparented to init. (A zombie is different: a process that has exited and that its parent has not yet reaped.) A signal to the process group reaches these grandchildren, but not a grandchild that starts its own session with `setsid`.
 4. **Denial-of-Service via Minified Bundles (CWE-400)**: Ingesting or generating multi-megabyte minified bundles exhausts editor memory.
 5. **Ignoring Compiler Oracles**: Models repeatedly apologize for compilation errors rather than treating Language Server (LSP) diagnostics as deterministic boundary conditions.
 
@@ -24,7 +24,7 @@ flowchart TD
     Event["IDE Agent Lifecycle Event"] --> Intercept{"Event Type"}
 
     Intercept -->|"Tool Execution"| CheckTool["evaluate_tool_call()"]
-    CheckTool --> IPCheck{"Contains Forbidden RFC 1918 IP?"}
+    CheckTool --> IPCheck{"Contains Forbidden Private IP Literal?"}
     IPCheck -->|"Yes (10.x, 192.168.x)"| DenyTool1["[DENY] Block Private Network Egress"]
     IPCheck -->|No| PathCheck{"Targeting Protected Path (.env, .ssh)?"}
     PathCheck -->|"Yes"| DenyTool2["[DENY] Block Protected Path Access"]

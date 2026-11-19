@@ -1,9 +1,9 @@
 # Observation 01 (Systems): Distributed Telemetry & Agent Waterfalls
 
-> **TLDR**: Trace multi-agent workflows using W3C traceparent propagation and OpenTelemetry span hierarchies to eliminate the agent black box.
+> **TLDR**: Trace multi-agent workflows using W3C traceparent propagation and OpenTelemetry span hierarchies to make each agent step visible.
 > **ELI:7b**: Put timing tags on every step each AI helper takes so you can see a visual chart of who did what and why something took so long.
 
-How W3C traceparent context propagation and OpenTelemetry span hierarchies eliminate the "black box" in multi-agent coding workflows.
+How W3C traceparent context propagation and OpenTelemetry span hierarchies reduce the "black box" problem in multi-agent coding workflows.
 
 ---
 
@@ -13,15 +13,15 @@ Autonomous coding agents commonly operate as black boxes: an engineer provides a
 
 - **Log Interleaving**: Concurrent tool calls and background subprocess outputs interleave unpredictably.
 - **Invisible Latency Sinks**: Engineers cannot distinguish whether 45 seconds was spent waiting on frontier LLM inference, a stuck subprocess git diff, or an unbounded test suite.
-- **Untracked Token Burn**: Monolithic token counters fail to attribute spend across specific agent personas or repetitive CEGIS candidate generation loops.
+- **Untracked Token Burn**: Monolithic token counters fail to attribute spend across specific agent personas or repetitive generate-and-test retry loops.
 
 ---
 
 ## 2. The Observed Phenomenon
 
-During an automated refactoring session on a legacy codebase, a multi-agent system triggered 14 consecutive tool executions before failing due to a timeout. The flat console log contained 1,400 lines of mixed tool outputs, AST visitor dumps, and prompt fragments.
+This section is an illustrative scenario, not a recorded run. During an automated refactoring session on a legacy codebase, a multi-agent system triggers many consecutive tool executions and then fails on a timeout. The flat console log mixes tool outputs, AST visitor dumps, and prompt fragments.
 
-Diagnosing why the agent failed required 40 minutes of manual log dissection. The root cause was not an LLM hallucination, but a silent loop:
+Manual log dissection is slow. The root cause is not an LLM hallucination, but a silent loop:
 1. Subagent A modified a file.
 2. Subagent B ran an invariant check that failed ($M = 12 > 10$).
 3. Subagent A retried using an identical strategy because context pruning had stripped the prior failure reason from Subagent A's memory window.
@@ -58,7 +58,7 @@ The failure was driven by:
 
 ## 4. Remediation & Architectural Pattern
 
-The solution was to introduce an end-to-end **OpenTelemetry Agent Telemetry Mesh**:
+The remediation is an end-to-end **OpenTelemetry Agent Telemetry Mesh**:
 
 1. **W3C Traceparent Header Injection**:
    Every subagent invocation, tool call, and CLI command carries the parent W3C trace context:
@@ -75,12 +75,16 @@ The solution was to introduce an end-to-end **OpenTelemetry Agent Telemetry Mesh
        - `llm_inference`: Model token usage, temperature, and latency.
        - `tool_execution`: CLI tool or FastMCP invocation.
        - `invariant_gate`: McCabe complexity and depth verification with boolean pass/fail.
+
+   These are local span labels, not OpenTelemetry semantic-convention names. The OpenTelemetry GenAI conventions name these spans `invoke_agent {gen_ai.agent.name}`, `chat {gen_ai.request.model}` and `execute_tool {gen_ai.tool.name}`. `python3 examples/agent-telemetry-trace-generator/generator.py --validate` checks spans against a snapshot of those conventions.
 3. **Prometheus Alerting on Behavioral Stalls**:
-   Alert rules trigger when CEGIS iterations exceed 8 rounds or invariant failure rates exceed 25%, halting runaway token burn before budgets are exhausted.
+   Proposed alert rules fire when retry iterations exceed 8 rounds or the invariant failure rate exceeds 25%, to stop runaway token burn before the budget is spent. These thresholds are design choices, not measured values.
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
+
+The waterfall below is illustrative. It was written by hand and is not tool output. `python3 examples/agent-telemetry-trace-generator/generator.py` renders a similar view from a synthetic session.
 
 ```text
 ================================================================================
@@ -91,12 +95,12 @@ AGENT EXECUTION WATERFALL (Trace: 4bf92f3577b34da6a3ce929d0e0e4736)
   ├── [1.300s - 3.450s] subagent: Synthesize Patch (2150ms) [tokens: 2840]
   │     ├── [1.320s - 2.900s] tool: git_diff_inspect (1580ms)
   │     └── [2.950s - 3.400s] tool: ast_invariant_gate (450ms) [status: VIOLATION]
-  └── [3.500s - 4.800s] subagent: CEGIS Constraint Convergence (1300ms) [tokens: 980]
+  └── [3.500s - 4.800s] subagent: Constrained Retry (1300ms) [tokens: 980]
         └── [4.300s - 4.750s] tool: ast_invariant_gate (450ms) [status: PASSED]
 ================================================================================
 ```
 
-### Measured Benefits:
-- **Mean Time to Diagnose (MTTD)**: Slashed from 40 minutes to under 30 seconds via visual waterfall traces in Jaeger.
-- **Deadlock Elimination**: Cyclic subagent failures are caught within 2 iterations via Prometheus alerting.
-- **Attributed Token Accounting**: 100% of LLM token spend is attributed to specific subagent personas and tasks.
+### Expected Benefits:
+- **Mean Time to Diagnose (MTTD)**: A waterfall view in a trace viewer such as Jaeger shows a repeated identical retry directly, where a flat log hides it. No measurement of the reduction exists.
+- **Retry-Cycle Detection**: An alert on repeated identical invariant failures can stop a retry cycle (a livelock, not a deadlock) after a set number of rounds.
+- **Attributed Token Accounting**: Each `llm_inference` span carries its token counts, so spend can be summed per subagent persona and task. Spend outside instrumented calls is not counted.

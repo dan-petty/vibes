@@ -60,7 +60,7 @@ flowchart TD
 Four rules:
 
 1. **Total input coverage.** Parse `nargs="*"`, audit every path, and reject unknown flags non-zero. Never hand-slice `sys.argv` or filter tokens by prefix — silently dropping an argument is the defect.
-2. **Unaudited input fails.** A target that cannot be read is a gate failure, not an empty result set. Report `files_checked` alongside the verdict so a caller can see the denominator.
+2. **Unaudited input fails.** A target that cannot be read is a gate failure, not an empty result set. Report `files_checked` alongside the verdict so a caller can see the denominator. The reference sentinel fails on a missing path (`TargetIntegrity`) and an unreadable file (`SyntaxIntegrity`), but a directory with no Python files still exits 0 with `Checked 0 Python files.`; the caller must read that count.
 3. **Uniform treatment.** The same file receives the same judgement whether it arrives via directory sweep or named argument. Exemptions applied at one entry point and not another make the verdict a function of the command line.
 4. **Measure the artifact, not the scaffolding.** Prefer the tool's self-reported metric over externally observed process behavior, and report irreducible harness cost separately.
 

@@ -42,7 +42,7 @@ flowchart TD
 
 ### Layer 3: Bounded String Truncation on Errors
 - External error messages, HTTP response bodies, and exception details must be bounded to $\le 256$ characters when propagated into structured logs or error details.
-- Prevents log bloat, denial-of-service, and prompt injection (CWE-209 / CWE-400).
+- Limits log bloat and resource use (CWE-400). A length cap does not stop prompt injection or the leak of sensitive data in error messages (CWE-209), because both fit in 256 characters. Mask secrets as well; devops-cli does both (`mask_secrets(summary)[:256]` in `src/devops_cli/core/process.py`).
 
 ---
 

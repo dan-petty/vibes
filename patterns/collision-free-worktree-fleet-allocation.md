@@ -2,8 +2,8 @@
 
 > **Pattern Class**: Multi-Agent Concurrency & Workspace Arbitration
 > **Problem**: Parallel subagents collide on .git/index.lock, dirty shared trees, and leave orphaned checkouts on disk
-> **Solution**: Ephemeral leased worktrees with bounded TTL, jittered lock polling, POSIX process group containment, and automated stale pruning
-> **TLDR**: Allocate isolated git worktrees with content-addressed hashes and scoped database tiers to prevent concurrent subagents from clobbering state.
+> **Solution**: Ephemeral leased worktrees with bounded TTL, bounded lock polling, POSIX process group containment, and automated stale pruning
+> **TLDR**: Allocate isolated git worktrees with timestamped lease IDs and per-worktree test artifacts to prevent concurrent subagents from clobbering state.
 > **ELI:7b**: Give every AI worker its own private copy of the code folder so they don't overwrite each other's work while running in parallel.
 > **Reference Implementation**: [`examples/worktree-swarm-arbiter/`](../examples/worktree-swarm-arbiter/)  
 
@@ -36,7 +36,7 @@ flowchart TD
     end
 
     subgraph Arbiter ["Worktree Fleet Arbiter"]
-        LockCheck["Lock Contention Sentinel<br/>(Polling with Jitter)"]
+        LockCheck["Lock Contention Sentinel<br/>(Bounded Polling)"]
         LeaseManager["Lease & TTL Manager<br/>(Heartbeat Extension)"]
         Reclamation["Automated Pruning<br/>(worktree remove & branch -D)"]
     end
@@ -61,17 +61,17 @@ flowchart TD
 ## 3. Core Operational Mechanisms
 
 ### 3.1 Bounded Leases and Heartbeat Renewal
-Every allocated worktree carries a cryptographically unique or timestamped identifier and a strictly bounded Time-To-Live (TTL):
+Every allocated worktree carries a timestamped identifier and a strictly bounded Time-To-Live (TTL). The reference implementation uses `wt-<agent>-<unix seconds>`, so two allocations by the same agent in the same second get the same ID:
 - **Default TTL**: Standard allocations expire after 1 hour (3600s).
 - **Heartbeat Protocol**: Active workers periodically emit heartbeat pings (`refresh_lease_heartbeat`), extending their lease deadline while actively making progress.
 - **Stale Pruning**: The arbiter periodically audits all registered leases; checkouts that exceed their TTL without a heartbeat are automatically torn down (`git worktree remove --force` and `git worktree prune`).
 
 ### 3.2 POSIX Process Group Containment
 Subagents executing external tasks inside a worktree must run within an isolated POSIX process group (`start_new_session=True`).
-- When a lease is released or expired, the arbiter sends `signal.SIGTERM` to the entire process group (`os.killpg(pgid, signal.SIGTERM)`), ensuring that spawned subshells, linters, or test workers do not survive as zombie processes.
+- When a lease is released or expired, the arbiter sends `signal.SIGTERM` to the entire process group (`os.killpg(pgid, signal.SIGTERM)`), so that spawned subshells, linters, or test workers do not survive as orphan processes. A process can ignore `SIGTERM`; the reference implementation sends no `SIGKILL` after it.
 
 ### 3.3 Jittered Index Lock Backoff
-Before executing git commands that modify worktree state (`git worktree add`, `git worktree remove`), the arbiter polls `.git/index.lock` with bounded exponential backoff and jitter, preventing catastrophic lock-contention cascades across agent swarms.
+Before executing git commands that modify worktree state (`git worktree add`, `git worktree remove`), the arbiter polls `.git/index.lock` a bounded number of times, so that it does not fail at once on a short-lived lock. Add exponential backoff and jitter for large swarms; the reference implementation polls 5 times at a fixed 0.05 s interval, and checks only before `git worktree add`.
 
 ---
 

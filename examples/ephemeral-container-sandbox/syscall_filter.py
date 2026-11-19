@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Kernel-enforced syscall confinement for workloads that run without a container.
 
-This harness has always had two execution paths: a rootless container when `docker` or
+This harness has always had two execution paths: a container when `docker` or
 `podman` is present, and a "simulator" subprocess when neither is. The simulator is the
-path that actually runs on most developer machines and inside most CI jobs — and it
+path that runs whenever neither engine is installed — and it
 enforced none of the eight controls the auditor scored, because the auditor read the
 *policy object* rather than the execution. A default policy therefore reported 100.0/100
 with zero violations while the same harness ran code that opened a socket and wrote a file

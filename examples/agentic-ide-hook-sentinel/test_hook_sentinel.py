@@ -125,7 +125,7 @@ def test_run_isolated_command_timeout(tmp_path: Path) -> None:
     """Ensure runaway subprocesses are terminated via process group kill on timeout.
 
     The expected exit code changed from `-1` to `-SIGTERM`. It was a placeholder: the
-    success branch reports `proc.returncode`, where POSIX spells a signal death as `-N`, so
+    success branch reports `proc.returncode`, where Python reports a signal death as `-N`, so
     `-1` claimed the child died of SIGHUP — a signal nothing here sends. This assertion had
     been pinning that.
     """

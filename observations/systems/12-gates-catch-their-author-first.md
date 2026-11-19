@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — Mechanical Enforcement Infrastructure
 > **Topic**: Who a New Gate Actually Fires On; Why a Clean First Run Is Evidence Against the Gate
-> **Key Metric**: 6 gates added in one session; 5 caught their own author's work within 2 commits of being written; the 1 that found nothing on its first run was not wired up
+> **Key Metric**: 6 gates added in one session; 5 caught their own author's work within 2 commits of being written; the sixth first caught 17 pre-existing nodes; the 1 whose first run found nothing was not wired up
 > **TLDR**: Recognize that newly authored quality gates immediately catch preexisting defects in the author's own code before catching external regressions.
 > **ELI:7b**: When you build a new linter rule, it will almost certainly flag flaws in your own project first—which proves the rule is working.
 
@@ -27,23 +27,23 @@ The expectation going in was ordinary: a new gate audits an existing corpus, fin
 
 ## 2. The Observed Phenomenon
 
-**Every gate's first finding was its own author's work**, usually within minutes of the gate existing.
+**Five of the six gates fired on their own author's work**, usually within minutes of the gate existing.
 
 | Gate | First thing it caught | Distance from its own commit |
 |---|---|---|
 | Multi-path auditing | 2 violations in the 3 files the agent was auditing at that moment, hidden by the defect being fixed | same command |
 | Mermaid render gate | 2 diagrams written earlier in the same session, both breaking on `;` as a sequence-diagram statement separator | same commit |
 | Workflow lint | The agent's own explanatory comment, containing a literal `${{ }}` that `actionlint` rejects as an unparsable expression | ~1 minute |
-| Directory map oracle | The agent's own new files missing from the map, three separate times across three commits | next commit, then twice more |
+| Directory map oracle | First wired run: 5 omissions (`CHANGELOG.md`, `CONTRIBUTING.md`, `pytest.ini`, `benchmarks/README.md`, and the same-session `tools/verify_mermaid.mjs`). Two commits later: both new files of the next feature | first wired run, then 2 commits |
 | Gate manifest test | A gate row the agent had added to `CONTRIBUTING.md` two commits earlier and never wired into `ci.yml` | 2 commits |
 | Mermaid contrast rule | 17 pre-existing styled nodes — the only gate whose first catch was genuinely historical | n/a |
 
-The directory map oracle is the clearest case. It was built specifically because a map had drifted and needed regenerating by hand. It then caught the same author's new files in the very next commit, and twice more after that, each time within minutes of the file being created.
+The directory map oracle is the clearest case. It was built specifically because a map had drifted and needed regenerating by hand. Its first wired run also found older omissions, such as `CHANGELOG.md` and `CONTRIBUTING.md`. Two commits later it caught both new files of the author's next feature, within minutes of their creation.
 
 A second regularity showed up alongside the first: **the initial measurement was frequently of the instrument rather than the artifact.**
 
 - The workbench's top-ranked defect, scored 370.0, was a 2.04s test whose body ran in 0.38s; the rest was interpreter boot. No edit to the file could have satisfied the threshold.
-- The new error budget engine reported a **20x burn rate** on its first iteration, because burn rate divides by elapsed window and one iteration is 5% of a twenty-iteration window.
+- The new error budget engine reported a **20x burn rate** on its first iteration, because the engine divides its burn rate by the elapsed window (an SRE burn rate does not) and one iteration is 5% of a twenty-iteration window.
 - Its toil indicator read `0.000` off a denominator of **one**.
 - A roadmap entry written early in the session claimed the per-file interpreter cost was "~1.7s × N". Measured properly it was 0.27s × 23 — the 1.7s figure was a cold-start artifact promoted to a planning assumption.
 

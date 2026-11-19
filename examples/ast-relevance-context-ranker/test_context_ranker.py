@@ -4,7 +4,7 @@ Verifies AST symbol extraction, graph construction, Personalized PageRank
 convergence, token-budgeted context packing, diagnostic invariant rules,
 and SARIF 2.1.0 telemetry export.
 
-Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2, params <= 4).
+Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
 
 from __future__ import annotations

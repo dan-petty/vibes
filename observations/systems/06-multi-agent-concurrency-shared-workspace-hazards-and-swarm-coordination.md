@@ -2,7 +2,7 @@
 
 > **Project**: `devops-cli` & `vibes`
 > **Topic**: Concurrency Hazards, Working Tree Isolation, SQLite Cache Contention, and Swarm Merge Serialization
-> **Key Metric**: Zero working tree collisions; 100% elimination of SQLite coverage file unlinking corruption; zero live-lock rebase storms; sub-second shared L2 cache coordination
+> **Key Metric**: Separate worktrees remove shared-working-tree collisions; separate data directories remove coverage-file unlink races; oldest-first PR handling reduces rebase churn (no measured rates)
 > **TLDR**: Eliminate working tree clobbering and database corruption in multi-agent swarms using isolated git worktrees, scoped data tiers, and FIFO PR queues.
 > **ELI:7b**: Give each AI helper its own copy of the project folder so they don't overwrite each other's files while working at the same time.
 
@@ -15,7 +15,7 @@ As autonomous AI engineering assistants transition from single-agent interactive
 > *"If one AI agent can refactor a subsystem in 10 minutes, five simultaneous agents will refactor five subsystems in two minutes."*
 
 In practice, running multiple autonomous agents simultaneously against an uncoordinated, shared codebase produces catastrophic thrashing:
-- Throughput degrades exponentially rather than scaling linearly.
+- Throughput can fall instead of scaling with the number of agents.
 - Agents enter recursive debugging loops diagnosing phantom errors caused by peer agents.
 - Local build artifacts, coverage databases, and git indices suffer silent data corruption.
 - Remote pull request queues lock up in cascading rebase storms and merge starvation.
@@ -72,12 +72,12 @@ flowchart TD
 When two agents execute against the same root checkout (`/workspaces/<repo>`):
 - **Mid-Edit Syntax Contamination**: Agent 1 initiates a multi-file refactoring, writing an incomplete AST to `module_a.py`. Concurrently, Agent 2 runs `pytest` or `devops ci` to verify an unrelated fix in `module_b.py`. Agent 2's test suite crashes on `SyntaxError in module_a.py`.
 - **Hallucinated Regression Loops**: Agent 2 falsely concludes that its own modification caused the syntax error, reverts its correct change, authors unnecessary defensive workarounds, and wastes significant token context debugging code it never touched.
-- **Git Index Contention**: Simultaneous `git add` or `git status` commands trigger `.git/index.lock` collisions, causing subprocess aborts across both agent sessions.
+- **Git Index Contention**: Simultaneous `git add` or `git commit` commands trigger `.git/index.lock` collisions, causing subprocess aborts across both agent sessions.
 
 ### Hazard 2: SQLite Build Artifact & Coverage Database Corruption
 Modern test runners, typecheckers, and coverage engines rely on SQLite databases for state tracking (e.g. `.coverage.*` produced by `pytest-cov`, `.mypy_cache`, and ephemeral benchmark indices):
 - **Database Unlink Races**: A common pattern in CI runner scripts is cleaning up stale coverage files (`_clean_coverage_artifacts()`) prior to running a test suite. When Agent 1 invokes CI while Agent 2's background test suite is actively executing, Agent 1's cleanup unlinks the `.data/.coverage.*` SQLite file while Agent 2 holds an open file descriptor.
-- **Table Missing Panic**: SQLite creates a bare, uninitialized database file on subsequent writes from Agent 2, triggering `sqlite3.OperationalError: no such table: file` or `no such table: line_bits`. Both CI pipelines fail despite zero source code defects.
+- **Table Missing Panic**: An already-open connection keeps writing to the unlinked file. When a process next opens that path, SQLite creates a bare, uninitialized database file, triggering `sqlite3.OperationalError: no such table: file` or `no such table: line_bits`. Both CI pipelines fail despite zero source code defects.
 
 ### Hazard 3: Epistemic Context Drift (Stale AST Hallucination)
 - When Agent 1 modifies a function signature or removes an obsolete parameter in `src/...`, it commits and pushes to its branch or merges to the mainline.
@@ -91,13 +91,13 @@ Modern test runners, typecheckers, and coverage engines rely on SQLite databases
   - If all four remaining agents simultaneously pull `main` and execute `git rebase main`:
     - Agent 2 finishes its rebase and merges PR #2 at $T_2$.
     - The remaining agents (3, 4, 5) find their newly rebased branches invalidated once again.
-- In high-velocity swarms, this produces **rebase live-lock**: agents spend 90% of their operational tokens rebasing and re-running test suites against rapidly moving base branches, while older PRs suffer complete starvation.
+- In high-velocity swarms, this produces **rebase live-lock**: agents spend most of their tokens rebasing and re-running test suites against rapidly moving base branches, while older PRs suffer complete starvation.
 
 ### Hazard 5: Inference Host & Local GPU VRAM Exhaustion
 - Unlike remote cloud APIs with massive serverless concurrency, local inference runtimes (such as Ollama or vLLM running on developer workstations or private homelab nodes) have strict hardware boundaries.
 - When three agents simultaneously issue unthrottled streaming generation and embedding requests:
   - Local GPU VRAM saturates, triggering memory thrashing and model eviction cycles (unloading the reasoning model to load the embedding model, then reloading the reasoning model).
-  - Inference latency spikes from $45\text{ms/token}$ to $> 2500\text{ms/token}$, triggering HTTP `ReadTimeout` exceptions in agent clients.
+  - Per-token inference latency rises sharply, triggering HTTP `ReadTimeout` exceptions in agent clients.
 
 ### Hazard 6: Process Tree Leaks & Host Resource Starvation
 - Autonomous agents execute background daemons, watchers, and test runners via subprocesses.
@@ -136,7 +136,7 @@ flowchart TD
     end
 
     subgraph Gatekeeper["Deterministic Merge Gatekeeper"]
-        W1 --> Gate["devops ci (10 Quality Gates)"]
+        W1 --> Gate["devops ci quality gates"]
         W2 --> Gate
         Gate --> Sentinel["Architectural Invariant Sentinel (M <= 10, Depth <= 5)"]
         Sentinel --> Merge["Atomic Mainline Merge (Oldest PR First)"]
@@ -153,45 +153,44 @@ git worktree add ../worktrees/task-128 feat/issue-128-streaming-reasoning
 cd ../worktrees/task-128
 ```
 - **Zero Syntax Cross-Contamination**: Transient file edits in worktree A are completely invisible to worktree B.
-- **Independent Git State**: Each worktree maintains its own `HEAD`, index, and staging area, eliminating `.git/index.lock` collisions.
+- **Independent Git State**: Each worktree maintains its own `HEAD`, index, and staging area, so `git add` in one worktree does not take the index lock of another. Refs, the object store, `git stash` and the repository config stay shared, so `git fetch`, `git gc` and stash operations still contend across worktrees.
 
 ### 2. Ephemeral Data Directory Partitioning (`.data/agent/<agent-id>`)
 Build artifacts, coverage measurements, and test logs must be strictly partitioned by agent identity:
-- Environment variable `DEVOPS_CLI_DATA_DIR` is set to `.data/agent/<agent-id>`.
-- `pytest-cov` writes `.data/agent/<agent-id>/.coverage.*`.
-- Coverage cleanup routines (`_clean_coverage_artifacts()`) operate strictly within the agent's scoped subfolder and guard against unlinking active SQLite databases when `PYTEST_CURRENT_TEST` is set.
+- Give each agent its own data root, for example `.data/agent/<agent-id>`.
+- In October 2026, devops-cli read its data root from `DEVOPS_CLI_DATA_DIR` (default `./.data`), and its `AGENTS.md` told agents to keep their artifacts under one `<data_dir>/agent/` folder. It had no per-agent subfolder, and `pytest-cov` wrote `.data/.coverage*`.
+- `_clean_coverage_artifacts()` (`src/devops_cli/commands/ci.py`) deletes `.coverage*` files in the project root and in `.data/`, not in a per-agent folder. It returns early when `PYTEST_CURRENT_TEST` is set, and from v0.2.23 (2026-09-28) it skips files that an active coverage worker owns.
 
 ### 3. Centralized Resource Arbitration via Valkey & Token-Bucket Limiters
 Shared external resources are coordinated through a centralized, thread-safe coordination layer:
 - **Shared Valkey L2 Cache**: Content-addressed AST parse results and embeddings are cached globally by SHA-256 digest, preventing redundant computation across agents.
-- **Client-Side Token-Bucket Rate Limiter**: All GitHub API and LLM requests route through centralized rate arbiters (`GitHubRateLimiter`, concurrency semaphores) to eliminate HTTP 429 quota exhaustion.
-- **Model Prewarming & Keep-Alive Pinning**: High-priority reasoning models are prewarmed and pinned in VRAM (`DEFAULT_AI_PREWARM_KEEP_ALIVE = "1h"`) to prevent thrashing evictions during concurrent agent workloads.
+- **Client-Side Token-Bucket Rate Limiter**: In devops-cli, GitHub calls go through `run_gh()` and its `GitHubRateLimiter`, a client-side token bucket with quota guards and a read cache, to reduce HTTP 429 responses and quota exhaustion.
+- **Model Prewarming & Keep-Alive Pinning**: High-priority reasoning models are prewarmed and pinned in VRAM (`DEFAULT_AI_PREWARM_KEEP_ALIVE = "1h"`) to reduce evictions during concurrent agent workloads.
 
 ### 4. Strict FIFO Pull Request Shepherding & Dry-Rebase Verification
 To eliminate rebase live-locks and PR starvation:
-- **Strict Chronological Priority**: Pull requests are processed in strict FIFO order (oldest PR / lowest PR number first). Newer PRs cannot merge ahead of older active PRs.
-- **In-Memory Dry-Rebase Verification**: Before attempting remote branch rebases, agents execute in-memory merge conflict simulations (`devops pr check-readiness --dry-rebase`). If conflicts are detected, the agent remediates them locally without polluting git reflogs.
+- **Strict Chronological Priority**: Process pull requests oldest first (lowest PR number first). In October 2026, devops-cli's `AGENTS.md` gave agents this rule as an instruction. No merge queue or check stopped a newer PR from merging first, and the rule is no longer in `AGENTS.md`.
+- **Dry-Rebase Verification**: Check for conflicts before a rebase. devops-cli's roadmap listed `devops pr check-readiness --dry-rebase` as an open item in October 2026, and the option was never built. `git merge-tree --write-tree` (Git 2.38 and later) reports conflicts without touching the working tree, the index or the reflog.
 
 ### 5. Deterministic Architectural Invariant Sentinel
 The centralized merge gatekeeper enforces immutable quality standards:
-- Cyclomatic complexity $M \le 10$ and maximum nesting depth $\le 5$ project-wide.
-- 100% passing tests with strict code coverage $\ge 90.0\%$.
+- In October 2026, devops-cli blocked nesting depth above 5 at pre-commit and required coverage of at least 90%. Cyclomatic complexity above 10 was reported, not blocked (240 functions breached it).
+- In November 2026, Ruff enforces `max-complexity = 10` and `max-nested-blocks = 4`, and coverage must reach 85% overall and 90% on changed lines.
 - Universal egress sanitization (RFC 5737 documentation IPs, loopback, zero secret leakage).
 
 ---
 
 ## 4. Empirical Impact & Benchmark Metrics
 
-Comparing uncoordinated multi-agent execution against the hardened coordination fabric across 10 concurrent engineering tasks:
+No benchmark in vibes or devops-cli compares an uncoordinated swarm with this fabric, so this observation reports no rates. Each mechanism above removes one named hazard:
 
-| Metric | Uncoordinated Agents (Shared Workdir) | Hardened Coordination Fabric (Worktrees + Valkey) | Improvement / Delta |
-|---|---|---|---|
-| **Working Tree Collisions** | 14 incidents / hr | 0 incidents / hr | **100% Elimination** |
-| **SQLite Coverage DB Corruptions** | 6 failures / session | 0 failures / session | **100% Immunity** |
-| **Rebase Live-Lock Churn** | 42 min / PR cycle | 3.2 min / PR cycle | **$92.4\%$ Reduction** |
-| **Local Inference Latency Spikes** | $> 2500\text{ms/token}$ (OOM failures) | $< 65\text{ms/token}$ (Paced semaphores) | **$38\times$ Faster** |
-| **Orphaned Zombie Processes** | 28 leaked PIDs / session | 0 leaked PIDs (Process group killpg) | **Zero Leakage** |
-| **Overall Swarm Throughput** | 1.2 completed tasks / hr | 8.4 completed tasks / hr | **$7\times$ Speedup** |
+| Hazard | Mechanism | Expected Effect |
+|---|---|---|
+| **Working tree collisions** | One git worktree per agent | Edits in one tree are not visible in another |
+| **Coverage file unlink races** | One data directory per worktree | Cleanup in one tree cannot delete another tree's coverage files |
+| **Rebase churn** | Oldest-first PR handling | Fewer rebases of the same branch |
+| **Local inference overload** | Concurrency limits and model keep-alive | Fewer model evictions and timeouts |
+| **Orphaned processes** | Process groups and `killpg` | Descendants still in the group are killed |
 
 ---
 

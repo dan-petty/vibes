@@ -4,7 +4,7 @@
 > **ELI:7b**: Build a map of all functions and classes in the project so the AI can look up callers and dependencies instantly.
 
 **Category**: Distributed Systems & Multi-Agent Refactoring Invariants  
-**Status**: Field-Verified  
+**Status**: Prototype with unit tests; no field benchmark.  
 **Canonical Implementation**: [`tools/code_memory.py`](../../tools/code_memory.py)  
 **Verification Suite**: [`tests/test_code_memory.py`](../../tests/test_code_memory.py)  
 
@@ -35,7 +35,7 @@ flowchart TD
 
     subgraph Analysis["Graph Analysis & Blast Radius"]
         BlastEngine["Transitive Blast Radius Engine<br>(BFS Reachability Closure)"]
-        CycleDetector["Tarjan Cycle Detector<br>(Back-Edge DFS Traversal)"]
+        CycleDetector["DFS Cycle Detector<br>(Back-Edge Traversal)"]
     end
 
     subgraph InvariantGates["Call Graph Invariant Oracles"]
@@ -76,34 +76,19 @@ flowchart TD
     style MermaidOut fill:#1e1e38,stroke:#f59e0b,stroke-width:2px,color:#ffffff
 ```
 
-To resolve these failure modes, this observation introduces the **Semantic Graph AST Code Memory & Persistent Symbol Indexing** engine (`tools/code_memory.py`). By constructing an incremental, directed code graph spanning symbols (classes, methods, functions) and dependency edges (`CALLS`, `IMPORTS`, `INHERITS`, `DEFINES`), the system computes the exact transitive blast radius of any proposed mutation and verifies mechanical call graph invariants prior to code integration.
+To resolve these failure modes, this observation introduces the **Semantic Graph AST Code Memory & Persistent Symbol Indexing** engine (`tools/code_memory.py`). By constructing an incremental, directed code graph spanning symbols (classes, methods, functions) and dependency edges (`CALLS`, `IMPORTS`, `INHERITS`, `DEFINES`), the system computes the static transitive blast radius of any proposed mutation and verifies mechanical call graph invariants prior to code integration.
 
 ---
 
 ## 2. Empirical Telemetry & Comparative Analysis
 
-Across 250 multi-file refactoring benchmark tasks spanning `devops-cli`, `vibes`, and multi-module microservices, we evaluated four refactoring coordination regimes: Flat Text Vector RAG, Monolithic Whole-File Editing, Unindexed Language Server Search, and Semantic Graph AST Code Memory.
-
-| Evaluation Metric | Flat Text Vector RAG | Monolithic Whole-File | Unindexed LSP Search | Semantic Graph Code Memory (Ours) |
-|---|---|---|---|---|
-| **Multi-File Refactor Success (Pass@1)** | $41.2\%$ | $52.6\%$ | $74.8\%$ | $\mathbf{98.4\%}$ |
-| **Dangling Symbol Regressions (`SGM001`)** | $32.4\%$ | $26.8\%$ | $9.2\%$ | $\mathbf{0.0\%}$ |
-| **Signature Arity Mismatches (`SGM002`)** | $28.0\%$ | $19.4\%$ | $8.0\%$ | $\mathbf{0.0\%}$ |
-| **Cyclic Dependency Inductions (`SGM003`)** | $14.8\%$ | $11.2\%$ | $4.4\%$ | $\mathbf{0.0\%}$ |
-| **Blast Radius Localization Accuracy** | $38.5\%$ | $46.0\%$ | $78.2\%$ | $\mathbf{100.0\%}$ |
-| **Mean Incremental Indexing Latency** | $3.40\text{s}$ | $5.12\text{s}$ | $1.85\text{s}$ | $\mathbf{0.14\text{s}}$ |
-| **Token Consumption per Refactor** | $38,400$ | $84,200$ | $24,100$ | $\mathbf{9,650}$ |
-
-### Key Empirical Findings
-1. **Zero Downstream Regressions**: Constructing explicit def-use and call edges eliminated 100% of dangling symbol calls (`SGM001`) and signature arity mismatches (`SGM002`), ensuring that refactored functions never broke unvisited consumer files.
-2. **Exact Blast Radius Containment**: Computing transitive upstream closures via graph BFS allowed the agent to accurately identify all affected call sites across the codebase, reducing token context consumption by $74.9\%$ compared to whole-file re-ingestion.
-3. **Sub-200ms Incremental Indexing**: SHA-256 content hashing ensured that only modified files were re-parsed, enabling persistent re-indexing in $0.14\text{s}$ across 100+ file repositories.
+No refactoring benchmark of this tool exists in this repository. No run over `devops-cli`, `vibes` or other services was recorded, so no success rate, regression rate, localization accuracy, latency or token figure is reported here. `tests/test_code_memory.py` checks each rule on small hand-written modules. The call graph is built from names in the AST, so dynamic dispatch, `getattr` and imports resolved at run time are outside it.
 
 ---
 
 ## 3. Diagnostic Rules & Invariant Gates
 
-The Semantic Graph AST Code Memory engine enforces five formal diagnostic invariant rules:
+The Semantic Graph AST Code Memory engine enforces five diagnostic rules:
 
 | Rule Code | Invariant Classification | Severity | Trigger Condition | Prescriptive Remediation |
 |---|---|---|---|---|
@@ -128,7 +113,7 @@ The indexer parses Python AST modules using `SymbolASTVisitor`, extracting:
 ### 4.2 Incremental Persistent Caching
 To maintain high velocity during interactive agent pair programming, `CodeMemoryIndex` tracks SHA-256 digests of all indexed files:
 $$\text{Digest}(F) = \text{SHA256}(\text{source}(F))$$
-If $\text{Digest}(F)$ matches the cache, AST parsing is skipped entirely. When a file is modified, its existing symbols and edges are pruned from adjacency tables, and newly parsed symbols are stitched in $O(|E_{\text{file}}|)$ time.
+If $\text{Digest}(F)$ matches the cache, AST parsing is skipped entirely. When a file is modified, the index drops its old symbols, filters the full edge list and rebuilds both adjacency tables, which costs $O(|E|)$ for the whole graph rather than $O(|E_{\text{file}}|)$.
 
 ### 4.3 Transitive Blast Radius & Centrality Traversal
 For any symbol $s$, the upstream blast radius represents the transitive reachability set across reverse call and inheritance edges:
@@ -145,23 +130,21 @@ The oracle provides native export to:
 
 ## 5. Verification Results & Invariant Gate Certification
 
-The tool and test suite have been verified against all repository architectural invariants:
+The tool and its test suite pass the sentinel and the tests:
 
 ```bash
-$ uv run python examples/ast-invariant-sentinel/sentinel.py --preset strict tools/code_memory.py tests/test_code_memory.py
-[PASS] tools/code_memory.py: M_max=5, depth_max=3, params_max=4
-[PASS] tests/test_code_memory.py: M_max=3, depth_max=2, params_max=3
-Certified: 0 invariant violations across all functions.
+$ python3 examples/ast-invariant-sentinel/sentinel.py --preset strict tools/code_memory.py tests/test_code_memory.py
+🛡️  AST Invariant Sentinel [preset=strict]: Scanning 'tools/code_memory.py', 'tests/test_code_memory.py'...
+Checked 2 Python files.
+✅ All architectural invariants PASSED! Zero violations.
 
-$ uv run pytest tests/test_code_memory.py
-============================= test session starts ==============================
-collected 12 items
-tests/test_code_memory.py ............                                   [100%]
-============================== 12 passed in 0.25s ===============================
+$ python3 -m pytest -q tests/test_code_memory.py
+............                                                             [100%]
+12 passed
 ```
 
 ### Operational Invariant Verification
-- **McCabe Complexity Headroom**: Every function across `code_memory.py` satisfies $M \le 5$ and depth $\le 3$, operating safely beneath strict proactive headroom caps ($M \le 6, d \le 3$).
+- **McCabe Complexity Headroom**: `radon cc -s tools/code_memory.py` reports a maximum of $M = 6$ (`CodeMemoryIndex._remove_file_symbols`, `CodeMemoryOracle._check_sig_mismatch`, `CodeMemoryOracle.audit_orphaned_definitions`), at the strict proactive headroom cap ($M \le 6, d \le 3$).
 - **Structural Tuple Equality**: All unit test assertions employ structural tuple equality (`assert (actual_a, actual_b) == (expected_a, expected_b)`), completely mitigating assertion sprawl.
 - **Zero Information Leakage**: No private RFC 1918 IP addresses or confidential hostnames exist in documentation, comments, or test fixtures. Standard `example.com` domains and RFC 5737 addresses are used exclusively.
 - **Documentation Link Integrity**: 100% compliant with `tools/docs_validator.py`.

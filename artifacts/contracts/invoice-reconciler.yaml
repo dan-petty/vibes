@@ -33,7 +33,7 @@ operations:
     arguments:
       - name: period
         type: string
-        description: Reporting period in ISO 8601 form, such as 2026-Q1.
+        description: Reporting period label, such as 2026-Q1 (ISO 8601 has no quarter notation).
       - name: include_resolved
         type: boolean
         required: false

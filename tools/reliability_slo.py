@@ -39,9 +39,11 @@ from typing import Any, Final
 DEFAULT_HISTORY_PATH: Final[Path] = Path(".data/slo_history.json")
 MAX_HISTORY_ITERATIONS: Final[int] = 100
 FAST_FEEDBACK_CEILING_SECONDS: Final[float] = 2.0
-# Burn faster than this and the window will be exhausted before it closes.
+# `burn_rate` below is `consumed` (window error ratio / allowed error ratio) divided by the
+# elapsed fraction of the window. That is not the SRE burn rate (error ratio / allowed
+# ratio): with a quarter of the window elapsed, half the allowed error rate gives 2.0.
 CRITICAL_BURN_RATE: Final[float] = 2.0
-# Burn rate divides by elapsed window, so the first iterations always look catastrophic.
+# This engine's burn rate divides by the elapsed window, so one early failure looks catastrophic.
 # Requiring a minimum sample is what stops one unlucky run from freezing the whole loop —
 # the noise this engine exists to remove. A zero-budget objective still trips immediately.
 MIN_BURN_RATE_ITERATIONS: Final[int] = 3
@@ -365,7 +367,7 @@ class BudgetSample:
 
     @property
     def is_exhausted(self) -> bool:
-        """The whole budget has been spent."""
+        """The window error ratio has reached the allowed ratio (burn rate 1 or more in SRE terms)."""
         return self.consumed >= 1.0
 
     @property

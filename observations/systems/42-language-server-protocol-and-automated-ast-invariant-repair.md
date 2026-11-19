@@ -4,14 +4,14 @@
 > **Environment**: Python 3.12+ AST, Language Server Protocol (LSP 3.17), static analysis, astral-sh/ruff  
 > **Classification**: Developer Ergonomics, Language Server Protocol, Automated Remediation, Static Analysis  
 > **Related**: [Observation 41 (Systems)](./41-radon-block-complexity-ranking-in-code-smell-quantification.md), [Observation 40 (Systems)](./40-configurable-prose-style-guides-and-inclusive-terminology-gates.md), [Pattern: LSP Diagnostics and Automated Invariant Repair](../../patterns/lsp-diagnostics-and-automated-invariant-repair.md), [Exhibit: AST Invariant Sentinel](../../examples/ast-invariant-sentinel/)
-> **TLDR**: Deliver sub-millisecond in-editor diagnostics and automated AST-verified QuickFix remediations using an in-process Language Server Protocol server.
+> **TLDR**: Deliver in-editor diagnostics and automated QuickFix remediations, checked with `ast.parse`, from an in-process Language Server Protocol server.
 > **ELI:7b**: Give the AI assistant instant compiler feedback and automated one-click fixes right inside VS Code as it writes code.
 
 ---
 
 ## 1. Executive Context & Baseline
 
-The AST Invariant Sentinel ([`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invariant-sentinel/sentinel.py)) provides mechanical enforcement of non-negotiable architectural bounds ($M \le 10$, nesting depth $\le 5$, zero-trust sanitization, waiver integrity). It guarantees that codebases maintain proactive headroom, clean abstractions, and zero confidential data leakage.
+The AST Invariant Sentinel ([`examples/ast-invariant-sentinel/sentinel.py`](../../examples/ast-invariant-sentinel/sentinel.py)) provides mechanical enforcement of non-negotiable architectural bounds ($M \le 10$, nesting depth $\le 5$, zero-trust sanitization, waiver integrity). It reports code that breaks these bounds, and its pre-commit hook blocks such commits.
 
 Historically, however, the sentinel operated exclusively as an offline batch analyzer: invoked via CLI commands (`python3 sentinel.py <paths>`) or triggered during git pre-commit and pre-push hooks.
 
@@ -48,7 +48,7 @@ flowchart TD
     end
 ```
 
-Under batch validation, the round-trip latency to discover and repair an invariant breach averages 15 to 45 seconds, requiring repeated context switching between editor, terminal, and commit staging. Under Language Server Protocol integration, feedback latency drops below 5 milliseconds, rendering violations directly at the cursor before the file is even saved to disk.
+Under batch validation, a breach is found only at commit time, which requires repeated context switching between editor, terminal, and commit staging. Under Language Server Protocol integration, the editor shows the violation as you type, before the file is saved to disk. No round-trip times were measured.
 
 ---
 
@@ -71,25 +71,25 @@ To close both survey gaps while preserving the sentinel's zero-dependency footpr
 We implemented the core Language Server Protocol (LSP 3.17) using standard library `json`, `io`, and `sys.stdin.buffer` / `sys.stdout.buffer`:
 
 - **Framing**: Content-Length header parsing (`_read_lsp_headers`, `_read_lsp_message`) and serialized response emission (`_write_lsp_message`).
-- **Lifecycle**: Full compliance with `initialize`, `initialized`, `shutdown`, and `exit`.
+- **Lifecycle**: Handles `initialize`, `shutdown`, and `exit`, and ignores `initialized`. It is not fully compliant: an unknown request gets a `null` result instead of a `MethodNotFound` error, and the server exits with code 0 even without a prior `shutdown`.
 - **Diagnostics**: Listens on `textDocument/didOpen`, `textDocument/didChange`, and `textDocument/didClose`, evaluating in-memory source trees via `audit_source` and publishing 0-indexed diagnostics via `textDocument/publishDiagnostics`.
 - **QuickFix Code Actions**: Listens on `textDocument/codeAction`, synthesizing `WorkspaceEdit` payloads that allow editors to auto-remediate violations with a single click or keyboard shortcut.
-- **Ruff Server Multiplexing**: Seamlessly falls back to or invokes `ruff server` (`run_ruff_server()`) when external language server capabilities are desired.
+- **Ruff Server Alternative**: `run_ruff_server()` runs `ruff server` instead of the sentinel server when `ruff` is on `PATH`, and falls back to the sentinel server otherwise. It does not combine the two servers.
 
 ### B. Safe, AST-Verified Source Auto-Remediation (`auto_fix_source`)
 
 The auto-fix engine performs deterministic mechanical repairs across three primary domains:
 
-1. **Zero-Trust IP Sanitization**: Identifies prohibited private IPv4 addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`) in string literals and rewrites them to RFC 5737 safe documentation addresses (`192.0.2.1`).
+1. **Zero-Trust IP Sanitization**: Identifies prohibited private and link-local IPv4 addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`) in string literals and rewrites them to RFC 5737 safe documentation addresses (`192.0.2.1`).
 2. **Mock Domain Canonicalization**: Normalizes non-canonical subdomains (`https://api.example.com`) to the standardized root dummy domain (`https://example.com`).
 3. **Waiver Justification Repair**: Detects bare or truncated `# sentinel: allow[...]` pragmas and formats compliant justifications meeting minimum character length requirements.
-4. **Pre-Write AST Invariant Verification**: Verifies candidate output with `ast.parse` before emitting changes; if candidate code fails syntax parsing, the repair is aborted, guaranteeing that no file is ever corrupted.
+4. **Pre-Write AST Invariant Verification**: Verifies candidate output with `ast.parse` before emitting changes; if candidate code fails syntax parsing, the repair is aborted, so a repair never writes code that does not parse. The check does not show that behavior is unchanged: a rewritten address changes what the code connects to.
 
 ---
 
 ## 5. Verification & Key Metrics
 
 1. **Closed Survey Capability Gaps**: Closed both `auto_fix` and `editor_lsp` gaps in `docs/landscape/capabilities.yaml`. Reduced total landscape gaps from 9 to 7, and completely eliminated all `integrate` gaps across the entire repository.
-2. **Sub-Millisecond In-Memory Execution**: Processing a 1,000-line Python document through the in-memory LSP diagnostic pipeline completes in under 2ms.
+2. **In-Memory Execution**: `audit_source()` on a generated 999-line Python file took about 15 ms (best of 20 runs, measured on 2026-11-19).
 3. **AST Invariant Compliance**: All new LSP and auto-fix functions strictly adhere to AST Invariant Sentinel `--preset strict` ceilings ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 4. **Comprehensive Test Suite**: Added 8 unit tests in `examples/ast-invariant-sentinel/test_sentinel.py` (totaling 61 passing tests) verifying framing, diagnostics emission, code actions, and CLI `--fix` execution.

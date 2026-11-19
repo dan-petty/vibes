@@ -76,7 +76,7 @@ flowchart LR
 - Parses test pass/fail counts, assertion errors, and deprecation warnings.
 - Computes an objective **Quality Score** (0–100):
   - Base: 100 points
-  - Deductions: -20 per complexity violation, -25 per failed test, -15 per sanitization leak, -5 per deprecation warning.
+  - Deductions: -20 per complexity violation, -25 per failed test (at least -30 when any test fails), -15 per sanitization leak, -5 per deprecation warning.
 - Compares metrics against persistent baseline runs (`.data/iteration_baseline.json`) to track complexity deltas ($\Delta M$) and latency regressions ($\Delta t$).
 
 ### 4. Phase 4: FEEDBACK (Meaningful Improvement Analysis)
@@ -89,7 +89,7 @@ Rather than going passive when code meets passing thresholds, the feedback engin
 
 ### 5. Phase 5: ITERATE / BACKLOG (Recursive Action Dispatch)
 - Ranks identified opportunities by priority (`HIGH`, `MEDIUM`, `LOW`, `INFO`).
-- Exports feedback directly to GitHub Projects / SDLC backlog tasks via `--export-backlog`.
+- Exports feedback as SDLC backlog tasks to a local JSON file via `--export-backlog`; it does not write to GitHub.
 - Dispatches the highest priority improvement into the agent's next development cycle.
 
 ---
@@ -119,5 +119,5 @@ if report.overall_health.value == "CRITICAL":
 ## 4. Key Takeaways
 
 1. **Closed-Loop Feedback Anchors LLM Tokens**: Providing agents with immediate, structured metrics (pass rate, complexity, deltas) turns non-deterministic code edits into predictable engineering progress.
-2. **Delta Tracking Exposes Regressions**: Comparing current AST metrics against a saved baseline ensures complexity never creeps upward silently.
+2. **Delta Tracking Exposes Regressions**: Comparing current AST metrics against a saved baseline makes upward complexity drift visible in every report.
 3. **Prescriptive Guidance Prevents Thrashing**: Clear error localization (exact line numbers and function names) directs agent attention to root causes rather than symptoms.

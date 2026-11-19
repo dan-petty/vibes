@@ -134,7 +134,7 @@ def test_packed_output_always_parses(source: str, budget: int) -> None:
 
 
 def test_the_token_estimate_counts_bytes_not_code_points() -> None:
-    """tiktoken's rule of thumb is roughly four *bytes* per token.
+    """The four-per-token rule of thumb is safer applied to UTF-8 *bytes* than to code points.
 
     Applied to `len(text)` it under-counted every non-ASCII source by up to four times, so
     the packer reported a budget met and handed over four times what was asked for.

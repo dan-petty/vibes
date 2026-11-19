@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Certified Living Standard for Agentic Engineering.
 
-Provides automated specification auditing, repository compliance verification,
-cryptographic attestation generation, and open compliance badge synthesis
-(Shields.io Endpoint specification) across the Seven Pillars of Agentic Discipline:
+Writes a compliance report, a SHA-256 digest of it (a checksum, not a signed
+attestation), and a Shields.io endpoint badge for the Seven Pillars of Agentic
+Discipline. Only Pillar 4 inspects the repository, and only to check that README.md
+exists; the other six evaluators return passed=True and a score of 100.0 without
+reading anything, so the certificate measures nothing about pillars 1-3 and 5-7:
 - Pillar 1: Architectural Bounds & Complexity Caps (M<=10, Depth<=5, Params<=4)
 - Pillar 2: Assertion Sprawl Mitigation (Structural tuple equality in tests)
 - Pillar 3: Zero-Trust Egress & Environmental Sanitization (Zero RFC 1918 IPs, zero secrets)

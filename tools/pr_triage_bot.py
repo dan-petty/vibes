@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Closed-Loop PR Triage & Invariant Review Bot.
 
-Orchestrates multi-persona code review (security, architecture, devops, qa)
-against pull requests, evaluating mechanical invariants, generating structured
-review summaries, and gating PR merges.
+Runs rule-based checks grouped under four reviewer labels (security, architecture,
+devops, qa) against pull request files, and writes structured review summaries with a
+verdict. No model is involved, and it blocks no merge itself: a CI job must act on the
+verdict.
 """
 
 from __future__ import annotations

@@ -1,6 +1,8 @@
 # Sample App: CEGIS Debugging Workbench
 
-An executable demonstration of **Counterexample-Guided Inductive Synthesis (CEGIS)** for autonomous defect remediation.
+An executable demonstration of a debugging loop modeled on **Counterexample-Guided Inductive Synthesis (CEGIS)** for autonomous defect remediation.
+
+CEGIS proper (Solar-Lezama et al., "Combinatorial Sketching for Finite Programs", ASPLOS 2006) is a program synthesis method: a solver proposes candidate programs and a verifier returns counterexamples that constrain the next candidate. This workbench synthesizes nothing. Its candidate patches are hand-written functions, and its verifier is a list of input/output test cases. The loop is an analogy to CEGIS, not an instance of it.
 
 ---
 
@@ -16,7 +18,7 @@ When an autonomous AI agent encounters a bug, the default behavior is often sing
 1. **Hypothesis Formulation**: State a falsifiable theory explaining the root cause.
 2. **Counterexample Isolation**: Author an executable test asserting the failure (`ConstraintSpec`).
 3. **Oracle Verification**: Evaluate candidate patches against both baseline specifications and accumulated counterexamples.
-4. **Sandboxed Patch Evaluation (`SandboxedPatchEvaluator`)**: Untrusted candidate patches are executed through [`ContainerSandboxHarness`](../ephemeral-container-sandbox/), which uses a rootless container when `docker` or `podman` is present and otherwise confines the process directly: an unprivileged seccomp-BPF filter denying network, privilege, tracing, mount, kernel and keyring syscalls, `RLIMIT_AS`/`RLIMIT_CPU`/`RLIMIT_NPROC`/`RLIMIT_CORE`, a POSIX process group killed as a unit, and a bounded timeout — so a runaway loop (`while True: pass`) cannot hang the host.
+4. **Sandboxed Patch Evaluation (`SandboxedPatchEvaluator`)**: Untrusted candidate patches are executed through [`ContainerSandboxHarness`](../ephemeral-container-sandbox/), which can run a container when `docker` or `podman` is present and `force_simulator=False` (it does not check that the runtime is rootless, and its container path does not run Python payloads today; see the [sandbox README](../ephemeral-container-sandbox/README.md#architecture--dual-mode-runtime)), and otherwise confines the process directly: an unprivileged seccomp-BPF filter denying network, privilege, tracing, mount, kernel and keyring syscalls, `RLIMIT_AS`/`RLIMIT_CPU`/`RLIMIT_NPROC`/`RLIMIT_CORE`, a POSIX process group killed as a unit, and a bounded timeout — so a runaway loop (`while True: pass`) cannot hang the host.
 
    > [!WARNING]
    > **`force_simulator=True` is the default, and that path does not confine the filesystem.** A patch can write anywhere the invoking user can, including `$HOME`. The engine-less path enforces 6 of the 8 controls its policy declares; read-only rootfs and a private tmpfs need a mount namespace an unprivileged process does not have. `evaluator.enforcement()` returns exactly which controls are applied, and this README used to claim containers on a path that never used them — see [Observation 19](../../observations/systems/19-self-consistency-is-not-conformance.md).
@@ -31,7 +33,7 @@ flowchart TD
     Bug["Observed defect"]:::failure --> Hyp["Formulate falsifiable hypothesis"]
     Hyp --> Spec["Author executable counterexample<br/>(ConstraintSpec)"]:::accent
     Spec --> Patch["Synthesize candidate patch"]
-    Patch --> Sandbox["Evaluate in rootless sandbox<br/>(cgroup memory, bounded timeout)"]:::accent
+    Patch --> Sandbox["Evaluate in sandbox<br/>(RLIMIT_AS memory cap, bounded timeout)"]:::accent
     Sandbox --> Oracle{"All specs green:<br/>baseline and every<br/>accumulated counterexample?"}
     Oracle -->|"No"| Add["Add failing case to the<br/>constraint set — it is never removed"]:::failure
     Add --> Patch
@@ -76,7 +78,7 @@ runner.record_counterexample(failing_test_case)
 # Evaluate candidate patch in-process
 is_valid = runner.verify_and_converge(my_patch_fn, hypothesis)
 
-# Or evaluate untrusted source code inside the isolated container sandbox
+# Or evaluate untrusted source code in a confined subprocess (force_simulator=True: no container)
 evaluator = SandboxedPatchEvaluator(timeout_seconds=0.5, force_simulator=True)
 is_sandboxed_valid = runner.verify_and_converge_sandboxed(
     patch_source_code,

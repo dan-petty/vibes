@@ -339,10 +339,11 @@ def _fingerprint(value: object, workspace: Path) -> str:
 
     **The order of the two substitutions is load-bearing.** Addresses were normalized
     first, and `mkdtemp` draws its suffix from a pool that includes `0`, `x` and the hex
-    digits: roughly one scratch directory in three hundred is named something like
-    `vibes-fuzz-8t0x1im`, which the address pattern rewrites to `vibes-fuzz-8t0xX`. The
+    digits: about one scratch directory in 530 (exact for eight characters drawn from its
+    37-symbol pool) is named something like `vibes-fuzz-8t0x1im`, which the address pattern
+    rewrites to `vibes-fuzz-8t0xXim`. The
     path replacement then no longer matched, the scratch name reached the hash, and that
-    run disagreed with every other. It presented as a 0.3% flake that vanished whenever it
+    run disagreed with every other. It presented as a 0.2% flake that vanished whenever it
     was investigated serially, because contention only raised the number of directories
     drawn, never the odds for any one of them. Replace the path first.
     """

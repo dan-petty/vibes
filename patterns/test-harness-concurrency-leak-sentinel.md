@@ -1,7 +1,7 @@
 # Pattern: Test Harness Concurrency Leak Sentinel
 
 > **Pattern Class**: Polyglot Systems Invariant Enforcement  
-> **Problem**: Standard test runners (`go test`, `pytest`) silently pass when concurrent worker goroutines outlive tests, accumulating thread table entries and leaking resources until production failure  
+> **Problem**: Standard test runners (`go test`, `pytest`) silently pass when concurrent worker goroutines outlive tests, accumulating goroutine stacks and leaking resources until production failure  
 > **Solution**: Integrate deterministic baseline calibration and teardown assertions directly into standard test functions (`defer sentinel.Check(t)()`, `verify_test_run(fail_on_leak=True)`) to fail tests on leaked goroutines  
 > **TLDR**: Embed goroutine and thread baseline tracking directly in test teardowns, failing tests immediately when background workers outlive the suite.
 > **ELI:7b**: Fail the test immediately if a background worker or thread is left running after the test finishes, preventing memory leaks.
@@ -16,7 +16,7 @@ In concurrent systems programming (Go, Rust, Python asyncio), asynchronous worke
 - Worker loops omitting `select` guards against context cancellation (`<-ctx.Done()`).
 - Orphaned background goroutines spawned without lifecycle wait-groups.
 
-When these flawed workers run inside standard unit tests, the test harness exercises the happy path, asserts on return values, and exits. Because the main test thread returns successfully, **the test runner reports a green pass**, even though background threads remain permanently blocked in the runtime thread scheduler:
+When these flawed workers run inside standard unit tests, the test harness exercises the happy path, asserts on return values, and exits. Because the main test thread returns successfully, **the test runner reports a green pass**, even though background goroutines remain blocked forever, each holding its stack and the memory it references:
 
 ```mermaid
 flowchart TD
@@ -24,7 +24,7 @@ flowchart TD
         T1["Test Launches Goroutine"] --> T2["Test Reads Initial Value"]
         T2 --> T3["Test Asserts & Returns (PASS)"]
         T1 -.-> L1["Leaked Goroutine Blocks Forever on Channel/Select"]
-        L1 -.-> L2["Thread Table Memory Accumulates Silently"]
+        L1 -.-> L2["Goroutine Stack Memory Accumulates Silently"]
     end
 ```
 
@@ -32,7 +32,7 @@ flowchart TD
 
 ## 2. The Architectural Pattern: In-Harness Teardown Verification
 
-Instead of requiring external analysis tools or asynchronous log scrapers, the **Test Harness Concurrency Leak Sentinel** drops directly into existing test routines. It records an initial baseline of active goroutines, executes the test workload, and enforces an automated teardown gate before the test completes:
+Instead of requiring external analysis tools or asynchronous log scrapers, the **Test Harness Concurrency Leak Sentinel** drops directly into existing test routines. It records an initial baseline of active goroutines, executes the test workload, and enforces an automated teardown gate before the test completes. The maintained open-source library [uber-go/goleak](https://github.com/uber-go/goleak) provides the same check (`defer goleak.VerifyNone(t)`); the example here is a teaching copy:
 
 ```mermaid
 sequenceDiagram
@@ -74,6 +74,9 @@ func TestWorkerConcurrecy(t *testing.T) {
 ```
 
 ### 3.2 Python Test Runner Integration (`pytest`)
+
+The Python helper parses a Go goroutine dump (`raw_trace`, from `pprof` or `runtime.Stack`) that the test captured from the Go process. It does not track Python threads or asyncio tasks.
+
 ```python
 from go_leak_sentinel import assert_no_goroutine_leaks, verify_test_run
 
@@ -89,4 +92,4 @@ def test_service_worker():
 
 1. **Zero External Orchestration**: Verification is invoked from inside the test process itself, requiring no separate CI infrastructure.
 2. **Deterministic Triage**: Leaks include exact goroutine IDs, blocked states (`chan send`, `select`), and line-level stack traces.
-3. **Daemon Immunity**: Well-known runtime background threads (e.g. `runtime.gopark`, `gcBgMarkWorker`, `scavenger`) are automatically excluded from leak tallies.
+3. **Daemon Immunity**: Runtime background goroutines (e.g. `gcBgMarkWorker`, `bgsweep`, `scavenger`) are automatically excluded from leak tallies. The Python analyzer also excludes any goroutine with a `runtime.gopark` frame. `runtime.gopark` is not a daemon: every blocked goroutine parks there, so a dump that shows runtime frames (`GOTRACEBACK=system`) hides user leaks (`go_leak_sentinel.py:20-31`).

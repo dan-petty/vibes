@@ -2,8 +2,8 @@
 
 > **Project**: `devops-cli`  
 > **Topic**: Test-Driven Development (TDD) as an Executable Boundary Oracle  
-> **Key Metric**: 900+ tests passing, 0 test failures, $\ge 90.0\%$ strict coverage gate  
-> **TLDR**: Writing executable tests before implementation code converts stochastic LLM token generation into deterministic engineering progress with zero test failures.
+> **Key Metric**: About 4,700 test functions on 2026-09-24 (`git grep -c 'def test_' acd091826 -- tests`), $\ge 90.0\%$ coverage gate (`fail_under = 90`)  
+> **TLDR**: Writing executable tests before implementation code turns stochastic LLM token generation into progress that a test run can check.
 > **ELI:7b**: If you ask an AI to code without tests, it will guess and pretend it works. If you make it write the test first, it can check its own homework until it gets an A+.
 
 ---
@@ -73,18 +73,18 @@ In `devops-cli`, TDD was hardcoded into the agent's DNA via three mechanical enf
    - Step 4: Verify test passes locally with 100% assertions satisfied.
 2. **Submodule-Aligned Test Mirroring**:
    - Strictly prohibit one-off, arbitrary test filenames (e.g., no `tests/test_fix_issue_123.py`).
-   - Every test must mirror the source tree (`tests/commands/test_release.py` mirrors `src/devops_cli/commands/release.py`).
+   - Every test must mirror the source tree (`tests/test_<submodule>.py` or `tests/<submodule>/test_<feature>.py`; for example `tests/test_release.py` covers `src/devops_cli/commands/release.py`).
 3. **Hard Coverage Gate in CI**:
-   - Continuous CI quality gates mandate minimum $90.0\%$ line coverage across `src/`. If an agent authors code without tests, CI immediately rejects the pull request.
+   - `pyproject.toml` sets `fail_under = 90`, and the CI `test` job runs `pytest --cov=src`. If total line coverage across `src/` falls below $90.0\%$, the job fails.
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
 
 ### Concrete Engineering Metrics
-- **900+ Unit and Integration Tests**: Maintained continuously throughout aggressive multi-version upgrades.
-- **Zero Uncaught Regressions**: Feature additions rarely, if ever, broke existing functionality because the test harness detected breaks instantaneously.
-- **Drastic Reduction in Debug Cycles**: The agent spent 70% less time debugging because failure traces from `pytest` pointed directly to the exact failing line and assertion.
+- **About 4,700 Test Functions (2026-09-24)**: Maintained continuously throughout aggressive multi-version upgrades.
+- **Fewer Uncaught Regressions**: The suite caught many breaks before merge. It did not catch all of them: the project history has many `fix(...)` commits for defects that reached a release branch.
+- **Shorter Debug Cycles**: Failure traces from `pytest` pointed directly to the failing line and assertion. No measurement of debugging time was recorded.
 
 > [!TIP]
 > **Takeaway for Agentic Practitioners**: Never ask an agent to "write code." Ask the agent to "write a failing test for the desired behavior, execute it, and then implement the minimal code to make it pass." Tests are the compass that keeps probabilistic intelligence on course.

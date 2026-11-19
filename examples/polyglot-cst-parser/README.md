@@ -1,6 +1,8 @@
 # Sample App: Polyglot CST Ingestion Engine
 
-A language-agnostic Concrete Syntax Tree (CST) and AST ingestion engine that extracts symbols, calculates unified cyclomatic complexity ($M$) and nesting depth, and enforces defensive pre-flight file size and symlink containment boundaries across **Python, Rust, Go, TypeScript/JavaScript, and Bash**.
+A symbol and complexity ingestion engine that extracts symbols, calculates cyclomatic complexity ($M$) and nesting depth, and enforces defensive pre-flight file size and symlink containment boundaries across **Python, Rust, Go, TypeScript/JavaScript, and Bash**.
+
+Despite the name, it builds no concrete syntax tree (CST). A CST keeps every token of the source, as a tree-sitter parse tree does. This engine parses Python with the standard `ast` module (an abstract syntax tree) and scans the other four languages with line-anchored regular expressions.
 
 ---
 
@@ -20,15 +22,15 @@ The **Polyglot CST Ingestion Engine** solves this by pairing multi-language toke
 
 ## Multi-Language Complexity Decision Points
 
-The engine maps language-specific control-flow statements to unified McCabe Cyclomatic Complexity ($M$):
+For Python, the engine counts McCabe decision points on the `ast` tree. For the other languages, it counts matches of one shared set of keywords and operators (`if`, `elif`, `for`, `while`, `case`, `catch`, `match`, `select`, `&&`, `||`, `?`) over the whole file text, comments and strings included. This is a per-file approximation, not a per-function McCabe value:
 
 | Language | Extracted Symbols | Decision Points Contributing to Complexity ($M$) |
 |---|---|---|
 | **Python** | `def` (functions/methods), `class` | `if`, `elif`, `for`, `while`, `try/except`, `assert`, `and`, `or`, ternary `if/else` |
-| **Rust** | `fn`, `struct`, `trait`, `impl` | `if`, `match`, `for`, `while`, `loop`, `?` (try operator), `&&`, `\|\|` |
+| **Rust** | `fn` (at line start), `struct`, `trait` | `if`, `match`, `for`, `while`, `?` (try operator), `&&`, `\|\|` |
 | **Go** | `func`, `type ... struct`, `type ... interface` | `if`, `for`, `switch/case`, `select/case`, `&&`, `\|\|` |
 | **TypeScript / JS** | `function`, `class`, `interface` | `if`, `else if`, `for`, `while`, `case`, `catch`, `&&`, `\|\|`, ternary `? :` |
-| **Bash** | `name() { ... }`, `function name` | `if`, `elif`, `for`, `while`, `case`, `&&`, `\|\|` |
+| **Bash** | `name() { ... }`, `function name() { ... }` | `if`, `elif`, `for`, `while`, `case`, `&&`, `\|\|` |
 
 ---
 
@@ -48,7 +50,7 @@ flowchart TD
 ```
 
 1. **Pre-Flight File Size Bound**: Strict cap of `MAX_FILE_SIZE_BYTES = 5MB`. Files exceeding the limit are skipped with a structured diagnostic warning.
-2. **Symlink Containment**: Defensively resolves paths with `path.resolve()` and asserts `is_relative_to(base_root)`, preventing circular symlink exhaustion (`ELOOP`) and directory traversal escapes.
+2. **Symlink Containment**: Resolves paths with `path.resolve()` and, when a `base_root` is given, asserts `is_relative_to(base_root)` to skip directory traversal escapes. A circular symlink (`ELOOP`) makes `resolve()` fail on Python 3.12 and older; on Python 3.13 and newer, `resolve()` returns and the `stat()` of the size check fails. The file is skipped in both cases. The `--scan` CLI passes no `base_root`, so it checks size and loops only.
 3. **Zero External Dependencies**: Fast, deterministic execution using Python standard library.
 
 ---
@@ -90,7 +92,7 @@ python3 examples/polyglot-cst-parser/parser.py --scan path/to/file.py --query "k
 ## Advanced Capabilities
 
 ### 1. Structural Syntax Querying (`structural_query`)
-Matches symbols using structured AST/CST properties rather than crude text regex:
+Filters the extracted symbol records by their fields instead of searching raw text. Only Python symbols carry a `scope` and the `method` kind; the regex extractors for the other languages set neither:
 - **`kind`**: Filter by symbol type (`function`, `method`, `class`, `struct`, `interface`, `trait`).
 - **`name` / `pattern`**: Regex matching against symbol names.
 - **`scope` / `parent`**: Match symbols enclosed within a designated parent structure.
@@ -110,7 +112,7 @@ matched = node.query_symbols(query)
 Reparses only the modified region (`EditSpan`) across file edits without recomputing unchanged AST nodes:
 - Pre-edit symbols (`line_end < edit.start_line`) are preserved untouched.
 - Post-edit symbols (`line_start > edit.old_end_line`) are shifted by `line_delta` without reparsing.
-- Overlapping symbols are re-extracted exclusively from the edited snippet.
+- Overlapping symbols are re-extracted exclusively from the edited snippet. An enclosing symbol, such as a function whose body contains the edit, is dropped unless the snippet itself defines it.
 
 ```python
 from parser import EditSpan, PolyglotCSTParser

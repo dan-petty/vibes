@@ -2,8 +2,8 @@
 
 > **Classification**: Polyglot Frontend & Fullstack Engineering  
 > **Target Language**: TypeScript 5.5+  
-> **Key Metric**: 80% reduction in type-checker regressions using CST symbol extraction  
-> **TLDR**: Extract concrete CST symbols and enforce zero-any invariant gates to prevent LLMs from writing overly recursive TypeScript conditional types.
+> **Key Metric**: Not measured; this observation states recommended practice. Neither vibes nor devops-cli contains TypeScript code or an ESLint configuration  
+> **TLDR**: Give the agent resolved type signatures from the TypeScript type checker and enforce lint gates that ban `any` and `@ts-ignore`, so that LLMs do not weaken or over-nest TypeScript types.
 > **ELI:7b**: Keep TypeScript simple: ban the 'any' keyword and don't let the AI write crazy nested generic puzzles that crash the type-checker.
 
 ---
@@ -28,7 +28,7 @@ type DeepFlatten<T> = T extends readonly (infer U)[]
   ? { [K in keyof T]: DeepFlatten<T[K]> }
   : T;
 ```
-When an agent was asked to modify a handler using this type, it frequently:
+When an agent modifies a handler that uses this type, typical failure modes are (illustrative; no recorded runs back a frequency):
 1. Replaced the generic constraint with `any` or `Record<string, unknown>` to make the compiler shut up ("sycophantic type weakening").
 2. Authored deeply nested union types that caused `Type instantiation is excessively deep and possibly infinite (TS2589)`.
 3. Guessed runtime property shapes that contradicted the static interface definition.
@@ -59,14 +59,15 @@ flowchart LR
 
 ## 4. Remediation & Architectural Pattern
 
-In our agentic pipelines, we implemented three strict guidelines for TypeScript tasks:
+Three guidelines for TypeScript tasks follow. They are recommendations; no repository in this project enforces them:
 
 ### 1. Hard Ban on `any` and `@ts-ignore` in Lint Gates
 - Enforce `@typescript-eslint/no-explicit-any: error` and `@typescript-eslint/ban-ts-comment: error`.
-- If an agent inserts `any`, CI instantly rejects the pull request.
+- If CI runs ESLint with these rules, a pull request that adds an explicit `any` or a `@ts-ignore` comment fails the lint check. `no-explicit-any` does not catch an implicit `any`; turn on `noImplicitAny` (part of `strict`) in `tsconfig.json` for that.
 
 ### 2. Concrete Syntax Tree (CST) Symbol Extraction
-- Instead of dumping 500 lines of complex types into the prompt, use Tree-Sitter or TypeScript compiler API to extract flattened hover signatures (`TypeChecker.typeToString(...)`).
+- Instead of dumping 500 lines of complex types into the prompt, use the TypeScript compiler API (`TypeChecker.typeToString(...)`, the data an editor shows on hover) to extract resolved type signatures.
+- A concrete syntax tree (CST), for example from tree-sitter, keeps every token of the declarations as written. It does not resolve types. The resolved shape comes only from the type checker.
 - Presenting the agent with the **resolved type shape** rather than the raw recursive macro simplifies reasoning drastically.
 
 ### 3. Progressive Compiler Probing (`tsc --noEmit`)
@@ -80,8 +81,8 @@ In our agentic pipelines, we implemented three strict guidelines for TypeScript 
 
 ## 5. Verifiable Impact & Key Takeaways
 
-- **Preservation of Type Safety**: Zero `@ts-ignore` or `any` escapes across production codebases.
-- **Faster Refactoring Cycles**: Flattened type signatures reduce agent token consumption by 65% compared to monolithic type file dumps.
+- **Preservation of Type Safety**: With both lint rules and `strict` on, a change that adds an explicit `any`, an implicit `any` or `@ts-ignore` fails the lint or type check.
+- **Faster Refactoring Cycles**: A resolved signature is often shorter than the type definitions it depends on, and then it uses fewer prompt tokens. A resolved type can also be longer than a compact recursive definition. No measurement backs a specific reduction.
 
 > [!IMPORTANT]
 > **Key Rule for Agentic TypeScript**: Never allow an agent to use `as any` or `@ts-ignore` to silence the compiler. Strict lint gates force the agent to respect and preserve generic contracts.

@@ -1,6 +1,6 @@
 # eBPF Runtime LSM Kernel Gate & Dynamic Syscall Fuzzing Oracle
 
-A zero-dependency Python reference implementation demonstrating **synchronous in-kernel security policy enforcement** via simulated Linux Security Module (BPF LSM) hooks, paired with dynamic Syzkaller-style mutation fuzzing to verify boundary containment.
+A zero-dependency Python **simulation** of BPF LSM (Linux Security Module) policy decisions. It loads no BPF program and touches no kernel: `evaluate_event` applies Python rules to event records that the caller builds. A fixed list of 15 adversarial probes checks the rules. That list is not syzkaller (a coverage-guided kernel fuzzer): nothing is mutated or randomized.
 
 ---
 
@@ -22,12 +22,14 @@ flowchart TD
         C -->|"LSM002: Private IP / Metadata"| D
         C -->|"LSM003: Sensitive Path / Escape"| D
         C -->|"LSM004: Privilege Escalation"| D
-        C -->|"LSM005: Syzkaller Evasion Trap"| D
+        C -->|"LSM005: Evasion Pattern"| D
         C -->|"Authorized Operation"| E["Dispatch to VFS / Network Stack"]
     end
 
     D --> F["OASIS SARIF 2.1.0 Telemetry"]
 ```
+
+The diagram shows the kernel design that this exhibit models. In this code, the syscall, the kernel layer and the hook are one Python function call on an `LSMEvent` record.
 
 ---
 
@@ -37,20 +39,20 @@ flowchart TD
 |---|---|---|---|
 | `LSM001` | Unauthorized Binary Execution | Binary not in allowlist or explicitly in blocklist (`nc`, `socat`, `telnet`) | `BLOCK` (`-EPERM`) |
 | `LSM002` | Network Egress Violation | Socket destination targets private RFC 1918/4193 addresses or metadata (`169.254.169.254`) | `BLOCK` (`-EPERM`) |
-| `LSM003` | Sensitive Path Access | Access to `/etc/shadow`, `/root`, `~/.ssh`, `~/.aws`, `.git/hooks` | `BLOCK` (`-EPERM`) |
+| `LSM003` | Sensitive Path Access | Path contains `/etc/shadow`, `/root`, `~/.ssh`, `~/.aws`, `.git/hooks` (substring match: `~/.ssh` matches only a literal `~`, so `/home/agent/.ssh/id_rsa` is allowed) | `BLOCK` (`-EPERM`) |
 | `LSM004` | Privilege Escalation | Subprocess attempts `setuid(0)` or requests administrative capabilities (`CAP_SYS_ADMIN`) | `BLOCK` (`-EPERM`) |
-| `LSM005` | Adversarial Syscall Evasion | Syzkaller mutation detected: null-byte injection, path normalization tricks (`..//`), or negative flags | `BLOCK` (`-EPERM`) |
+| `LSM005` | Adversarial Syscall Evasion | Evasion pattern detected: a null byte or literal `\0`, path normalization tricks (`..//`), or negative flags. Paths are not normalized, so `/etc/./shadow` and `/etc//shadow` are allowed | `BLOCK` (`-EPERM`) |
 
 ---
 
-## Dynamic Syzkaller-Style Mutation Fuzzing
+## Fixed Adversarial Probe List
 
-The exhibit includes an automated mutation fuzzer that systematically probes the LSM kernel gate with adversarial inputs:
-- **Path Permutations**: Path traversal normalization attempts (`/workspace/..//..//root`, `/workspace/.../etc/sudoers`, null bytes `\x00`).
+The exhibit includes a fixed list of 15 adversarial probes for the simulated gate. It is not a fuzzer in the syzkaller sense: no input is generated at random, and `--seed` has no effect.
+- **Path Permutations**: Path traversal normalization attempts (`/workspace//..//root`, `/workspace/.../etc/sudoers`, a literal `\0`).
 - **Network Permutations**: IPv6 Unique Local Addresses (`fd00::1`), RFC 1918 subnets, and AWS metadata endpoints.
-- **Corrupted Syscall Arguments**: Bitwise-inverted execution flags and privileged UID spoofing.
+- **Binary and Privilege Probes**: `nc`, `socat`, an unlisted binary, and a `setuid` to UID 0.
 
-The fuzzer asserts monotonic containment ($R_{\text{contain}} \ge 0.85$), proving zero evasion bypasses across all generated attack variants.
+The campaign passes when at most one probe is allowed (`allowed <= 1` in `run_fuzz_campaign`). The expected pass is the loopback connect to `127.0.0.1`. `lsm_gate.py fuzz --seed 42` blocks 14 of 15 probes (rate 0.933). This checks the rules against these 15 inputs only; it proves nothing about other inputs.
 
 ---
 
@@ -82,6 +84,8 @@ python3 examples/ebpf-lsm-kernel-gate/lsm_gate.py generate --format bpf
 python3 examples/ebpf-lsm-kernel-gate/lsm_gate.py generate --format tetragon
 ```
 
+Both outputs are fixed skeletons. In the BPF C, each LSM hook holds only a comment and returns 0 (allow), so it enforces nothing. The Tetragon TracingPolicy traces three kernel functions; it has no selectors or actions, so it blocks nothing.
+
 ### 4. Export Telemetry to OASIS SARIF 2.1.0
 
 ```bash
@@ -92,5 +96,5 @@ python3 examples/ebpf-lsm-kernel-gate/lsm_gate.py sarif --hook bprm_check_securi
 
 ## Zero-Dependency Statement
 
-This reference implementation strictly uses Python's standard library (`ipaddress`, `hashlib`, `json`, `argparse`, `dataclasses`, `enum`, `pathlib`). It requires no third-party packages, external C compilers, or kernel privileges to demonstrate and verify the architectural invariants of in-kernel LSM security gating.
+This reference implementation strictly uses Python's standard library (`ipaddress`, `json`, `argparse`, `dataclasses`, `enum`). It requires no third-party packages, external C compilers, or kernel privileges, because it runs no kernel code. It demonstrates the policy logic only; it verifies nothing about in-kernel enforcement.
 

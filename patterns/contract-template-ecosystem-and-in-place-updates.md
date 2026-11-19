@@ -11,9 +11,9 @@
 
 ## 1. Problem Statement: The Scaffolding Lifecycle Chasm
 
-Most software generators (`cookiecutter`, `yeoman`) focus exclusively on initial creation. Once files are written to disk, the generation lifecycle ends:
+Most software generators (`cookiecutter`, `yeoman`) focus on initial creation. Once files are written to disk, the generation lifecycle ends. Copier (`copier update`) and cruft (for cookiecutter templates) are open tools that do update a generated project in place from recorded answers:
 
-1. **Destructive Regeneration**: Re-running a template generator destroys hand-written domain logic and custom integrations.
+1. **Destructive Regeneration**: Re-running a template generator over an existing project either refuses to run (cookiecutter without `--overwrite-if-exists`), asks file by file (Yeoman), or overwrites hand-written domain logic and custom integrations.
 2. **Schema & Dispatch Drift**: When an upstream specification evolves (such as adding an endpoint or modifying argument constraints), developers must manually synchronize JSON Schemas, CLI argument parsers, dispatch mappings, and test assertions.
 3. **Ad-Hoc Contract Sprawl**: Lacking a curated, gate-compliant template ecosystem, developers invent ad-hoc schemas that frequently breach architectural complexity and nesting bounds.
 

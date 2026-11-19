@@ -1,6 +1,6 @@
 # Chapter 7: Big Brains & Fast Hands (Using Big and Small Models Together)
 
-> **TLDR**: Orchestrating frontier models for high-level reasoning alongside fast open-weight models and deterministic scripts slashes token costs by 85% while speeding up execution.
+> **TLDR**: Orchestrating frontier models for high-level reasoning alongside fast open-weight models and deterministic scripts cuts token costs while speeding up execution.
 >
 > **ELI:7b**: Don't hire a world-famous architect to sweep the floor. Use big smart models for the master plan, small fast models for fetching and typing, and dumb scripts for grading tests.
 
@@ -48,7 +48,7 @@ flowchart TD
 
     subgraph Tier3 ["Tier 3: The Mechanical Oracles ('Zero LLM Tokens')"]
         M3["Linters, Compilers & Test Runners (pytest, ruff, mypy)"]
-        D3["Instant 100% Accurate Pass/Fail Grading in Milliseconds"]
+        D3["Fast, Deterministic Pass/Fail Grading"]
     end
 
     Tier1 -->|"Delegates mechanical tasks"| Tier2
@@ -64,16 +64,16 @@ flowchart TD
 ### 2. Tier 2: The Fast Hands ("Small Types")
 - **Who**: Fast, cheap open-weight models (like 7B or 14B parameter models running locally via Ollama or vLLM).
 - **What they do**: Searching through directories, extracting symbol lists from files, formatting markdown tables, drafting repetitive unit test cases.
-- **Why**: They are 10x cheaper and respond in milliseconds.
+- **Why**: They cost much less per token and respond quickly.
 
 ### 3. Tier 3: The Mechanical Oracles ("Zero LLM Tokens")
 - **Who**: Traditional computer programs (Python scripts, `pytest`, `ruff`, `mypy`, git hooks).
 - **What they do**: Checking syntax errors, verifying type annotations, counting cyclomatic complexity, verifying file paths.
-- **Why**: **Never use an LLM for something a 5-line Python script can do.** A script runs in 0.01 seconds, costs zero dollars, and is 100% mathematically accurate every single time.
+- **Why**: **Never use an LLM for something a 5-line Python script can do.** A script runs in a fraction of a second, costs almost nothing, and gives the same answer every time.
 
 ---
 
-## The 85% Token Savings Rule: "Rent the Frontier, Own the Workhorse"
+## The Token Savings Rule: "Rent the Frontier, Own the Workhorse"
 
 When you structure your agent workflow this way:
 
@@ -82,7 +82,7 @@ When you structure your agent workflow this way:
 3. The test runner (`pytest`) grades the code in 0.4 seconds.
 4. The frontier model only steps back in if an unexpected architectural blocker arises.
 
-**Result**: You cut your API bill by **80% to 90%**, your agent runs three times faster, and your codebase stays rock-solid.
+**Result**: You cut your API bill, your agent runs faster, and your codebase stays rock-solid. (This repository has not measured the size of the saving.)
 
 ---
 
@@ -110,4 +110,4 @@ Ready to see how these fundamentals are implemented in real production code?
 - 🚀 [**Next: Chapter 8 — Fast Checks Beat Slow Tests**](./08-fast-checks-beat-slow-tests.md)
 - 📜 [**The Disciplined Agentic Manifesto**](../MANIFESTO.md)
 - 🧭 [**Taxonomy of Agentic Engineering**](../TAXONOMY.md)
-- 🔬 [**71 Real-World Case Studies (Observations)**](../../observations/README.md)
+- 🔬 [**Field Observations**](../../observations/README.md)

@@ -2,8 +2,9 @@
 """Unified Polyglot CST Ingestion Engine & Complexity Auditor.
 
 Extracts symbols (functions, methods, classes, structs, traits, interfaces),
-computes language-agnostic cyclomatic complexity (M) and nesting depth, and
-enforces defensive file size and symlink containment boundary guards across:
+computes cyclomatic complexity (M: McCabe on the `ast` tree for Python, a keyword
+count over the file text for the other languages) and nesting depth, and enforces
+defensive file size and symlink containment boundary guards across:
 - Python
 - Rust
 - Go
@@ -12,7 +13,8 @@ enforces defensive file size and symlink containment boundary guards across:
 
 Hardening Guarantees:
 - Pre-flight file size capping (MAX_FILE_SIZE_BYTES <= 5MB) preventing OOM/DoS (CWE-400).
-- Defensive symlink resolution trapping circular loops (ELOOP) and workspace escapes.
+- Symlink resolution that skips circular loops (ELOOP) and, given a base_root, workspace escapes.
+- No CST is built: Python uses the `ast` module; the other languages use regexes.
 - Zero external wheel dependencies; standard-library execution with sub-second latency.
 """
 

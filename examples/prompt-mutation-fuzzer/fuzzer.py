@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Interactive Prompt Mutation Suite & Invariant Fuzzer for AI Agents.
 
-Fuzzes agent system prompts with grammar-guided perturbations (instruction dilution,
+Fuzzes agent system prompts with template-based perturbations (instruction dilution,
 distraction noise, adversarial injection prefixes, context truncation, and complexity
 traps) to measure and quantify architectural invariant drift resilience.
 """

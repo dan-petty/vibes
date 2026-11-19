@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Agentic IDE Lifecycle Hook Sentinel & Zero-Trust Execution Guard.
 
-Intercepts agent tool calls and editor events in agentic IDE control planes (VS Code,
-Antigravity, Cursor). Enforces zero-trust egress, protected path isolation, pre-flight
-file bounds (CWE-400), POSIX process group containment, and LSP diagnostic ingestion.
+Policy checks for agent tool calls and editor events that a hook in an agentic IDE (for
+example VS Code, Antigravity or Cursor) can call; no IDE adapter is included. Checks
+private IP literals in tool arguments, protected paths, pre-flight file bounds (CWE-400),
+runs commands in their own POSIX process group, and ingests LSP diagnostics.
 """
 
 # sentinel: allow[ZeroTrustSanitization] — this module defines the private-address policy;
@@ -353,8 +354,8 @@ class IdeHookSentinel:
         return CommandResult(
             command=cmd_tuple,
             # The signal that actually reaped it, not a placeholder. The success branch
-            # reports `proc.returncode`, where POSIX convention spells a signal death as
-            # `-N`, so a hardcoded `-1` claimed the child died of SIGHUP — a signal
+            # reports `proc.returncode`, where Python's `subprocess` reports a signal death on
+            # POSIX as `-N`, so a hardcoded `-1` claimed the child died of SIGHUP — a signal
             # nothing here sends. A reader distinguishing "timed out and was terminated"
             # from "was hung up on" could not, and the real value is -15, or -9 once the
             # escalation above fires.

@@ -46,12 +46,12 @@ Whenever an agent encounters any unexpected failure, unhandled exception, CLI cr
 
 ## 3. Implementation Example
 
-### Real Incident from `devops-cli`
-- **Issue**: An agent used `datetime.utcnow()`, which triggered a `DeprecationWarning` in Python 3.12+.
-- **Step 1 (Source Fix)**: Replaced with `datetime.now(timezone.utc)`.
-- **Step 2 (Instruction Hardening)**: Added the following guardrail to `AGENTS.md`:
-  > *"Proactive Deprecation Remediation & Zero-Warning Mandate: Suppressing, ignoring, or tolerating deprecation warnings is strictly prohibited. Update deprecated calls immediately upon encounter. Use timezone-aware `datetime.now(timezone.utc)` across all modules."*
-- **Outcome**: No subsequent agent in any session ever used `datetime.utcnow()` again.
+### Illustrative Example
+- **Issue**: An agent uses `datetime.utcnow()`, which Python 3.12 deprecates with a `DeprecationWarning`.
+- **Step 1 (Source Fix)**: Replace it with `datetime.now(timezone.utc)`.
+- **Step 2 (Instruction Hardening)**: Add a guardrail to `AGENTS.md`. devops-cli has a real rule of this kind, added in v0.2.18 (commit 46472f3a9, 2026-09-16):
+  > *"Proactive Deprecation Remediation & Zero-Warning Mandate ... Suppressing, ignoring, bypassing, or tolerating actionable deprecation warnings in project code, configurations, or test suites is strictly prohibited."*
+- **Outcome**: The rule tells the next agent not to suppress the warning. A mechanical check, such as Ruff rule `DTZ003` or `-W error::DeprecationWarning` in the test run, is what stops the call from coming back.
 
 ---
 

@@ -1,8 +1,8 @@
 """WebAssembly Component Model & Capability-Based Sandbox Gateway (WASI 0.2).
 
-Demonstrates object-capability isolation, WIT interface contracts, deterministic
-gas metering, and linear memory containment for ephemeral agent tool execution.
-Eliminates ambient UNIX authority (CWE-250) and unbounded execution (CWE-400).
+Simulates object-capability isolation, WIT interface contracts, deterministic
+gas metering, and linear memory containment in pure Python. It runs no WebAssembly,
+and the header check accepts core modules (version 1) only, not components.
 
 Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 """
@@ -29,7 +29,7 @@ DEFAULT_GAS_BUDGET: int = 10000
 
 
 class CapabilityKind(StrEnum):
-    """Categorical kind of unforgeable object capability."""
+    """Categorical kind of object capability."""
 
     FILESYSTEM_READ = "FILESYSTEM_READ"
     FILESYSTEM_WRITE = "FILESYSTEM_WRITE"
@@ -61,7 +61,7 @@ class DiagnosticRule(StrEnum):
 
 @dataclass(frozen=True)
 class CapabilityHandle:
-    """Cryptographically sealed capability grant."""
+    """Capability grant record. Any caller can build one; no check reads handle_id."""
 
     handle_id: str
     kind: CapabilityKind
@@ -112,7 +112,7 @@ class ExecutionResult:
 
 
 def create_capability(kind: CapabilityKind, scope: str, salt: str = "wasi-cap") -> CapabilityHandle:
-    """Mint an unforgeable, cryptographically hashed capability handle."""
+    """Mint a capability handle whose ID is a deterministic SHA-256 digest of kind and scope."""
     raw = f"{kind}:{scope}:{salt}".encode()
     digest = hashlib.sha256(raw).hexdigest()[:16]
     return CapabilityHandle(

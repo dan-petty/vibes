@@ -11,7 +11,7 @@
 
 ## 1. Executive Context & Baseline
 
-The Code Smell Quantifier ([`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code-smell-quantifier/smell_quantifier.py)) provides deterministic, stdlib-only structural decay measurement. Rather than evaluating pass/fail gates alone, it quantifies nine structural health dimensions across codebases, including normalized maintainability index, Halstead volume, LCOM4 cohesion, duplicate code blocks, unreferenced symbols, and cyclomatic complexity.
+The Code Smell Quantifier ([`examples/code-smell-quantifier/smell_quantifier.py`](../../examples/code-smell-quantifier/smell_quantifier.py)) provides deterministic structural decay measurement. It depends on radon, networkx and vulture; its polyglot tokenizer uses only the standard library. Rather than evaluating pass/fail gates alone, it quantifies nine structural health dimensions across codebases, including normalized maintainability index, Halstead volume, LCOM4 cohesion, duplicate code blocks, unreferenced symbols, and cyclomatic complexity.
 
 In the comparative landscape survey ([`tools/landscape_survey.py`](../../tools/landscape_survey.py)), the quantifier was benchmarked against `kucherenko/jscpd` (a multi-language copy-paste detector documenting over 150 file formats). The survey identified an open capability gap:
 
@@ -58,14 +58,14 @@ flowchart TD
 Why do traditional static analyzers struggle with multi-language analysis without massive external runtimes?
 
 1. **Full AST Parse Overhead**: Parsing full abstract syntax trees for dozens of languages requires complex native parsers (such as Tree-Sitter grammars or compiler frontends) that complicate distribution and portability.
-2. **Type-1 vs. Type-2 Mismatch**: Naive text-based duplicate detectors search for byte-identical text (Type-1). However, the first action an engineer or AI agent performs after copying code is renaming identifiers and constants. Type-1 detectors miss these copies entirely.
+2. **Type-1 vs. Type-2 Mismatch**: Naive text-based duplicate detectors find Type-1 clones: code that is identical except for whitespace, layout and comments (Roy and Cordy, "A Survey on Software Clone Detection Research", Queen's University TR 2007-541). Type-2 clones also differ in identifiers, literals or types. However, the first action an engineer or AI agent performs after copying code is renaming identifiers and constants. Type-1 detectors miss these copies entirely.
 3. **Incompatible Maintainability Scales**: Tools that invent proprietary metric scales prevent comparative longitudinal tracking across different programming languages.
 
 ---
 
 ## 4. Remediation & Implementation Mechanics
 
-To deliver zero-dependency, multi-language structural decay quantification, `smell_quantifier.py` was extended with a three-layer polyglot architecture:
+To deliver multi-language structural decay quantification without new dependencies, `smell_quantifier.py` was extended with a three-layer polyglot architecture:
 
 ### 4.1. Fast Polyglot Tokenizer & Type-2 Normalization
 
@@ -117,7 +117,7 @@ $$\text{MI} = \max\left(0.0, \min\left(100.0, \frac{171.0 - 5.2 \ln V - 0.23 M -
 The polyglot smell quantification engine was validated across test suites and the comparative landscape survey:
 
 1. **Unit Test Coverage (`test_smell_quantifier.py`)**: 39/39 passing tests (8 new comprehensive polyglot tests) validating TypeScript, JavaScript, Go, and Rust normalization, clone detection, module metrics, gating complexity checks, and CLI filtering.
-2. **Sentinel Audit Compliance**: Both `smell_quantifier.py` and `test_smell_quantifier.py` certified compliant with $M \le 7$, nesting depth $\le 3$, and $\le 3$ parameters.
+2. **Sentinel Audit Compliance**: Both `smell_quantifier.py` and `test_smell_quantifier.py` pass the repository gate ($M \le 10$, nesting depth $\le 5$). At $M \le 7$ and depth $\le 3$, the sentinel from the same commit reports 8 violations in `smell_quantifier.py` (`sentinel.py -C 7 -D 3` on the files from commit `ee7995c`).
 3. **Landscape Survey Impact**:
    - Total capability gaps dropped from 5 to 4.
    - **Zero open `build` gaps remaining** across all surveyed domains (`4 adopt`, `0 build`).

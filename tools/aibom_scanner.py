@@ -4,7 +4,8 @@
 Generates machine-readable AIBOM inventories compliant with CycloneDX 1.6 ML-BOM,
 extracts pretrained weights provenance and SafeTensors/GGUF headers without executing
 untrusted code, and audits AI codebases for critical supply-chain vulnerabilities:
-- AIBOM001: trust_remote_code=True arbitrary code execution risk (CVE-2024-4372)
+- AIBOM001: trust_remote_code=True arbitrary code execution risk (a documented
+  Hugging Face loading option, not a CVE)
 - AIBOM002: Unsafe checkpoint loading via pickle without weights_only=True
 - AIBOM003: Unpinned model revision susceptible to upstream model confusion
 - AIBOM004: Plaintext HTTP model weight and configuration download

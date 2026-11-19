@@ -2,10 +2,10 @@
 
 Resolves concurrent subagent git worktree collisions via commutative AST symbol
 graphs rather than line-based text diffs. Identifies false merge conflicts on
-disjoint functions, imports, and class methods, emitting valid unparsed code or
-structured CEGIS counterexample diagnostics under semantic collision.
+disjoint functions, imports, and class methods, emitting unparsed code (comments
+are lost) or structured collision diagnostics under semantic collision.
 
-Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
+Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
 
 from __future__ import annotations

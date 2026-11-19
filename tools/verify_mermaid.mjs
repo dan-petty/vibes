@@ -10,7 +10,7 @@
  * Usage:  node tools/verify_mermaid.mjs [path ...]     (default: repository root)
  * Exit:   0 when every diagram parses, 1 otherwise.
  *
- * Requires: npm install --no-save mermaid@11 jsdom
+ * Requires: npm install --no-save mermaid@11 jsdom@30   (the versions CI installs)
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";

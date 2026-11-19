@@ -1,14 +1,14 @@
 # Artifact: Architectural Invariant Sentinel Prompt Harness
 
 > **Artifact Type**: System Prompt Harness & Verification Oracle  
-> **Source Project**: `devops-cli`  
-> **Purpose**: Automated pre-push architectural sentinel prompt verifying structural elegance and complexity caps.
+> **Source Project**: rules from `devops-cli` `AGENTS.md` (October 2026); the prompt text itself is not in `devops-cli`  
+> **Purpose**: Review prompt that asks a model to check code against complexity, nesting, matching and sanitization rules.
 
 ---
 
 ## Architecture Overview
 
-When an agent synthesizes an implementation, this sentinel prompt acts as an automated sanity checker to ensure the code does not violate architectural standards before passing control back to the user or pushing to git.
+When an agent writes an implementation, this prompt asks a second model to review it against four rules before control returns to the user. A model verdict is a review, not a guarantee. `devops-cli` checks nesting depth with a deterministic AST pre-commit hook, and [`examples/ast-invariant-sentinel`](../../examples/ast-invariant-sentinel/) does the same for complexity and nesting here.
 
 ---
 
@@ -34,7 +34,7 @@ Your objective is to mechanically evaluate code changes against four non-negotia
    - Flag any string matching against partial word lists, prefixes, or ad-hoc regular expressions.
 
 4. Zero-Trust Sanitization Rule:
-   - Flag any private RFC 1918 IP addresses (10.x, 172.16.x, 192.168.x).
+   - Flag any private RFC 1918 IP addresses (10.x, 172.16.x to 172.31.x, 192.168.x).
    - Flag any non-standard mock domains (only example.com with NO subdomains is permitted).
    - Flag any hardcoded secrets, tokens, or plaintext credentials.
 </invariant_rules>

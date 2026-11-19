@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Kinetic probe execution engine and invariant leash registry.
 
-Replaces subjective conversational review debate with sandboxed counterexample
-execution, mapping operating system exit codes to deterministic verification
-verdicts and tracking dynamic mitigation dependencies across commits.
+Runs each counterexample script in a plain subprocess with a timeout and maps the exit
+code to a verdict, and tracks mitigation dependencies across commits. The subprocess is
+not a sandbox: it inherits the parent environment and has full file and network access,
+and `DEFAULT_MEMORY_LIMIT_BYTES` is defined but never applied.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ class ProbeVerdict(StrEnum):
 
 @dataclass(frozen=True)
 class KineticProbeResult:
-    """Standardized result of a sandboxed kinetic probe execution."""
+    """Standardized result of a kinetic probe execution."""
 
     verdict: ProbeVerdict
     exit_code: int
@@ -59,7 +60,7 @@ class KineticProbeResult:
 
 @dataclass(frozen=True)
 class _ProcessOutcome:
-    """Raw process outcome from isolated probe subprocess execution."""
+    """Raw process outcome from a probe subprocess execution."""
 
     verdict: ProbeVerdict
     exit_code: int
@@ -67,7 +68,7 @@ class _ProcessOutcome:
 
 
 class KineticProbeEngine:
-    """Executes synthesized counterexample probes within isolated subprocess boundaries."""
+    """Executes synthesized counterexample probes in a plain subprocess with a timeout."""
 
     def __init__(self, workspace_root: Path | None = None) -> None:
         self.workspace_root: Final[Path] = (workspace_root or Path.cwd()).resolve()
@@ -101,7 +102,7 @@ class KineticProbeEngine:
                 tmp_path.unlink()
 
     def _execute_subprocess(self, script_path: Path, timeout: float) -> _ProcessOutcome:
-        """Run the script in an isolated subprocess with bounded execution limits."""
+        """Run the script in a subprocess bounded only by a timeout."""
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.workspace_root)
         try:

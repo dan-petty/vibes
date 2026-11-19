@@ -1,7 +1,7 @@
 # Chapter 10: The Sovereign Human Core
 ### When to Steer, When to Step Back, and How to Hold the Steering Wheel
 
-> **TLDR**: When autonomous AI agents handle 95% of syntax, typing, and verification, the human engineer's role shifts from a mechanical typist to an architectural pilot—defining purpose (Telos), enforcing resource boundaries, and providing cryptographic release attestation.
+> **TLDR**: When autonomous AI agents handle most of the syntax, typing, and verification, the human engineer's role shifts from a mechanical typist to an architectural pilot—defining purpose (Telos), enforcing resource boundaries, and providing cryptographic release attestation.
 >
 > **ELI:7b**: The AI is like a super-fast race car on autopilot. It can drive around the track really fast without getting tired, but you are the human in the driver's seat who picks the destination, decides how much gas to buy, and hits the brakes if there's a wall ahead.
 
@@ -15,7 +15,7 @@ If you talk to engineers who have never used agentic workflows, they usually ima
 
 Both views are completely wrong.
 
-In disciplined agentic engineering, working with an AI assistant is like flying a modern commercial jet. An Airbus A350 flies on autopilot 98% of the time. The flight computer calculates engine thrust, adjusts wing flaps, and keeps the plane steady in turbulent winds with precision no human hand could match.
+In disciplined agentic engineering, working with an AI assistant is like flying a modern commercial jet. An airliner such as the Airbus A350 flies on autopilot for most of a flight. The flight computer calculates engine thrust, adjusts wing flaps, and keeps the plane steady in turbulent winds with precision no human hand could match.
 
 ```mermaid
 flowchart LR
@@ -115,7 +115,7 @@ When this happens, **do not yell at the agent or type "Fix it!"**. That just pou
 |---|---|---|
 | **Strike 1** | The agent failed the first attempt. | **Let it retry once.** Often, seeing the test diff is enough for the model to self-correct. |
 | **Strike 2** | The agent failed the second attempt. | **Stop the agent and inspect the answer key.** Is your test asserting the right behavior? Did you give the agent ambiguous instructions? |
-| **Strike 3** | The agent failed the third attempt. | **Take the controls.** Roll back the branch (`git checkout .`), write a minimal failing reproduction test by hand, or break the prompt into three smaller, bite-sized tasks. |
+| **Strike 3** | The agent failed the third attempt. | **Take the controls.** Discard the agent's uncommitted edits (`git checkout .`), write a minimal failing reproduction test by hand, or break the prompt into three smaller, bite-sized tasks. |
 
 > [!TIP]
 > If an agent fails three times on the same problem, the failure is almost never the model's intelligence—**it is the ambiguity of your task boundaries**. Shrink the problem, clarify the test assertion, and try again.
@@ -153,4 +153,4 @@ Congratulations! You have completed the foundational guide to agentic software e
 - ⚡ [**Chapter 8: Fast Checks Beat Slow Tests (Verification Speed)**](./08-fast-checks-beat-slow-tests.md)
 - 🧰 [**Chapter 9: The Cheat Sheet & Survival Kit (Daily Decision Trees)**](./09-the-cheat-sheet-and-survival-kit.md)
 - 👑 [**Chapter 10: The Sovereign Human Core (Pilot & Autopilot)**](./10-the-human-in-the-loop.md)
-- 🔬 [**71 Real-World Case Studies (Field Observations)**](../../observations/README.md)
+- 🔬 [**Field Observations**](../../observations/README.md)

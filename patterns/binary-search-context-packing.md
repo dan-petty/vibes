@@ -15,14 +15,14 @@ Autonomous agents exploring complex repositories must pack multi-file AST repres
 
 Naive approaches fail:
 1. **Raw Line Truncation**: Slices code mid-statement or mid-block, producing invalid syntax trees that confuse downstream models into hallucinating compiler bugs.
-2. **Greedy Whole-File Packing**: Strands up to 30% of the token budget when candidate files cannot fit in the remaining margin.
-3. **Trial-and-Error Linear Scans**: Iterating symbol-by-symbol incurs $O(N)$ overhead, adding hundreds of milliseconds to turnaround time.
+2. **Greedy Whole-File Packing**: Strands part of the token budget when candidate files cannot fit in the remaining margin.
+3. **Trial-and-Error Linear Scans**: Iterating symbol-by-symbol calls the token counter up to $N$ times.
 
 ---
 
 ## 2. Core Mechanics
 
-The pattern decomposes source files into discrete, top-level AST symbol units and uses a **monotonic binary search** across hierarchical fidelity tiers to pack the maximum number of complete symbols into budget $B$ in $O(\log N)$ evaluations:
+The pattern decomposes source files into discrete, top-level AST symbol units and uses a **monotonic binary search** across hierarchical fidelity tiers to pack the maximum number of complete symbols into budget $B$ in $O(\log N)$ evaluations. Each evaluation renders and counts the first $k$ symbols, so the total text work is $O(N \log N)$; the gain is fewer calls to the token counter, which matters when that counter is expensive. With an additive estimate such as the example's bytes/4, a single running-sum pass finds the same $k$ in $O(N)$:
 
 ```mermaid
 flowchart TD
@@ -45,7 +45,7 @@ flowchart TD
    - `DOCSTRINGS`: Definition signature + docstring + `...`.
    - `SIGNATURES`: Definition signature + `...`.
 3. **Monotonic Binary Search**: For a given tier, evaluate token weight at index $\text{mid} = \lfloor(\text{low} + \text{high}) / 2\rfloor$. If $\le B$, set $\text{best} = \text{mid}$ and explore higher; otherwise explore lower.
-4. **Syntax Tree Verification**: Verify that the assembled output compiles cleanly via `ast.parse()`, guaranteeing zero broken syntax trees.
+4. **Syntax Tree Verification**: Verify that the assembled output compiles cleanly via `ast.parse()`. The reference implementation builds its output only from whole top-level nodes and does not parse it again; the caller does, as in the example below.
 
 ---
 
@@ -64,7 +64,7 @@ rendered_context, tier, count = pack_source_to_budget(
     budget_tokens=token_budget,
 )
 
-# Rendered context is 100% syntactically valid Python
+# Check that the rendered context parses as Python
 ast.parse(rendered_context)
 print(f"Packed {count} symbols at {tier} fidelity ({len(rendered_context)} chars).")
 ```
@@ -73,7 +73,7 @@ print(f"Packed {count} symbols at {tier} fidelity ({len(rendered_context)} chars
 
 ## 4. Guardrails & Anti-Patterns
 
-- ❌ **Anti-Pattern: Character Slicing (`text[:max_chars]`)**: Slicing raw strings splits multi-byte UTF-8 sequences and fractures code syntax.
+- ❌ **Anti-Pattern: Character Slicing (`text[:max_chars]`)**: Slicing raw strings fractures code syntax and can split combined characters; slicing encoded bytes also splits multi-byte UTF-8 sequences.
 - ❌ **Anti-Pattern: Dropping Imports**: Top-level imports provide vital context for type signatures. Ensure imports are prioritized and preserved during symbol slicing.
 - ⚠️ **Guardrail: Guarantee Syntax Tree Integrity**: Always assert that the rendered context can be parsed by the language grammar (`ast.parse()` for Python, CST parsers for TypeScript/Rust) before injecting it into prompt templates.
 

@@ -2,16 +2,16 @@
 
 > **Pattern Class**: Agent Orchestration & Review Lifecycle  
 > **Problem**: Autonomous agents often push valid code fixes but fail to resolve GitHub PR review threads, get misled by drifting line coordinates, or hallucinate thread resolutions without verifying that the defect is fixed on disk.  
-> **Solution**: Anchor review threads to semantic AST symbols rather than brittle line numbers, verify remediations against mechanical invariant oracles, and execute atomic reply-and-resolve GraphQL mutations with SARIF telemetry.  
+> **Solution**: Anchor review threads to semantic AST symbols rather than brittle line numbers, verify remediations against mechanical invariant oracles, and emit single-request reply-and-resolve GraphQL mutations with SARIF telemetry.  
 > **Reference Implementation**: [`tools/pr_thread_sync.py`](../tools/pr_thread_sync.py) — `synchronize_threads`, `verify_thread_resolution`, `locate_ast_symbol`, `generate_resolution_mutation`  
-> **TLDR**: Ground PR review comments in AST symbols, mechanically verify that the defect is cured on disk, and atomically resolve threads via GraphQL mutations.  
+> **TLDR**: Ground PR review comments in AST symbols, mechanically verify that the defect is cured on disk, and resolve threads via one GraphQL mutation request per thread.  
 > **ELI:7b**: Line numbers change whenever you add code, confusing AI helpers. By attaching comments to the function name, checking that the bug is really gone, and answering the reviewer automatically, the robot keeps your PR clean and ready to merge.  
 
 ---
 
 ## Problem Statement
 
-Continuous integration and automated review personas post granular review comments on GitHub Pull Requests to flag complexity violations, deep nesting, missing documentation, or security leaks. Under enterprise GitHub Branch Protection policies, pull requests require that all conversation threads be marked resolved before merging into `main`.
+Continuous integration and automated review personas post granular review comments on GitHub Pull Requests to flag complexity violations, deep nesting, missing documentation, or security leaks. When branch protection enables "Require conversation resolution before merging", all conversation threads must be marked resolved before a pull request merges into `main`.
 
 However, autonomous engineering agents encounter three critical failure modes during PR iteration:
 
@@ -42,17 +42,17 @@ flowchart TD
     subgraph Verification ["3. Mechanical Verification Oracle"]
         Sym --> Classify[classify_comment_rule]
         Classify --> Oracle{Verify Invariant on Disk}
-        Oracle -->|"Complexity M <= 6"| Clean[Status: FIX_VERIFIED]
-        Oracle -->|"Nesting Depth <= 3"| Clean
+        Oracle -->|"Complexity M <= 10"| Clean[Status: FIX_VERIFIED]
+        Oracle -->|"Nesting Depth <= 5"| Clean
         Oracle -->|"Zero-Trust Clean"| Clean
         Oracle -->|"Still Violated"| Action[Status: ACTION_REQUIRED]
     end
 
     subgraph Resolution ["4. Atomic Resolution & Telemetry"]
-        Clean --> Mutation["Atomic GraphQL Mutation:\naddPullRequestReviewThreadReply +\nresolveReviewThread"]
+        Clean --> Mutation["One GraphQL Mutation Request:\naddPullRequestReviewThreadReply +\nresolveReviewThread"]
         Action --> SARIF["Export OASIS SARIF 2.1.0 Telemetry"]
         Orphan --> SARIF
-        Mutation --> Exec[Execute via rate-managed devops gh api]
+        Mutation --> Exec["Print mutations (the caller runs them)"]
     end
 ```
 
@@ -63,20 +63,21 @@ flowchart TD
    - Extracts thread IDs, resolution states, target relative file paths, and chronological comment bodies.
 
 2. **Semantic AST Grounding**:
-   - Rather than assuming the comment line remains valid, `locate_ast_symbol` loads the target file from the active branch and traverses the abstract syntax tree (`ast.walk`).
+   - `locate_ast_symbol` loads the target file from the active branch and traverses the abstract syntax tree (`ast.walk`). It takes the thread's `line`, which GitHub moves with the diff while the thread is current; for an outdated thread it falls back to `originalLine`, which can point at a different symbol after the file changed.
    - Identifies the enclosing function, method, or class declaration spanning the line coordinate.
-   - Converts brittle numeric coordinates into durable semantic coordinates (e.g. `function 'calculate_scores' (lines 40-58)`).
+   - Converts numeric coordinates into semantic coordinates (e.g. `function 'calculate_scores' (lines 40-58)`) for the report.
 
 3. **Mechanical Verification Oracles**:
    - `classify_comment_rule` parses review comments against invariant rules (`CC001`, `ND001`, `SEC001`, `DOC001`, `TYP001`).
    - Directly executes the relevant deterministic checker against the file on disk:
      - Recomputes cyclomatic complexity via `compute_ast_complexity`.
-     - Measures indentation depth.
-     - Scans for RFC 1918 private IP leaks (`_RFC1918_PATTERN`).
+     - Measures the indentation depth of the target line (leading spaces divided by 4).
+     - Scans the whole file for RFC 1918 private IP leaks (`_RFC1918_PATTERN`).
+     - For `DOC001` it only checks that the file is not empty, and a `CC001` thread whose line no longer falls inside a function is marked `FIX_VERIFIED`. These two checks are weak; review them before resolving.
    - Computes explicit resolution state: `FIX_VERIFIED`, `ACTION_REQUIRED`, `RESOLVED`, or `ORPHANED_PATH`.
 
 4. **Atomic Resolution & Standardized Telemetry**:
-   - For all `FIX_VERIFIED` threads, `generate_resolution_mutation` constructs a single atomic GraphQL mutation combining reply publication and thread resolution.
+   - For all `FIX_VERIFIED` threads, `generate_resolution_mutation` constructs one GraphQL mutation request combining reply publication and thread resolution. The tool prints it; it does not send it.
    - `export_sarif` serializes findings into OASIS SARIF 2.1.0 format, linking review thread IDs, rule IDs, file paths, and resolution statuses for CI ingestion.
 
 ---
@@ -116,6 +117,6 @@ python3 tools/pr_thread_sync.py --input threads.json --exit-code
 ## Invariants & Guardrails
 
 1. **Zero Unverified Resolutions**: Never mark a thread resolved based solely on conversational LLM intent. Pre-flight AST or lint verification against active disk state is strictly mandatory.
-2. **Atomic Single-Transaction Mutations**: Never separate reply generation from thread resolution. Both operations must occur in a single GraphQL mutation to guarantee atomic consistency.
+2. **Single-Request Mutations**: Never separate reply generation from thread resolution. Send both in one GraphQL mutation request. GraphQL runs top-level mutation fields in order, but not as a transaction ([GraphQL spec, Mutation](https://spec.graphql.org/October2021/#sec-Mutation)): if `resolveReviewThread` fails, the reply stays, so check the response.
 3. **AST Grounding Over Line Numbers**: Always translate diff line numbers to semantic symbol descriptors to survive file refactorings and line insertions.
 4. **Standard Telemetry Output**: Always emit SARIF 2.1.0 payloads to maintain unified dashboard visibility across static analysis tools, review bots, and thread synchronizers.

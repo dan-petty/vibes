@@ -3,7 +3,7 @@
 > **Pattern Class**: Autonomous Governance & Delivery Lifecycle
 > **Problem**: Agents suffer SDLC blindness: they can write code but cannot decide what to work on next, or know when something is blocked
 > **Solution**: Deterministic resource modelling, dependency-aware scoring, and a ranked next-action recommendation the agent can obey
-> **TLDR**: Ground agent execution in atomic GitHub issues, project cards, and state machines to eliminate conversational amnesia and scope drift.
+> **TLDR**: Ground agent execution in atomic GitHub issues, project cards, and state machines to reduce conversational amnesia and scope drift.
 > **ELI:7b**: Keep the AI focused by making it pick one small ticket from a task board, work on it, and check it off when tests pass.
 > **Reference Implementation**: [`tools/sdlc_project_manager.py`](../tools/sdlc_project_manager.py)
 
@@ -48,11 +48,13 @@ flowchart TD
     BoardUpdate --> DoneState[Lifecycle State Transition]
 ```
 
+The reference implementation reads and writes local JSON files; it does not call the GitHub API. `DependencyGraph.has_circular_dependency()` exists but the scoring and recommendation path does not call it: items in a cycle simply stay blocked.
+
 ### 1. Deterministic Prioritization Scoring Formula
 
 The priority score $S$ for each SDLC resource is computed across six dimensions:
 
-$$S = S_{\text{base}} + \sum M_{\text{labels}} + (N_{\text{blocks}} \times 150) + M_{\text{pr}} + \text{ROI}_{\text{effort}} + \min(\text{age}_{\text{days}} \times 12, 200) \times P_{\text{blocked}}$$
+$$S = \left(S_{\text{base}} + \sum M_{\text{labels}} + (N_{\text{blocks}} \times 150) + M_{\text{pr}} + \text{ROI}_{\text{effort}} + \min(\text{age}_{\text{days}} \times 12, 200)\right) \times P_{\text{blocked}}$$
 
 - **$S_{\text{base}}$**: Base urgency (`P0_CRITICAL` = 1000, `P1_HIGH` = 500, `P2_MEDIUM` = 200, `P3_LOW` = 50).
 - **$M_{\text{labels}}$**: Critical severity modifiers (`security` = +400, `bug`/`regression` = +250–300).
@@ -60,7 +62,7 @@ $$S = S_{\text{base}} + \sum M_{\text{labels}} + (N_{\text{blocks}} \times 150) 
 - **$M_{\text{pr}}$**: Pull Request in-flight bonus (+300 for active PRs, +250 for failing checks, +50 per unresolved review thread).
 - **$\text{ROI}_{\text{effort}}$**: Value-to-effort ratio: $(\text{business\_value} \times 25) / \text{effort\_points}$.
 - **FIFO Aging Bonus**: Older items accrue up to +200 points to prevent starvation.
-- **$P_{\text{blocked}}$**: Penalty factor (0.2x) if incomplete dependencies remain.
+- **$P_{\text{blocked}}$**: Penalty factor on the whole score: 0.2 if incomplete dependencies remain, else 1.
 
 ### 2. Prescriptive Next-Action Rules
 1. **Rule 1 (Remediate In-Flight PRs)**: If any active pull request has failing CI checks, all new issue implementation is halted until checks pass.
@@ -94,5 +96,5 @@ print(f"Rationale: {recommendation.rationale}")
 ## 4. Key Takeaways
 
 1. **Self-Steering Requires Formality**: Without a mathematical scoring formula, agents pick tasks opportunistically, abandoning hard defects and leaving PRs unmerged.
-2. **FIFO Prevents Drift**: Enforcing chronological pull request resolution eliminates branch divergence and cascading merge conflicts in autonomous swarms.
+2. **FIFO Prevents Drift**: Finishing open pull requests before new work, with an aging bonus so that old items are not starved, reduces branch divergence and cascading merge conflicts in autonomous swarms. It does not remove them: the queue is ordered by score, not strictly by age, and two open pull requests can still conflict.
 3. **Dependency-Aware Scheduling**: Modeling items as a directed acyclic graph (DAG) prevents agents from attempting tasks whose prerequisites are incomplete.

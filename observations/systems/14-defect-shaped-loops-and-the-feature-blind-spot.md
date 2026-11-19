@@ -2,7 +2,7 @@
 
 > **Project**: `vibes` — Self-Improvement Loop & Backlog Generation
 > **Topic**: Why an Autonomous Loop Converges to Zero Work While the Project Is Unfinished; Prioritizing Intent Against Measurement
-> **Key Metric**: Repository certified at 100.0/100 with **0 backlog items** against **11 open roadmap deliverables**; 6 of 6 work generators defect-shaped; 83% of one backlog was measurement error
+> **Key Metric**: Repository certified at 100.0/100 with **0 backlog items** against **11 open roadmap deliverables**; 6 of 6 work generators defect-shaped; 6 of the 12 items in one backlog were measurement error
 > **TLDR**: Counteract defect-shaped feedback loops that endlessly tighten linters by pairing inward quality gates with outward roadmap and capability ingestion.
 > **ELI:7b**: Don't spend all your time polishing linters and gates while forgetting to build new features. Balance code inspection with real capability building.
 
@@ -39,7 +39,7 @@ At that moment `docs/ROADMAP.md` contained **eleven open deliverables**, none of
 
 Six generators, one question. Nothing in the system answered *what should exist next*, so the backlog was structurally incapable of containing a feature.
 
-Worse, the loop reports the empty state as success. "Ready for push or release" is a true statement about quality and a false impression of progress, and an autonomous agent taking it at face value stops — or, having nothing else, starts polishing. In the same session the loop's top-ranked item was twice a threshold artifact: once a latency oracle measuring interpreter boot, and once a backlog of which **83% were measurement error** from a detector counting method calls as instance attributes.
+Worse, the loop reports the empty state as success. "Ready for push or release" is a true statement about quality and a false impression of progress, and an autonomous agent taking it at face value stops — or, having nothing else, starts polishing. In the same session the loop's top-ranked item was twice a threshold artifact: once a latency oracle measuring interpreter boot, and once a backlog in which **6 of 12 items were measurement error** from a detector counting method calls as instance attributes.
 
 A defect-shaped loop at convergence does not go quiet. It gets quieter and less useful at the same time, because the remaining findings are the marginal ones, and marginal findings are where instrument error dominates signal.
 
@@ -110,4 +110,4 @@ python3 tools/sdlc_project_manager.py next --file .data/sdlc_backlog.json
 - **Defects are derivable from the artifact; intent is not.** No number of scanners will produce a feature, because a feature's absence looks exactly like a decision not to build it.
 - **Check what question your generators answer.** Six tools in six vocabularies answering one question is one tool with better coverage, not six perspectives.
 - **Convergence deserves suspicion.** When the backlog empties, ask what the loop is structurally unable to see rather than treating the empty state as a finish line.
-- **The capability is often already there.** The ranking machinery for features had existed for months; what was missing was a path from the document stating the project's purpose into the queue that schedules its work.
+- **The capability is often already there.** The ranking machinery for features had existed since 2026-09-16, five days before this observation; what was missing was a path from the document stating the project's purpose into the queue that schedules its work.

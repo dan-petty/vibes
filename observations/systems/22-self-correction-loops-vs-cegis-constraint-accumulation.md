@@ -2,8 +2,8 @@
 
 > **Project**: `vibes` — Autonomous Agent Self-Improvement & Synthesis Oracles
 > **Topic**: Solving the "Try-Again" Degeneracy Trap: Replacing Conversational Prompting Loops with Counterexample-Guided Inductive Synthesis (CEGIS), Negative Constraint Accumulation, and Monotonic Convergence Oracles
-> **Key Metric**: 100% elimination of oscillatory repair cycles ($A \to B \to A$); 0% latent invariant degradation under accumulated negative constraint envelopes ($\Phi_{k+1} = \Phi_k \land \neg c_k$); mathematically bounded $O(\log N)$ or step-bounded convergence verification.
-> **TLDR**: Contrast brittle unconstrained LLM self-correction with formal CEGIS constraint accumulation to prevent patch oscillation and regression loops.
+> **Key Metric**: `tools/cegis_engine.py` audits a supplied sequence of candidate programs and flags a repeated candidate ($A \to B \to A$, `CEGIS006`), a rule that newly fails (`CEGIS007`) and a repeat of a recorded counterexample (`CEGIS008`, $\Phi_{k+1} = \Phi_k \land \neg c_k$). It does not generate candidates, and no command in this repository measures oscillation or regression rates.
+> **TLDR**: Contrast brittle unconstrained LLM self-correction with CEGIS-style constraint accumulation to detect patch oscillation and regression loops.
 > **ELI:7b**: Don't just ask the AI to try again when a test fails. Add each failed test to an accumulating list so the AI can't repeat past mistakes.
 
 ---
@@ -15,12 +15,12 @@ Autonomous coding agents operating in self-improvement loops frequently encounte
 In standard agent implementations, self-correction is almost universally handled via **conversational retry loops**:
 The parent system captures an error traceback, appends it to the chat transcript, and prompts the model: *"That failed with error X. Please try again and fix it."*
 
-While superficially intuitive, recent empirical research into agentic reasoning—including **SCAFFOLD-CEGIS** (2025/2026), **CodeARC**, and studies on **Attention Dilution** and **Context Decay**—demonstrates that conversational retry loops exhibit catastrophic failure dynamics over multi-step refactoring horizons:
+While superficially intuitive, such loops carry three risks over multi-step refactoring horizons. Published work measures the second one: **SCAFFOLD-CEGIS** (Chen et al., arXiv 2603.08520, 2026) reports that security degrades gradually across iterative LLM code refinement and that a SAST gate alone did not stop it. **CodeARC** (Wei et al., COLM 2025, arXiv 2503.23145) evaluates agents that refine programs against a differential testing oracle. The first and third risks are stated here without a measurement:
 1. **Constraint Thrashing & Oscillatory Cycles**: The agent modifies code to eliminate defect $A$, which introduces violation $B$. In the subsequent turn, the agent addresses $B$, but regresses back to state $A$. Without memory of previous failure geometries, the agent spins in unbounded oscillatory cycles ($A \to B \to A$).
 2. **Latent Invariant & Security Degradation**: In an unconstrained effort to make a specific test or metric pass, the model weakens or eliminates other unspoken constraints (e.g., stripping parameter validation, omitting type annotations, or hardcoding insecure fallbacks).
-3. **Softmax Attention Dilution & Context Rot**: Appending full code dumps and execution tracebacks into the transcript on every iteration rapidly consumes context tokens. Because softmax attention is normalized ($\sum w_i = 1.0$), spreading attention across thousands of tokens of previous failed attempts drastically dilutes the signal for the original system rules.
+3. **Softmax Attention Dilution & Context Rot**: Appending full code dumps and execution tracebacks into the transcript on every iteration rapidly consumes context tokens. Because softmax attention is normalized ($\sum w_i = 1.0$), spreading attention across thousands of tokens of previous failed attempts can dilute the signal for the original system rules (see [Observation 23](./23-attention-dilution-context-rot-and-active-compaction.md)).
 
-To eliminate these failure modes and provide a rigorous self-improvement engine for autonomous feature development, we implemented [`tools/cegis_engine.py`](../../tools/cegis_engine.py).
+To detect these failure modes in a recorded repair trajectory, we implemented [`tools/cegis_engine.py`](../../tools/cegis_engine.py).
 
 ---
 
@@ -28,7 +28,7 @@ To eliminate these failure modes and provide a rigorous self-improvement engine 
 
 ### 2.1 The Conversational Retry Thrashing Trap
 
-When an agent is prompted conversationally to fix an invariant breach without formal constraint accumulation, the repair trajectory frequently degenerates:
+When an agent is prompted conversationally to fix an invariant breach without constraint accumulation, the repair trajectory frequently degenerates:
 
 ```mermaid
 flowchart TD
@@ -43,11 +43,11 @@ flowchart TD
     C2 -->|"Thrashing Cycle Detected<br/>Candidate 2 == Candidate 0"| Trap["Oscillatory Repair Trap<br/>(Tokens Wasted, Invariants Unmet)"]:::cycle
 ```
 
-In empirical testing, when models are presented with competing constraints (such as reducing McCabe complexity while simultaneously bounding statement nesting depth), conversational agents without negative constraint accumulators entered oscillatory loops in **38.4% of non-trivial refactoring attempts**, exhausting their turn budgets without reaching a passing state.
+When a model must satisfy competing constraints (such as reducing McCabe complexity while bounding statement nesting depth), a conversational loop with no record of past counterexamples can return to an earlier candidate and use up its turn budget without reaching a passing state. This repository has no measured rate for this.
 
-### 2.2 Formal CEGIS Architecture: Synthesizer vs. Verifier
+### 2.2 CEGIS-Style Architecture: Synthesizer vs. Verifier
 
-Counterexample-Guided Inductive Synthesis (CEGIS) replaces chat history accumulation with a neuro-symbolic dialogue between an inductive candidate generator and a deterministic deductive oracle:
+In program synthesis, Counterexample-Guided Inductive Synthesis (CEGIS; Solar-Lezama et al., ASPLOS 2006) is a loop in which a synthesizer proposes a program that is correct on a finite set of inputs, a verifier checks it against the full formal specification, and each failure returns a counterexample input that joins the set. This engine uses that loop shape as an analogy. Its "specification" is a set of lint thresholds, a "counterexample" is a rule violation in the candidate (not an input), a model or a person supplies the candidates, and nothing is proved. It replaces chat history accumulation with a dialogue between a candidate generator and a deterministic checker:
 
 ```mermaid
 flowchart LR
@@ -55,13 +55,13 @@ flowchart LR
     classDef synth fill:#2e7d32,color:#fff
     classDef memory fill:#4a148c,color:#fff
 
-    Spec["Formal Specification & Invariants<br/>Φ = M≤6 ∧ Depth≤3 ∧ P≤4 ∧ ZeroTrust"]:::oracle
+    Spec["Lint Thresholds as Specification<br/>Φ = M≤6 ∧ Depth≤3 ∧ P≤4 ∧ ZeroTrust"]:::oracle
     Spec --> Engine["CEGIS Engine<br/>(tools/cegis_engine.py)"]:::oracle
 
     Engine --> Synth["Synthesizer / Generator<br/>(LLM / AST Refactorer)"]:::synth
-    Synth -->|"Candidate Program (P_k)"| Verifier["Deductive Invariant Verifier<br/>(radon, AST visitor, SARIF)"]:::oracle
+    Synth -->|"Candidate Program (P_k)"| Verifier["Deterministic Invariant Checker<br/>(radon, AST visitor, SARIF)"]:::oracle
 
-    Verifier -->|"Valid (Pass)"| Done["Certified Invariant Code<br/>(Convergence Achieved)"]:::synth
+    Verifier -->|"Valid (Pass)"| Done["Code That Passes All Rules<br/>(Converged)"]:::synth
     Verifier -->|"Invalid (Counterexample c_k)"| Accum["Negative Constraint Accumulator<br/>Φ_{k+1} = Φ_k ∧ ¬c_k"]:::memory
 
     Accum -->|"Accumulated Constraints Envelope"| Synth
@@ -76,7 +76,7 @@ Rather than relying on vague natural language feedback, the verifier extracts ex
 - **`CEGIS001` (Complexity Exceeded)**: Identifies the exact function node where McCabe $M > M_{\text{limit}}$ along with the measured value.
 - **`CEGIS002` (Excessive Nesting Depth)**: Pinpoints the line number and compound statement chain exceeding $D_{\text{limit}}$.
 - **`CEGIS003` (Parameter Cardinality Exceeded)**: Identifies callables declaring $> 4$ parameters.
-- **`CEGIS004` (Zero-Trust Egress)**: Traps string constants containing private RFC 1918 / RFC 4193 IP addresses.
+- **`CEGIS004` (Zero-Trust Egress)**: Traps string constants containing private IPv4 addresses (RFC 1918, link-local and shared address space). Its pattern matches only dotted-quad IPv4 text, so RFC 4193 IPv6 addresses pass.
 - **`CEGIS005` (Assertion Sprawl)**: Flags runs of consecutive linear assertions in test suites, requiring consolidated structural tuple equality (`assert (a, b) == (x, y)`).
 
 ### 3.2 Negative Constraint Accumulation (`NegativeConstraintAccumulator`)
@@ -88,23 +88,15 @@ If any subsequent candidate re-manifests a previously registered counterexample 
 
 ### 3.3 Convergence Oracle & Cycle Detection (`ConvergenceOracle`)
 The Convergence Oracle computes a normalized AST hash for every candidate in the synthesis trajectory:
-- **Oscillatory Cycle Detection**: Detects if $\text{hash}(P_j) == \text{hash}(P_i)$ where $i < j$, terminating runaway loops and triggering rule **`CEGIS006`**.
+- **Oscillatory Cycle Detection**: Detects if $\text{hash}(P_j) == \text{hash}(P_i)$ where $i < j$ and reports rule **`CEGIS006`**. The engine audits a finished trajectory; it does not stop a running loop.
 - **Latent Invariant Regression Detection**: Tracks whether an invariant property that was satisfied in step $t-1$ became violated in step $t$, triggering rule **`CEGIS007`**.
-- **Monotonic Convergence**: Asserts that the violation count monotonically descends toward zero.
+- **Divergence**: Reports `DIVERGING` when the violation count rises at each of the last three steps. It does not require the count to fall at every step.
 
 ---
 
 ## 4. Empirical Evaluation & Telemetry
 
-We evaluated the CEGIS Engine across a benchmark corpus of complex procedural functions requiring refactoring:
-
-| Metric | Conversational Retry Loop | CEGIS Invariant Engine (`cegis_engine.py`) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Pass@Round 3** | 46.2% | **94.7%** | **+48.5% absolute** |
-| **Oscillatory Cycle Rate** | 38.4% | **0.0%** (Trapped & Blocked) | **100% elimination** |
-| **Latent Regression Rate** | 24.1% | **0.0%** (Guarded by $\bigwedge \neg c_k$) | **100% elimination** |
-| **Context Token Overhead** | $14,200 \pm 3,800$ tokens | **$2,100 \pm 450$ tokens** | **85.2% token reduction** |
-| **Verification Latency** | $45.2\text{s}$ (Multi-turn chat) | **$0.38\text{s}$** (Deterministic AST pass) | **118x faster feedback** |
+No benchmark corpus or harness for this engine exists in this repository, so no pass rate, cycle rate, regression rate, token overhead or latency is reported here. `tests/test_cegis_engine.py` checks the verifier rules, the negative constraint accumulator and the convergence checks on hand-written code and trajectories (`pytest tests/test_cegis_engine.py`: 13 passed).
 
 ---
 

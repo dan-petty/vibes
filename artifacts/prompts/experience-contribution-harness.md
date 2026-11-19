@@ -1,6 +1,6 @@
 # Artifact: Agentic Experience Contribution Harness
 
-> **Artifact Type**: Prompt Harness (four staged prompts)
+> **Artifact Type**: Prompt Harness (five staged prompts: four per observation, a fifth for patterns)
 > **Source Project**: `vibes` (this repository)
 > **Purpose**: Turn a real agent session into a publishable observation or pattern — or establish that it contains nothing worth publishing.
 
@@ -200,6 +200,12 @@ Preconditions — verify each before writing, and abort if any fails:
   3. No existing file in `patterns/` already covers it. Check before writing; an
      overlapping pattern is worse than none, because it splits the guidance.
 
+Open with the metadata block that `docs_validator.py` enforces (`pattern_header`):
+  # Pattern: <Name> — <the sharp version of what it does>
+  > **Pattern Class**: <domain>
+  > **Problem**: <the failure mode, in one line>
+  > **Solution**: <the countermeasure, in one line>
+
 Structure:
   ## Problem Statement      — the failure mode, not the solution
   ## Core Mechanics         — numbered steps, with a diagram
@@ -227,10 +233,9 @@ If the preconditions fail, output: INSUFFICIENT_RECURRENCE: <which precondition>
 python3 tools/docs_validator.py observations/<project>/<nn>-<slug>.md --strict
 python3 tools/docs_validator.py --rule observation_structure observations/
 node tools/verify_mermaid.mjs observations/
-python3 examples/ast-invariant-sentinel/sentinel.py observations/
 ```
 
-The sentinel runs against documentation too: it detects private IP addresses and non-standard mock domains in any file it is handed, which is the mechanical half of Prompt 3.
+`docs_validator.py` checks Markdown for private addresses and internal hostnames, which is the mechanical half of Prompt 3. It does not catch every item on that list: a subdomain of another mock domain, such as `api.example.org`, passes it. The AST invariant sentinel reads Python files only, so it checks nothing in `observations/`.
 
 > [!IMPORTANT]
 > These prompts are deliberately biased toward rejection. The value of this archive is the ratio of signal it carries, and that ratio is set entirely by what does not get written.

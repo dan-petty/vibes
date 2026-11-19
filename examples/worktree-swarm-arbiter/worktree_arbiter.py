@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Autonomous Git Worktree Fleet Allocator & Swarm Arbiter.
 
-Coordinates collision-free git worktree checkouts, lease heartbeats,
-index-lock contention mitigation, and process group containment across
-concurrent AI coding subagents.
+Coordinates git worktree checkouts, lease heartbeats, index-lock waits,
+and process group termination across concurrent AI coding subagents.
+Lease state lives with the caller; the CLI stores none.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def is_index_locked(repo_root: Path) -> bool:
 
 
 def wait_for_index_lock(repo_root: Path, max_attempts: int = 5, delay: float = 0.05) -> bool:
-    """Wait for git index lock release with bounded backoff."""
+    """Wait for git index lock release, polling a bounded number of times at a fixed interval."""
     for _ in range(max_attempts):
         if not is_index_locked(repo_root):
             return True

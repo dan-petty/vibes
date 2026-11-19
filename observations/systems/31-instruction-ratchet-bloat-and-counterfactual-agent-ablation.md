@@ -4,7 +4,7 @@
 > **Environment**: Autonomous agent instruction sets, context window budgets, continuous CI invariant sentinels
 > **Classification**: Context Budgeting, Attention Dilution, Instruction Pruning, Counterfactual Ablation
 > **Related**: [Observation 08](./08-convention-to-mechanical-enforcement-inversion.md), [Observation 23](./23-attention-dilution-context-rot-and-active-compaction.md), [Observation 27](./27-agentic-project-self-documentation-and-the-phantom-architecture-trap.md), [Observation 29](./29-epistemic-drift-and-the-unreliable-teacher-in-autonomous-verification.md)
-> **TLDR**: Resolve prompt bloat and lost-in-the-middle attention decay with two-tier JIT prompt envelopes and empirical counterfactual ablation.
+> **TLDR**: Resolve prompt bloat and lost-in-the-middle attention decay with two-tier JIT prompt envelopes and an ablation audit of instruction sections.
 > **ELI:7b**: Prune giant prompt instruction files by testing which rules actually change agent behavior and deleting rules that don't do anything.
 
 ---
@@ -17,9 +17,9 @@ While this principle is vital during early bootstrapping, over prolonged develop
 
 $$\frac{d(\text{Rules})}{dt} > 0, \quad \text{while} \quad \frac{d(\text{Pruned Rules})}{dt} \approx 0$$
 
-Because adding a rule feels safe and deleting a rule feels risky, instruction files grow monotonically. In production repositories, `AGENTS.md` rapidly expanded past 118 Kilobytes (~31,000 tokens). This token weight constitutes an unbudgeted tax on every agent turn, consuming over 24% of a standard 128k context window before a single project file is loaded.
+Because adding a rule feels safe and deleting a rule feels risky, instruction files grow monotonically. In this repository, `AGENTS.md` reached 120,786 bytes (118 KiB, about 30,000 tokens at four bytes per token) at commit `fb373aa` on 2026-09-24, before #85 cut it to 43,174 bytes. That weight is an unbudgeted tax on every agent turn: close to a quarter of a 128k context window before a single project file is loaded.
 
-More critically, empirical telemetry revealed that monolithic instruction growth triggers the **Lost-in-the-Middle Attention Extinction** effect: rules located in the central third of long prompt contexts suffer an attention decay rate exceeding 62%, rendering them functionally inert.
+More critically, monolithic instruction growth puts rules in the middle of long prompts, where models use information less well (the **Lost-in-the-Middle** effect; Liu et al., TACL 2024). This repository has no measurement of rule adherence by position.
 
 ```mermaid
 flowchart LR
@@ -27,14 +27,14 @@ flowchart LR
         direction TB
         Incident["Production Bug / Flake<br/>(Novel Failure Mode)"]
         AppendRule["Append Instruction<br/>(AGENTS.md Grows +20 Lines)"]
-        MonotonicGrowth["Monotonic Bloat<br/>(118KB / 31k Tokens)"]
+        MonotonicGrowth["Monotonic Bloat<br/>(118 KiB / ~30k Tokens)"]
         Incident --> AppendRule --> MonotonicGrowth
     end
 
     subgraph AttentionCollapse ["2. Lost-in-the-Middle Decay"]
         direction TB
-        ContextSaturation["Context Window Tax<br/>(>24% Context Consumed)"]
-        MiddleValley["Attention Dilution Valley<br/>(62% Attenuation in Mid-Sections)"]
+        ContextSaturation["Context Window Tax<br/>(~1/4 of a 128k Context)"]
+        MiddleValley["Attention Dilution Valley<br/>(Mid-Prompt Rules Used Less)"]
         InvariantBreach["Silent Rule Breaches<br/>(Agent Violates Mid-Prompt Rules)"]
         ContextSaturation --> MiddleValley --> InvariantBreach
     end
@@ -55,22 +55,18 @@ flowchart LR
 
 ## 2. The Observed Phenomenon
 
-During systematic benchmarking across 180 autonomous code editing and refactoring sessions across varying instruction set sizes:
+No benchmark of instruction size was run. The effects below are expected costs, stated without measured values:
 
-### 2.1 The 31,000-Token Tax and Linear Latency Drag
-- In the monolithic baseline (`AGENTS.md` at 31,420 tokens), the average time-to-first-token (TTFT) increased from 1.2 seconds to 4.8 seconds on remote inference gateways.
-- On multi-turn sessions averaging 12 turns, context token costs increased by 377,000 input tokens per completed pull request, representing \$1.88 in unnecessary LLM inference cost per simple bug fix.
+### 2.1 The 30,000-Token Tax and Linear Latency Drag
+- A larger prompt adds prefill work and time-to-first-token (TTFT) on every turn unless the provider caches the prompt prefix.
+- The instruction file is sent again on each turn, so its input-token cost grows with the number of turns in a session.
 
 ### 2.2 The Attention Dilution Valley & Selective Amnesia
-When tracking adherence to 45 individual rules codified in `AGENTS.md`:
-- **Head Rules** (top 10% of instructions): 97.4% adherence.
-- **Tail Rules** (bottom 10% of instructions): 91.2% adherence.
-- **Middle Rules** (middle 40% of instructions, lines 200–550): adherence plummeted to **37.8%**.
-Crucial negative constraints—such as prohibiting circular symlink traversal, avoiding raw `assert` sprawl in test suites, and adhering to RFC 5737 documentation IP blocks—were routinely violated by frontier reasoning models because they fell into the attention valley.
+No adherence data by rule position was recorded. The rules at risk are the ones in the middle of a long file: crucial negative constraints such as prohibiting circular symlink traversal, avoiding raw `assert` sprawl in test suites, and adhering to RFC 5737 documentation IP blocks.
 
 ### 2.3 The "Inversion Ceiling" Paradox
 When rules were converted from conversational prose into deterministic pre-commit gates (such as `sentinel.py` for complexity and `docs_validator.py` for Mermaid syntax):
-- Adherence rose to **100%** because failure was mechanically blocked at the git boundary.
+- The gate blocks a violating commit at the git boundary, whatever the prose says.
 - However, the corresponding prose sections in `AGENTS.md` were never removed. The prompt continued instructing the model on rules that automated tooling already enforced deterministically, wasting tokens on redundant cognitive leashing.
 
 ---
@@ -85,16 +81,16 @@ The root cause is the **Unabated Instruction Accumulation Dilemma**:
    - Without empirical ablation testing, rules become sacred historical monuments.
 2. **Context Window Tragedy of the Commons**:
    - Every domain (eBPF, Rust affine types, CommonMark linters, Kubernetes manifests, GitHub Actions) demands dedicated instructions.
-   - Concatenating all domain rules into a single global `AGENTS.md` assumes the agent works on all domains simultaneously. In reality, 94% of sessions touch only one domain (e.g., Python AST refactoring or Markdown documentation).
+   - Concatenating all domain rules into a single global `AGENTS.md` assumes the agent works on all domains simultaneously. Many sessions touch only one domain (e.g., Python AST refactoring or Markdown documentation); this repository has not measured the share.
 3. **Cognitive Saturation & Softmax Competition**:
    - Transformer attention mechanisms distribute attention weights across input tokens via the softmax function.
-   - When 30,000 instruction tokens compete with 1,500 code tokens, the attention weight allocated to any specific line of code or boundary condition decreases exponentially ($O(1/N)$).
+   - When 30,000 instruction tokens compete with 1,500 code tokens, the average attention weight on any specific line of code or boundary condition falls as roughly $1/N$, which is inverse, not exponential.
 
 ---
 
 ## 4. Remediation & Architectural Pattern
 
-The failure is eliminated by establishing the **Just-In-Time (JIT) Instruction Governor and Counterfactual Ablation Protocol**:
+The pattern below addresses this failure: the **Just-In-Time (JIT) Instruction Governor and Counterfactual Ablation Protocol**:
 
 ```mermaid
 flowchart LR
@@ -136,9 +132,10 @@ flowchart LR
      - `*.rs` $\to$ Rust affine type and zero-sized marker invariants.
      - `.github/*` $\to$ GitHub Actions rate limit and isolation policies.
 2. **Rule Attribution Mapping**:
-   - Every mechanical gate code (`CC001`, `DOC012`, `AIBOM001`, `ROT002`, `EBPF001`) must map bijectively to an instruction section.
+   - Every mechanical gate code (`CC001`, `DOC012`, `AIBOM001`, `ROT002`, `EBPF001`) must map to an instruction section. The map is many-to-one, not a bijection: `RuleAttributionMatrix` gives each code in `KNOWN_GATES` the first section that matches it, so several codes can share one section.
    - If an automated gate provides 100% mechanical protection, the corresponding prose in `AGENTS.md` is condensed to a concise one-line invariant reference.
 3. **Counterfactual Rule Ablation Testing**:
+   - A counterfactual ablation runs the agent with and without a rule section and compares the gate failures. `tools/instruction_governor.py ablate` does not do that: it flags a section as a candidate statically, when the section names a known gate code and exceeds 500 estimated tokens. The sweep below is the protocol for a real ablation; it is not implemented here.
    - Periodic synthetic ablation sweeps execute prompt perturbation benchmarks with individual rule sections removed.
    - If removing a rule yields zero increase in mechanical gate failures across 50 simulated turns, the rule is flagged for automated pruning or conversion to a mechanical oracle.
 
@@ -146,15 +143,7 @@ flowchart LR
 
 ## 5. Verifiable Impact & Key Takeaways
 
-Implementing the JIT Instruction Governor and Counterfactual Pruning yielded dramatic improvements in reasoning velocity and invariant compliance:
-
-| Evaluation Metric | Monolithic Baseline (31k Tokens) | JIT Governor (3.2k Tokens) | Net Impact |
-|---|---|---|---|
-| **Instruction Prompt Size** | 31,420 tokens (118 KB) | 3,150 tokens (12 KB) | **$-89.9\%$ context tax reduction** |
-| **Time-to-First-Token (TTFT)** | 4.82 seconds | 1.15 seconds | **$4.2\times$ faster response** |
-| **Middle-Valley Invariant Adherence** | 37.8% compliance | 96.5% compliance | **$+58.7\%$ rule adherence** |
-| **Per-PR Token Expenditure** | 412,000 tokens | 68,000 tokens | **$-83.5\%$ token savings** |
-| **Mechanical Gate Pass on Turn 1** | 68.2% first-turn pass | 94.1% first-turn pass | **$+25.9\%$ zero-shot accuracy** |
+The one measured change is the size cut in #85: `AGENTS.md` went from 120,786 bytes at `fb373aa` to 43,174 bytes at `4c2a94d` (`git show <sha>:AGENTS.md | wc -c`). No TTFT, adherence, token-per-PR or first-turn pass rate was measured before or after it.
 
 ### Summary Maxim:
 > *An instruction file that only grows is an instruction file that eventually ceases to be read. True discipline lies not in hoarding every historical warning, but in inverting prose into mechanical gates and delivering instructions just in time.*

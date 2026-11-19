@@ -138,9 +138,9 @@ def test_fingerprints_ignore_memory_addresses_and_the_scratch_directory(tmp_path
 def test_a_scratch_name_containing_an_address_pattern_is_still_normalized() -> None:
     """`mkdtemp` draws from a pool that includes `0`, `x` and the hex digits.
 
-    Roughly one scratch directory in three hundred is named something the address pattern
-    rewrites, and normalizing addresses before paths then left the directory name inside
-    the hash. It presented as a 0.3% flake that no serial re-run could reproduce, because
+    About one scratch directory in 530 is named something the address pattern rewrites,
+    and normalizing addresses before paths then left the directory name inside the
+    hash. It presented as a rare flake that no serial re-run could reproduce, because
     contention raises the number of directories drawn and not the odds for any one.
     """
     hostile = Path("/tmp/vibes-fuzz-8t0x1im")

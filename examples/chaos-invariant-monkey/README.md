@@ -15,7 +15,7 @@ In production environments, however, software development is messy:
 - **Egress Leak Traps**: Accidental leakage of internal IP addresses or private tokens into test fixtures.
 - **Transient Failures**: Intermittent HTTP 429 rate limits from inference or tool gateways.
 
-The **Chaos Invariant Injector** acts as a resilience benchmark by introducing synthetic invariant violations, measuring time-to-detection ($T_{\text{detect}}$) and repair ratio ($R_{\text{repair}}$), and cleanly rolling back all modifications.
+The **Chaos Invariant Injector** introduces synthetic invariant violations, computes a repair ratio ($R_{\text{repair}}$) from detected and repaired counts that the caller supplies, and rolls back modifications through its Python API. It runs no agent and does not measure time to detection or convergence rounds. The `benchmark` command scores one fixed demo mutation with 1 detected and 1 repaired, so it always reports a 100.0% repair ratio.
 
 ---
 
@@ -34,12 +34,12 @@ flowchart TD
     end
 
     Monkey --> Vectors
-    Vectors --> AgentLoop["Autonomous Agent Self-Healing Loop"]
+    Vectors --> AgentLoop["External Agent Loop (not part of this tool)"]
 
     subgraph Evaluation ["Resilience Telemetry"]
-        M1["Time to Detection (T_detect)"]
-        M2["Convergence Iterations (N_rounds)"]
-        M3["Repair Ratio (R_repair)"]
+        M1["Time to Detection (not measured)"]
+        M2["Convergence Iterations (not measured)"]
+        M3["Repair Ratio (caller-supplied counts)"]
     end
 
     AgentLoop --> Evaluation
@@ -70,11 +70,13 @@ python3 chaos_monkey.py benchmark --format markdown
 python3 chaos_monkey.py benchmark --format sarif
 ```
 
+The `inject` command has no matching rollback command: it does not save the mutation record, so keep the target file under version control. The `Transient429Fault` vector is `inject_transient_fault()`, a function that returns a sample 429 response; `inject` does not offer it.
+
 ---
 
 ## Invariant Verification
 
-- **Zero External Dependencies**: Standard library Python (`ast`, `json`, `dataclasses`, `time`).
-- **Clean Rollback**: Guaranteed exact byte-level restoration of all modified files.
-- **Structural Bounds**: All functions certified at $M \le 4$, nesting depth $\le 2$, and parameter count $\le 4$.
+- **Zero External Dependencies**: Standard library Python (`argparse`, `json`, `dataclasses`, `pathlib`, `time`).
+- **Rollback**: `rollback_chaos_mutation` writes back the original text. It is not byte-exact: files are read and written as UTF-8 text, so CRLF line endings come back as LF, and an existing empty file is deleted instead of restored.
+- **Structural Bounds**: All functions pass the AST Invariant Sentinel `strict` preset ($M \le 6$, nesting depth $\le 3$). The `pedantic` preset ($M \le 4$, depth $\le 2$) reports 5 violations. The sentinel has no parameter-count rule; no function takes more than 3 parameters.
 

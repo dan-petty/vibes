@@ -3,7 +3,8 @@
 
 Injects controlled, reversible mechanical mutations (complexity spikes,
 nesting invasions, tuple assertion desync, and mock egress leaks) into
-codebases to benchmark autonomous agent self-healing convergence.
+codebases, as fixtures for a self-healing benchmark. It runs no agent: the
+repair ratio comes from detected and repaired counts that the caller supplies.
 """
 
 # sentinel: allow[ZeroTrustSanitization] — chaos mutation testing egress sentinel detection

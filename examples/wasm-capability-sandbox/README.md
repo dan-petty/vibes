@@ -1,7 +1,7 @@
 # WebAssembly Component Model & Capability-Based Sandbox Gateway (WASI 0.2)
 
 > **Exemplar Status**: Living Artifact & Executable Reference Implementation  
-> **Classification**: Capability Isolation, Wasm Component Model, WASI 0.2, Gas Metering  
+> **Classification**: Pure-Python Simulation of Capability Isolation, Wasm Component Model, WASI 0.2, Gas Metering  
 > **Related**: [Observation 36](../../observations/systems/36-wasi-component-models-and-capability-based-tool-sandboxing.md), [Pattern: Capability-Based Wasm Sandboxing](../../patterns/capability-based-wasm-sandboxing.md)
 
 ---
@@ -10,13 +10,19 @@
 
 In autonomous agent workflows, subagents frequently generate and execute ephemeral helper utilities, format converters, and data scrapers. Executing untrusted agent-generated code inside traditional host processes (`python -c` or `bash`) grants **ambient UNIX authority** (CWE-250), exposing local credentials, filesystems, and network sockets to unverified tools.
 
-Containerized sandboxes (`docker run`, cgroups v2) mitigate ambient authority but impose severe startup overhead (100ms–500ms, 50MB+ RAM), making high-frequency tool loops prohibitively slow and expensive.
+Containerized sandboxes (`docker run`, cgroups v2) mitigate ambient authority but add a container start to every call, which slows high-frequency tool loops.
 
-The **WASI 0.2 Component Model & Capability-Based Sandbox Gateway** eliminates ambient authority using **unforgeable object-capability tokens**, sub-millisecond instantiation ($< 500\mu\text{s}$), deterministic instruction gas metering, and linear memory containment.
+The **WASI 0.2 Component Model & Capability-Based Sandbox Gateway** is a pure-Python simulation of capability tokens, gas metering and linear memory containment. It runs no WebAssembly: the code imports no Wasm runtime (such as Wasmtime), instantiates nothing and measures no instantiation time. What it does:
+
+- `validate` checks a file's magic bytes, version and section IDs. It accepts core modules (version 1) only, so it rejects every Component Model binary (version `0x0d`, layer `1`).
+- A capability handle is a Python object. Its ID is a SHA-256 digest of kind, scope and a fixed salt, and no check reads the ID, so any caller can build a handle that passes. The tokens are not unforgeable.
+- Gas metering sums the costs of a supplied list of `(op, cost)` pairs, and memory containment is a page counter.
 
 ---
 
 ## 2. Architectural Sequence
+
+The diagram shows the intended design. The code implements the capability checks, the counters and the SARIF output; it runs no module.
 
 ```mermaid
 sequenceDiagram
@@ -28,7 +34,7 @@ sequenceDiagram
 
     Agent->>Gateway: Submit tool bytecode (.wasm) & WIT interface
     Gateway->>Broker: Request capability grants (fs:read, net:dial)
-    Broker-->>Gateway: Mint unforgeable SHA-256 capability tokens
+    Broker-->>Gateway: Mint SHA-256-derived capability handles
     Gateway->>Engine: Instantiate module with scoped capability table
     loop Metered Execution
         Engine->>Engine: Decrement gas per instruction (Halting Defense)
@@ -53,13 +59,15 @@ Declarative WebAssembly Interface Type (`wit`) contract governing the agent tool
 ```wit
 package example:tool-runner;
 
-interface runner {
+world runner {
     import wasi:filesystem/preopens@0.2.0;
     import wasi:clocks/monotonic-clock@0.2.0;
 
     export run: func(payload: string) -> string;
 }
 ```
+
+WIT allows `import` and `export` only inside a `world`, not inside an `interface`. `parse_wit_contract` is not a WIT parser: it reads only the `package`, `interface`, `import` and `export` lines.
 
 ---
 
@@ -78,7 +86,7 @@ interface runner {
 ## 5. CLI Usage & Verification
 
 ```bash
-# Validate Wasm binary header magic and section table
+# Validate Wasm binary header magic and section table (core modules only)
 python3 examples/wasm-capability-sandbox/wasm_sandbox.py validate module.wasm
 
 # Audit requested path against capability permissions

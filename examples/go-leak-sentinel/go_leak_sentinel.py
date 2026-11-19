@@ -17,7 +17,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-# System runtime functions that are not leaks
+# Frame patterns that mark a goroutine as a system daemon. `runtime.gopark` is also the
+# top frame of every blocked goroutine when the dump shows runtime frames
+# (GOTRACEBACK=system), so such dumps hide user leaks.
 SYSTEM_GOROUTINE_PATTERNS = (
     "runtime.gopark",
     "runtime.timerproc",
