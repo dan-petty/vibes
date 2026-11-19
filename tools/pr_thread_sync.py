@@ -7,10 +7,14 @@ oracles (complexity, nesting, sanitization, docstrings), checks whether defects 
 been resolved, and writes resolution plans and GraphQL mutation text.
 
 CC001 and DOC001 check the definition that the thread names: the node's `symbolName`
-field, else the definition that encloses the commented line in the first comment's
-`diffHunk`. A function that moved is found by its name. The check fails when the file has
-no definition of that name, or when the thread names no symbol and no definition encloses
-the thread line. ND001 and SEC001 still read the thread line or the whole file.
+field, else the definition that encloses the review-time line in the base version of the
+file (`--base-root`), else the definition that the first comment's `diffHunk` shows. A
+function that moved is found by its name. The check fails when the file has no definition
+of that name, or when the thread names no symbol and no definition encloses the thread
+line. ND001 and SEC001 still read the thread line or the whole file.
+
+Each reply states only what the tool measured. A CC001 reply gives the symbol, its radon
+complexity in the base version and now, and the limit.
 
 The reply and resolve mutations are not atomic: GraphQL runs mutation fields in order,
 with no transaction, so a failed resolve leaves the reply in place.
@@ -25,7 +29,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
@@ -54,6 +58,10 @@ type _Definition = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
 _FUNCTION_TYPES: Final[tuple[type[_Definition], ...]] = (ast.FunctionDef, ast.AsyncFunctionDef)
 _DEFINITION_TYPES: Final[tuple[type[_Definition], ...]] = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
+# The CC001 and ND001 limits of AGENTS.md §10
+_COMPLEXITY_LIMIT: Final[int] = 10
+_NESTING_LIMIT: Final[int] = 5
+
 
 class ResolutionStatus(StrEnum):
     """Resolution status of a PR review thread."""
@@ -79,7 +87,10 @@ class ReviewThread:
     """A GitHub PR review discussion thread anchored to a file path, a line and a symbol.
 
     `symbol_name` is the bare or dotted name of the reviewed definition at review time,
-    or an empty string when the payload does not show it.
+    or an empty string when the payload does not show it. `symbol_is_explicit` is true
+    when that name came from the node's `symbolName` field, not from the diff hunk.
+    `original_line` is the commented line at review time (`originalLine`); zero means that
+    the payload gave only `line`.
     """
 
     thread_id: str
@@ -88,6 +99,13 @@ class ReviewThread:
     line: int
     comments: list[ReviewComment] = field(default_factory=list)
     symbol_name: str = ""
+    symbol_is_explicit: bool = False
+    original_line: int = 0
+
+    @property
+    def review_line(self) -> int:
+        """Returns the commented line in the version of the file that the review was made on."""
+        return self.original_line or self.line
 
 
 @dataclass(frozen=True)
@@ -171,13 +189,16 @@ def _parse_single_thread(node: dict[str, Any]) -> ReviewThread | None:
     path = str(node.get("path", ""))
     line = int(node.get("line") or node.get("originalLine") or 1)
     raw_comments = _comment_nodes(node.get("comments", []))
+    explicit = _explicit_symbol_name(node)
     return ReviewThread(
         thread_id=thread_id,
         is_resolved=is_resolved,
         path=path,
         line=line,
         comments=[_parse_single_comment(item) for item in raw_comments],
-        symbol_name=_parse_symbol_name(node, raw_comments),
+        symbol_name=explicit or _hunk_symbol_name(raw_comments),
+        symbol_is_explicit=bool(explicit),
+        original_line=int(node.get("originalLine") or node.get("original_line") or 0),
     )
 
 
@@ -189,11 +210,14 @@ def _comment_nodes(raw_comments: Any) -> list[dict[str, Any]]:
     return [item for item in nodes if isinstance(item, dict)]
 
 
-def _parse_symbol_name(node: dict[str, Any], raw_comments: list[dict[str, Any]]) -> str:
-    """Reads the reviewed symbol name from the thread node, else from the first diff hunk."""
+def _explicit_symbol_name(node: dict[str, Any]) -> str:
+    """Reads the reviewed symbol name that the thread node states, or an empty string."""
     explicit = node.get("symbolName") or node.get("symbol_name") or node.get("symbol")
-    if explicit:
-        return str(explicit)
+    return str(explicit) if explicit else ""
+
+
+def _hunk_symbol_name(raw_comments: list[dict[str, Any]]) -> str:
+    """Reads the reviewed symbol name from the diff hunk of the first comment."""
     first_hunk = raw_comments[0].get("diffHunk", "") if raw_comments else ""
     return symbol_from_diff_hunk(str(first_hunk or ""))
 
@@ -206,8 +230,9 @@ def symbol_from_diff_hunk(diff_hunk: str) -> str:
     indented than every line below it, so the result is a dotted path such as
     `Calc.compute`. When the hunk shows no enclosing definition and the walk did not reach
     module level, the hunk header's context text gives a bare name. That header can name a
-    different definition than the one that holds the line; a payload that knows the name
-    should send `symbolName`. An empty string means the hunk shows no symbol.
+    different definition than the one that holds the line (the class of a method, or the
+    function above the line), so `resolve_review_symbol` prefers the base version of the
+    file. An empty string means the hunk shows no symbol.
     """
     lines = diff_hunk.splitlines()
     new_side = [text[1:] for text in lines[1:] if text[:1] in (" ", "+")]
@@ -282,6 +307,33 @@ def _first_definition_named(scope: ast.AST, name: str) -> _Definition | None:
     return None
 
 
+def resolve_review_symbol(thread: ReviewThread, base_root: Path | None) -> str:
+    """Names the definition that a thread reviewed, from the best evidence that is available.
+
+    The node's `symbolName` comes first. Next is the dotted path of the definitions that
+    enclose the review-time line in the base version of the file under `base_root` (the
+    files that the review was made on), for example `B.run`. The name from the diff hunk
+    is used only when that lookup fails: no base root, no such file, no parse, or no
+    definition at the line.
+    """
+    if thread.symbol_is_explicit or base_root is None:
+        return thread.symbol_name
+    tree = _parse_ast_safe(base_root / thread.path)
+    in_base = definition_path_at_line(tree, thread.review_line) if tree is not None else ""
+    return in_base or thread.symbol_name
+
+
+def definition_path_at_line(tree: ast.AST, line: int) -> str:
+    """Returns the dotted names of the definitions that span the line, outermost first.
+
+    Two definitions that span one line are nested, and the outer one starts first, so the
+    start lines give the order. An empty string means that no definition spans the line.
+    """
+    definitions = [node for node in ast.walk(tree) if isinstance(node, _DEFINITION_TYPES)]
+    spanning = [node for node in definitions if _node_encloses_line(node, line)]
+    return ".".join(node.name for node in sorted(spanning, key=lambda node: node.lineno))
+
+
 def _parse_ast_safe(file_path: Path) -> ast.AST | None:
     """Parses Python AST safely, returning None on errors."""
     try:
@@ -322,8 +374,16 @@ def _format_symbol_name(node: ast.AST) -> str:
     return f"{kind} '{name}' (lines {start}-{end})"
 
 
-def verify_thread_resolution(root_dir: Path, thread: ReviewThread) -> ThreadAnalysis:
-    """Evaluates whether an open review thread has been resolved in the workspace."""
+def verify_thread_resolution(
+    root_dir: Path, thread: ReviewThread, base_root: Path | None = None
+) -> ThreadAnalysis:
+    """Evaluates whether an open review thread has been resolved in the workspace.
+
+    `base_root` holds the base version of the files: the version that the review was made
+    on. With it, the thread's symbol name comes from that version (`resolve_review_symbol`)
+    and a CC001 reply states the old complexity. The analysis keeps the thread with that
+    name.
+    """
     if thread.is_resolved:
         return _make_resolved_analysis(thread)
 
@@ -331,11 +391,13 @@ def verify_thread_resolution(root_dir: Path, thread: ReviewThread) -> ThreadAnal
     if not target_path.exists():
         return _make_orphaned_analysis(thread)
 
+    thread = replace(thread, symbol_name=resolve_review_symbol(thread, base_root))
     last_body = thread.comments[-1].body if thread.comments else ""
     rule_id = classify_comment_rule(last_body)
     symbol_name = locate_ast_symbol(target_path, thread.line, thread.symbol_name)
+    base_path = base_root / thread.path if base_root is not None else None
 
-    status, explanation, reply = _audit_rule_resolution(target_path, thread, rule_id, symbol_name)
+    status, explanation, reply = _audit_rule_resolution(target_path, thread, rule_id, symbol_name, base_path)
     return ThreadAnalysis(thread, status, rule_id, symbol_name, explanation, reply)
 
 
@@ -368,12 +430,13 @@ def _audit_rule_resolution(
     thread: ReviewThread,
     rule_id: str,
     symbol_name: str,
+    base_path: Path | None,
 ) -> tuple[ResolutionStatus, str, str]:
     """Audits specific rule compliance using table-driven dispatch."""
     content = _read_file_safe(target_path)
     dispatch: dict[str, Callable[[], tuple[ResolutionStatus, str, str]]] = {
         "SEC001": lambda: _audit_security_rule(content, symbol_name),
-        "CC001": lambda: _audit_complexity_rule(content, thread, symbol_name),
+        "CC001": lambda: _audit_complexity_rule(content, thread, symbol_name, base_path),
         "ND001": lambda: _audit_nesting_rule(content, thread.line, symbol_name),
         "DOC001": lambda: _audit_doc_rule(content, thread, symbol_name),
     }
@@ -401,23 +464,56 @@ def _audit_security_rule(content: str, symbol_name: str) -> tuple[ResolutionStat
         return (
             ResolutionStatus.FIX_VERIFIED,
             f"Zero RFC 1918 IP leaks verified in {symbol_name}.",
-            "Verified: All address references sanitized to RFC 5737 compliant documentation standards.",
+            "Verified: the file contains no RFC 1918 private IPv4 address. "
+            "Secrets, tokens and credentials were not checked.",
         )
     return (
         ResolutionStatus.ACTION_REQUIRED,
         "Private RFC 1918 IP address detected in file.",
-        "Sanitizing remaining private address references.",
+        "The file still contains an RFC 1918 private IPv4 address.",
     )
 
 
 def _audit_complexity_rule(
-    content: str, thread: ReviewThread, symbol_name: str
+    content: str, thread: ReviewThread, symbol_name: str, base_path: Path | None
 ) -> tuple[ResolutionStatus, str, str]:
-    """Audits the cyclomatic complexity of the function that the thread names."""
+    """Audits radon's McCabe complexity of the function that the thread names against the limit."""
     func_node, failure = _locate_audit_target(content, thread, _FUNCTION_TYPES)
     if func_node is None:
         return (ResolutionStatus.ACTION_REQUIRED, failure, "")
-    return _evaluate_func_complexity(func_node, symbol_name)
+    new = cyclomatic_complexity(func_node)
+    old = _base_complexity(base_path, thread.symbol_name)
+    reply = _complexity_reply(thread.symbol_name or func_node.name, old, new)
+    if new <= _COMPLEXITY_LIMIT:
+        return (
+            ResolutionStatus.FIX_VERIFIED,
+            f"Cyclomatic complexity M={new} <= {_COMPLEXITY_LIMIT} verified for {symbol_name}.",
+            f"Verified: {reply}",
+        )
+    return (
+        ResolutionStatus.ACTION_REQUIRED,
+        f"Cyclomatic complexity M={new} still exceeds ceiling of {_COMPLEXITY_LIMIT} in {symbol_name}.",
+        reply,
+    )
+
+
+def _base_complexity(base_path: Path | None, symbol: str) -> int | None:
+    """Measures the named function in the base version of the file, or returns None if it cannot."""
+    tree = _parse_ast_safe(base_path) if base_path is not None and symbol else None
+    node = find_symbol_by_name(tree, symbol) if tree is not None else None
+    return cyclomatic_complexity(node) if isinstance(node, _FUNCTION_TYPES) else None
+
+
+def _complexity_reply(label: str, old: int | None, new: int) -> str:
+    """States what the CC001 check measured: the symbol, its old and new complexity, and the limit."""
+    relation = "at or below" if new <= _COMPLEXITY_LIMIT else "above"
+    limit = _COMPLEXITY_LIMIT
+    if old is None:
+        before = f"No base version of {label} was found, so the old complexity was not measured."
+    else:
+        before = f"In the base version, {label} measured M={old}."
+    measured = f"radon measures cyclomatic complexity M={new} for {label}, {relation} the limit of {limit}."
+    return f"{measured} {before}"
 
 
 def _locate_audit_target(
@@ -451,23 +547,6 @@ def _parse_ast_safe_content(content: str) -> ast.AST | None:
         return None
 
 
-def _evaluate_func_complexity(node: ast.AST, symbol_name: str) -> tuple[ResolutionStatus, str, str]:
-    """Evaluates radon's McCabe complexity against the standard ceiling of 10."""
-    c_score = cyclomatic_complexity(node)
-    name = getattr(node, "name", "function")
-    if c_score <= 10:
-        return (
-            ResolutionStatus.FIX_VERIFIED,
-            f"Cyclomatic complexity M={c_score} <= 10 verified for {symbol_name}.",
-            f"Verified: Refactored {name} into table dispatch; cyclomatic complexity now M={c_score} <= 10.",
-        )
-    return (
-        ResolutionStatus.ACTION_REQUIRED,
-        f"Cyclomatic complexity M={c_score} still exceeds ceiling of 10 in {symbol_name}.",
-        f"Refactoring {name} to reduce complexity.",
-    )
-
-
 def _audit_nesting_rule(content: str, line: int, symbol_name: str) -> tuple[ResolutionStatus, str, str]:
     """Audits indentation nesting depth around the target line."""
     lines = content.splitlines()
@@ -475,16 +554,17 @@ def _audit_nesting_rule(content: str, line: int, symbol_name: str) -> tuple[Reso
         return (ResolutionStatus.FIX_VERIFIED, "Target line verified clean.", "Verified.")
 
     depth = _calculate_line_depth(lines[line - 1])
-    if depth <= 5:
+    measured = f"line {line} has nesting depth {depth} (leading spaces divided by 4)"
+    if depth <= _NESTING_LIMIT:
         return (
             ResolutionStatus.FIX_VERIFIED,
-            f"Nesting depth {depth} <= 5 verified for line {line}.",
-            f"Verified: Flattened control flow; nesting depth is now {depth} <= 5.",
+            f"Nesting depth {depth} <= {_NESTING_LIMIT} verified for line {line}.",
+            f"Verified: {measured}, at or below the limit of {_NESTING_LIMIT}.",
         )
     return (
         ResolutionStatus.ACTION_REQUIRED,
-        f"Nesting depth {depth} exceeds ceiling of 5 in {symbol_name}.",
-        "Flattening nested control structures.",
+        f"Nesting depth {depth} exceeds ceiling of {_NESTING_LIMIT} in {symbol_name}.",
+        f"Not fixed: {measured}, above the limit of {_NESTING_LIMIT}.",
     )
 
 
@@ -515,9 +595,11 @@ def _audit_doc_rule(content: str, thread: ReviewThread, symbol_name: str) -> tup
     )
 
 
-def synchronize_threads(root_dir: Path, threads: Sequence[ReviewThread]) -> list[ThreadAnalysis]:
+def synchronize_threads(
+    root_dir: Path, threads: Sequence[ReviewThread], base_root: Path | None = None
+) -> list[ThreadAnalysis]:
     """Synchronizes a sequence of review threads with the active codebase state."""
-    return [verify_thread_resolution(root_dir, t) for t in threads]
+    return [verify_thread_resolution(root_dir, t, base_root) for t in threads]
 
 
 def generate_resolution_mutation(thread_id: str, reply_body: str) -> str:
@@ -613,7 +695,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     threads = _load_threads_from_input(args.input)
-    analyses = synchronize_threads(args.root, threads)
+    analyses = synchronize_threads(args.root, threads, args.base_root)
 
     _emit_outputs(analyses, args)
 
@@ -630,6 +712,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", "-i", type=Path, help="Path to input JSON file containing review threads.")
     parser.add_argument(
         "--root", "-r", type=Path, default=Path("."), help="Root repository directory (default: .)."
+    )
+    parser.add_argument(
+        "--base-root",
+        type=Path,
+        help=(
+            "Directory with the base version of the files: the version that the review was made on, "
+            "for example a git worktree of the reviewed commit. It names the definition at each "
+            "thread's review-time line and gives the old complexity in CC001 replies."
+        ),
     )
     parser.add_argument("--json", action="store_true", help="Emit structured machine-readable JSON output.")
     parser.add_argument("--sarif", type=Path, help="Export OASIS SARIF 2.1.0 payload to target file.")

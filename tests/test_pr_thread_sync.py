@@ -27,6 +27,7 @@ from pr_thread_sync import (
     main,
     parse_review_threads,
     render_terminal_summary,
+    resolve_review_symbol,
     summarize_analyses,
     synchronize_threads,
     verify_thread_resolution,
@@ -320,6 +321,96 @@ def test_terminal_summary_and_parser_say_sequential(capsys: pytest.CaptureFixtur
     help_text = capsys.readouterr().out
     assert ("Sequential Resolver" in summary, "Atomic" in summary, "Sequential Resolver" in help_text) == (
         True,
+        False,
+        True,
+    )
+
+
+_FIXED_PROCESS = "def process(x):\n    return x if 0 <= x < 10 else -1\n"
+
+
+def test_cc001_reply_states_what_was_measured(tmp_path: Path) -> None:
+    """A verified CC001 reply names the symbol, its complexity and the limit, and claims no refactoring."""
+    (tmp_path / "mod.py").write_text(_FIXED_PROCESS, encoding="utf-8")
+    result = _analyze(tmp_path, _thread_node("mod.py", 1, "complexity too high", symbolName="process"))
+    reply = result.suggested_reply
+    assert (result.status, "process" in reply, "M=2" in reply, "limit of 10" in reply) == (
+        ResolutionStatus.FIX_VERIFIED,
+        True,
+        True,
+        True,
+    )
+    assert ("not measured" in reply, "table dispatch" in reply.lower()) == (True, False)
+
+
+def test_cc001_reply_states_old_complexity_from_base_version(tmp_path: Path) -> None:
+    """With the base version of the file, the CC001 reply also states the old measured complexity."""
+    base, head = tmp_path / "base", tmp_path / "head"
+    base.mkdir()
+    head.mkdir()
+    (base / "mod.py").write_text("def process(x):\n" + _COMPLEX_BODY, encoding="utf-8")
+    (head / "mod.py").write_text(_FIXED_PROCESS, encoding="utf-8")
+    (thread,) = parse_review_threads([_thread_node("mod.py", 1, "complexity too high", symbolName="process")])
+    reply = verify_thread_resolution(head, thread, base_root=base).suggested_reply
+    assert ("M=11" in reply, "M=2" in reply, "limit of 10" in reply, "table dispatch" in reply.lower()) == (
+        True,
+        True,
+        True,
+        False,
+    )
+
+
+def test_thread_in_method_resolves_through_base_version(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A thread inside method B.run whose hunk header names class B resolves to B.run in the base version."""
+    base, head = tmp_path / "base", tmp_path / "head"
+    base.mkdir()
+    head.mkdir()
+    method_body = "".join(f"    {text}\n" for text in _COMPLEX_BODY.splitlines())
+    header = 'class B:\n    """Runs."""\n\n    def run(self, x):\n'
+    (base / "mod.py").write_text(header + method_body, encoding="utf-8")
+    (head / "mod.py").write_text(header + "        return x if 0 <= x < 10 else -1\n", encoding="utf-8")
+    hunk = "@@ -9,2 +9,3 @@ class B:\n         if x == 2:\n             return 2\n+        if x == 3:"
+    node = _thread_node("mod.py", 11, "complexity too high", diffHunk=hunk, originalLine=11)
+    (tmp_path / "threads.json").write_text(json.dumps([node]), encoding="utf-8")
+
+    argv = ["--input", str(tmp_path / "threads.json"), "--root", str(head), "--base-root", str(base)]
+    exit_code = main([*argv, "--json", "--exit-code"])
+    (analysis,) = json.loads(capsys.readouterr().out)
+    reply = analysis["suggested_reply"]
+    outcome = (exit_code, analysis["status"], "B.run" in reply, "M=11" in reply)
+    assert outcome == (0, "FIX_VERIFIED", True, True)
+
+
+def test_symbol_lookup_prefers_symbol_name_then_base_then_hunk(tmp_path: Path) -> None:
+    """symbolName wins; the diff hunk names the symbol only when the base version shows no definition."""
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "mod.py").write_text('"""Module."""\n\n\ndef helper():\n    return 1\n', encoding="utf-8")
+    hunk = "@@ -1,3 +1,4 @@ def process(x):\n     return 1\n+    y = 2"
+    named, in_base, outside, missing = parse_review_threads(
+        [
+            _thread_node("mod.py", 5, "x", diffHunk=hunk, symbolName="Calc.compute"),
+            _thread_node("mod.py", 5, "x", diffHunk=hunk),
+            _thread_node("mod.py", 1, "x", diffHunk=hunk),
+            _thread_node("gone.py", 5, "x", diffHunk=hunk),
+        ]
+    )
+    names = tuple(resolve_review_symbol(thread, base) for thread in (named, in_base, outside, missing))
+    without_base = resolve_review_symbol(in_base, None)
+    assert (names, without_base) == (("Calc.compute", "helper", "process", "process"), "process")
+
+
+def test_verified_replies_claim_only_what_was_measured(tmp_path: Path) -> None:
+    """ND001 and SEC001 replies state the measured value and claim no change that the tool did not check."""
+    (tmp_path / "flat.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    nesting = _analyze(tmp_path, _thread_node("flat.py", 2, "nesting depth too deep")).suggested_reply
+    secret = _analyze(tmp_path, _thread_node("flat.py", 2, "a secret leaks here")).suggested_reply
+    claims = ("depth 1" in nesting, "Flattened" in nesting, "RFC 5737" in secret, "not checked" in secret)
+    assert claims == (
+        True,
+        False,
         False,
         True,
     )
