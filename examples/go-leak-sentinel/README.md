@@ -25,7 +25,7 @@ flowchart TD
         O1["Runtime NumGoroutine() Baseline Calibration"]
         O2["Stack Frame Parsing (runtime/pprof Lookup('goroutine'))"]
         O3["State Categorization (chan send, chan receive, select)"]
-        O4["System Daemon Exclusion (gopark, gcBgMarkWorker)"]
+        O4["System Goroutine Exclusion (runtime entry function)"]
     end
 
     subgraph Actions["Deterministic Remediation Feedback"]
@@ -124,7 +124,9 @@ Concurrency Score:   50.0/100.0
 ```
 
 > [!WARNING]
-> **Limits of the Python parser.** It classifies a goroutine by the state in its header and by name patterns. A goroutine in a `time.Sleep` loop (Trap 2) has the state `[sleep]` and is not counted as a leak. The `runtime.gopark` pattern marks a goroutine as a system daemon, but with `GOTRACEBACK=system` every blocked goroutine shows a `runtime.gopark` frame, so blocked user goroutines are also excluded. The Go library (`sentinel.go`) counts goroutines with `runtime.NumGoroutine()` and has neither limit.
+> **Limits of the Python parser.** It classifies a goroutine by the state in its header. A goroutine in a `time.Sleep` loop (Trap 2) has the state `[sleep]` and is not counted as a leak. The Go library (`sentinel.go`) counts goroutines with `runtime.NumGoroutine()` and does not have this limit.
+
+The parser finds system goroutines by their entry function: the last frame, or the frame above `runtime.goexit`. An entry function in package `runtime`, other than `runtime.main`, marks a runtime goroutine. This is the rule of `runtime.isSystemGoroutine`, and `runtime.NumGoroutine()` does not count these goroutines. The parser also skips the goroutines that the default filters of `go.uber.org/goleak` skip: the `testing` runner while it waits on a channel receive, the `os/signal` loop, and the `runtime/trace` reader. It does not use the `runtime.gopark` frame, because every blocked goroutine has that frame in a `GOTRACEBACK=system` dump. It also reads the `fp=`, `sp=` and `pc=` fields that this level adds to each frame line.
 
 ### Scan a Live Stack Dump File
 ```bash
@@ -185,6 +187,6 @@ uv run pytest examples/go-leak-sentinel/test_go_leak_sentinel.py
 ├── sentinel.go             # Native Go sentinel library, test harness integration (Check, VerifyNone)
 ├── sentinel_test.go        # Go unit tests verifying leak detection & mock TestingT harness
 ├── go_leak_sentinel.py     # Python runtime stack dump parser & test runner verification engine
-├── test_go_leak_sentinel.py # Automated test suite (15 passing unit tests in < 0.6s)
+├── test_go_leak_sentinel.py # Automated test suite (21 unit tests in < 0.6s)
 └── README.md               # Architecture, failure mode guide & usage (this file)
 ```
