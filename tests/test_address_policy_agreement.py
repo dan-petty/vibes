@@ -6,6 +6,9 @@ lived in five places and had drifted in four: each delegated to `ipaddress.is_pr
 behind a message reading "RFC 1918", so each blocked `0.0.0.0`, `255.255.255.255`, RFC 2544
 benchmarking space and reserved ranges under a clause covering none of them — and none
 scanned IPv6, so `http://[fd00::1]/` walked through every egress guard untouched.
+
+One difference is recorded below, not hidden: code and documentation may name the cloud
+metadata address, and an egress guard must refuse a request to it.
 """
 
 # sentinel: allow[ZeroTrustSanitization] — the corpus below is the policy under test; each
@@ -74,6 +77,22 @@ def _policy(address: str) -> bool:
     return parsed is not None and is_private_host(parsed)
 
 
+# A code scanner lets code and documentation name the cloud metadata address, because a
+# guard that blocks the address must name it. The IDE hook sentinel is an egress guard: a
+# tool call that names the address is a request to it. The sentinel blocks it, as the web
+# crawler, `tools/ebpf_tracer.py` and the LSM gate example do. These sets name that one
+# difference, so every other address still needs one answer from all five.
+EGRESS_GUARDS: frozenset[str] = frozenset({"agentic-ide-hook-sentinel"})
+EGRESS_ONLY_TARGETS: frozenset[str] = frozenset({"169.254.169.254"})
+
+
+def _expected(implementation: str, address: str) -> bool:
+    """Return the verdict that one implementation must give for one corpus address."""
+    if implementation in EGRESS_GUARDS and address in EGRESS_ONLY_TARGETS:
+        return True
+    return CORPUS[address]
+
+
 IMPLEMENTATIONS = {
     "sanitization_policy": _policy,
     "ast-invariant-sentinel": lambda a: sentinel._is_prohibited_ip(a),
@@ -86,9 +105,8 @@ IMPLEMENTATIONS = {
 @pytest.mark.parametrize("address", sorted(CORPUS))
 def test_every_implementation_agrees_on_every_address(address: str) -> None:
     """One policy, five implementations, one answer per address."""
-    expected = CORPUS[address]
     verdicts = {name: bool(fn(address)) for name, fn in IMPLEMENTATIONS.items()}
-    assert verdicts == dict.fromkeys(IMPLEMENTATIONS, expected)
+    assert verdicts == {name: _expected(name, address) for name in IMPLEMENTATIONS}
 
 
 def test_a_bind_address_is_not_a_private_host() -> None:
