@@ -9,7 +9,8 @@ a native Tetragon `process_exec` record. Other native Tetragon records, such as
 
 The sensitive-path check expands each `~/` entry below the configured home directories and
 compares whole path components. The Tetragon TracingPolicy has one `sys_execve` syscall
-kprobe that sends `Sigkill` when the executed path names a disallowed binary. The observed
+kprobe that sends `Sigkill` when the executed path names a disallowed binary. Its
+`podSelector` limits it to the pods with the sandbox label (`--pod-label`). The observed
 binaries go into a metadata annotation; the policy does not enforce them. The Falco rule
 only alerts.
 
@@ -66,6 +67,10 @@ DEFAULT_HOME_DIRS: Final[tuple[str, ...]] = ("/root",)
 # The observed binaries are a baseline for review. The TracingPolicy CRD has no field for
 # them, and the policy does not enforce them, so they go into this metadata annotation.
 TETRAGON_BASELINE_ANNOTATION: Final[str] = "ebpf-tracer/observed-binaries"
+
+# The label that resources/k8s/agent-sandbox/sandbox-pod.yaml puts on the sandbox pod. The
+# policy's podSelector uses it, so the Sigkill reaches sandbox pods only.
+TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app.kubernetes.io/name", "agent-sandbox")
 
 # Kernel system calls only: `cap_set_proc` is the libcap function that calls `capset`.
 PRIVILEGE_SYSCALLS: Final[frozenset[str]] = frozenset(
@@ -473,6 +478,7 @@ class EbpfSandboxTracer:
 def generate_tetragon_policy(
     events: Sequence[EbpfTraceEvent],
     policy_name: str = "agent-sandbox-containment",
+    pod_label: tuple[str, str] = TETRAGON_POD_LABEL,
 ) -> dict[str, Any]:
     """Synthesize a Tetragon TracingPolicy that kills a process when it executes a disallowed binary.
 
@@ -480,17 +486,21 @@ def generate_tetragon_policy(
     sends `Sigkill` when the path is a disallowed binary name or ends in `/<name>`, the
     same binaries that EBPF001 flags. Each operator has its own selector: a selector
     matches only when all of its matches hold, and the kprobe acts when any selector
-    matches. The kprobe does not hook `execveat`. The observed binaries go into the
-    `TETRAGON_BASELINE_ANNOTATION` annotation for review; the policy does not enforce them.
+    matches. The kprobe does not hook `execveat`. The `podSelector` limits the policy to
+    the pods with `pod_label`; without it, Tetragon applies the policy to every process
+    on the node. The observed binaries go into the `TETRAGON_BASELINE_ANNOTATION`
+    annotation for review; the policy does not enforce them.
     """
     observed = sorted({e.process_name for e in events if e.event_type == EbpfEventType.EXECVE})
     binaries = sorted(DISALLOWED_BINARIES)
     matches = (("Equal", binaries), ("Postfix", [f"/{b}" for b in binaries]))
+    label_key, label_value = pod_label
     return {
         "apiVersion": "cilium.io/v1alpha1",
         "kind": "TracingPolicy",
         "metadata": {"name": policy_name, "annotations": {TETRAGON_BASELINE_ANNOTATION: ",".join(observed)}},
         "spec": {
+            "podSelector": {"matchLabels": {label_key: label_value}},
             "kprobes": [
                 {
                     "call": "sys_execve",
@@ -647,28 +657,28 @@ def _handle_cli_exports(
     summary: EbpfAuditSummary,
     events: Sequence[EbpfTraceEvent],
     target_uri: str,
-    export_paths: dict[str, str | None],
+    args: argparse.Namespace,
 ) -> None:
-    """Write outputs to requested file paths."""
-    sarif_p = export_paths.get("sarif")
+    """Write outputs to the file paths that the command line requests."""
+    sarif_p = args.export_sarif
     if sarif_p:
         data = export_sarif(summary, target_uri)
         Path(sarif_p).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
-    json_p = export_paths.get("json")
+    json_p = args.export_json
     if json_p:
         Path(json_p).write_text(export_json(summary), encoding="utf-8")
 
-    md_p = export_paths.get("md")
+    md_p = args.export_md
     if md_p:
         Path(md_p).write_text(format_markdown_report(summary), encoding="utf-8")
 
-    tetragon_p = export_paths.get("tetragon")
+    tetragon_p = args.export_tetragon
     if tetragon_p:
-        policy = generate_tetragon_policy(events)
+        policy = generate_tetragon_policy(events, pod_label=args.pod_label)
         Path(tetragon_p).write_text(json.dumps(policy, indent=2), encoding="utf-8")
 
-    falco_p = export_paths.get("falco")
+    falco_p = args.export_falco
     if falco_p:
         Path(falco_p).write_text(generate_falco_policy(events), encoding="utf-8")
 
@@ -678,6 +688,14 @@ def _absolute_dir(text: str) -> str:
     if not text.startswith("/"):
         raise argparse.ArgumentTypeError(f"not an absolute path: {text}")
     return text
+
+
+def _pod_label(text: str) -> tuple[str, str]:
+    """Split a `key=value` pod label at the first `=`; the key must not be empty."""
+    key, sep, value = text.partition("=")
+    if not sep or not key:
+        raise argparse.ArgumentTypeError(f"not a key=value label: {text}")
+    return key, value
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
@@ -699,6 +717,14 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Home directory of the sandbox user; the ~/ sensitive paths are checked below it. "
         "Repeat for more users (default: /root).",
+    )
+    parser.add_argument(
+        "--pod-label",
+        type=_pod_label,
+        default=TETRAGON_POD_LABEL,
+        metavar="KEY=VALUE",
+        help="Label of the sandbox pods that the Tetragon policy's podSelector matches "
+        "(default: app.kubernetes.io/name=agent-sandbox).",
     )
     parser.add_argument(
         "--preset",
@@ -763,13 +789,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         summary,
         events,
         args.targets[0] if args.targets else "trace.jsonl",
-        {
-            "sarif": args.export_sarif,
-            "json": args.export_json,
-            "md": args.export_md,
-            "tetragon": args.export_tetragon,
-            "falco": args.export_falco,
-        },
+        args,
     )
     print(format_markdown_report(summary))
     return 0 if summary.is_compliant else 1

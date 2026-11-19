@@ -383,21 +383,27 @@ def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
 
     Field names and enums follow the CRD of Tetragon v1.8.0
     (pkg/k8s/apis/cilium.io/client/crds/v1alpha1/cilium.io_tracingpolicies.yaml). The CRD
-    has no `allowedProcesses` field; `kubectl apply` rejects an unknown field.
+    has no `allowedProcesses` field; `kubectl apply` rejects an unknown field. The pod
+    selector limits the Sigkill to the sandbox pods of resources/k8s/agent-sandbox/.
     """
     policy = generate_tetragon_policy([EbpfTraceEvent(EbpfEventType.EXECVE, 1, "python3")])
+    custom = generate_tetragon_policy([], pod_label=("team", "agents"))
     kprobe = policy["spec"]["kprobes"][0]
     binaries = ["chattr", "nc", "ncat", "netcat", "nmap", "socat", "tcpdump", "telnet", "wireshark"]
 
     assert (
         sorted(policy),
         sorted(policy["spec"]),
+        policy["spec"]["podSelector"],
+        custom["spec"]["podSelector"],
         len(policy["spec"]["kprobes"]),
         (kprobe["call"], kprobe["syscall"], kprobe["args"]),
         kprobe["selectors"],
     ) == (
         ["apiVersion", "kind", "metadata", "spec"],
-        ["kprobes"],
+        ["kprobes", "podSelector"],
+        {"matchLabels": {"app.kubernetes.io/name": "agent-sandbox"}},
+        {"matchLabels": {"team": "agents"}},
         1,
         ("sys_execve", True, [{"index": 0, "type": "string"}]),
         [
@@ -542,6 +548,29 @@ def test_cli_home_dir_option(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert (default_code, agent_code, relative.value.code, "not an absolute path" in capsys.readouterr().err) == (
         0,
         1,
+        2,
+        True,
+    )
+
+
+def test_cli_pod_label_option(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify that `--pod-label` sets the pod selector of the exported policy and needs `key=value`."""
+    trace_file = tmp_path / "agent_events.jsonl"
+    trace_file.write_text('{"event_type": "execve", "pid": 1, "comm": "python3"}\n', encoding="utf-8")
+    default_file, custom_file = tmp_path / "default.json", tmp_path / "custom.json"
+    main([str(trace_file), "--export-tetragon", str(default_file)])
+    main([str(trace_file), "--export-tetragon", str(custom_file), "--pod-label", "team=agents"])
+    with pytest.raises(SystemExit) as no_value:
+        main([str(trace_file), "--pod-label", "team"])
+
+    assert (
+        json.loads(default_file.read_text(encoding="utf-8"))["spec"]["podSelector"],
+        json.loads(custom_file.read_text(encoding="utf-8"))["spec"]["podSelector"],
+        no_value.value.code,
+        "not a key=value label" in capsys.readouterr().err,
+    ) == (
+        {"matchLabels": {"app.kubernetes.io/name": "agent-sandbox"}},
+        {"matchLabels": {"team": "agents"}},
         2,
         True,
     )

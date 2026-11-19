@@ -86,7 +86,7 @@ eBPF introduces dual monitoring planes within the Linux kernel:
 
 ## 3. Quantitative Telemetry & Egress Interception Benchmarks
 
-No benchmark of eBPF tracing exists in this repository. `tools/ebpf_tracer.py` reads recorded events, so it has no kernel component to time, and no overhead, interception latency or detection rate has been measured. `tests/test_ebpf_tracer.py` checks each rule on hand-written event records (`pytest tests/test_ebpf_tracer.py`: 19 passed). Measure overhead and interception on the target kernel before relying on either.
+No benchmark of eBPF tracing exists in this repository. `tools/ebpf_tracer.py` reads recorded events, so it has no kernel component to time, and no overhead, interception latency or detection rate has been measured. `tests/test_ebpf_tracer.py` checks each rule on hand-written event records (`pytest tests/test_ebpf_tracer.py`: 20 passed). Measure overhead and interception on the target kernel before relying on either.
 
 ---
 
@@ -142,7 +142,7 @@ To establish zero-trust eBPF introspection across production agent fleets:
 ### 1. Phased Operational Rollout: Observe → Alert → Enforce
 1. **Phase 1 (Observation & Baseline Profiling)**: Deploy `ebpf_tracer.py` in `--preset audit_only` during CI test runs and benchmark execution. Capture the exact set of benign syscalls, binaries, and network destinations required by the agent.
 2. **Phase 2 (Automated Policy Synthesis)**: Use the module function `generate_tetragon_policy()` to write a Tetragon `TracingPolicy` custom resource, or `generate_falco_policy()` to write Falco rules. Falco detects and alerts; it does not block.
-3. **Phase 3 (Inline Kernel Enforcement)**: Apply the synthesized Tetragon policy in production. Its selectors send `Sigkill` when a process executes a binary of the EBPF001 deny list. The kernel stops only the calls that the selectors match; the policy does not hook `execveat`. The observed binaries of Phase 1 go into the annotation `ebpf-tracer/observed-binaries` for review; the policy does not enforce them. The policy has no `podSelector`, so it applies to every process on each node where Tetragon runs.
+3. **Phase 3 (Inline Kernel Enforcement)**: Apply the synthesized Tetragon policy in production. Its selectors send `Sigkill` when a process executes a binary of the EBPF001 deny list. The kernel stops only the calls that the selectors match; the policy does not hook `execveat`. The observed binaries of Phase 1 go into the annotation `ebpf-tracer/observed-binaries` for review; the policy does not enforce them. Its `podSelector` limits the policy to the pods with the label `app.kubernetes.io/name: agent-sandbox`, the label of [`sandbox-pod.yaml`](../../resources/k8s/agent-sandbox/sandbox-pod.yaml); `--pod-label key=value` sets another label. Without a `podSelector`, Tetragon applies a policy to every process on the node.
 
 ### 2. Concrete Tetragon TracingPolicy Template
 
@@ -154,6 +154,9 @@ metadata:
   annotations:
     ebpf-tracer/observed-binaries: "git,python3"
 spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: "agent-sandbox"
   kprobes:
     - call: "sys_execve"
       syscall: true
