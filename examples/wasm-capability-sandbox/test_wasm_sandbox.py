@@ -141,6 +141,30 @@ def test_each_minted_handle_keeps_its_grant(tmp_path: Path) -> None:
     ) == (True, None, None)
 
 
+def test_root_scoped_handle_grants_every_path() -> None:
+    """Grant a path under `/` to a minted handle whose scope is the root directory."""
+    cap = create_capability(CapabilityKind.FILESYSTEM_READ, "/")
+    assert check_filesystem_access("/etc/passwd", (cap,)) is None
+
+
+def test_scope_matches_whole_path_components() -> None:
+    """Refuse a path that shares only a string prefix with the scope (CAP001)."""
+    etc = create_capability(CapabilityKind.FILESYSTEM_READ, "/etc")
+    srv = create_capability(CapabilityKind.FILESYSTEM_READ, "/srv/a")
+    findings = (
+        check_filesystem_access("/etc/passwd", (etc,)),
+        check_filesystem_access("/etcx/file", (etc,)),
+        check_filesystem_access("/home/x", (etc,)),
+        check_filesystem_access("/srv/ab/file", (srv,)),
+    )
+    assert tuple(f.rule if f else None for f in findings) == (
+        None,
+        DiagnosticRule.CAP001,
+        DiagnosticRule.CAP001,
+        DiagnosticRule.CAP001,
+    )
+
+
 def test_gas_metering_termination() -> None:
     """Verify instruction gas exhaustion triggers CAP003 trap."""
     env = SandboxEnvironment(gas_budget=50)
