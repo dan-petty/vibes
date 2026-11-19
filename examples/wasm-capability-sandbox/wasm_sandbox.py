@@ -234,10 +234,12 @@ def verify_wit_contract(contract: WITContract, granted: tuple[str, ...]) -> tupl
 
 
 def _is_scoped_path(target: str, scope: str) -> bool:
-    """Predicate checking if target path is inside capability scope."""
-    norm_target = Path(target).resolve().as_posix()
-    norm_scope = Path(scope).resolve().as_posix()
-    return norm_target == norm_scope or norm_target.startswith(f"{norm_scope}/")
+    """Return True if the resolved target path is the scope or is below it.
+
+    Path.is_relative_to compares whole path components, so a scope of `/` grants every
+    path and a scope of `/etc` does not grant `/etcx`.
+    """
+    return Path(target).resolve().is_relative_to(Path(scope).resolve())
 
 
 def _has_fs_grant(target: str, handle: CapabilityHandle) -> bool:
