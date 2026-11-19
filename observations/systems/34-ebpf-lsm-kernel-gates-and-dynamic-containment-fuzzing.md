@@ -45,7 +45,7 @@ Untrusted workloads constrained to "safe" developer tools can invoke unauthorize
 
 ## 3. The Architectural Solution
 
-The design pairs **Synchronous In-Kernel LSM Policy Enforcement** with **mutation tests of the policy**. The reference example ([`examples/ebpf-lsm-kernel-gate/`](../../examples/ebpf-lsm-kernel-gate/)) is a Python simulation of that design. It loads no BPF program and touches no kernel interface: `evaluate_event()` in `lsm_gate.py` applies the policy to `LSMEvent` objects in user space. It ships no BPF C. For kernel enforcement, `generate_tetragon_policy()` emits a Cilium Tetragon `TracingPolicy` whose kprobe selectors send `Sigkill` for blocked binaries, absolute blocked paths and egress. No test loads that policy into a kernel.
+The design pairs **Synchronous In-Kernel LSM Policy Enforcement** with **mutation tests of the policy**. The reference example ([`examples/ebpf-lsm-kernel-gate/`](../../examples/ebpf-lsm-kernel-gate/)) is a Python simulation of that design. It loads no BPF program and touches no kernel interface: `evaluate_event()` in `lsm_gate.py` applies the policy to `LSMEvent` objects in user space. It ships no BPF C. For kernel enforcement, `generate_tetragon_policy()` emits a Cilium Tetragon `TracingPolicy` whose kprobe selectors send `Sigkill` for blocked binaries, absolute blocked paths (with `~` entries expanded below the configured home directories) and egress. No test loads that policy into a kernel.
 
 ```mermaid
 flowchart TD
@@ -74,7 +74,7 @@ To test the policy against path and address tricks, `run_fuzz_campaign()` evalua
 - Lists private RFC 1918/4193 addresses and the link-local metadata endpoint (`169.254.169.254`).
 - Asserts **Monotonic Containment**: at most one of the 31 events may be allowed. On the default policy, 30 are blocked and the loopback connect is allowed (`python examples/ebpf-lsm-kernel-gate/lsm_gate.py fuzz`).
 
-The simulated `file_open` check normalizes `.`, `..` and repeated slashes, then matches path strings (prefix or substring). It does not resolve symbolic links, so it keeps the symbolic-link weakness that Section 2.2 describes.
+The simulated `file_open` check normalizes `.`, `..` and repeated slashes, then compares whole path components: `/root` covers `/root/x` but not `/rootfs`. It writes each `~` entry below each configured home directory. It does not resolve symbolic links, so it keeps the symbolic-link weakness that Section 2.2 describes.
 
 ---
 

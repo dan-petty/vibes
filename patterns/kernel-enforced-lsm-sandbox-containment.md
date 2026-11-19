@@ -26,7 +26,7 @@ When autonomous AI coding agents execute terminal tools, compile code, and run t
 
 To close the detect-then-kill gap, isolation must reside directly within the operating system kernel's authorization path using **Linux Security Module (BPF LSM)** hooks.
 
-The reference implementation does not do this. [`examples/ebpf-lsm-kernel-gate/lsm_gate.py`](../examples/ebpf-lsm-kernel-gate/lsm_gate.py) is a pure-Python simulation. It loads no BPF program and touches no kernel. Its file check normalizes `.`, `..` and repeated slashes before it matches, so it blocks `/etc/./shadow` and `/etc//shadow`; it does not resolve symbolic links. Its probe list has 31 inputs, and the path probes come from the policy. It is not [syzkaller](https://github.com/google/syzkaller), which is a coverage-guided kernel fuzzer that looks for kernel bugs. For kernel enforcement, the example emits a Cilium Tetragon `TracingPolicy` instead of BPF C.
+The reference implementation does not do this. [`examples/ebpf-lsm-kernel-gate/lsm_gate.py`](../examples/ebpf-lsm-kernel-gate/lsm_gate.py) is a pure-Python simulation. It loads no BPF program and touches no kernel. Its file check normalizes `.`, `..` and repeated slashes before it matches, so it blocks `/etc/./shadow` and `/etc//shadow`; it does not resolve symbolic links. It compares whole path components, so `/root` does not cover `/rootfs`. Its probe list has 31 inputs, and the path probes come from the policy. It is not [syzkaller](https://github.com/google/syzkaller), which is a coverage-guided kernel fuzzer that looks for kernel bugs. For kernel enforcement, the example emits a Cilium Tetragon `TracingPolicy` instead of BPF C.
 
 ```mermaid
 sequenceDiagram
@@ -57,7 +57,7 @@ sequenceDiagram
 3. **Boundary Mutation Probes**:
    Continuously probe the LSM policy with synthesized traversal strings, bitwise flag mutations, and IP variants. Probes find bypasses; they cannot prove that none exist. `lsm_gate.py fuzz` runs 31 probes and blocks 30 (rate 0.968); it allows `127.0.0.1` by design.
 4. **Declarative Policy Synthesis**:
-   Compile declared security policies into Kubernetes-native Cilium Tetragon `TracingPolicy` CRDs. `generate_tetragon_policy()` in `lsm_gate.py` reads the `LSMPolicy` and gives each kprobe a selector with a `Sigkill` action ([Tetragon selectors](https://tetragon.io/docs/concepts/tracing-policy/selectors/)). `Sigkill` stops the process; to make the call itself fail, add `Override` ([Tetragon enforcement](https://tetragon.io/docs/concepts/enforcement/)). The binary allowlist, relative paths and the privilege and evasion rules have no kernel selector. The example ships no BPF C.
+   Compile declared security policies into Kubernetes-native Cilium Tetragon `TracingPolicy` CRDs. `generate_tetragon_policy()` in `lsm_gate.py` reads the `LSMPolicy` and gives each kprobe one or more selectors with a `Sigkill` action ([Tetragon selectors](https://tetragon.io/docs/concepts/tracing-policy/selectors/)). `Sigkill` stops the process; to make the call itself fail, add `Override` ([Tetragon enforcement](https://tetragon.io/docs/concepts/enforcement/)). The generator writes each `~` entry below each configured home directory, and it matches a blocked path with `Equal` or with `Prefix` on the path plus `/`. The binary allowlist, relative paths such as `.git/hooks`, and the privilege and evasion rules have no kernel selector. The example ships no BPF C.
 
 ---
 

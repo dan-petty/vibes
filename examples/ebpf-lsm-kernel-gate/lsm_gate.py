@@ -3,11 +3,12 @@
 Simulates BPF LSM (Linux Security Module) policy decisions in Python. It evaluates
 event records for binary executions, sensitive filesystem paths, privilege escalation,
 and network egress. It loads no BPF program and intercepts no real syscall. The file
-check normalizes `.`, `..` and repeated slashes before it matches; it does not resolve
-symbolic links. The probe list comes from the policy's absolute blocked paths plus fixed
+check normalizes `.`, `..` and repeated slashes, then compares whole path components;
+it does not resolve symbolic links. A `~` entry becomes one absolute path per configured
+home directory. The probe list comes from the policy's absolute blocked paths plus fixed
 evasion, egress and binary probes; it is not syzkaller, and nothing is random. The
 Tetragon generator emits a TracingPolicy whose selectors send `Sigkill` for the policy's
-blocked binaries, absolute paths and egress. The module ships no BPF C.
+blocked binaries, absolute and home-relative paths, and egress. The module ships no BPF C.
 
 Passes the strict sentinel preset (M <= 6, nesting depth <= 3).
 """
@@ -22,6 +23,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Any, Final
 
 GATE_VERSION: Final[str] = "1.0.0"
@@ -44,6 +46,9 @@ BLOCKED_PATH_PREFIXES: Final[tuple[str, ...]] = (
     "/proc/kcore",
 )
 
+# Home directories of the sandbox user; a `~` entry of `blocked_paths` is expanded in each.
+DEFAULT_HOME_DIRS: Final[tuple[str, ...]] = ("/root", "/home/user")
+
 METADATA_ENDPOINT: Final[str] = "169.254.169.254"
 
 LOOPBACK_NETWORKS: Final[tuple[str, ...]] = ("127.0.0.0/8", "::1/128")
@@ -64,6 +69,9 @@ EVASION_PATH_SUFFIXES: Final[tuple[str, ...]] = (
 
 # One argument match of a Tetragon selector: argument index, operator and values.
 ArgMatch = tuple[int, str, tuple[str, ...]]
+
+# One kprobe: kernel function, argument types, and selectors (each a list of argument matches).
+Kprobe = tuple[str, tuple[tuple[int, str], ...], list[list[ArgMatch]]]
 
 
 class LSMHookType(StrEnum):
@@ -105,6 +113,7 @@ class LSMPolicy:
     blocked_paths: tuple[str, ...] = BLOCKED_PATH_PREFIXES
     allow_loopback_only: bool = True
     enforce_syz_bounds: bool = True
+    home_dirs: tuple[str, ...] = DEFAULT_HOME_DIRS
 
 
 @dataclass(frozen=True)
@@ -214,17 +223,52 @@ def normalize_path(target: str) -> str:
     return "/" + norm.lstrip("/") if norm.startswith("//") else norm
 
 
+def _is_under(path: str, entry: str) -> bool:
+    """Return True when `path` is `entry` or lies below it, compared by whole path components.
+
+    An absolute entry matches from the root, so `/root` covers `/root/x` but not `/rootfs`.
+    A relative entry, such as `.git/hooks`, matches at any depth.
+    """
+    target, protected = PurePosixPath(path), PurePosixPath(entry)
+    if protected.is_absolute():
+        return target.is_relative_to(protected)
+    size = len(protected.parts)
+    return any(target.parts[i : i + size] == protected.parts for i in range(len(target.parts)))
+
+
+def _expand_home(entry: str, home_dirs: Sequence[str]) -> list[str]:
+    """Write a `~` or `~/...` entry once below each home directory; normalize any other entry.
+
+    `posixpath.expanduser` is not used: it reads the home of the user who runs this
+    module, not the home of the sandbox user that the kernel policy protects.
+    """
+    if entry != "~" and not entry.startswith("~/"):
+        return [normalize_path(entry)]
+    return [normalize_path(home + entry[1:]) for home in home_dirs]
+
+
+def _is_covered(path: str, entries: Sequence[str]) -> bool:
+    """Return True when another entry already covers `path`."""
+    return any(other != path and _is_under(path, other) for other in entries)
+
+
+def resolve_blocked_paths(policy: LSMPolicy) -> tuple[str, ...]:
+    """Return the blocked paths with `~` expanded, in policy order, minus entries that another entry covers."""
+    expanded = [p for entry in policy.blocked_paths for p in _expand_home(entry, policy.home_dirs)]
+    unique = list(dict.fromkeys(expanded))
+    return tuple(p for p in unique if not _is_covered(p, unique))
+
+
 def _evaluate_file(event: LSMEvent, policy: LSMPolicy) -> LSMFinding | None:
     """Evaluate filesystem access against sensitive path rules."""
     norm = normalize_path(event.target)
-    for prefix in policy.blocked_paths:
-        if norm.startswith(prefix) or prefix in norm:
-            return LSMFinding(
-                "LSM003",
-                LSMVerdict.BLOCK,
-                event,
-                f"Sensitive filesystem path access blocked: {norm}",
-            )
+    if any(_is_under(norm, entry) for entry in resolve_blocked_paths(policy)):
+        return LSMFinding(
+            "LSM003",
+            LSMVerdict.BLOCK,
+            event,
+            f"Sensitive filesystem path access blocked: {norm}",
+        )
     return None
 
 
@@ -327,40 +371,66 @@ def _egress_matches(policy: LSMPolicy) -> list[ArgMatch]:
     return [family, (1, "SAddr", (link_local,))]
 
 
+def _file_selectors(policy: LSMPolicy) -> list[list[ArgMatch]]:
+    """Match an absolute blocked path itself (`Equal`) or a path below it (`Prefix` on the path plus `/`).
+
+    The two operators go in two selectors: a Tetragon selector matches only when all
+    of its argument matches hold, and the kprobe acts when any selector matches. A
+    bare `Prefix` on `/root` would also match `/rootfs`.
+    """
+    paths = tuple(p for p in resolve_blocked_paths(policy) if p.startswith("/"))
+    below = tuple(p.rstrip("/") + "/" for p in paths)
+    return [[(0, "Equal", paths)], [(0, "Prefix", below)]]
+
+
 def _has_values(matches: Sequence[ArgMatch]) -> bool:
     """Return True when every argument match has at least one value."""
     return all(values for _, _, values in matches)
 
 
-def _tetragon_kprobes(policy: LSMPolicy) -> list[tuple[str, tuple[tuple[int, str], ...], list[ArgMatch]]]:
-    """Map the policy to kprobes; drop a kprobe that has no value to match."""
+def _selectors_with_values(selectors: Sequence[list[ArgMatch]]) -> list[list[ArgMatch]]:
+    """Keep the selectors whose every argument match has a value."""
+    return [matches for matches in selectors if _has_values(matches)]
+
+
+def _tetragon_kprobes(policy: LSMPolicy) -> list[Kprobe]:
+    """Map the policy to kprobes; drop a selector, then a kprobe, that has no value to match."""
     binaries = tuple(f"/{b}" for b in sorted(policy.blocked_binaries))
-    paths = tuple(p for p in policy.blocked_paths if p.startswith("/"))
-    kprobes = [
-        ("security_bprm_check", ((0, "linux_binprm"),), [(0, "Postfix", binaries)]),
-        ("security_file_open", ((0, "file"),), [(0, "Prefix", paths)]),
-        ("security_socket_connect", ((0, "socket"), (1, "sockaddr")), _egress_matches(policy)),
+    kprobes: list[Kprobe] = [
+        ("security_bprm_check", ((0, "linux_binprm"),), [[(0, "Postfix", binaries)]]),
+        ("security_file_open", ((0, "file"),), _file_selectors(policy)),
+        ("security_socket_connect", ((0, "socket"), (1, "sockaddr")), [_egress_matches(policy)]),
     ]
-    return [k for k in kprobes if _has_values(k[2])]
+    kept = [(call, args, _selectors_with_values(selectors)) for call, args, selectors in kprobes]
+    return [k for k in kept if k[2]]
 
 
-def _yaml_kprobe(call: str, args: Sequence[tuple[int, str]], matches: Sequence[ArgMatch]) -> list[str]:
-    """Render one kprobe whose single selector sends Sigkill when every match holds."""
-    lines = [f"    - call: {json.dumps(call)}", "      syscall: false", "      args:"]
-    for index, arg_type in args:
-        lines += [f"        - index: {index}", f"          type: {json.dumps(arg_type)}"]
-    lines += ["      selectors:", "        - matchArgs:"]
+def _yaml_selector(matches: Sequence[ArgMatch]) -> list[str]:
+    """Render one selector that sends Sigkill when every match holds."""
+    lines = ["        - matchArgs:"]
     for index, operator, values in matches:
         lines += [f"            - index: {index}", f"              operator: {json.dumps(operator)}", "              values:"]
         lines += [f"                - {json.dumps(value)}" for value in values]
     return [*lines, "          matchActions:", "            - action: Sigkill"]
 
 
+def _yaml_kprobe(call: str, args: Sequence[tuple[int, str]], selectors: Sequence[Sequence[ArgMatch]]) -> list[str]:
+    """Render one kprobe; Tetragon sends Sigkill when any of its selectors matches."""
+    lines = [f"    - call: {json.dumps(call)}", "      syscall: false", "      args:"]
+    for index, arg_type in args:
+        lines += [f"        - index: {index}", f"          type: {json.dumps(arg_type)}"]
+    lines.append("      selectors:")
+    for matches in selectors:
+        lines += _yaml_selector(matches)
+    return lines
+
+
 def generate_tetragon_policy(policy: LSMPolicy | None = None) -> str:
     """Emit a Cilium Tetragon TracingPolicy that sends Sigkill for the policy's blocked operations.
 
-    It covers the blocked binaries, the absolute blocked paths and egress. The binary
-    allowlist, relative paths and the privilege and evasion rules stay simulation-only.
+    It covers the blocked binaries, the absolute blocked paths (with `~` entries expanded
+    under `home_dirs`) and egress. The binary allowlist, relative paths such as
+    `.git/hooks`, and the privilege and evasion rules stay simulation-only.
     """
     pol = policy or LSMPolicy()
     label_key, label_value = TETRAGON_POD_LABEL
@@ -377,8 +447,8 @@ def generate_tetragon_policy(policy: LSMPolicy | None = None) -> str:
         f"      {label_key}: {json.dumps(label_value)}",
         "  kprobes:",
     ]
-    for call, args, matches in _tetragon_kprobes(pol):
-        lines += _yaml_kprobe(call, args, matches)
+    for call, args, selectors in _tetragon_kprobes(pol):
+        lines += _yaml_kprobe(call, args, selectors)
     return "\n".join(lines) + "\n"
 
 
