@@ -49,7 +49,7 @@ When line-based merge conflicts are left unresolved in working copies, tools wri
 
 ## 3. The Architectural Solution: 3-Way AST Semantic Reconciliation
 
-To remove false conflicts for disjoint additions and to emit only parseable output, we designed the **Autonomous 3-Way AST Semantic Reconciler** ([`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)). It writes its output with `ast.unparse`, so the result parses, but the result loses every comment and the original formatting, and the imports move to the top in sorted order.
+To remove false conflicts for disjoint additions and to emit only parseable output, we designed the **Autonomous 3-Way AST Semantic Reconciler** ([`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)). It writes its output with `ast.unparse` and then parses the result again with `ast.parse`. If that parse fails, it reports a collision and writes no code. The result loses every comment and the original formatting, and the imports move to the top in sorted order.
 
 ```mermaid
 flowchart TD
@@ -69,7 +69,7 @@ flowchart TD
     subgraph "Arbitration Engine"
         SH --> IU["3-Way Import Union: (O | T) - (B - (O & T))"]
         SH --> CF["Commutative Disjoint Function Merge"]
-        SH --> CM["Recursive Class Method Arbitration"]
+        SH --> CM["Recursive Class Member Arbitration"]
     end
 
     subgraph "Verification & Telemetry"
@@ -102,11 +102,13 @@ Where each symbol $s \in S$ has an identifier $k$ and structural hash $H(s)$. Fo
 
 If both branches add disjoint symbols ($k \notin \operatorname{dom}(S_B)$ and $k$ is present in only one branch), both are included commutatively, converting would-be textual conflicts into clean merges.
 
+$\operatorname{ReconcileClass}$ applies the same rule to each member of the class body: the docstring, attributes, methods, nested classes and other statements. The class header (decorators, bases, keywords) is arbitrated as one more symbol. The docstring $D$ of the module is arbitrated like a symbol too, so the merged module holds it one time.
+
 ---
 
 ## 4. Evaluation Status
 
-No benchmark against Git was run. This repository holds no 120-branch testbed and no data for false-conflict rates, collision rates, output validity or latency. The 10 unit tests in `test_reconciler.py` run the reconciler on fixed three-way inputs: disjoint functions, imports, class methods and true collisions.
+No benchmark against Git was run. This repository holds no 120-branch testbed and no data for false-conflict rates, collision rates, output validity or latency. The 26 tests in `test_reconciler.py` run the reconciler on fixed three-way inputs: disjoint functions, imports, class members and docstrings, true collisions, and assembled code that does not parse.
 
 ---
 
@@ -114,5 +116,5 @@ No benchmark against Git was run. This repository holds no 120-branch testbed an
 
 The complete executable reference tool is located at [`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/):
 - **Executable Core**: [`ast_reconciler.py`](../../examples/ast-semantic-reconciler/ast_reconciler.py) certified compliant under AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
-- **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 10 unit tests. They cover 92% of the statements in `ast_reconciler.py` (`coverage run --include=examples/ast-semantic-reconciler/ast_reconciler.py -m pytest examples/ast-semantic-reconciler`, run on 2026-11-19).
+- **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 26 tests. They cover 97% of the statements in `ast_reconciler.py` (`coverage run --include=examples/ast-semantic-reconciler/ast_reconciler.py -m pytest examples/ast-semantic-reconciler`, run on 2026-11-19).
 - **Git Driver Protocol**: Integrates as a native git custom merge driver via `.gitattributes` (`*.py merge=ast-reconciler`).

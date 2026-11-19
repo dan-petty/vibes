@@ -2,8 +2,9 @@
 
 Resolves concurrent subagent git worktree collisions via commutative AST symbol
 graphs rather than line-based text diffs. Identifies false merge conflicts on
-disjoint functions, imports, and class methods, emitting unparsed code (comments
-are lost) or structured collision diagnostics under semantic collision.
+disjoint functions, imports, and class members, emitting unparsed code (comments
+are lost) or structured collision diagnostics under semantic collision. Merged
+code that does not parse again is reported as a collision, never returned.
 
 Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
@@ -12,15 +13,20 @@ from __future__ import annotations
 
 import argparse
 import ast
+import copy
 import hashlib
 import json
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+# Keys that no Python identifier can take, so they never clash with a symbol name.
+DOCSTRING_KEY = "<docstring>"
+MODULE_KEY = "<module>"
 
 
 class ReconciliationStatus(StrEnum):
@@ -33,7 +39,7 @@ class ReconciliationStatus(StrEnum):
 
 
 class SymbolKind(StrEnum):
-    """Categorical kind of top-level AST symbol."""
+    """Categorical kind of a module or class body symbol."""
 
     DOCSTRING = "DOCSTRING"
     IMPORT = "IMPORT"
@@ -42,11 +48,12 @@ class SymbolKind(StrEnum):
     CLASS = "CLASS"
     MAIN_GUARD = "MAIN_GUARD"
     STATEMENT = "STATEMENT"
+    MODULE = "MODULE"
 
 
 @dataclass(frozen=True)
 class SymbolNode:
-    """Canonical representation of an extracted top-level AST symbol."""
+    """Canonical representation of an extracted module or class body symbol."""
 
     name: str
     kind: SymbolKind
@@ -79,6 +86,27 @@ class ReconciliationResult:
     duration_ms: float = 0.0
 
 
+@dataclass
+class BodyMerge:
+    """Arbitrated docstring and statements of one module or class body."""
+
+    docstring: ast.stmt | None
+    statements: list[ast.stmt]
+    collisions: list[CollisionReport]
+    false_conflicts: int
+
+    def full_body(self) -> list[ast.stmt]:
+        """Return the docstring, if there is one, followed by the other statements."""
+        if self.docstring is None:
+            return list(self.statements)
+        return [self.docstring, *self.statements]
+
+
+SymbolMaps = tuple[dict[str, SymbolNode], dict[str, SymbolNode], dict[str, SymbolNode]]
+ClassTriple = tuple[ast.ClassDef, ast.ClassDef, ast.ClassDef]
+ArbitratedSymbol = tuple[ast.stmt | None, list[CollisionReport], int]
+
+
 def hash_ast_node(node: ast.AST) -> str:
     """Compute SHA-256 fingerprint over normalized AST structure."""
     dumped = ast.dump(node, annotate_fields=False, include_attributes=False)
@@ -98,14 +126,21 @@ def parse_ast_safely(source: str) -> ast.Module:
         raise ValueError(f"Syntax error during AST parse: {exc.msg} at line {exc.lineno}") from exc
 
 
-def extract_docstring_node(tree: ast.Module) -> tuple[ast.Expr | None, list[ast.stmt]]:
-    """Extract leading module docstring and remaining body statements."""
-    if not tree.body:
-        return None, []
-    first = tree.body[0]
-    if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
-        return first, tree.body[1:]
-    return None, list(tree.body)
+def _is_docstring(stmt: ast.stmt) -> bool:
+    """Return True if the statement is a bare string literal."""
+    return (
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Constant)
+        and isinstance(stmt.value.value, str)
+    )
+
+
+def extract_docstring_node(owner: ast.Module | ast.ClassDef) -> tuple[ast.Expr | None, list[ast.stmt]]:
+    """Extract the leading docstring of a module or class and its remaining body statements."""
+    first = owner.body[0] if owner.body else None
+    if isinstance(first, ast.Expr) and _is_docstring(first):
+        return first, owner.body[1:]
+    return None, list(owner.body)
 
 
 def _get_target_name(target: ast.AST) -> str:
@@ -141,8 +176,28 @@ def _classify_other(stmt: ast.stmt, idx: int) -> tuple[str, SymbolKind]:
 
 
 def classify_statement_symbol(stmt: ast.stmt, index: int) -> tuple[str, SymbolKind]:
-    """Determine unique identifier and category for top-level statement."""
+    """Determine unique identifier and category for a module or class body statement."""
     return _classify_def(stmt) or _classify_assign(stmt) or _classify_other(stmt, index)
+
+
+def _make_symbol(name: str, kind: SymbolKind, stmt: ast.stmt) -> SymbolNode:
+    """Wrap one statement in an immutable SymbolNode with its fingerprint."""
+    return SymbolNode(
+        name=name,
+        kind=kind,
+        unparsed=ast.unparse(stmt),
+        hash_digest=hash_ast_node(stmt),
+        node=stmt,
+    )
+
+
+def _unique_key(name: str, taken: dict[str, SymbolNode]) -> str:
+    """Return the name, or `name#N` for the Nth statement with that name (a property setter)."""
+    key, count = name, 1
+    while key in taken:
+        count += 1
+        key = f"{name}#{count}"
+    return key
 
 
 def extract_symbol_map(stmts: list[ast.stmt]) -> dict[str, SymbolNode]:
@@ -150,13 +205,17 @@ def extract_symbol_map(stmts: list[ast.stmt]) -> dict[str, SymbolNode]:
     symbols: dict[str, SymbolNode] = {}
     for idx, stmt in enumerate(stmts):
         name, kind = classify_statement_symbol(stmt, idx)
-        symbols[name] = SymbolNode(
-            name=name,
-            kind=kind,
-            unparsed=ast.unparse(stmt),
-            hash_digest=hash_ast_node(stmt),
-            node=stmt,
-        )
+        key = _unique_key(name, symbols)
+        symbols[key] = _make_symbol(key, kind, stmt)
+    return symbols
+
+
+def index_body(owner: ast.Module | ast.ClassDef, drop_imports: bool = False) -> dict[str, SymbolNode]:
+    """Index a module or class body by symbol, with its docstring under DOCSTRING_KEY."""
+    doc, rest = extract_docstring_node(owner)
+    symbols = extract_symbol_map(_filter_non_import_stmts(rest) if drop_imports else rest)
+    if doc is not None:
+        symbols[DOCSTRING_KEY] = _make_symbol(DOCSTRING_KEY, SymbolKind.DOCSTRING, doc)
     return symbols
 
 
@@ -181,11 +240,6 @@ def reconcile_import_sets(
     total_imports = retained_base | ours_added | theirs_added
     false_conflicts = len(ours_added & theirs_added) + min(len(ours_added), len(theirs_added))
     return sorted(total_imports), false_conflicts
-
-
-def _extract_methods_map(cls: ast.ClassDef) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
-    """Extract method definitions from class body mapped by method name."""
-    return {item.name: item for item in cls.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 def _build_collision_report(
@@ -217,6 +271,16 @@ def _is_ours_accepted(t_hash: str | None, b_hash: str | None, o_hash: str | None
     return o_hash == t_hash
 
 
+def _pick_variant(hashes: tuple[str | None, str | None, str | None]) -> int | None:
+    """Return the index (1 ours, 2 theirs) of the variant a 3-way merge accepts, or None."""
+    b_hash, o_hash, t_hash = hashes
+    if _is_theirs_accepted(o_hash, b_hash):
+        return 2
+    if _is_ours_accepted(t_hash, b_hash, o_hash):
+        return 1
+    return None
+
+
 def _arbitrate_single_node(
     name: str,
     kind: SymbolKind,
@@ -224,87 +288,59 @@ def _arbitrate_single_node(
 ) -> tuple[ast.stmt | None, CollisionReport | None]:
     """Arbitrate 3-way conflict for a single AST statement node."""
     base_node, ours_node, theirs_node = nodes
-    b_hash, o_hash, t_hash = _safe_hash(base_node), _safe_hash(ours_node), _safe_hash(theirs_node)
-    if _is_theirs_accepted(o_hash, b_hash):
-        return theirs_node, None
-    if _is_ours_accepted(t_hash, b_hash, o_hash):
-        return ours_node, None
-    return None, _build_collision_report(name, kind, nodes)
+    index = _pick_variant((_safe_hash(base_node), _safe_hash(ours_node), _safe_hash(theirs_node)))
+    if index is None:
+        return None, _build_collision_report(name, kind, nodes)
+    return nodes[index], None
 
 
-def _reconcile_single_class_method(
-    name: str,
-    base_m: dict[str, ast.stmt],
-    ours_m: dict[str, ast.stmt],
-    theirs_m: dict[str, ast.stmt],
-) -> tuple[ast.stmt | None, CollisionReport | None]:
-    """Arbitrate single class method across three variants."""
-    bm, om, tm = base_m.get(name), ours_m.get(name), theirs_m.get(name)
-    return _arbitrate_single_node(name, SymbolKind.FUNCTION, (bm, om, tm))
-
-
-def _consume_class_method(
-    stmt: ast.stmt | None,
-    col: CollisionReport | None,
-    merged_body: list[ast.stmt],
-    collisions: list[CollisionReport],
-) -> None:
-    """Append resolved method or record collision."""
-    if col:
-        collisions.append(col)
-        return
-    if stmt:
-        merged_body.append(stmt)
-
-
-def _build_reconciled_class(ours_cls: ast.ClassDef, body: list[ast.stmt]) -> ast.ClassDef:
-    """Synthesize updated class definition with merged method body."""
-    return ast.ClassDef(
-        name=ours_cls.name,
-        bases=ours_cls.bases,
-        keywords=ours_cls.keywords,
-        body=body or [ast.Pass()],
-        decorator_list=ours_cls.decorator_list,
-    )
-
-
-def reconcile_class_methods(
-    base_cls: ast.ClassDef,
-    ours_cls: ast.ClassDef,
-    theirs_cls: ast.ClassDef,
-) -> tuple[ast.ClassDef | None, list[CollisionReport]]:
-    """Reconcile disjoint method additions across concurrent class branches."""
-    base_m = _extract_methods_map(base_cls)
-    ours_m = _extract_methods_map(ours_cls)
-    theirs_m = _extract_methods_map(theirs_cls)
-    all_names = sorted(set(base_m) | set(ours_m) | set(theirs_m))
-    merged_body: list[ast.stmt] = []
-    collisions: list[CollisionReport] = []
-
-    for name in all_names:
-        stmt, col = _reconcile_single_class_method(name, base_m, ours_m, theirs_m)
-        _consume_class_method(stmt, col, merged_body, collisions)
-
-    if collisions:
-        return None, collisions
-    return _build_reconciled_class(ours_cls, merged_body), []
-
-
-def _try_reconcile_class(
-    b_node: ast.stmt | None,
-    o_node: ast.stmt | None,
-    t_node: ast.stmt | None,
-) -> tuple[ast.stmt | None, bool]:
-    """Attempt method-level reconciliation if all three are class nodes."""
+def _as_class_triple(nodes: tuple[ast.stmt | None, ast.stmt | None, ast.stmt | None]) -> ClassTriple | None:
+    """Return the three nodes as class definitions, or None if any is not a class."""
+    base_node, ours_node, theirs_node = nodes
     if (
-        isinstance(b_node, ast.ClassDef)
-        and isinstance(o_node, ast.ClassDef)
-        and isinstance(t_node, ast.ClassDef)
+        isinstance(base_node, ast.ClassDef)
+        and isinstance(ours_node, ast.ClassDef)
+        and isinstance(theirs_node, ast.ClassDef)
     ):
-        merged_cls, _ = reconcile_class_methods(b_node, o_node, t_node)
-        if merged_cls:
-            return merged_cls, True
-    return None, False
+        return base_node, ours_node, theirs_node
+    return None
+
+
+def _with_body(cls: ast.ClassDef, body: list[ast.stmt]) -> ast.ClassDef:
+    """Return a shallow copy of a class definition with another body."""
+    clone = copy.copy(cls)
+    clone.body = body
+    return clone
+
+
+def _header_hash(cls: ast.ClassDef) -> str:
+    """Hash the decorators, name, bases and keywords of a class without its body."""
+    return hash_ast_node(_with_body(cls, []))
+
+
+def _ordered_names(
+    first: dict[str, SymbolNode],
+    second: dict[str, SymbolNode],
+    third: dict[str, SymbolNode],
+) -> list[str]:
+    """List the symbol names of three maps once each in first-seen order, without the docstring."""
+    names = dict.fromkeys([*first, *second, *third])
+    names.pop(DOCSTRING_KEY, None)
+    return list(names)
+
+
+def reconcile_class_members(name: str, classes: ClassTriple) -> ArbitratedSymbol:
+    """Merge a class that both branches changed member by member, keeping every statement kind."""
+    base_cls, ours_cls, theirs_cls = classes
+    header_index = _pick_variant((_header_hash(base_cls), _header_hash(ours_cls), _header_hash(theirs_cls)))
+    if header_index is None:
+        return None, [_build_collision_report(name, SymbolKind.CLASS, classes)], 0
+    maps = (index_body(base_cls), index_body(ours_cls), index_body(theirs_cls))
+    merge = reconcile_bodies(maps, _ordered_names(maps[1], maps[2], maps[0]))
+    if merge.collisions:
+        return None, [replace(col, symbol_name=f"{name}.{col.symbol_name}") for col in merge.collisions], 0
+    merged_cls = _with_body(classes[header_index], merge.full_body() or [ast.Pass()])
+    return merged_cls, [], 1 + merge.false_conflicts
 
 
 def _extract_ast_node(sym: SymbolNode | None) -> ast.stmt | None:
@@ -343,22 +379,17 @@ def arbitrate_symbol(
     base_sym: SymbolNode | None,
     ours_sym: SymbolNode | None,
     theirs_sym: SymbolNode | None,
-) -> tuple[ast.stmt | None, list[CollisionReport], bool]:
-    """Arbitrate top-level symbol entry with class method drilldown."""
-    b_node = _extract_ast_node(base_sym)
-    o_node = _extract_ast_node(ours_sym)
-    t_node = _extract_ast_node(theirs_sym)
-
-    cls_node, ok = _try_reconcile_class(b_node, o_node, t_node)
-    if ok:
-        return cls_node, [], True
-
-    kind = _resolve_symbol_kind(ours_sym, theirs_sym)
-    node, col = _arbitrate_single_node(name, kind, (b_node, o_node, t_node))
+) -> ArbitratedSymbol:
+    """Arbitrate one symbol; merge a class member by member when both branches changed it."""
+    nodes = (_extract_ast_node(base_sym), _extract_ast_node(ours_sym), _extract_ast_node(theirs_sym))
+    node, col = _arbitrate_single_node(name, _resolve_symbol_kind(ours_sym, theirs_sym), nodes)
+    classes = _as_class_triple(nodes)
+    if col is not None and classes is not None:
+        return reconcile_class_members(name, classes)
     is_false = _is_disjoint_symbol_addition(
         node, base_sym is not None, ours_sym is not None, theirs_sym is not None
     )
-    return node, _wrap_collision(col), is_false
+    return node, _wrap_collision(col), int(is_false)
 
 
 def _filter_non_import_stmts(stmts: list[ast.stmt]) -> list[ast.stmt]:
@@ -367,14 +398,14 @@ def _filter_non_import_stmts(stmts: list[ast.stmt]) -> list[ast.stmt]:
 
 
 def assemble_merged_module(
-    docstring: ast.Expr | None,
+    docstring: ast.stmt | None,
     imports: list[str],
     body_stmts: list[ast.stmt],
 ) -> str:
-    """Assemble final Python code from reconciled parts."""
+    """Assemble final Python code from reconciled parts, with the docstring written once."""
     parts: list[str] = []
-    if docstring:
-        parts.append(ast.unparse(docstring))
+    if docstring is not None:
+        parts.append(ast.unparse(ast.Module(body=[docstring], type_ignores=[])))
     if imports:
         parts.append("\n".join(imports))
     if body_stmts:
@@ -384,18 +415,18 @@ def assemble_merged_module(
 
 
 def _consume_arbitrated_symbol(
-    result: tuple[ast.stmt | None, list[CollisionReport], bool],
+    result: ArbitratedSymbol,
     merged_stmts: list[ast.stmt],
     collisions: list[CollisionReport],
 ) -> int:
     """Record arbitrated symbol and return incremental false conflict count."""
-    stmt, cols, was_false = result
+    stmt, cols, false_count = result
     if cols:
         collisions.extend(cols)
         return 0
-    if stmt:
+    if stmt is not None:
         merged_stmts.append(stmt)
-        return int(was_false)
+        return false_count
     return 0
 
 
@@ -417,31 +448,58 @@ def _reconcile_all_symbols(
     return merged_stmts, collisions, false_conflicts
 
 
+def reconcile_bodies(maps: SymbolMaps, names: list[str]) -> BodyMerge:
+    """Arbitrate the docstring of one module or class body, then its other symbols in order."""
+    base, ours, theirs = maps
+    doc_result = arbitrate_symbol(
+        DOCSTRING_KEY, base.get(DOCSTRING_KEY), ours.get(DOCSTRING_KEY), theirs.get(DOCSTRING_KEY)
+    )
+    stmts, collisions, false_conflicts = _reconcile_all_symbols(names, base, ours, theirs)
+    doc_node, doc_collisions, doc_false = doc_result
+    return BodyMerge(doc_node, stmts, doc_collisions + collisions, doc_false + false_conflicts)
+
+
+def _parse_failure(code: str) -> list[CollisionReport]:
+    """Return one collision if the merged code does not parse, else no collision."""
+    try:
+        ast.parse(code)
+    except SyntaxError as exc:
+        return [
+            CollisionReport(
+                symbol_name=MODULE_KEY,
+                symbol_kind=SymbolKind.MODULE,
+                base_snippet="<n/a>",
+                ours_snippet="<n/a>",
+                theirs_snippet="<n/a>",
+                reason=f"Merged code does not parse: {exc.msg} at line {exc.lineno}",
+            )
+        ]
+    return []
+
+
+def _classify_status(collisions: list[CollisionReport], false_conflicts: int) -> ReconciliationStatus:
+    """Map collisions and resolved false conflicts to a reconciliation status."""
+    if collisions:
+        return ReconciliationStatus.SEMANTIC_COLLISION
+    if false_conflicts > 0:
+        return ReconciliationStatus.COMMUTATIVE_MERGE
+    return ReconciliationStatus.CLEAN_MERGE
+
+
 def _build_reconciliation_result(
-    merged_data: tuple[ast.Expr | None, list[str], list[ast.stmt]],
+    merged_data: tuple[ast.stmt | None, list[str], list[ast.stmt]],
     collisions: list[CollisionReport],
     false_conflicts: int,
     elapsed_ms: float,
 ) -> ReconciliationResult:
-    """Construct final ReconciliationResult data object."""
+    """Assemble and re-parse the merged code, then construct the ReconciliationResult."""
     doc_node, imports, stmts = merged_data
-    if collisions:
-        return ReconciliationResult(
-            status=ReconciliationStatus.SEMANTIC_COLLISION,
-            merged_code="",
-            collisions=collisions,
-            resolved_false_conflicts=false_conflicts,
-            symbols_merged=len(stmts),
-            duration_ms=round(elapsed_ms, 3),
-        )
-    code = assemble_merged_module(doc_node, imports, stmts)
-    status = (
-        ReconciliationStatus.COMMUTATIVE_MERGE if false_conflicts > 0 else ReconciliationStatus.CLEAN_MERGE
-    )
+    code = "" if collisions else assemble_merged_module(doc_node, imports, stmts)
+    collisions = collisions or _parse_failure(code)
     return ReconciliationResult(
-        status=status,
-        merged_code=code,
-        collisions=[],
+        status=_classify_status(collisions, false_conflicts),
+        merged_code="" if collisions else code,
+        collisions=collisions,
         resolved_false_conflicts=false_conflicts,
         symbols_merged=len(stmts),
         duration_ms=round(elapsed_ms, 3),
@@ -455,24 +513,23 @@ def reconcile_3way(base_code: str, ours_code: str, theirs_code: str) -> Reconcil
     o_tree = parse_ast_safely(ours_code)
     t_tree = parse_ast_safely(theirs_code)
 
-    doc_node, _ = extract_docstring_node(o_tree) or extract_docstring_node(t_tree)
     b_imp = extract_import_statements(b_tree)
     o_imp = extract_import_statements(o_tree)
     t_imp = extract_import_statements(t_tree)
     merged_imports, import_conflicts = reconcile_import_sets(b_imp, o_imp, t_imp)
 
-    b_syms = extract_symbol_map(_filter_non_import_stmts(b_tree.body))
-    o_syms = extract_symbol_map(_filter_non_import_stmts(o_tree.body))
-    t_syms = extract_symbol_map(_filter_non_import_stmts(t_tree.body))
-
-    all_names = list(dict.fromkeys(list(b_syms) + list(o_syms) + list(t_syms)))
-    merged_stmts, collisions, symbol_conflicts = _reconcile_all_symbols(all_names, b_syms, o_syms, t_syms)
-    total_false = import_conflicts + symbol_conflicts
+    maps = (
+        index_body(b_tree, drop_imports=True),
+        index_body(o_tree, drop_imports=True),
+        index_body(t_tree, drop_imports=True),
+    )
+    body = reconcile_bodies(maps, _ordered_names(*maps))
+    total_false = import_conflicts + body.false_conflicts
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
     return _build_reconciliation_result(
-        (doc_node, merged_imports, merged_stmts),
-        collisions,
+        (body.docstring, merged_imports, body.statements),
+        body.collisions,
         total_false,
         elapsed_ms,
     )
