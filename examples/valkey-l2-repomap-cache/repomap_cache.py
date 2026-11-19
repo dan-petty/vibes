@@ -3,14 +3,15 @@
 
 Implements multi-tier AST symbol table caching and structural
 drift auditing across subagent invocations:
-1. L1 Fast Memory Cache (in-process FIFO cache; a hit does not refresh a key).
+1. L1 Fast Memory Cache (in-process LRU cache; a hit refreshes a key).
 2. L2 Valkey / Redis-compatible Distributed Cache (content-addressed by SHA-256).
-3. Pure Python RESP (REdis Serialization Protocol) client with fallback store.
-4. AST Feature Embedding Generator (normalized 8-dimensional structural vector).
+3. Pure Python RESP (REdis Serialization Protocol) client with a reported fallback store.
+4. AST Feature Embedding Generator (normalized shape, operator and identifier-name blocks).
 5. Embedding Drift Auditor measuring cosine distance and symbol topology changes.
 
-The default endpoint is localhost:6379; when nothing answers there, an in-process dict
-stands in for L2.
+The default endpoint is localhost:6379. When nothing answers there, or a command fails,
+an in-process dict stands in for L2. The client logs one warning, keeps the reason in
+`fallback_reason`, and the cache reports each hit from the dict as `L2_FALLBACK`.
 """
 
 from __future__ import annotations
@@ -19,10 +20,13 @@ import argparse
 import ast
 import hashlib
 import json
+import logging
 import math
 import socket
 import sys
 import time
+import zlib
+from collections import Counter, OrderedDict
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
@@ -37,12 +41,41 @@ BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.AsyncFor)
 FN_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 RETURN_TYPES = (ast.Return, ast.Yield)
 
+# One vector dimension per operator type, so `==` and `!=` are different features. The
+# order is fixed here, not read from the `ast` module, so a cached vector keeps its meaning.
+OPERATOR_TYPES: tuple[type[ast.AST], ...] = (
+    ast.Add, ast.Sub, ast.Mult, ast.MatMult, ast.Div, ast.Mod, ast.Pow, ast.LShift,
+    ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd, ast.FloorDiv,
+    ast.And, ast.Or,
+    ast.Invert, ast.Not, ast.UAdd, ast.USub,
+    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Is, ast.IsNot, ast.In, ast.NotIn,
+)
+
+# Identifier names go into this many buckets by a stable hash (CRC-32). `hash()` changes
+# per process, so a vector made with it would not match its own cached copy.
+NAME_BUCKETS = 64
+_IDENTIFIER_FIELDS: dict[type[ast.AST], str] = {
+    ast.Name: "id",
+    ast.Attribute: "attr",
+    ast.arg: "arg",
+    ast.FunctionDef: "name",
+    ast.AsyncFunctionDef: "name",
+    ast.ClassDef: "name",
+}
+
+# The key carries the record version. A record from the older 8-feature vector has a
+# different length, and the cosine of two vectors of different length is not defined.
+CACHE_KEY_PREFIX = "repomap:v2:"
+
+logger = logging.getLogger(__name__)
+
 
 class CacheTier(StrEnum):
     """Source tier providing repomap resolution."""
 
     L1_MEMORY = "L1_MEMORY"
     L2_VALKEY = "L2_VALKEY"
+    L2_FALLBACK = "L2_FALLBACK"
     MISS_COMPUTED = "MISS_COMPUTED"
 
 
@@ -173,8 +206,9 @@ def read_resp_reply(sock: Any, chunk: int = 65536) -> Any:
             return value
         received = sock.recv(chunk)
         if not received:
-            # The peer closed before completing the reply; a partial answer is not an answer.
-            return None
+            # The peer closed before completing the reply. A partial answer is not an
+            # answer, and it is not a nil reply either: `None` would read as a cache miss.
+            raise ConnectionError("connection closed before a complete RESP reply")
         buffer += received
 
 
@@ -192,7 +226,14 @@ def decode_resp_response(data: bytes) -> tuple[Any, int]:
 
 
 class ValkeyL2Client:
-    """Valkey / Redis RESP client (one TCP connection per command) with in-memory fallback."""
+    """Valkey / Redis RESP client (one TCP connection per command) with in-memory fallback.
+
+    The client uses the server only while `is_connected` is true. A failed `PING` at start,
+    or a transport error on any later command, moves it to the in-process dict for the rest
+    of its life: reads and writes then do not split between two stores. The move logs one
+    warning and records why in `fallback_reason`. A nil `GET` reply is a cache miss, not a
+    failure.
+    """
 
     def __init__(
         self, host: str = CANONICAL_MOCK_HOST, port: int = DEFAULT_VALKEY_PORT, timeout: float = 0.5
@@ -202,49 +243,65 @@ class ValkeyL2Client:
         self.port = port
         self.timeout = timeout
         self.is_connected = False
+        self.fallback_reason: str | None = None
         self._fallback_store: dict[str, str] = {}
         self._check_connection()
 
     def _execute_command(self, *cmd: str) -> Any:
+        """Send one command on a new connection. A transport failure raises `OSError`."""
+        with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
+            s.sendall(encode_resp_command(*cmd))
+            return read_resp_reply(s)
+
+    def _use_fallback(self, reason: str) -> None:
+        """Move to the in-process dict, record why, and warn. It runs once per client."""
+        self.is_connected = False
+        self.fallback_reason = reason
+        logger.warning(
+            "Valkey at %s:%s is not in use (%s). An in-process dict serves L2 for this client.",
+            self.host,
+            self.port,
+            reason,
+        )
+
+    def _call(self, *cmd: str) -> tuple[bool, Any]:
+        """Run one command on the server. Return (False, None) when it moved to the fallback."""
         try:
-            with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
-                s.sendall(encode_resp_command(*cmd))
-                return read_resp_reply(s)
-        except OSError:
-            return None
+            return True, self._execute_command(*cmd)
+        except OSError as exc:
+            self._use_fallback(f"{cmd[0]} failed: {exc}")
+            return False, None
 
     def _check_connection(self) -> None:
-        val = self._execute_command("PING")
-        self.is_connected = bool(val == "PONG")
+        answered, reply = self._call("PING")
+        if not answered:
+            return
+        if reply != "PONG":
+            self._use_fallback(f"PING replied {reply!r}")
+            return
+        self.is_connected = True
 
     def get(self, key: str) -> str | None:
         """Fetch string value by key from Valkey or fallback store."""
-        if not self.is_connected:
+        answered, reply = self._call("GET", key) if self.is_connected else (False, None)
+        if not answered:
             return self._fallback_store.get(key)
-        val = self._execute_command("GET", key)
-        if val is None:
-            return self._fallback_store.get(key)
-        return str(val)
+        return None if reply is None else str(reply)
 
     def set(self, key: str, value: str, ttl_seconds: int | None = None) -> bool:
         """Store string value by key into Valkey or fallback store."""
-        if not self.is_connected:
+        cmd = ["SET", key, value] + (["EX", str(ttl_seconds)] if ttl_seconds else [])
+        answered, reply = self._call(*cmd) if self.is_connected else (False, None)
+        if not answered:
             self._fallback_store[key] = value
             return True
-        cmd = ["SET", key, value]
-        if ttl_seconds:
-            cmd.extend(["EX", str(ttl_seconds)])
-        val = self._execute_command(*cmd)
-        if val is None:
-            self._fallback_store[key] = value
-            return True
-        return bool(val == "OK")
+        return bool(reply == "OK")
 
     def delete(self, key: str) -> bool:
         """Remove key from store."""
         self._fallback_store.pop(key, None)
         if self.is_connected:
-            self._execute_command("DEL", key)
+            self._call("DEL", key)
         return True
 
 
@@ -325,20 +382,26 @@ class ASTFeatureExtractor:
 
     @classmethod
     def compute_embedding(cls, tree: ast.AST, line_count: int) -> list[float]:
-        """Compute a normalized 8-dimensional structural feature embedding vector."""
+        """Compute a normalized vector of three blocks: shape, operators and names.
+
+        Each block is scaled to unit length before the blocks are joined. The cosine of two
+        such vectors is then the mean of the three block cosines, so no block can hide the
+        others. In the older single vector, two `ln(1 + n)` terms outweighed every density,
+        and unrelated modules scored PRESERVED.
+        """
         counts = cls._count_ast_features(tree)
         safe_lines = max(1, line_count)
-        raw_vector = [
+        shape = [
             counts["functions"] / safe_lines,
             counts["classes"] / safe_lines,
             counts["branches"] / safe_lines,
             counts["calls"] / safe_lines,
             counts["returns"] / safe_lines,
             counts["docstrings"] / max(1, counts["functions"] + counts["classes"]),
-            math.log1p(counts["branches"]),
-            math.log1p(safe_lines),
         ]
-        return cls._normalize_vector(raw_vector)
+        operators, names = cls._operator_and_name_counts(tree)
+        joined = [x for block in (shape, operators, names) for x in _unit_vector(block)]
+        return cls._normalize_vector(joined)
 
     @staticmethod
     def _count_ast_features(tree: ast.AST) -> dict[str, int]:
@@ -349,11 +412,33 @@ class ASTFeatureExtractor:
         return counts
 
     @staticmethod
+    def _operator_and_name_counts(tree: ast.AST) -> tuple[list[float], list[float]]:
+        """Count each operator type, and each identifier name by its hash bucket, in one pass."""
+        types: Counter[type[ast.AST]] = Counter()
+        names = [0.0] * NAME_BUCKETS
+        for node in ast.walk(tree):
+            types[type(node)] += 1
+            field_name = _IDENTIFIER_FIELDS.get(type(node))
+            if field_name:
+                names[_name_bucket(getattr(node, field_name))] += 1.0
+        return [float(types[op]) for op in OPERATOR_TYPES], names
+
+    @staticmethod
     def _normalize_vector(vec: list[float]) -> list[float]:
-        norm = math.hypot(*vec)
-        if norm == 0.0:
-            return [0.0] * len(vec)
-        return [round(x / norm, 6) for x in vec]
+        return [round(x, 6) for x in _unit_vector(vec)]
+
+
+def _unit_vector(vec: list[float]) -> list[float]:
+    """Scale a vector to unit length; a zero vector stays zero."""
+    norm = math.hypot(*vec)
+    if norm == 0.0:
+        return [0.0] * len(vec)
+    return [x / norm for x in vec]
+
+
+def _name_bucket(name: str) -> int:
+    """Map an identifier name to its bucket with a hash that is the same in every process."""
+    return zlib.crc32(name.encode("utf-8")) % NAME_BUCKETS
 
 
 class EmbeddingDriftAuditor:
@@ -401,6 +486,9 @@ class EmbeddingDriftAuditor:
         return DriftVerdict.SIGNIFICANT_DRIFT
 
 
+_TIER_STATS = {CacheTier.L2_VALKEY: "l2_hits", CacheTier.L2_FALLBACK: "l2_fallback_hits"}
+
+
 class TwoTierRepomapCache:
     """Two-tier L1 memory and L2 Valkey caching coordinator for AST repomaps."""
 
@@ -408,8 +496,8 @@ class TwoTierRepomapCache:
         """Initialize cache coordinator with L1 capacity and Valkey client."""
         self.valkey = valkey_client or ValkeyL2Client()
         self.l1_capacity = l1_capacity
-        self._l1_cache: dict[str, RepomapRecord] = {}
-        self.stats = {"l1_hits": 0, "l2_hits": 0, "misses": 0}
+        self._l1_cache: OrderedDict[str, RepomapRecord] = OrderedDict()
+        self.stats = {"l1_hits": 0, "l2_hits": 0, "l2_fallback_hits": 0, "misses": 0}
 
     @staticmethod
     def compute_sha256(content: str) -> str:
@@ -429,17 +517,20 @@ class TwoTierRepomapCache:
         """Fetch repomap from L1, L2, or compute on demand using content hashing."""
         content = source_code if source_code is not None else file_path.read_text(encoding="utf-8")
         digest = self.compute_sha256(content)
-        cache_key = f"repomap:{digest}"
+        cache_key = f"{CACHE_KEY_PREFIX}{digest}"
 
         if cache_key in self._l1_cache:
+            self._l1_cache.move_to_end(cache_key)
             self.stats["l1_hits"] += 1
             return self._l1_cache[cache_key], CacheTier.L1_MEMORY
 
         l2_record = self._try_get_l2(cache_key)
         if l2_record is not None:
             self._store_l1(cache_key, l2_record)
-            self.stats["l2_hits"] += 1
-            return l2_record, CacheTier.L2_VALKEY
+            # Read the state after the GET: a GET that failed has already moved the client.
+            tier = CacheTier.L2_VALKEY if self.valkey.is_connected else CacheTier.L2_FALLBACK
+            self.stats[_TIER_STATS[tier]] += 1
+            return l2_record, tier
 
         self.stats["misses"] += 1
         record = self._compute_record(file_path, content, digest)
@@ -448,10 +539,11 @@ class TwoTierRepomapCache:
         return record, CacheTier.MISS_COMPUTED
 
     def _store_l1(self, key: str, record: RepomapRecord) -> None:
-        if len(self._l1_cache) >= self.l1_capacity:
-            oldest_key = next(iter(self._l1_cache))
-            self._l1_cache.pop(oldest_key, None)
+        """Insert as most recently used, then evict the least recently used over capacity."""
         self._l1_cache[key] = record
+        self._l1_cache.move_to_end(key)
+        if len(self._l1_cache) > self.l1_capacity:
+            self._l1_cache.popitem(last=False)
 
     @staticmethod
     def _compute_record(file_path: Path, content: str, digest: str) -> RepomapRecord:

@@ -2,10 +2,10 @@
 
 Verifies:
 - RESP wire protocol command encoding and multi-type payload decoding.
-- In-memory mock fallback of Valkey L2 client for zero-dependency CI.
+- In-memory fallback of the Valkey L2 client: one warning, a reason, and its own tier.
 - AST symbol extraction across functions, async functions, and classes.
-- Normalized structural feature embedding vector generation.
-- Two-tier caching lifecycle (L1 memory hit, L2 distributed hit, content-addressed miss).
+- Normalized structural vector of shape, operator and identifier-name blocks.
+- Two-tier caching lifecycle (L1 memory hit, L2 hit, content-addressed miss) and LRU order.
 - Content-addressed cache invalidation on source modification.
 - Cosine distance measurement and semantic drift classification.
 - Interactive CLI demo execution.
@@ -14,14 +14,22 @@ Verifies:
 from __future__ import annotations
 
 import ast
+import logging
+import socket
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+
+import pytest
 
 _app_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_app_dir))
 
+import repomap_cache
 from repomap_cache import (
     _FEATURE_TESTS,
+    NAME_BUCKETS,
+    OPERATOR_TYPES,
     ASTFeatureExtractor,
     CacheTier,
     DriftVerdict,
@@ -65,6 +73,118 @@ class DataPipeline:
         pass
 """
 
+# Two modules with no function or class name in common. The 8-feature vector scored them
+# PRESERVED (distance 0.0079): its two logarithmic terms outweighed every density.
+UNRELATED_STATS = '''
+def mean_of(samples):
+    """Return the arithmetic mean."""
+    if not samples:
+        return 0.0
+    total = 0.0
+    for sample in samples:
+        total += sample * weight(sample)
+    return total / len(samples)
+
+
+def weight(sample):
+    """Return a weight in the range 0 to 1."""
+    if sample < 0 or sample > 100:
+        return 0.0
+    return sample / 100
+'''
+
+UNRELATED_PATHS = '''
+class PathFilter:
+    """Keep the paths that match a suffix."""
+
+    def __init__(self, suffix):
+        self.suffix = suffix
+
+    def keep(self, names):
+        """Return the names that end with the suffix."""
+        kept = []
+        for name in names:
+            if name.endswith(self.suffix) and name not in kept:
+                kept.append(name.lower())
+        return kept
+'''
+
+EQUALITY_CHECK = '''
+def is_ready(state, expected):
+    """Return True when the state is the expected state."""
+    if state.phase == expected.phase:
+        return state.count == expected.count
+    return False
+'''
+
+
+@pytest.fixture
+def refused_port() -> Iterator[int]:
+    """Yield a loopback port that refuses connections: it is bound, and nothing listens."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as holder:
+        holder.bind(("127.0.0.1", 0))
+        yield holder.getsockname()[1]
+
+
+class _FakeValkey:
+    """A RESP server double: one in-memory socket that answers PING, GET, SET and DEL.
+
+    A command named in `fail` raises `OSError`, as a reset connection does.
+    """
+
+    def __init__(self, fail: frozenset[str] = frozenset(), ping: bytes = b"+PONG\r\n") -> None:
+        self.fail = fail
+        self.ping = ping
+        self.data: dict[str, str] = {}
+        self.commands: list[str] = []
+        self._reply = b""
+
+    def connect(self, _address: tuple[str, int], timeout: float | None = None) -> _FakeValkey:
+        """Stand in for `socket.create_connection`."""
+        return self
+
+    def __enter__(self) -> _FakeValkey:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def sendall(self, payload: bytes) -> None:
+        """Decode one RESP command and prepare its reply."""
+        args = [part.decode() for part in payload.split(b"\r\n")[2::2]]
+        self.commands.append(args[0])
+        if args[0] in self.fail:
+            raise OSError(f"connection reset during {args[0]}")
+        self._reply = self._answer(args)
+
+    def _answer(self, args: list[str]) -> bytes:
+        if args[0] == "PING":
+            return self.ping
+        if args[0] == "SET":
+            self.data[args[1]] = args[2]
+            return b"+OK\r\n"
+        if args[0] == "DEL":
+            return b":%d\r\n" % (self.data.pop(args[1], None) is not None)
+        value = self.data.get(args[1])
+        if value is None:
+            return b"$-1\r\n"
+        encoded = value.encode()
+        return b"$%d\r\n%s\r\n" % (len(encoded), encoded)
+
+    def recv(self, _size: int) -> bytes:
+        """Return the prepared reply once, then end of stream."""
+        reply, self._reply = self._reply, b""
+        return reply
+
+
+def _fake_client(monkeypatch: pytest.MonkeyPatch, server: _FakeValkey) -> ValkeyL2Client:
+    monkeypatch.setattr(repomap_cache.socket, "create_connection", server.connect)
+    return ValkeyL2Client()
+
+
+def _warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+
 
 def test_resp_encoding_and_decoding() -> None:
     """Verify RESP wire protocol encoding and parsing across primitive types."""
@@ -80,9 +200,9 @@ def test_resp_encoding_and_decoding() -> None:
     assert (len1, len2, len3, len4) == (7, 5, 11, 5)
 
 
-def test_valkey_client_in_memory_fallback() -> None:
+def test_valkey_client_in_memory_fallback(refused_port: int) -> None:
     """Verify in-memory fallback store when Valkey daemon is not present."""
-    client = ValkeyL2Client(host="127.0.0.1", port=65530)
+    client = ValkeyL2Client(host="127.0.0.1", port=refused_port)
     assert client.is_connected is False
 
     set_ok = client.set("key:test", "sample_val", ttl_seconds=60)
@@ -108,18 +228,18 @@ def test_ast_symbol_extraction() -> None:
 
 
 def test_embedding_computation_and_normalization() -> None:
-    """Verify normalized 8-dimensional feature embedding computation."""
+    """Verify the vector joins 6 shape, 29 operator and 64 name-bucket features."""
     tree = ast.parse(SAMPLE_PY_V1)
     embedding = ASTFeatureExtractor.compute_embedding(tree, 6)
-    assert len(embedding) == 8
+    assert len(embedding) == len(_FEATURE_TESTS) + len(OPERATOR_TYPES) + NAME_BUCKETS == 99
     # Verify unit vector normalization ||v|| ~= 1.0
     norm_sq = sum(x * x for x in embedding)
     assert 0.99 <= norm_sq <= 1.01
 
 
-def test_two_tier_caching_flow() -> None:
-    """Verify L1 memory cache hit, L2 distributed cache hit, and computed miss."""
-    client = ValkeyL2Client(host="127.0.0.1", port=65530)
+def test_two_tier_caching_flow(refused_port: int) -> None:
+    """Verify L1 memory cache hit, L2 fallback hit, and computed miss with no server."""
+    client = ValkeyL2Client(host="127.0.0.1", port=refused_port)
     cache = TwoTierRepomapCache(valkey_client=client)
     p = Path("test_sample.py")
 
@@ -131,10 +251,11 @@ def test_two_tier_caching_flow() -> None:
     rec2, tier2 = cache.get_repomap(p, source_code=SAMPLE_PY_V1)
     assert (tier2, rec2.content_sha256) == (CacheTier.L1_MEMORY, rec1.content_sha256)
 
-    # Pass 3: Evict L1 to verify L2 Valkey hit
+    # Pass 3: Evict L1. No server answered, so the in-process dict serves L2 and says so.
     cache._l1_cache.clear()
     rec3, tier3 = cache.get_repomap(p, source_code=SAMPLE_PY_V1)
-    assert (tier3, rec3.content_sha256) == (CacheTier.L2_VALKEY, rec1.content_sha256)
+    assert (tier3, rec3.content_sha256) == (CacheTier.L2_FALLBACK, rec1.content_sha256)
+    assert (cache.stats["l2_hits"], cache.stats["l2_fallback_hits"]) == (0, 1)
 
 
 def test_cache_invalidation_on_content_change() -> None:
@@ -190,8 +311,10 @@ def test_run_demo() -> None:
 class _SplitSocket:
     """A conformant server writing the bulk-string header and payload as separate writes."""
 
-    def __init__(self, payload: bytes) -> None:
+    def __init__(self, payload: bytes, drop_tail: bool = False) -> None:
         self.chunks = [b"$%d\r\n" % len(payload), payload[:100], payload[100:] + b"\r\n"]
+        if drop_tail:
+            self.chunks.pop()
 
     def recv(self, _size: int) -> bytes:
         """Return the next scripted segment, then end of stream."""
@@ -239,3 +362,125 @@ def test_run_cli_with_files(tmp_path: Path) -> None:
 
     res = run_cli(["--file", str(f1), "--refactored", str(f2)])
     assert res == 0
+
+
+def test_unreachable_valkey_warns_once_and_reports_the_fallback(
+    refused_port: int, caplog: pytest.LogCaptureFixture
+) -> None:
+    """With no server, the client says so once, keeps the reason, and a hit has its own tier."""
+    client = ValkeyL2Client(host="127.0.0.1", port=refused_port)
+    cache = TwoTierRepomapCache(valkey_client=client)
+    p = Path("test_sample.py")
+    reads = (client.get("absent:1"), client.get("absent:2"))
+    cache.get_repomap(p, source_code=SAMPLE_PY_V1)
+    cache._l1_cache.clear()
+    _, tier = cache.get_repomap(p, source_code=SAMPLE_PY_V1)
+
+    assert (reads, tier, client.is_connected) == ((None, None), CacheTier.L2_FALLBACK, False)
+    assert "PING" in (client.fallback_reason or "")
+    assert len(_warnings(caplog)) == 1
+
+
+def test_a_ping_reply_other_than_pong_selects_the_fallback(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A server that needs a password answers PING with an error; that is not a connection."""
+    server = _FakeValkey(ping=b"-NOAUTH Authentication required.\r\n")
+    client = _fake_client(monkeypatch, server)
+
+    assert (client.is_connected, server.commands) == (False, ["PING"])
+    assert "NOAUTH" in (client.fallback_reason or "")
+    assert len(_warnings(caplog)) == 1
+
+
+@pytest.mark.parametrize(
+    ("failing", "expected", "sent"),
+    [("GET", None, ["PING", "SET", "GET"]), ("SET", "value", ["PING", "SET"])],
+)
+def test_a_failed_command_falls_back_and_reports_it(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failing: str,
+    expected: str | None,
+    sent: list[str],
+) -> None:
+    """A GET or SET that raises moves the client to the in-process dict, visibly and once.
+
+    The client stays on the dict after the first failure, so reads and writes do not split
+    between two stores, and the tier of every later L2 hit is `L2_FALLBACK`.
+    """
+    server = _FakeValkey(fail=frozenset({failing}))
+    client = _fake_client(monkeypatch, server)
+    assert client.is_connected is True
+
+    stored = client.set("key", "value")
+    value = client.get("key")
+    client.get("key")
+
+    assert (stored, value, client.is_connected) == (True, expected, False)
+    assert server.commands == sent
+    assert failing in (client.fallback_reason or "")
+    assert len(_warnings(caplog)) == 1
+
+
+def test_a_live_server_hit_is_reported_as_valkey(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A nil GET reply is a cache miss, not a fallback; a server hit is `L2_VALKEY`."""
+    server = _FakeValkey()
+    client = _fake_client(monkeypatch, server)
+    cache = TwoTierRepomapCache(valkey_client=client)
+    p = Path("test_sample.py")
+
+    _, first = cache.get_repomap(p, source_code=SAMPLE_PY_V1)
+    cache._l1_cache.clear()
+    _, second = cache.get_repomap(p, source_code=SAMPLE_PY_V1)
+    deleted = client.delete(next(iter(server.data)))
+
+    assert (first, second, deleted) == (CacheTier.MISS_COMPUTED, CacheTier.L2_VALKEY, True)
+    assert (client.is_connected, client.fallback_reason, server.data) == (True, None, {})
+    assert (cache.stats["l2_hits"], cache.stats["l2_fallback_hits"]) == (1, 0)
+    assert _warnings(caplog) == []
+
+
+def test_a_peer_that_closes_mid_reply_is_a_transport_error() -> None:
+    """A partial reply is not a nil reply; it must select the fallback, not read as a miss."""
+    with pytest.raises(ConnectionError):
+        read_resp_reply(_SplitSocket(b"x" * 5000, drop_tail=True))
+
+
+def test_unrelated_modules_are_not_preserved(refused_port: int) -> None:
+    """Two modules that share no function or class name must not score PRESERVED."""
+    cache = TwoTierRepomapCache(ValkeyL2Client(port=refused_port))
+    stats, _ = cache.get_repomap(Path("stats.py"), source_code=UNRELATED_STATS)
+    paths, _ = cache.get_repomap(Path("paths.py"), source_code=UNRELATED_PATHS)
+
+    report = EmbeddingDriftAuditor.calculate_drift(stats, paths)
+    assert report.retained_symbols == []
+    assert report.verdict != DriftVerdict.PRESERVED
+    assert report.cosine_distance > 0.05
+
+
+def test_an_equality_flip_changes_the_distance(refused_port: int) -> None:
+    """`==` and `!=` are different operators, so the vector must tell them apart."""
+    cache = TwoTierRepomapCache(ValkeyL2Client(port=refused_port))
+    before, _ = cache.get_repomap(Path("ready.py"), source_code=EQUALITY_CHECK)
+    after, _ = cache.get_repomap(Path("ready.py"), source_code=EQUALITY_CHECK.replace("==", "!="))
+
+    assert EmbeddingDriftAuditor.calculate_drift(before, after).cosine_distance > 0.0
+
+
+def test_a_read_refreshes_lru_order(refused_port: int) -> None:
+    """Reading the oldest key makes it the newest, so the next insert evicts the other one."""
+    cache = TwoTierRepomapCache(ValkeyL2Client(port=refused_port), l1_capacity=2)
+    oldest, middle, newest = "a = 1\n", "b = 2\n", "c = 3\n"
+    for source in (oldest, middle):
+        cache.get_repomap(Path("m.py"), source_code=source)
+
+    _, read_tier = cache.get_repomap(Path("m.py"), source_code=oldest)
+    cache.get_repomap(Path("m.py"), source_code=newest)
+    _, kept_tier = cache.get_repomap(Path("m.py"), source_code=oldest)
+    _, evicted_tier = cache.get_repomap(Path("m.py"), source_code=middle)
+
+    assert (read_tier, kept_tier) == (CacheTier.L1_MEMORY, CacheTier.L1_MEMORY)
+    assert evicted_tier != CacheTier.L1_MEMORY
