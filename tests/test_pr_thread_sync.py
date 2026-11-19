@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
@@ -19,12 +21,12 @@ from pr_thread_sync import (
     ReviewThread,
     ThreadAnalysis,
     classify_comment_rule,
-    compute_ast_complexity,
     export_sarif,
     generate_resolution_mutation,
     locate_ast_symbol,
     main,
     parse_review_threads,
+    render_terminal_summary,
     summarize_analyses,
     synchronize_threads,
     verify_thread_resolution,
@@ -106,8 +108,8 @@ def test_classify_comment_rule() -> None:
     )
 
 
-def test_locate_ast_symbol_and_complexity(tmp_path: Path) -> None:
-    """Verifies enclosing AST symbol location and cyclomatic complexity computation."""
+def test_locate_ast_symbol(tmp_path: Path) -> None:
+    """Verifies AST symbol location by enclosing line and by bare or dotted name."""
     source_code = (
         "class Calculator:\n"
         "    def compute(self, x: int) -> int:\n"
@@ -122,20 +124,17 @@ def test_locate_ast_symbol_and_complexity(tmp_path: Path) -> None:
     sym_comp = locate_ast_symbol(py_file, 4)
     sym_none = locate_ast_symbol(tmp_path / "missing.py", 10)
     sym_md = locate_ast_symbol(tmp_path / "doc.md", 5)
+    sym_dotted = locate_ast_symbol(py_file, 1, "Calculator.compute")
+    sym_gone = locate_ast_symbol(py_file, 2, "render")
 
-    assert (sym_calc, sym_comp, sym_none, sym_md) == (
+    assert (sym_calc, sym_comp, sym_none, sym_md, sym_dotted, sym_gone) == (
         "class 'Calculator' (lines 1-5)",
         "function 'compute' (lines 2-5)",
         "file scope",
         "file scope",
+        "function 'compute' (lines 2-5)",
+        "'render' (not found)",
     )
-
-    import ast
-
-    tree = ast.parse(source_code)
-    func_node = tree.body[0].body[0]  # type: ignore[attr-defined]
-    complexity = compute_ast_complexity(func_node)
-    assert complexity == 2
 
 
 def test_verify_thread_resolution_flow(tmp_path: Path) -> None:
@@ -179,7 +178,7 @@ def test_verify_thread_resolution_flow(tmp_path: Path) -> None:
 
 
 def test_graphql_mutations_and_sarif_telemetry() -> None:
-    """Verifies synthesis of atomic GraphQL mutations and valid OASIS SARIF 2.1.0 output."""
+    """Verifies synthesis of sequential reply-and-resolve GraphQL mutations and OASIS SARIF 2.1.0 output."""
     mutation = generate_resolution_mutation("PRRT_test123", "Fixed cleanly.")
     assert 'resolveReviewThread(input: { threadId: "PRRT_test123" })' in mutation
     assert "Fixed cleanly." in mutation
@@ -224,3 +223,103 @@ def test_cli_execution_with_fixture(tmp_path: Path, capsys: object) -> None:
     exit_code = main(["--input", str(json_input), "--root", str(tmp_path), "--sarif", str(sarif_output)])
     sarif_exists = sarif_output.exists()
     assert (exit_code, sarif_exists) == (0, True)
+
+
+_COMPLEX_BODY = "".join(f"    if x == {i}:\n        return {i}\n" for i in range(10)) + "    return -1\n"
+
+
+def _thread_node(path: str, line: int, body: str, **extra: object) -> dict[str, object]:
+    """Builds one GraphQL review thread node with one bot comment."""
+    comment: dict[str, object] = {"id": "C1", "author": {"login": "bot"}, "body": body, "createdAt": "t"}
+    hunk = extra.pop("diffHunk", None)
+    if hunk is not None:
+        comment["diffHunk"] = hunk
+    return {"id": "PRRT_X", "isResolved": False, "path": path, "line": line, "comments": [comment], **extra}
+
+
+def _analyze(root: Path, node: dict[str, object]) -> ThreadAnalysis:
+    """Parses one thread node and verifies it against the files under root."""
+    (thread,) = parse_review_threads([node])
+    return verify_thread_resolution(root, thread)
+
+
+def test_cc001_thread_whose_function_moved_stays_unresolved(tmp_path: Path) -> None:
+    """A complex function that moved away from the thread line must not pass CC001."""
+    source = '"""Module."""\n\n\ndef helper():\n    return 1\n\n\ndef process(x):\n' + _COMPLEX_BODY
+    (tmp_path / "mod.py").write_text(source, encoding="utf-8")
+    body = "Cyclomatic complexity of process is 11"
+
+    named_blank = _analyze(tmp_path, _thread_node("mod.py", 2, body, symbolName="process"))
+    named_shifted = _analyze(tmp_path, _thread_node("mod.py", 5, body, symbolName="process"))
+    unnamed_blank = _analyze(tmp_path, _thread_node("mod.py", 2, body))
+    from_hunk = _analyze(
+        tmp_path, _thread_node("mod.py", 5, body, diffHunk="@@ -1,4 +1,5 @@\n def process(x):\n+    if x == 1:")
+    )
+
+    assert (named_blank.status, named_shifted.status, unnamed_blank.status, from_hunk.status) == (
+        ResolutionStatus.ACTION_REQUIRED,
+        ResolutionStatus.ACTION_REQUIRED,
+        ResolutionStatus.ACTION_REQUIRED,
+        ResolutionStatus.ACTION_REQUIRED,
+    )
+
+
+def test_cc001_thread_whose_function_was_removed_names_it(tmp_path: Path) -> None:
+    """CC001 fails, and names the symbol, when the file has no function of that name."""
+    (tmp_path / "mod.py").write_text("def helper():\n    return 1\n", encoding="utf-8")
+    result = _analyze(tmp_path, _thread_node("mod.py", 1, "complexity too high", symbolName="process"))
+    assert (result.status, "process" in result.explanation) == (ResolutionStatus.ACTION_REQUIRED, True)
+
+
+def test_cc001_counts_match_arms_with_radon(tmp_path: Path) -> None:
+    """CC001 scores the named function with radon, which counts each match arm."""
+    arms = "".join(f"        case {i}:\n            return {i}\n" for i in range(10))
+    (tmp_path / "mod.py").write_text(f"def route(x):\n    match x:\n{arms}    return -1\n", encoding="utf-8")
+    result = _analyze(tmp_path, _thread_node("mod.py", 1, "complexity too high", symbolName="route"))
+    assert (result.status, "M=11" in result.explanation) == (ResolutionStatus.ACTION_REQUIRED, True)
+
+
+def test_doc001_thread_needs_the_named_docstring(tmp_path: Path) -> None:
+    """DOC001 passes only when the named symbol has a non-empty docstring."""
+    (tmp_path / "bare.py").write_text('"""Module."""\n\n\ndef helper():\n    return 1\n', encoding="utf-8")
+    (tmp_path / "done.py").write_text('def helper():\n    """Returns one."""\n    return 1\n', encoding="utf-8")
+    (tmp_path / "guide.md").write_text("# Guide\n\nThis has a typo.\n", encoding="utf-8")
+    body = "Missing docstring on helper"
+
+    bare = _analyze(tmp_path, _thread_node("bare.py", 4, body, symbolName="helper"))
+    bare_by_line = _analyze(tmp_path, _thread_node("bare.py", 4, body))
+    done = _analyze(tmp_path, _thread_node("done.py", 1, body, symbolName="helper"))
+    markdown = _analyze(tmp_path, _thread_node("guide.md", 3, "Fix the typo in this markdown"))
+
+    assert (bare.status, bare_by_line.status, done.status, markdown.status) == (
+        ResolutionStatus.ACTION_REQUIRED,
+        ResolutionStatus.ACTION_REQUIRED,
+        ResolutionStatus.FIX_VERIFIED,
+        ResolutionStatus.ACTION_REQUIRED,
+    )
+
+
+def test_parser_reads_symbol_name_from_field_or_diff_hunk() -> None:
+    """The parser keeps the review-time symbol name from symbolName or the first diffHunk."""
+    nodes = [
+        _thread_node("a.py", 1, "x", symbolName="Calc.compute"),
+        _thread_node("a.py", 1, "x", diffHunk="@@ -10,3 +10,4 @@ def process(x):\n     y = 1\n+    z = 2"),
+        _thread_node("a.py", 1, "x", diffHunk="@@ -1,4 +1,5 @@\n class Calc:\n     def compute(self):\n \n+        a = 1"),
+        _thread_node("a.py", 1, "x", diffHunk="@@ -1,3 +1,4 @@ def process(x):\n     return 1\n+VALUE = 2"),
+        _thread_node("a.py", 1, "x", diffHunk="@@ -1,2 +1,3 @@\n+async def fetch(url):"),
+    ]
+    names = tuple(t.symbol_name for t in parse_review_threads(nodes))
+    assert names == ("Calc.compute", "process", "Calc.compute", "", "fetch")
+
+
+def test_terminal_summary_and_parser_say_sequential(capsys: pytest.CaptureFixture[str]) -> None:
+    """The reply and resolve mutations run in order, so no output calls them atomic."""
+    summary = render_terminal_summary([])
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    help_text = capsys.readouterr().out
+    assert ("Sequential Resolver" in summary, "Atomic" in summary, "Sequential Resolver" in help_text) == (
+        True,
+        False,
+        True,
+    )
