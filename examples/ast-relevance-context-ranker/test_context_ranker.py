@@ -1,9 +1,10 @@
 """Unit tests for AST Relevance Context Ranker & Optimizer.
 
-Verifies AST symbol extraction, graph construction, Personalized PageRank
-convergence and its non-convergence error, token-budgeted context packing,
-packed snippets that parse as Python, diagnostic invariant rules, and SARIF
-2.1.0 telemetry export.
+Verifies AST symbol extraction (one symbol for each imported name), graph
+construction, Personalized PageRank convergence and its non-convergence error,
+token-budgeted context packing with each method body once, packed snippets that
+parse as Python in fences that a CommonMark parser (markdown-it-py) closes at the
+right line, diagnostic invariant rules, and SARIF 2.1.0 telemetry export.
 
 Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
@@ -12,11 +13,12 @@ from __future__ import annotations
 
 import ast
 import json
-import re
 import sys
 from pathlib import Path
 
 import pytest
+from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 # Add current example directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -113,9 +115,39 @@ def multi_line(
 '''
 
 
+# Line 1 holds two names in one statement and line 2 two statements. Line 5 imports the
+# same dotted name as a module and as a member.
+IMPORT_SOURCE = """import a, b
+import sys; import json
+from typing import Any, Final
+import os.path as osp
+import x.y; from x import y
+from .m import z
+"""
+
+# Strings that hold a line of three backticks and a line of four. A fence of three closes
+# at the first line, and a fence of four at the second.
+FENCE_SOURCE = '''def show() -> str:
+    return """
+```
+"""
+
+
+def after() -> str:
+    return """
+````
+"""
+'''
+
+
+def _fences(rendered: str) -> list[Token]:
+    """Return the fenced code blocks that a CommonMark parser finds in a rendered pack."""
+    return [t for t in MarkdownIt("commonmark").parse(rendered) if t.type == "fence"]
+
+
 def _python_blocks(rendered: str) -> list[str]:
     """Return the body of each fenced Python block in a rendered pack."""
-    return re.findall(r"^```python\n(.*?)^```$", rendered, flags=re.DOTALL | re.MULTILINE)
+    return [t.content for t in _fences(rendered) if t.info == "python"]
 
 
 def _parses(code: str) -> bool:
@@ -263,6 +295,54 @@ def test_signatures_docstring_is_a_string_literal() -> None:
     graph = build_symbol_graph(extract_symbols_from_source(PACK_SOURCE, "pack.py"))
     text = pack_context(graph, 5000, FidelityLevel.SIGNATURES).rendered_text
     assert repr('Keep "quoted" values.') in text
+
+
+def test_each_imported_name_is_one_symbol() -> None:
+    """Give each imported name its own id from its line and name, and its own statement.
+
+    The id was `import_<line>`, so the graph kept one of two imports on one line, and
+    `import a, b` was one symbol.
+    """
+    graph = build_symbol_graph(extract_symbols_from_source(IMPORT_SOURCE, "imp.py"))
+    assert {nid: node.body_code for nid, node in graph.nodes.items()} == {
+        "imp.py::import_1_a": "import a",
+        "imp.py::import_1_b": "import b",
+        "imp.py::import_2_sys": "import sys",
+        "imp.py::import_2_json": "import json",
+        "imp.py::import_3_typing:Any": "from typing import Any",
+        "imp.py::import_3_typing:Final": "from typing import Final",
+        "imp.py::import_4_os.path as osp": "import os.path as osp",
+        "imp.py::import_5_x.y": "import x.y",
+        "imp.py::import_5_x:y": "from x import y",
+        "imp.py::import_6_.m:z": "from .m import z",
+    }
+
+
+@pytest.mark.parametrize("focal", [(), ("calc.py::Calculator.add",)])
+def test_full_pack_holds_each_method_once(focal: tuple[str, ...]) -> None:
+    """At FULL, a packed class holds its methods, so no method is packed beside it.
+
+    With a method in focus, the method ranks before its class and is packed first.
+    """
+    graph = build_symbol_graph(extract_symbols_from_source(SAMPLE_SOURCE, "calc.py"))
+    compute_pagerank(graph, PageRankConfig(focal_symbols=focal))
+    res = pack_context(graph, 5000, FidelityLevel.FULL)
+    text = res.rendered_text
+    packed = [s.name for s in res.packed_symbols]
+    counts = (text.count("def add("), text.count("def compute("), packed.count("Calculator"))
+    assert (counts, "Calculator.add" in packed, len(packed)) == ((1, 1, 1), False, 4)
+
+
+def test_backtick_line_stays_in_one_fence() -> None:
+    """Make each fence longer than the longest backtick run in its block.
+
+    A fence of exactly three backticks closed at the line of three backticks in the string.
+    """
+    graph = build_symbol_graph(extract_symbols_from_source(FENCE_SOURCE, "fence.py"))
+    rendered = pack_context(graph, 5000, FidelityLevel.FULL).rendered_text
+    blocks = [t.content for t in _fences(rendered)]
+    first = blocks[0]
+    assert (len(blocks), _parses(first), "def after()" in first, "\n````\n" in first) == (1, True, True, True)
 
 
 def test_diagnostic_orphans_and_cycles() -> None:

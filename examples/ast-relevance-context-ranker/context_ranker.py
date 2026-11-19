@@ -15,6 +15,7 @@ import copy
 import json
 import math
 import os
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -84,6 +85,7 @@ class SymbolNode:
     tokens: int
     references: list[str] = field(default_factory=list)
     score: float = 0.0
+    parent_id: str | None = None  # The class of a method, else None
 
 
 class PageRankConvergenceError(RuntimeError):
@@ -217,33 +219,52 @@ def _extract_class_methods(
             m_sym = _make_function_symbol(item, file_path, source_text, SymbolKind.METHOD)
             m_sym.symbol_id = f"{file_path}::{cls_node.name}.{item.name}"
             m_sym.name = f"{cls_node.name}.{item.name}"
+            m_sym.parent_id = f"{file_path}::{cls_node.name}"
             methods.append(m_sym)
     return methods
 
 
-def _make_import_symbol(
-    node: ast.Import | ast.ImportFrom,
-    file_path: str,
-    source_text: str,
-) -> SymbolNode:
-    """Construct an import statement SymbolNode."""
-    end_line = getattr(node, "end_lineno", node.lineno)
-    body = _statement_source(source_text, node)
-    names: list[str] = [alias.name for alias in node.names]
-    line_name = f"import_{node.lineno}"
-    return SymbolNode(
-        symbol_id=f"{file_path}::{line_name}",
-        name=line_name,
-        file_path=file_path,
-        kind=SymbolKind.IMPORT,
-        line_start=node.lineno,
-        line_end=end_line,
-        docstring=None,
-        signature=body,
-        body_code=body,
-        tokens=estimate_tokens(body),
-        references=sorted(names),
-    )
+def _imported_name(node: ast.Import | ast.ImportFrom, alias: ast.alias) -> str:
+    """Name one imported name as `module` or `module:member`, with ` as <alias>` if it has one.
+
+    The `:` keeps `import x.y` apart from `from x import y`, and the alias keeps
+    `from x import y` apart from `from x import y as z`.
+    """
+    name = alias.name
+    if isinstance(node, ast.ImportFrom):
+        name = f"{'.' * node.level}{node.module or ''}:{alias.name}"
+    return f"{name} as {alias.asname}" if alias.asname else name
+
+
+def _make_import_symbols(node: ast.Import | ast.ImportFrom, file_path: str) -> list[SymbolNode]:
+    """Construct one SymbolNode for each name that an import statement imports.
+
+    The id holds the line and the imported name, so that two imports on one line stay two
+    symbols. The body is a one-name statement written with `ast.unparse`, so that a pack
+    does not repeat `import a, b` for each name.
+    """
+    symbols: list[SymbolNode] = []
+    for alias in node.names:
+        stub = copy.copy(node)
+        stub.names = [alias]
+        body = ast.unparse(stub)
+        line_name = f"import_{node.lineno}_{_imported_name(node, alias)}"
+        symbols.append(
+            SymbolNode(
+                symbol_id=f"{file_path}::{line_name}",
+                name=line_name,
+                file_path=file_path,
+                kind=SymbolKind.IMPORT,
+                line_start=node.lineno,
+                line_end=getattr(node, "end_lineno", node.lineno),
+                docstring=None,
+                signature=body,
+                body_code=body,
+                tokens=estimate_tokens(body),
+                references=[alias.name],
+            )
+        )
+    return symbols
 
 
 def _safe_parse_ast(source_text: str) -> ast.Module | None:
@@ -268,7 +289,7 @@ def _dispatch_stmt_symbols(
         cls_sym, methods = _make_class_symbol(stmt, file_path, source_text)
         return [cls_sym, *methods]
     if isinstance(stmt, (ast.Import, ast.ImportFrom)):
-        return [_make_import_symbol(stmt, file_path, source_text)]
+        return _make_import_symbols(stmt, file_path)
     return []
 
 
@@ -529,19 +550,8 @@ def pack_context(
 ) -> PackedContextResult:
     """Pack highest-ranked symbols into model-ready artifact within budget."""
     sorted_syms = sorted(graph.nodes.values(), key=lambda s: s.score, reverse=True)
-    packed: list[SymbolNode] = []
-    current_tokens = 0
     findings = check_diagnostic_invariants(graph)
-    excluded_count = 0
-
-    for sym in sorted_syms:
-        snippet = _render_symbol_content(sym, fidelity)
-        cost = estimate_tokens(snippet) + 5
-        if current_tokens + cost <= budget_tokens:
-            packed.append(sym)
-            current_tokens += cost
-        else:
-            excluded_count += 1
+    packed, current_tokens, excluded_count = _pack_greedily(sorted_syms, budget_tokens, fidelity)
 
     if excluded_count > 0:
         findings.append(
@@ -564,6 +574,55 @@ def pack_context(
     )
 
 
+def _pack_greedily(
+    ranked: Sequence[SymbolNode],
+    budget: int,
+    fidelity: FidelityLevel,
+) -> tuple[list[SymbolNode], int, int]:
+    """Pack symbols in rank order while they fit. Return the pack, its tokens and the excluded count.
+
+    At FULL, the source of a class holds its methods. A method whose class is packed is
+    skipped, and a class packed after some of its methods replaces them, so that no
+    method body is in the pack twice.
+    """
+    packed: dict[str, tuple[SymbolNode, int]] = {}
+    used = 0
+    excluded = 0
+    for sym in ranked:
+        if fidelity == FidelityLevel.FULL and sym.parent_id in packed:
+            continue
+        cost = estimate_tokens(_render_symbol_content(sym, fidelity)) + 5
+        if used + cost > budget:
+            excluded += 1
+            continue
+        packed[sym.symbol_id] = (sym, cost)
+        used += cost - _drop_packed_methods(packed, sym, fidelity)
+    return [s for s, _ in packed.values()], used, excluded
+
+
+def _drop_packed_methods(
+    packed: dict[str, tuple[SymbolNode, int]],
+    sym: SymbolNode,
+    fidelity: FidelityLevel,
+) -> int:
+    """At FULL, remove the methods of a class that was just packed. Return their tokens."""
+    if fidelity != FidelityLevel.FULL or sym.kind != SymbolKind.CLASS:
+        return 0
+    methods = [nid for nid, (member, _) in packed.items() if member.parent_id == sym.symbol_id]
+    return sum(packed.pop(nid)[1] for nid in methods)
+
+
+def _code_fence(code: str) -> str:
+    """Return a backtick fence one longer than the longest backtick run in the code, at least 3.
+
+    CommonMark 0.31.2 §4.5 closes a fenced block at the first line of backticks that is at
+    least as long as the opening fence, so a line of three backticks in a string closed a
+    fence of three early.
+    """
+    longest = max((len(run) for run in re.findall(r"`+", code)), default=0)
+    return "`" * max(3, longest + 1)
+
+
 def _serialize_model_ready_pack(
     symbols: Sequence[SymbolNode],
     fidelity: FidelityLevel,
@@ -582,13 +641,9 @@ def _serialize_model_ready_pack(
         by_file.setdefault(s.file_path, []).append(s)
 
     for path, sym_list in sorted(by_file.items()):
-        header.append(f"## File: `{path}`")
-        header.append("```python")
-        for s in sym_list:
-            header.append(_render_symbol_content(s, fidelity))
-            header.append("")
-        header.append("```")
-        header.append("")
+        code = "\n".join(f"{_render_symbol_content(s, fidelity)}\n" for s in sym_list)
+        fence = _code_fence(code)
+        header.extend([f"## File: `{path}`", f"{fence}python", code, fence, ""])
     return "\n".join(header)
 
 

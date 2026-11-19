@@ -51,7 +51,9 @@ sequenceDiagram
 3. **Graceful Fidelity Degradation**:
    - When token limits prevent packing all high-relevance symbols, degrade bodies to signatures and docstrings (`FidelityLevel.SIGNATURES`) instead of dropping symbols entirely. The reference implementation does not degrade automatically: `pack_context` uses one fidelity for every symbol and drops the symbols that do not fit (reported as `RNK003`).
 4. **Syntactic Completeness**:
-   - Every snippet in the packed context corresponds to one whole AST node, so the packer never cuts a block at a token limit. Each snippet is one complete statement and parses alone. In the reference implementation, `FULL` takes the exact statement source (`ast.get_source_segment`) and moves a method body to column 0, and `SIGNATURES`/`OUTLINE` write the whole header with `ast.unparse` and add the body `...`. Decorators are left out.
+   - Every snippet in the packed context corresponds to one whole AST node, so the packer never cuts a block at a token limit. Each snippet is one complete statement and parses alone. In the reference implementation, `FULL` takes the exact source of a `def` or `class` statement (`ast.get_source_segment`) and moves a method body to column 0, and `SIGNATURES`/`OUTLINE` write the whole header with `ast.unparse` and add the body `...`. Decorators are left out. An import gives one statement for each imported name, written with `ast.unparse`. Its id holds the line and that name, so two imports on one line stay two symbols.
+5. **Each Line Once, in a Fence That Holds**:
+   - A snippet must not repeat code that another packed snippet holds. In the reference implementation, the `FULL` source of a class holds its methods, so a method is not packed beside its class. The code fence of each block is one backtick longer than the longest backtick run in the block ([CommonMark 0.31.2 §4.5](https://spec.commonmark.org/0.31.2/#fenced-code-blocks)), so the packed code cannot close the block early.
 
 ---
 
