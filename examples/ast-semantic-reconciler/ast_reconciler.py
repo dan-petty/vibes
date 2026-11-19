@@ -4,7 +4,8 @@ Resolves concurrent subagent git worktree collisions via commutative AST symbol
 graphs rather than line-based text diffs. Identifies false merge conflicts on
 disjoint functions, imports, and class members, emitting unparsed code (comments
 are lost) or structured collision diagnostics under semantic collision. Merged
-code that does not parse again is reported as a collision, never returned.
+code that does not compile is reported as a collision, never returned. Imports
+from `__future__` come first, after the module docstring.
 
 Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
@@ -239,7 +240,12 @@ def reconcile_import_sets(
     theirs_added = theirs_imports - base_imports
     total_imports = retained_base | ours_added | theirs_added
     false_conflicts = len(ours_added & theirs_added) + min(len(ours_added), len(theirs_added))
-    return sorted(total_imports), false_conflicts
+    return sorted(total_imports, key=_import_sort_key), false_conflicts
+
+
+def _import_sort_key(line: str) -> tuple[bool, str]:
+    """Sort `from __future__` imports first, as Python requires, then the other lines as text."""
+    return not line.startswith("from __future__ "), line
 
 
 def _build_collision_report(
@@ -459,10 +465,14 @@ def reconcile_bodies(maps: SymbolMaps, names: list[str]) -> BodyMerge:
     return BodyMerge(doc_node, stmts, doc_collisions + collisions, doc_false + false_conflicts)
 
 
-def _parse_failure(code: str) -> list[CollisionReport]:
-    """Return one collision if the merged code does not parse, else no collision."""
+def _compile_failure(code: str) -> list[CollisionReport]:
+    """Return one collision if the merged code does not compile, else no collision.
+
+    `compile` also runs the checks that `ast.parse` skips, for example the position of
+    `from __future__` imports and `global` declarations. It does not run the code.
+    """
     try:
-        ast.parse(code)
+        compile(code, "<merged>", "exec")
     except SyntaxError as exc:
         return [
             CollisionReport(
@@ -471,7 +481,7 @@ def _parse_failure(code: str) -> list[CollisionReport]:
                 base_snippet="<n/a>",
                 ours_snippet="<n/a>",
                 theirs_snippet="<n/a>",
-                reason=f"Merged code does not parse: {exc.msg} at line {exc.lineno}",
+                reason=f"Merged code does not compile: {exc.msg} at line {exc.lineno}",
             )
         ]
     return []
@@ -492,10 +502,10 @@ def _build_reconciliation_result(
     false_conflicts: int,
     elapsed_ms: float,
 ) -> ReconciliationResult:
-    """Assemble and re-parse the merged code, then construct the ReconciliationResult."""
+    """Assemble and compile the merged code, then construct the ReconciliationResult."""
     doc_node, imports, stmts = merged_data
     code = "" if collisions else assemble_merged_module(doc_node, imports, stmts)
-    collisions = collisions or _parse_failure(code)
+    collisions = collisions or _compile_failure(code)
     return ReconciliationResult(
         status=_classify_status(collisions, false_conflicts),
         merged_code="" if collisions else code,

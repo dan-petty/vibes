@@ -49,7 +49,7 @@ When line-based merge conflicts are left unresolved in working copies, tools wri
 
 ## 3. The Architectural Solution: 3-Way AST Semantic Reconciliation
 
-To remove false conflicts for disjoint additions and to emit only parseable output, we designed the **Autonomous 3-Way AST Semantic Reconciler** ([`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)). It writes its output with `ast.unparse` and then parses the result again with `ast.parse`. If that parse fails, it reports a collision and writes no code. The result loses every comment and the original formatting, and the imports move to the top in sorted order.
+To remove false conflicts for disjoint additions and to emit only output that compiles, we designed the **Autonomous 3-Way AST Semantic Reconciler** ([`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/)). It writes its output with `ast.unparse` and then compiles the result with `compile()`. If the compile fails, it reports a collision and writes no code. An `ast.parse` check alone is not sufficient: it accepts a `from __future__` import after other imports, and Python then refuses to compile the module. The result loses every comment and the original formatting. The imports move to the top: `from __future__` imports first, then the other imports in sorted order.
 
 ```mermaid
 flowchart TD
@@ -108,7 +108,7 @@ $\operatorname{ReconcileClass}$ applies the same rule to each member of the clas
 
 ## 4. Evaluation Status
 
-No benchmark against Git was run. This repository holds no 120-branch testbed and no data for false-conflict rates, collision rates, output validity or latency. The 26 tests in `test_reconciler.py` run the reconciler on fixed three-way inputs: disjoint functions, imports, class members and docstrings, true collisions, and assembled code that does not parse.
+No benchmark against Git was run. This repository holds no 120-branch testbed and no data for false-conflict rates, collision rates, output validity or latency. The 29 tests in `test_reconciler.py` run the reconciler on fixed three-way inputs: disjoint functions, imports (including `from __future__` imports), class members and docstrings, true collisions, and merged code that does not parse or does not compile.
 
 ---
 
@@ -116,5 +116,5 @@ No benchmark against Git was run. This repository holds no 120-branch testbed an
 
 The complete executable reference tool is located at [`examples/ast-semantic-reconciler/`](../../examples/ast-semantic-reconciler/):
 - **Executable Core**: [`ast_reconciler.py`](../../examples/ast-semantic-reconciler/ast_reconciler.py) certified compliant under AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
-- **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 26 tests. They cover 97% of the statements in `ast_reconciler.py` (`coverage run --include=examples/ast-semantic-reconciler/ast_reconciler.py -m pytest examples/ast-semantic-reconciler`, run on 2026-11-19).
+- **Test Suite**: [`test_reconciler.py`](../../examples/ast-semantic-reconciler/test_reconciler.py) with 29 tests. They cover 98% of the statements in `ast_reconciler.py` (`coverage run --include=examples/ast-semantic-reconciler/ast_reconciler.py -m pytest examples/ast-semantic-reconciler`, run on 2026-11-19).
 - **Git Driver Protocol**: Integrates as a native git custom merge driver via `.gitattributes` (`*.py merge=ast-reconciler`).
