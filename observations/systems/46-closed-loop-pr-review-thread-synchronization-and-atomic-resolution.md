@@ -100,7 +100,7 @@ flowchart TD
 ```
 
 ### 1. Robust AST Symbol Locating
-`parse_review_threads` keeps the review-time symbol name of each thread: the node's `symbolName` field, else the definitions that enclose the commented line in the first comment's `diffHunk` (GitHub ends that hunk at the commented line), else the hunk header's context text (`symbol_from_diff_hunk`). `locate_ast_symbol` parses the current file with Python's `ast` module and finds the definition of that name (`find_symbol_by_name`), so a function that moved is still found. A dotted name such as `Calc.compute` is resolved part by part; a bare name takes the outermost, then earliest, match. The hunk header can name a different definition than the one that holds the line, so a payload that knows the name should send `symbolName`.
+`parse_review_threads` keeps the review-time symbol name of each thread: the node's `symbolName` field, else the definitions that enclose the commented line in the first comment's `diffHunk` (GitHub ends that hunk at the commented line), else the hunk header's context text (`symbol_from_diff_hunk`). The hunk header can name a different definition than the one that holds the line: the class of a method, or the function above the line. With `--base-root`, a directory that holds the base version of the files (the version that the review was made on, for example a git worktree of the reviewed commit), `resolve_review_symbol` first looks in that version. It takes the dotted path of the definitions that enclose the review-time line (`originalLine`, else `line`), for example `B.run` for a line in method `run` of class `B`. The name from the diff hunk is used only when that lookup fails, and a `symbolName` field always wins. `locate_ast_symbol` parses the current file with Python's `ast` module and finds the definition of that name (`find_symbol_by_name`), so a function that moved is still found. A dotted name such as `Calc.compute` is resolved part by part; a bare name takes the outermost, then earliest, match. One `--base-root` serves all threads, so a thread from an earlier review commit can get the definition at the wrong line.
 
 A thread with no symbol name falls back to the most specific function, method, or class node that encloses `thread.line` (or `originalLine` when `line` is missing). That fallback does not correct drift: if the code moved, it names whatever symbol now sits at that line. If the line falls outside any declaration it reports `module level`; a non-Python file is `file scope`.
 
@@ -127,14 +127,14 @@ When a thread is certified as `FIX_VERIFIED`, `generate_resolution_mutation` con
 mutation {
   addPullRequestReviewThreadReply(input: {
     pullRequestReviewThreadId: "PRRT_kwDO12345",
-    body: "Verified: Refactored calculate_metrics into table dispatch; cyclomatic complexity now M=4 <= 10."
+    body: "Verified: radon measures cyclomatic complexity M=4 for calculate_metrics, at or below the limit of 10. In the base version, calculate_metrics measured M=12."
   }) { comment { id } }
   resolveReviewThread(input: { threadId: "PRRT_kwDO12345" }) {
     thread { isResolved }
   }
 }
 ```
-The reply text is fixed: it says the function was refactored into table dispatch even when no such change was made. Separately, `export_sarif` produces OASIS SARIF 2.1.0 output for ingestion into GitHub Security and CI quality dashboards.
+The reply states only what the tool measured. A `CC001` reply gives the symbol, its radon complexity now and in the base version, and the limit; without `--base-root` it says that the old complexity was not measured. It does not say how the code changed. An `ND001` reply gives the measured depth of the line, and a `SEC001` reply says that secrets, tokens and credentials were not checked. Separately, `export_sarif` produces OASIS SARIF 2.1.0 output for ingestion into GitHub Security and CI quality dashboards.
 
 ---
 

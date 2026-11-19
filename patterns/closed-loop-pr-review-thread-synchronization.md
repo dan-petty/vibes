@@ -64,6 +64,7 @@ flowchart TD
 
 2. **Semantic AST Grounding**:
    - `parse_review_threads` keeps the review-time symbol name: the node's `symbolName` field, else the definitions that enclose the commented line in the first comment's `diffHunk`.
+   - With `--base-root`, a directory that holds the base version of the files (the version that the review was made on), `resolve_review_symbol` names the definitions that enclose the review-time line in that version, for example `B.run`. The hunk header can name the class of a method or the function above the line, so the tool uses the diff hunk only when the base lookup fails.
    - `locate_ast_symbol` loads the target file from the active branch, traverses the abstract syntax tree (`ast.walk`) and finds the definition of that name wherever it moved (`find_symbol_by_name`).
    - A thread with no symbol name falls back to the function, method, or class declaration that spans the thread's `line`. GitHub moves `line` with the diff while the thread is current; for an outdated thread the tool falls back to `originalLine`, which can point at a different symbol after the file changed.
    - Converts numeric coordinates into semantic coordinates (e.g. `function 'calculate_scores' (lines 40-58)`) for the report.
@@ -79,6 +80,7 @@ flowchart TD
    - Computes explicit resolution state: `FIX_VERIFIED`, `ACTION_REQUIRED`, `RESOLVED`, or `ORPHANED_PATH`.
 
 4. **Sequential Resolution & Standardized Telemetry**:
+   - The reply states only what the tool measured. A `CC001` reply gives the symbol, its radon complexity now and in the base version, and the limit of 10. It does not say how the code changed.
    - For all `FIX_VERIFIED` threads, `generate_resolution_mutation` constructs one GraphQL mutation request combining reply publication and thread resolution. GraphQL runs the two mutations in order with no rollback, so a failed resolve leaves the reply in place. The tool prints the request; it does not send it.
    - `export_sarif` serializes findings into OASIS SARIF 2.1.0 format, linking review thread IDs, rule IDs, file paths, and resolution statuses for CI ingestion.
 
@@ -109,6 +111,9 @@ python3 tools/pr_thread_sync.py --input threads.json --sarif threads.sarif
 
 # Emit executable GraphQL mutations for verified threads
 python3 tools/pr_thread_sync.py --input threads.json --resolve-verified
+
+# Name each symbol from the reviewed version, and state the old complexity in CC001 replies
+python3 tools/pr_thread_sync.py --input threads.json --base-root ../reviewed-worktree --resolve-verified
 
 # Enforce clean PR gate (exit 1 if ACTION_REQUIRED threads remain)
 python3 tools/pr_thread_sync.py --input threads.json --exit-code
