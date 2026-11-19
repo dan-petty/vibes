@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import struct
 import sys
 from pathlib import Path
@@ -155,6 +156,25 @@ model = AutoModel.from_pretrained("org/repo", trust_remote_code=False)
         RuleSeverity.ERROR,
         False,
     )
+
+
+def test_trust_remote_code_cites_transformers_docs_not_a_cve() -> None:
+    """AIBOM001 cites the Transformers documentation and no unrelated advisory number.
+
+    The trust_remote_code risk is documented Transformers behavior. CVE-2024-4372 is a
+    cross-site scripting bug in a WordPress plugin, so the rule text must not cite it.
+    """
+    code = 'AutoModel.from_pretrained("org/repo", trust_remote_code=True)\n'
+    _, all_findings = scan_python_code(code, "remote.py")
+    findings = [f for f in all_findings if f.rule_id == "AIBOM001"]
+    rule_text = " ".join(f"{f.title} {f.message} {f.recommendation}" for f in findings)
+    advisory_ids = re.findall(r"\b(?:CVE-\d{4}-\d+|GHSA(?:-[0-9a-z]{4}){3})\b", f"{rule_text} {aibom.__doc__}")
+
+    assert (
+        len(findings),
+        "https://huggingface.co/docs/transformers/" in rule_text,
+        advisory_ids,
+    ) == (1, True, [])
 
 
 def test_torch_load_ast_sentinel() -> None:
