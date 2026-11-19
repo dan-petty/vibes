@@ -1,13 +1,18 @@
 """eBPF Process Tracing & Sandbox Introspection Oracle.
 
-Audits flat JSON event records (one object per line, with keys such as `event_type`,
-`comm`, `path`, `daddr`) for unauthorized process execution, network egress violations,
-workspace escapes, privilege escalation, and anti-debugging evasion, and exports findings
-to OASIS SARIF 2.1.0. It attaches no eBPF program and traces nothing. It cannot read the
-native nested JSON of Tetragon or Falco; convert events to the flat form first. The
-Tetragon and Falco policies it writes are drafts: for example, the Tetragon kprobe names
-`sys_enter_execve`, a tracepoint name, and adds an `allowedProcesses` field that the
-TracingPolicy CRD does not define. The `~/` path prefixes never match kernel paths.
+Audits JSON event records (one object per line) for unauthorized process execution,
+network egress violations, sensitive file access, privilege escalation, and anti-debugging
+evasion, and exports findings to OASIS SARIF 2.1.0. It attaches no eBPF program and traces
+nothing. A record is a flat object (keys such as `event_type`, `comm`, `path`, `daddr`) or
+a native Tetragon `process_exec` record. Other native Tetragon records, such as
+`process_kprobe`, and Falco JSON become `unknown` events; convert them to the flat form first.
+
+The sensitive-path check expands each `~/` entry below the configured home directories and
+compares whole path components. The Tetragon TracingPolicy has one `sys_execve` syscall
+kprobe that sends `Sigkill` when the executed path names a disallowed binary. Its
+`podSelector` limits it to the pods with the sandbox label (`--pod-label`). The observed
+binaries go into a metadata annotation; the policy does not enforce them. The Falco rule
+only alerts.
 
 Maintains proactive complexity headroom (M <= 6, depth <= 3, parameters <= 4).
 """
@@ -18,11 +23,14 @@ import argparse
 import hashlib
 import ipaddress
 import json
+import posixpath
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from pathlib import Path
+from functools import partial
+from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
 TRACER_VERSION: Final[str] = "1.0.0"
@@ -53,11 +61,22 @@ SENSITIVE_PATH_PREFIXES: Final[tuple[str, ...]] = (
     "/proc/kcore",
 )
 
+# Kernel events carry absolute paths, so each `~/` entry is written below these directories.
+DEFAULT_HOME_DIRS: Final[tuple[str, ...]] = ("/root",)
+
+# The observed binaries are a baseline for review. The TracingPolicy CRD has no field for
+# them, and the policy does not enforce them, so they go into this metadata annotation.
+TETRAGON_BASELINE_ANNOTATION: Final[str] = "ebpf-tracer/observed-binaries"
+
+# The label that resources/k8s/agent-sandbox/sandbox-pod.yaml puts on the sandbox pod. The
+# policy's podSelector uses it, so the Sigkill reaches sandbox pods only.
+TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app.kubernetes.io/name", "agent-sandbox")
+
+# Kernel system calls only: `cap_set_proc` is the libcap function that calls `capset`.
 PRIVILEGE_SYSCALLS: Final[frozenset[str]] = frozenset(
     {
         "setuid",
         "setgid",
-        "cap_set_proc",
         "capset",
         "pivot_root",
         "unshare",
@@ -187,8 +206,31 @@ def _compute_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
 
+def _parse_tetragon_exec(raw: dict[str, Any]) -> EbpfTraceEvent:
+    """Map a native Tetragon `process_exec` record to an execve event.
+
+    Tetragon writes the JSON field names of its protobuf API (`process_exec.process.binary`,
+    `arguments`, `pid`) and an RFC 3339 `time`. `binary` is the executed path, and
+    `arguments` holds the arguments without it.
+    """
+    process = raw["process_exec"].get("process", {})
+    binary = str(process.get("binary", ""))
+    event_time = str(raw.get("time", ""))
+    return EbpfTraceEvent(
+        event_type=EbpfEventType.EXECVE,
+        pid=int(process.get("pid", 0)),
+        process_name=PurePosixPath(binary).name or "unknown",
+        command_line=f"{binary} {process.get('arguments', '')}".strip(),
+        target_path=binary,
+        syscall="execve",
+        timestamp=datetime.fromisoformat(event_time).timestamp() if event_time else 0.0,
+    )
+
+
 def parse_trace_event(raw: dict[str, Any]) -> EbpfTraceEvent:
-    """Parse raw dictionary into normalized EbpfTraceEvent."""
+    """Parse a flat record or a native Tetragon `process_exec` record into an EbpfTraceEvent."""
+    if "process_exec" in raw:
+        return _parse_tetragon_exec(raw)
     raw_type = str(raw.get("event_type", raw.get("type", "unknown"))).lower()
     event_type = _resolve_event_type(raw_type)
 
@@ -285,14 +327,48 @@ def _check_ebpf002_network(event: EbpfTraceEvent) -> EbpfFinding | None:
     )
 
 
-def _check_ebpf003_filesystem(event: EbpfTraceEvent) -> EbpfFinding | None:
-    """Detect process accessing or modifying sensitive host paths outside workspace."""
+def _normalize_path(path: str) -> str:
+    """Collapse `.`, `..` and repeated slashes the way the kernel resolves a path name.
+
+    `posixpath.normpath` keeps a leading `//`; Linux gives it no meaning, so one slash
+    replaces it. Symbolic links are not resolved.
+    """
+    norm = posixpath.normpath(path.strip())
+    return "/" + norm.lstrip("/") if norm.startswith("//") else norm
+
+
+def _expand_home(entry: str, home_dirs: Sequence[str]) -> list[str]:
+    """Write a `~/...` entry once below each home directory; keep any other entry.
+
+    `posixpath.expanduser` is not used: it reads the home of the user who runs this
+    module, not the home of the sandbox user whose events are audited.
+    """
+    if not entry.startswith("~/"):
+        return [entry]
+    return [_normalize_path(home + entry[1:]) for home in home_dirs]
+
+
+def resolve_sensitive_paths(home_dirs: Sequence[str] = DEFAULT_HOME_DIRS) -> tuple[str, ...]:
+    """Return the sensitive paths with each `~/` entry expanded below each home directory."""
+    expanded = [p for entry in SENSITIVE_PATH_PREFIXES for p in _expand_home(entry, home_dirs)]
+    return tuple(dict.fromkeys(expanded))
+
+
+def _is_under(path: str, entry: str) -> bool:
+    """Return True when `path` is `entry` or lies below it, compared by whole path components.
+
+    `/root` covers `/root/.ssh` but not `/rootfs`. A relative path is never under an
+    absolute entry.
+    """
+    return PurePosixPath(_normalize_path(path)).is_relative_to(entry)
+
+
+def _check_ebpf003_filesystem(event: EbpfTraceEvent, sensitive_paths: Sequence[str]) -> EbpfFinding | None:
+    """Detect a process that opens a sensitive host path or a path below it."""
     if event.event_type != EbpfEventType.FILE_OPEN:
         return None
 
-    path_target = event.target_path.lower()
-    is_sensitive = any(path_target.startswith(p.lower()) for p in SENSITIVE_PATH_PREFIXES)
-    if not is_sensitive:
+    if not any(_is_under(event.target_path, p) for p in sensitive_paths):
         return None
 
     h = _compute_hash(f"EBPF003:{event.pid}:{event.target_path}")
@@ -349,9 +425,14 @@ def _check_ebpf005_evasion(event: EbpfTraceEvent) -> EbpfFinding | None:
 class EbpfSandboxTracer:
     """Kernel-level eBPF event auditor and policy synthesis engine."""
 
-    def __init__(self, preset: TracerPreset = TracerPreset.STRICT) -> None:
-        """Initialize tracer with enforcement sensitivity preset."""
+    def __init__(
+        self,
+        preset: TracerPreset = TracerPreset.STRICT,
+        home_dirs: Sequence[str] = DEFAULT_HOME_DIRS,
+    ) -> None:
+        """Initialize tracer with a sensitivity preset and the home directories of the `~/` entries."""
         self.preset = preset
+        self.sensitive_paths = resolve_sensitive_paths(home_dirs)
 
     def audit_event(self, event: EbpfTraceEvent) -> list[EbpfFinding]:
         """Audit single eBPF trace event against applicable rules."""
@@ -364,7 +445,7 @@ class EbpfSandboxTracer:
         checks = (
             _check_ebpf001_binary,
             _check_ebpf002_network,
-            _check_ebpf003_filesystem,
+            partial(_check_ebpf003_filesystem, sensitive_paths=self.sensitive_paths),
             _check_ebpf004_privilege,
             _check_ebpf005_evasion,
         )
@@ -397,34 +478,43 @@ class EbpfSandboxTracer:
 def generate_tetragon_policy(
     events: Sequence[EbpfTraceEvent],
     policy_name: str = "agent-sandbox-containment",
+    pod_label: tuple[str, str] = TETRAGON_POD_LABEL,
 ) -> dict[str, Any]:
-    """Synthesize Kubernetes TracingPolicy CRD locking down observed binaries."""
-    allowed_binaries = sorted({e.process_name for e in events if e.event_type == EbpfEventType.EXECVE})
+    """Synthesize a Tetragon TracingPolicy that kills a process when it executes a disallowed binary.
+
+    The `sys_execve` syscall kprobe reads the path that the caller gives (argument 0). It
+    sends `Sigkill` when the path is a disallowed binary name or ends in `/<name>`, the
+    same binaries that EBPF001 flags. Each operator has its own selector: a selector
+    matches only when all of its matches hold, and the kprobe acts when any selector
+    matches. The kprobe does not hook `execveat`. The `podSelector` limits the policy to
+    the pods with `pod_label`; without it, Tetragon applies the policy to every process
+    on the node. The observed binaries go into the `TETRAGON_BASELINE_ANNOTATION`
+    annotation for review; the policy does not enforce them.
+    """
+    observed = sorted({e.process_name for e in events if e.event_type == EbpfEventType.EXECVE})
+    binaries = sorted(DISALLOWED_BINARIES)
+    matches = (("Equal", binaries), ("Postfix", [f"/{b}" for b in binaries]))
+    label_key, label_value = pod_label
     return {
         "apiVersion": "cilium.io/v1alpha1",
         "kind": "TracingPolicy",
-        "metadata": {"name": policy_name},
+        "metadata": {"name": policy_name, "annotations": {TETRAGON_BASELINE_ANNOTATION: ",".join(observed)}},
         "spec": {
+            "podSelector": {"matchLabels": {label_key: label_value}},
             "kprobes": [
                 {
-                    "call": "sys_enter_execve",
+                    "call": "sys_execve",
                     "syscall": True,
                     "args": [{"index": 0, "type": "string"}],
                     "selectors": [
                         {
-                            "matchArgs": [
-                                {
-                                    "index": 0,
-                                    "operator": "Prefix",
-                                    "values": [f"/bin/{b}" for b in DISALLOWED_BINARIES],
-                                }
-                            ],
+                            "matchArgs": [{"index": 0, "operator": operator, "values": values}],
                             "matchActions": [{"action": "Sigkill"}],
                         }
+                        for operator, values in matches
                     ],
                 }
             ],
-            "allowedProcesses": allowed_binaries,
         },
     }
 
@@ -567,30 +657,45 @@ def _handle_cli_exports(
     summary: EbpfAuditSummary,
     events: Sequence[EbpfTraceEvent],
     target_uri: str,
-    export_paths: dict[str, str | None],
+    args: argparse.Namespace,
 ) -> None:
-    """Write outputs to requested file paths."""
-    sarif_p = export_paths.get("sarif")
+    """Write outputs to the file paths that the command line requests."""
+    sarif_p = args.export_sarif
     if sarif_p:
         data = export_sarif(summary, target_uri)
         Path(sarif_p).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
-    json_p = export_paths.get("json")
+    json_p = args.export_json
     if json_p:
         Path(json_p).write_text(export_json(summary), encoding="utf-8")
 
-    md_p = export_paths.get("md")
+    md_p = args.export_md
     if md_p:
         Path(md_p).write_text(format_markdown_report(summary), encoding="utf-8")
 
-    tetragon_p = export_paths.get("tetragon")
+    tetragon_p = args.export_tetragon
     if tetragon_p:
-        policy = generate_tetragon_policy(events)
+        policy = generate_tetragon_policy(events, pod_label=args.pod_label)
         Path(tetragon_p).write_text(json.dumps(policy, indent=2), encoding="utf-8")
 
-    falco_p = export_paths.get("falco")
+    falco_p = args.export_falco
     if falco_p:
         Path(falco_p).write_text(generate_falco_policy(events), encoding="utf-8")
+
+
+def _absolute_dir(text: str) -> str:
+    """Accept an absolute directory path: kernel events carry absolute paths only."""
+    if not text.startswith("/"):
+        raise argparse.ArgumentTypeError(f"not an absolute path: {text}")
+    return text
+
+
+def _pod_label(text: str) -> tuple[str, str]:
+    """Split a `key=value` pod label at the first `=`; the key must not be empty."""
+    key, sep, value = text.partition("=")
+    if not sep or not key:
+        raise argparse.ArgumentTypeError(f"not a key=value label: {text}")
+    return key, value
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
@@ -603,7 +708,23 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         "targets",
         nargs="*",
         default=[],
-        help="JSONL files containing eBPF trace events.",
+        help="JSONL files of flat event records or native Tetragon process_exec records.",
+    )
+    parser.add_argument(
+        "--home-dir",
+        action="append",
+        type=_absolute_dir,
+        metavar="PATH",
+        help="Home directory of the sandbox user; the ~/ sensitive paths are checked below it. "
+        "Repeat for more users (default: /root).",
+    )
+    parser.add_argument(
+        "--pod-label",
+        type=_pod_label,
+        default=TETRAGON_POD_LABEL,
+        metavar="KEY=VALUE",
+        help="Label of the sandbox pods that the Tetragon policy's podSelector matches "
+        "(default: app.kubernetes.io/name=agent-sandbox).",
     )
     parser.add_argument(
         "--preset",
@@ -661,20 +782,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     events = _load_events_from_targets(args.targets)
 
     preset = TracerPreset(args.preset)
-    tracer = EbpfSandboxTracer(preset)
+    tracer = EbpfSandboxTracer(preset, args.home_dir or DEFAULT_HOME_DIRS)
     summary = tracer.audit_events(events)
 
     _handle_cli_exports(
         summary,
         events,
         args.targets[0] if args.targets else "trace.jsonl",
-        {
-            "sarif": args.export_sarif,
-            "json": args.export_json,
-            "md": args.export_md,
-            "tetragon": args.export_tetragon,
-            "falco": args.export_falco,
-        },
+        args,
     )
     print(format_markdown_report(summary))
     return 0 if summary.is_compliant else 1
