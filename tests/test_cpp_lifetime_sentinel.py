@@ -78,6 +78,42 @@ def test_cpp001_manual_memory_management() -> None:
     )
 
 
+def _cpp001_lines(source: str) -> list[int]:
+    """Return the line numbers of the CPP001 findings in a source string."""
+    findings = CppLifetimeSentinel(SentinelPreset.STRICT).audit_source(source, "rule_of_five.hpp")
+    return [f.line_number for f in findings if f.rule_id == "CPP001"]
+
+
+def test_cpp001_ignores_deleted_functions() -> None:
+    """Verify '= delete' declarations give no CPP001, and delete expressions still do."""
+    source = (
+        "class Handle {\n"
+        "public:\n"
+        "    ~Handle() { release(); }\n"
+        "    Handle(const Handle&) = delete;\n"
+        "    Handle& operator=(const Handle&) = delete;\n"
+        "    Handle(Handle&&) noexcept = default;\n"
+        "    Handle& operator=(Handle&&) noexcept = default;\n"
+        "};\n"
+        "void drop(int* p) { delete p; }\n"
+        "struct A { A(const A&) = delete; }; void f(int* p) { delete p; }\n"
+        "void drop_all(int* q) { delete[] q; }\n"
+    )
+    assert _cpp001_lines(source) == [9, 10, 11]
+
+
+def test_cpp001_ignores_comments_and_string_literals() -> None:
+    """Verify 'delete' and 'free(' in comments and string literals give no CPP001."""
+    source = (
+        "// delete p; in a line comment\n"
+        "/* free(p) in a block comment */\n"
+        'const char* verb = "delete this";\n'
+        'const char* hint = "call free(x) here";\n'
+        "char quote = '\"'; int* r = nullptr; delete r;\n"
+    )
+    assert _cpp001_lines(source) == [5]
+
+
 def test_cpp002_dangling_view_return() -> None:
     """Verify string_view or span returning local temporary triggers CPP002."""
     violating_code = """

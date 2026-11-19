@@ -142,10 +142,29 @@ def strip_cpp_comments(source: str) -> str:
     return re.sub(pattern, _replacer, source)
 
 
+_CPP001_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"\b(delete\s*\[\s*\]|delete\b|free\s*\(|malloc\s*\(|calloc\s*\(|realloc\s*\()"
+)
+_CPP_LITERAL_PATTERN: Final[re.Pattern[str]] = re.compile(r'"(?:\\.|[^\\"])*"|\'(?:\\.|[^\\\'])*\'')
+
+
+def _is_deleted_function(code: str, match: re.Match[str]) -> bool:
+    """Return True when a 'delete' token is the body of a deleted function ('= delete')."""
+    return match.group(1) == "delete" and code[: match.start()].rstrip().endswith("=")
+
+
+def _find_cpp001_token(line: str) -> re.Match[str] | None:
+    """Return the first manual memory token outside literals and deleted-function bodies."""
+    code = _CPP_LITERAL_PATTERN.sub('""', line)
+    for m in _CPP001_PATTERN.finditer(code):
+        if not _is_deleted_function(code, m):
+            return m
+    return None
+
+
 def _check_cpp001_line(line: str, line_no: int, filename: str) -> CppFinding | None:
     """Check line for direct calls to delete, delete[], free, or malloc."""
-    pattern = re.compile(r"\b(delete\s*\[\s*\]|delete\b|free\s*\(|malloc\s*\(|calloc\s*\(|realloc\s*\()")
-    m = pattern.search(line)
+    m = _find_cpp001_token(line)
     if not m:
         return None
     token = m.group(1).split()[0].split("(")[0]
