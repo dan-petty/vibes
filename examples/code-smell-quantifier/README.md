@@ -87,7 +87,7 @@ Thresholds are the published defaults of the tool each detector mirrors, so ever
 
 Run against this repository, the quantifier immediately reported three things that were real:
 
-1. Two byte-identical functions in the context packer, differing only in a docstring — now a single `_extract_declaration_signature`.
+1. Two byte-identical functions in the context packer, differing only in a docstring — merged into one, which is now `_declaration_header`.
 2. `audit_directory`, a compatibility shim left behind when the sentinel gained multi-path support earlier in the same session, referenced by nothing.
 3. `LifecycleEventType`, an enum defined, exported, documented nowhere and used nowhere.
 

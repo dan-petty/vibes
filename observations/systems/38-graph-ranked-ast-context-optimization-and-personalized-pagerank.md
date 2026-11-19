@@ -4,7 +4,7 @@
 > **Environment**: Multi-file repository prompting, token budget saturation, AST symbol graph centrality  
 > **Classification**: Context Engineering, Graph Centrality, Token Budgeting, Information Foraging  
 > **Related**: [Observation 14](../devops-cli/14-binary-search-ast-context-packing-and-token-budgeting.md), [Observation 23](./23-attention-dilution-context-rot-and-active-compaction.md), [Pattern: AST Graph Relevance Ranking & Context Packing](../../patterns/ast-graph-relevance-ranking-and-context-packing.md), [Exhibit: AST Relevance Context Ranker](../../examples/ast-relevance-context-ranker/)
-> **TLDR**: Rank prompt context with Personalized PageRank over an AST symbol graph and pack whole symbols into a token budget; some packed snippets still do not parse on their own.
+> **TLDR**: Rank prompt context with Personalized PageRank over an AST symbol graph and pack whole symbols into a token budget; each packed snippet parses on its own.
 > **ELI:7b**: Use PageRank (like Google search) over your code's dependency tree to pick only the most important helper functions for the AI prompt.
 
 ---
@@ -64,8 +64,8 @@ flowchart TD
 ```
 
 The engine has two properties:
-1. **Symbol-Boundary Cuts**: The packer includes or excludes whole symbols and never cuts a symbol mid-body. Each snippet is a source slice from the symbol's first line to its last, not a re-serialized AST node, so some snippets do not parse alone. A method body keeps its class indentation, a decorator is left out, and in `SIGNATURES` mode a multi-line signature keeps only its first line (`def helper(`). (Checked with `ast.parse` on each snippet, 2026-11-19.)
-2. **Bounded Iteration**: Power iteration stops when $\|r_{k+1} - r_k\|_1 < 10^{-5}$ or after 50 steps (`DEFAULT_MAX_ITER`), whichever comes first. The step change shrinks by about the damping factor (0.85) per step, so 50 steps do not reach $10^{-5}$ on every graph, and the loop does not report when it stops early. On a six-function call cycle focused on one function, the change after 50 steps was about $5.9 \times 10^{-4}$. No timing was measured.
+1. **Symbol-Boundary Cuts**: The packer includes or excludes whole symbols and never cuts a symbol mid-body. Each snippet is one complete statement, so it parses alone. `FULL` takes the exact source of the statement with `ast.get_source_segment` and moves a method to column 0. `SIGNATURES` and `OUTLINE` write the `def` or `class` header with `ast.unparse` and add the body `...`. A decorator is left out. Before this change, a slice from the first line to the last line of the symbol did not parse in four cases: a method body kept its class indentation, an import got an indented `...`, a multi-line signature kept only its first line (`def helper(`), and an `OUTLINE` header had no body. The tests now parse every snippet at each tier.
+2. **Iteration to Convergence**: Power iteration stops when $\|r_{k+1} - r_k\|_1 < 10^{-5}$. If 100 steps (`DEFAULT_MAX_ITER`) pass first, `compute_pagerank` raises `PageRankConvergenceError` and returns no scores. The step change shrinks by at least the damping factor (0.85) per step and the first change is at most 2, so the default settings converge on every graph by step 77. The earlier limit of 50 steps returned scores that were still moving, with no report: on a six-function call cycle focused on one function, the change after 50 steps was about $5.9 \times 10^{-4}$, and that cycle needs 76 steps. No timing was measured.
 
 ---
 

@@ -18,7 +18,7 @@ Two failure modes consistently degrade LLM reasoning:
 
 Rather than treating source code as flat text, the engine parses code into top-level structural units (`AstSymbol`) using Python's `ast` module. It then evaluates three hierarchical fidelity tiers (`FULL`, `DOCSTRINGS`, `SIGNATURES`) and executes a monotonic binary search to maximize token utilization in $O(\log N)$ iterations.
 
-The output is meant to parse as Python, and the test suite checks that for its sample sources. It is not guaranteed: a one-line `def` with an annotated parameter (`def f(x: int): return x`) is cut at its first colon, and its DOCSTRINGS and SIGNATURES renderings do not parse.
+Each symbol renders as a complete top-level statement, so the output parses as Python. `FULL` keeps the exact source of each statement (`ast.get_source_segment`). `DOCSTRINGS` and `SIGNATURES` write the header from the AST with `ast.unparse`, so `def f(x: int): return x` becomes `def f(x: int):` and a multi-line header keeps its closing parenthesis. The test suite parses the output for each of these cases.
 
 ```mermaid
 flowchart TD

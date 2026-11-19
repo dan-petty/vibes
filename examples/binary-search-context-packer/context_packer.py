@@ -9,6 +9,7 @@ Uses binary search boundary convergence over structured symbol units.
 from __future__ import annotations
 
 import ast
+import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -62,16 +63,16 @@ def estimate_tokens(text: str) -> int:
     return max(1, (measured + DEFAULT_TOKEN_CHAR_RATIO - 1) // DEFAULT_TOKEN_CHAR_RATIO)
 
 
-def _source_lines(source_code: str) -> list[str]:
-    """Split source the way the Python tokenizer does, so `ast` line numbers index correctly.
+def _statement_source(source_code: str, node: ast.stmt) -> str:
+    """Return the exact source of one top-level statement, from its start to its end.
 
-    `str.splitlines()` also breaks on form feed, vertical tab, file/group/record separators,
-    NEL and the Unicode line separators. The tokenizer does not: it recognises `\\n`,
-    `\\r\\n` and `\\r` only. A single form feed — legal, and conventional as a page break in
-    Python source — therefore shifted every index after it by one, and the packer emitted
-    fragments sliced one line off from where `ast` said they were.
+    `ast.get_source_segment` splits lines the way the tokenizer does. `str.splitlines()`
+    also breaks on a form feed, which is legal in Python source and is a page break by
+    convention, so one form feed shifted every later slice by one line. A whole-line slice
+    also took a second statement that shares the line (`import os; x = (` did not parse).
     """
-    return source_code.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    segment = ast.get_source_segment(source_code, node) or ""
+    return segment.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _extract_docstring(node: ast.AST) -> str:
@@ -81,27 +82,18 @@ def _extract_docstring(node: ast.AST) -> str:
     return ""
 
 
-def _extract_declaration_signature(
-    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, lines: Sequence[str]
-) -> str:
-    """Extract the declaration lines of a def or class, up to the start of its body.
+def _declaration_header(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> str:
+    """Render the header of a def or class from the AST, so that it is always complete.
 
-    Functions and classes differ in what they declare and not at all in how the
-    declaration is sliced, which is why the two extractors were byte-identical.
+    Source slicing failed three ways: `def f(): return 1` gave a bare `:`, a cut at the
+    first colon turned `def f(x: int): return x` into `def f(x:`, and a multi-line header
+    whose body shared its last line lost that line (`def g(:`). `ast.unparse` writes the
+    header from the parsed node and needs no slicing. Decorators stay out, as in FULL.
     """
-    start_line = node.lineno - 1
-    body_start = node.body[0].lineno - 1 if node.body else start_line + 1
-    # `def f(): return 1` puts the body on the declaration line, so `body[0].lineno` equals
-    # `node.lineno` and the slice was empty — the symbol rendered as a bare `:` and the whole
-    # packed context stopped being parsable Python. Always take the declaration line itself.
-    body_start = max(body_start, start_line + 1)
-    sig_lines = [lines[i] for i in range(start_line, min(len(lines), body_start))]
-    sig = "\n".join(sig_lines).rstrip()
-    if node.body and node.body[0].lineno == node.lineno:
-        # Inline suite: keep the header, drop the statement that followed the colon.
-        head, _, _ = sig.partition(":")
-        sig = f"{head}:"
-    return sig if sig.endswith(":") else f"{sig}:"
+    stub = copy.copy(node)
+    stub.decorator_list = []
+    stub.body = [ast.Expr(ast.Constant(...))]
+    return ast.unparse(stub).rsplit("\n", 1)[0]
 
 
 def extract_ast_symbols(source_code: str) -> list[AstSymbol]:
@@ -111,29 +103,26 @@ def extract_ast_symbols(source_code: str) -> list[AstSymbol]:
     except SyntaxError:
         return []
 
-    lines = _source_lines(source_code)
     symbols: list[AstSymbol] = []
 
     for node in tree.body:
-        sym = _parse_top_level_node(node, lines)
+        sym = _parse_top_level_node(node, source_code)
         if sym is not None:
             symbols.append(sym)
 
     return symbols
 
 
-def _parse_top_level_node(node: ast.AST, lines: Sequence[str]) -> AstSymbol | None:
+def _parse_top_level_node(node: ast.stmt, source_code: str) -> AstSymbol | None:
     """Transform an individual AST node into a structured AstSymbol."""
-    start = node.lineno - 1
-    end = getattr(node, "end_lineno", node.lineno)
-    full_source = "\n".join(lines[start:end])
+    full_source = _statement_source(source_code, node)
     docstring = _extract_docstring(node)
 
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        sig = _extract_declaration_signature(node, lines)
+        sig = _declaration_header(node)
         return AstSymbol(node.name, "function", sig, docstring, "...", full_source, node.lineno)
     if isinstance(node, ast.ClassDef):
-        sig = _extract_declaration_signature(node, lines)
+        sig = _declaration_header(node)
         return AstSymbol(node.name, "class", sig, docstring, "...", full_source, node.lineno)
     if isinstance(node, (ast.Import, ast.ImportFrom)):
         return AstSymbol("import", "import", full_source, "", "", full_source, node.lineno)
@@ -190,9 +179,9 @@ def pack_source_to_budget(
     """Pack source code to fit token budget, dynamically degrading detail levels if needed.
 
     Levels evaluated: FULL -> DOCSTRINGS -> SIGNATURES.
-    Aims for output that parses as a Python module. Known exception: a one-line def whose
-    header holds a colon before the body colon (`def f(x: int): return x`) is cut at the
-    first colon, so its DOCSTRINGS and SIGNATURES renderings do not parse.
+    Each symbol renders as a complete top-level statement, so the output parses as a
+    Python module: FULL keeps each statement's exact source, and the other tiers render
+    the header from the AST and add the body `...`.
     """
     symbols = extract_ast_symbols(source_code)
     if not symbols or budget_tokens <= 0:

@@ -118,8 +118,18 @@ def test_extract_symbols_syntax_error() -> None:
         ('def f():\n    \'\'\'Say "hi"\'\'\'\n    return 1\n\ndef g():\n    \'\'\'other\'\'\'\n    return 2\n', 30),
         ("def f(): return 1\n\ndef g(): return 2\n\ndef h(): return 3\n", 4),
         ('HEADER = "x"\n\x0c\ndef target():\n    return 42\n', 5000),
+        ("def f(x: int): return x\n\ndef g(y: int): return y\n", 8),
+        ("def g(\n    a: int,\n    b: int): return a + b\n", 10),
+        ("import os; x = (\n    1)\n\ndef f(): return os\n", 5000),
     ],
-    ids=["quoted-docstring", "inline-suite", "form-feed"],
+    ids=[
+        "quoted-docstring",
+        "inline-suite",
+        "form-feed",
+        "annotated-inline-suite",
+        "multi-line-header",
+        "shared-line",
+    ],
 )
 def test_packed_output_always_parses(source: str, budget: int) -> None:
     """The tier exists to hand a model something it can read as code.
@@ -127,10 +137,30 @@ def test_packed_output_always_parses(source: str, budget: int) -> None:
     Three ways it emitted Python that will not parse: a docstring re-wrapped between two
     triple quotes without escaping, an inline suite whose body shares the declaration line
     (leaving a bare `:`), and `splitlines()` breaking on boundaries the tokenizer does not —
-    a single form feed shifted every `ast` line number after it by one.
+    a single form feed shifted every `ast` line number after it by one. Later: a header cut
+    at its first colon (`def f(x:`), a multi-line header that lost its closing line
+    (`def g(:`), and an import slice that took a second statement from its line.
     """
     packed, _, _ = pack_source_to_budget(source, budget_tokens=budget)
     ast.parse(packed)
+
+
+def test_signature_tiers_keep_whole_headers() -> None:
+    """Keep each annotation and the closing parenthesis, and drop a body on the header line."""
+    source = (
+        "def f(x: int): return x\n\n"
+        "def g(\n    a: int,\n    b: int): return a + b\n\n"
+        'def h(y: int) -> int:\n    """Return y."""\n    return y\n'
+    )
+    levels = (ContextDetailLevel.DOCSTRINGS, ContextDetailLevel.SIGNATURES)
+    rendered = "\n\n".join(s.render(level) for s in extract_ast_symbols(source) for level in levels)
+    ast.parse(rendered)
+    assert (
+        "def f(x: int):" in rendered,
+        "b: int):" in rendered,
+        "'Return y.'" in rendered,
+        "return" in rendered,
+    ) == (True, True, True, False)
 
 
 def test_the_token_estimate_counts_bytes_not_code_points() -> None:
