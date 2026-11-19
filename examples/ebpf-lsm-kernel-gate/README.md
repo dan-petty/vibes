@@ -97,7 +97,7 @@ The command prints a Tetragon `TracingPolicy` built from `LSMPolicy`. It has one
 | `security_socket_connect` | `sockaddr` (index 1) | `Family` is `AF_INET` or `AF_INET6`, and `NotSAddr` is loopback | `allow_loopback_only` |
 
 Limits of the generated policy:
-- **Scope**: `spec.podSelector` limits it to pods with the label `app: agent-sandbox`. Without that, it would also stop host processes such as `sudo`, which reads `/etc/sudoers`.
+- **Scope**: `spec.podSelector` limits it to pods with the label `app.kubernetes.io/name: agent-sandbox`, the label of [`sandbox-pod.yaml`](../../resources/k8s/agent-sandbox/sandbox-pod.yaml). To select other pods, set `LSMPolicy.tetragon_pod_label` or give `generate --pod-label KEY=VALUE`. Without a `podSelector`, the policy would also stop host processes such as `sudo`, which reads `/etc/sudoers`.
 - **Whole path components**: A Tetragon selector matches only when all of its argument matches hold, and the kprobe acts when any one of its selectors matches. Thus the file kprobe has one `Equal` selector and one `Prefix` selector. Each `Prefix` value ends with `/`, so `/root/` matches `/root/x` and not `/rootfs`.
 - **Home directories**: The generator writes each `~` entry below each directory of `home_dirs` (default `/root` and `/home/user`), so the policy holds no `~`. Tetragon has no wildcard operator for a path, so `/home/*` cannot be written; list each home directory by name.
 - **Simulation-only rules**: The binary allowlist, the relative path `.git/hooks`, `LSM004` and `LSM005` have no kernel selector. With `allow_loopback_only=False`, the policy blocks only the link-local range that holds the metadata endpoint; the private ranges stay a simulation check.

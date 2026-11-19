@@ -21,7 +21,7 @@ import json
 import posixpath
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Final
@@ -56,8 +56,9 @@ LOOPBACK_NETWORKS: Final[tuple[str, ...]] = ("127.0.0.0/8", "::1/128")
 
 TETRAGON_MODE_ANNOTATION: Final[str] = "agent-lsm-gate/mode"
 
-# The generated policy acts only on pods that carry this label, never on host processes.
-TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app", "agent-sandbox")
+# The label that resources/k8s/agent-sandbox/sandbox-pod.yaml puts on the sandbox pod. The
+# generated policy acts only on pods that carry it, never on host processes.
+TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app.kubernetes.io/name", "agent-sandbox")
 
 # Fixed evasion probes, appended to a workspace base path by the probe campaign.
 EVASION_PATH_SUFFIXES: Final[tuple[str, ...]] = (
@@ -115,6 +116,7 @@ class LSMPolicy:
     allow_loopback_only: bool = True
     enforce_syz_bounds: bool = True
     home_dirs: tuple[str, ...] = DEFAULT_HOME_DIRS
+    tetragon_pod_label: tuple[str, str] = TETRAGON_POD_LABEL
 
 
 @dataclass(frozen=True)
@@ -431,10 +433,11 @@ def generate_tetragon_policy(policy: LSMPolicy | None = None) -> str:
 
     It covers the blocked binaries, the absolute blocked paths (with `~` entries expanded
     under `home_dirs`) and egress. The binary allowlist, relative paths such as
-    `.git/hooks`, and the privilege and evasion rules stay simulation-only.
+    `.git/hooks`, and the privilege and evasion rules stay simulation-only. The
+    `podSelector` limits the policy to the pods with `tetragon_pod_label`.
     """
     pol = policy or LSMPolicy()
-    label_key, label_value = TETRAGON_POD_LABEL
+    label_key, label_value = pol.tetragon_pod_label
     lines = [
         "apiVersion: cilium.io/v1alpha1",
         "kind: TracingPolicy",
@@ -445,7 +448,7 @@ def generate_tetragon_policy(policy: LSMPolicy | None = None) -> str:
         "spec:",
         "  podSelector:",
         "    matchLabels:",
-        f"      {label_key}: {json.dumps(label_value)}",
+        f"      {json.dumps(label_key)}: {json.dumps(label_value)}",
         "  kprobes:",
     ]
     for call, args, selectors in _tetragon_kprobes(pol):
@@ -481,6 +484,14 @@ def format_sarif(findings: Sequence[LSMFinding]) -> dict[str, Any]:
     }
 
 
+def _pod_label(text: str) -> tuple[str, str]:
+    """Split a `key=value` pod label at the first `=`; the key must not be empty."""
+    key, sep, value = text.partition("=")
+    if not sep or not key:
+        raise argparse.ArgumentTypeError(f"not a key=value label: {text}")
+    return key, value
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser."""
     parser = argparse.ArgumentParser(description="eBPF Runtime LSM Kernel Gate Oracle")
@@ -498,6 +509,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     gen_p = sub.add_parser("generate", help="Print a Tetragon TracingPolicy that enforces the policy")
     gen_p.add_argument("--format", type=str, default="tetragon", choices=["tetragon"])
+    gen_p.add_argument(
+        "--pod-label",
+        type=_pod_label,
+        default=TETRAGON_POD_LABEL,
+        metavar="KEY=VALUE",
+        help="Label of the sandbox pods that the policy's podSelector matches "
+        "(default: app.kubernetes.io/name=agent-sandbox).",
+    )
 
     sarif_p = sub.add_parser("sarif", help="Evaluate event and export as SARIF")
     sarif_p.add_argument("--target", type=str, required=True)
@@ -520,8 +539,8 @@ def _handle_fuzz(args: argparse.Namespace, policy: LSMPolicy) -> int:
     return 0 if rep.monotonically_contained else 1
 
 
-def _handle_generate(_args: argparse.Namespace, policy: LSMPolicy) -> int:
-    print(generate_tetragon_policy(policy), end="")
+def _handle_generate(args: argparse.Namespace, policy: LSMPolicy) -> int:
+    print(generate_tetragon_policy(replace(policy, tetragon_pod_label=args.pod_label)), end="")
     return 0
 
 

@@ -322,7 +322,7 @@ def test_tetragon_policy_enforces_with_sigkill() -> None:
     ) == (
         "TracingPolicy",
         {"agent-lsm-gate/mode": "enforce"},
-        {"matchLabels": {"app": "agent-sandbox"}},
+        {"matchLabels": {"app.kubernetes.io/name": "agent-sandbox"}},
         {
             "security_bprm_check": [(0, "linux_binprm")],
             "security_file_open": [(0, "file")],
@@ -352,6 +352,31 @@ def test_tetragon_policy_follows_custom_policy() -> None:
             ([(1, "Family", ["AF_INET", "AF_INET6"]), (1, "SAddr", ["169.254.0.0/16"])], ["Sigkill"])
         ],
     }
+
+
+def test_tetragon_policy_follows_pod_label(capsys: pytest.CaptureFixture[str]) -> None:
+    """Assert that the policy field and `generate --pod-label` replace the default selector."""
+    doc, _ = _kprobes(LSMPolicy(tetragon_pod_label=("app", "other")))
+    rc = main(["generate", "--pod-label", "app=other"])
+    cli_doc = yaml.safe_load(capsys.readouterr().out)
+
+    assert (doc["spec"]["podSelector"], rc, cli_doc["spec"]["podSelector"]) == (
+        {"matchLabels": {"app": "other"}},
+        0,
+        {"matchLabels": {"app": "other"}},
+    )
+
+
+def test_generate_rejects_a_pod_label_without_equals(capsys: pytest.CaptureFixture[str]) -> None:
+    """Assert that `generate --pod-label` refuses a value that has no `=`, or no key."""
+    codes = []
+    for value in ("agent-sandbox", "=agent-sandbox"):
+        with pytest.raises(SystemExit) as exc:
+            main(["generate", "--pod-label", value])
+        codes.append(exc.value.code)
+    err = capsys.readouterr().err
+
+    assert (codes, "--pod-label" in err, "not a key=value label: agent-sandbox" in err) == ([2, 2], True, True)
 
 
 def test_generate_ships_no_bpf_c(capsys: pytest.CaptureFixture[str]) -> None:
