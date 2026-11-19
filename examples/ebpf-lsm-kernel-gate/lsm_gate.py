@@ -2,11 +2,14 @@
 
 Simulates BPF LSM (Linux Security Module) policy decisions in Python. It evaluates
 event records for binary executions, sensitive filesystem paths, privilege escalation,
-and network egress. It loads no BPF program and intercepts no real syscall. A fixed list
-of adversarial probes checks the rules; it is not syzkaller, and nothing is random. The
-BPF C and Tetragon generators emit skeletons that enforce nothing.
+and network egress. It loads no BPF program and intercepts no real syscall. The file
+check normalizes `.`, `..` and repeated slashes before it matches; it does not resolve
+symbolic links. The probe list comes from the policy's absolute blocked paths plus fixed
+evasion, egress and binary probes; it is not syzkaller, and nothing is random. The
+Tetragon generator emits a TracingPolicy whose selectors send `Sigkill` for the policy's
+blocked binaries, absolute paths and egress. The module ships no BPF C.
 
-Maintains proactive complexity headroom (M <= 4, depth <= 2, parameters <= 4).
+Passes the strict sentinel preset (M <= 6, nesting depth <= 3).
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import posixpath
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -41,6 +45,25 @@ BLOCKED_PATH_PREFIXES: Final[tuple[str, ...]] = (
 )
 
 METADATA_ENDPOINT: Final[str] = "169.254.169.254"
+
+LOOPBACK_NETWORKS: Final[tuple[str, ...]] = ("127.0.0.0/8", "::1/128")
+
+TETRAGON_MODE_ANNOTATION: Final[str] = "agent-lsm-gate/mode"
+
+# The generated policy acts only on pods that carry this label, never on host processes.
+TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app", "agent-sandbox")
+
+# Fixed evasion probes, appended to a workspace base path by the probe campaign.
+EVASION_PATH_SUFFIXES: Final[tuple[str, ...]] = (
+    "/../../etc/shadow",
+    "//..//root",
+    "/.../etc/sudoers",
+    "/\\0.git/hooks",
+    "/.git/hooks/pre-commit",
+)
+
+# One argument match of a Tetragon selector: argument index, operator and values.
+ArgMatch = tuple[int, str, tuple[str, ...]]
 
 
 class LSMHookType(StrEnum):
@@ -96,7 +119,7 @@ class LSMFinding:
 
 @dataclass(frozen=True)
 class FuzzReport:
-    """Summary telemetry produced by the fixed adversarial probe campaign."""
+    """Summary telemetry produced by the policy-derived probe campaign."""
 
     total_probes: int
     blocked_probes: int
@@ -180,9 +203,20 @@ def _evaluate_socket(event: LSMEvent, policy: LSMPolicy) -> LSMFinding | None:
     return None
 
 
+def normalize_path(target: str) -> str:
+    """Collapse `.`, `..` and repeated slashes the way the kernel resolves a path name.
+
+    `posixpath.normpath` keeps a leading `//` because POSIX lets an implementation
+    give it a meaning; Linux does not, so one slash replaces it. Symbolic links are
+    not resolved: that needs the filesystem, and the kernel hook sees the resolved file.
+    """
+    norm = posixpath.normpath(target.strip())
+    return "/" + norm.lstrip("/") if norm.startswith("//") else norm
+
+
 def _evaluate_file(event: LSMEvent, policy: LSMPolicy) -> LSMFinding | None:
     """Evaluate filesystem access against sensitive path rules."""
-    norm = event.target.strip()
+    norm = normalize_path(event.target)
     for prefix in policy.blocked_paths:
         if norm.startswith(prefix) or prefix in norm:
             return LSMFinding(
@@ -229,15 +263,20 @@ def evaluate_event(event: LSMEvent, policy: LSMPolicy | None = None) -> LSMFindi
     return LSMFinding("LSM000", LSMVerdict.ALLOW, event, "Permitted by simulated LSM policy")
 
 
-def generate_syz_path_mutations(base: str) -> list[str]:
-    """Generate path traversal and evasion permutations."""
-    return [
-        f"{base}/../../etc/shadow",
-        f"{base}//..//root",
-        f"{base}/.../etc/sudoers",
-        f"{base}/\\0.git/hooks",
-        f"{base}/.git/hooks/pre-commit",
-    ]
+def _path_spellings(path: str) -> list[str]:
+    """Return a path and its dot, double-slash and parent-directory spellings."""
+    head, tail = posixpath.split(normalize_path(path))
+    head = head.rstrip("/")
+    parent = posixpath.basename(head)
+    climb = f"{head}/../{parent}/{tail}" if parent else f"/../{tail}"
+    return [f"{head}/{tail}", f"{head}/./{tail}", f"{head}//{tail}", climb]
+
+
+def generate_syz_path_mutations(policy: LSMPolicy | None = None, base: str = "/workspace") -> list[str]:
+    """Derive path probes from the policy's absolute blocked paths, then add the evasion probes."""
+    pol = policy or LSMPolicy()
+    spellings = [s for p in pol.blocked_paths if p.startswith("/") for s in _path_spellings(p)]
+    return [*spellings, *(base + suffix for suffix in EVASION_PATH_SUFFIXES)]
 
 
 def generate_syz_socket_mutations() -> list[str]:
@@ -255,9 +294,9 @@ def generate_syz_socket_mutations() -> list[str]:
     ]
 
 
-def _collect_fuzz_events(base_path: str = "/workspace") -> list[LSMEvent]:
+def _collect_fuzz_events(policy: LSMPolicy) -> list[LSMEvent]:
     """Collect test events across all hooks."""
-    ev_files = [LSMEvent(LSMHookType.FILE_OPEN, "runner", p) for p in generate_syz_path_mutations(base_path)]
+    ev_files = [LSMEvent(LSMHookType.FILE_OPEN, "runner", p) for p in generate_syz_path_mutations(policy)]
     ev_sockets = [LSMEvent(LSMHookType.SOCKET_CONNECT, "runner", a) for a in generate_syz_socket_mutations()]
     ev_bins = [LSMEvent(LSMHookType.BPRM_CHECK, b, f"/bin/{b}") for b in ("nc", "socat", "unknown_compiler")]
     ev_priv = [LSMEvent(LSMHookType.TASK_SETUID, "runner", "root", uid=0)]
@@ -265,9 +304,9 @@ def _collect_fuzz_events(base_path: str = "/workspace") -> list[LSMEvent]:
 
 
 def run_fuzz_campaign(policy: LSMPolicy | None = None, seed: int = 42) -> FuzzReport:
-    """Evaluate the fixed adversarial probe list against the policy; `seed` is unused."""
+    """Evaluate the policy-derived probe list against the policy; `seed` is unused."""
     pol = policy or LSMPolicy()
-    events = _collect_fuzz_events()
+    events = _collect_fuzz_events(pol)
     blocked = sum(1 for e in events if evaluate_event(e, pol).verdict == LSMVerdict.BLOCK)
     total = len(events)
     allowed = total - blocked
@@ -276,53 +315,71 @@ def run_fuzz_campaign(policy: LSMPolicy | None = None, seed: int = 42) -> FuzzRe
     return FuzzReport(total, blocked, allowed, rate, contained)
 
 
-def generate_bpf_c(_policy: LSMPolicy | None = None) -> str:
-    """Emit a BPF CO-RE C skeleton whose LSM hooks return 0 (allow); it enforces nothing."""
-    return """// SPDX-License-Identifier: GPL-2.0
-#include <vmlinux.h>
-#include <bpf/bpf_tracing.h>
-#include <bpf/bpf_helpers.h>
+def _egress_matches(policy: LSMPolicy) -> list[ArgMatch]:
+    """Match IPv4 and IPv6 connects whose destination the policy blocks.
 
-char LICENSE[] SEC("license") = "GPL";
-
-SEC("lsm/bprm_check_security")
-int BPF_PROG(lsm_bprm_check, struct linux_binprm *bprm) {
-    // In-kernel binary execution allowlist check
-    return 0;
-}
-
-SEC("lsm/file_open")
-int BPF_PROG(lsm_file_open, struct file *file) {
-    // In-kernel sensitive path enforcement
-    return 0;
-}
-
-SEC("lsm/socket_connect")
-int BPF_PROG(lsm_socket_connect, struct socket *sock, struct sockaddr *addr, int addrlen) {
-    // In-kernel network egress containment
-    return 0;
-}
-"""
+    For a `sockaddr` argument, Tetragon reads the connect address into its `SAddr` field.
+    """
+    family: ArgMatch = (1, "Family", ("AF_INET", "AF_INET6"))
+    if policy.allow_loopback_only:
+        return [family, (1, "NotSAddr", LOOPBACK_NETWORKS)]
+    link_local = str(ipaddress.ip_network(f"{METADATA_ENDPOINT}/16", strict=False))
+    return [family, (1, "SAddr", (link_local,))]
 
 
-def generate_tetragon_policy(_policy: LSMPolicy | None = None) -> str:
-    """Emit a Cilium Tetragon TracingPolicy that traces three LSM functions and blocks nothing."""
-    return """apiVersion: cilium.io/v1alpha1
-kind: TracingPolicy
-metadata:
-  name: agent-lsm-sandbox-gate
-spec:
-  kprobes:
-    - call: "security_bprm_check"
-      syscall: false
-      return: true
-    - call: "security_file_open"
-      syscall: false
-      return: true
-    - call: "security_socket_connect"
-      syscall: false
-      return: true
-"""
+def _has_values(matches: Sequence[ArgMatch]) -> bool:
+    """Return True when every argument match has at least one value."""
+    return all(values for _, _, values in matches)
+
+
+def _tetragon_kprobes(policy: LSMPolicy) -> list[tuple[str, tuple[tuple[int, str], ...], list[ArgMatch]]]:
+    """Map the policy to kprobes; drop a kprobe that has no value to match."""
+    binaries = tuple(f"/{b}" for b in sorted(policy.blocked_binaries))
+    paths = tuple(p for p in policy.blocked_paths if p.startswith("/"))
+    kprobes = [
+        ("security_bprm_check", ((0, "linux_binprm"),), [(0, "Postfix", binaries)]),
+        ("security_file_open", ((0, "file"),), [(0, "Prefix", paths)]),
+        ("security_socket_connect", ((0, "socket"), (1, "sockaddr")), _egress_matches(policy)),
+    ]
+    return [k for k in kprobes if _has_values(k[2])]
+
+
+def _yaml_kprobe(call: str, args: Sequence[tuple[int, str]], matches: Sequence[ArgMatch]) -> list[str]:
+    """Render one kprobe whose single selector sends Sigkill when every match holds."""
+    lines = [f"    - call: {json.dumps(call)}", "      syscall: false", "      args:"]
+    for index, arg_type in args:
+        lines += [f"        - index: {index}", f"          type: {json.dumps(arg_type)}"]
+    lines += ["      selectors:", "        - matchArgs:"]
+    for index, operator, values in matches:
+        lines += [f"            - index: {index}", f"              operator: {json.dumps(operator)}", "              values:"]
+        lines += [f"                - {json.dumps(value)}" for value in values]
+    return [*lines, "          matchActions:", "            - action: Sigkill"]
+
+
+def generate_tetragon_policy(policy: LSMPolicy | None = None) -> str:
+    """Emit a Cilium Tetragon TracingPolicy that sends Sigkill for the policy's blocked operations.
+
+    It covers the blocked binaries, the absolute blocked paths and egress. The binary
+    allowlist, relative paths and the privilege and evasion rules stay simulation-only.
+    """
+    pol = policy or LSMPolicy()
+    label_key, label_value = TETRAGON_POD_LABEL
+    lines = [
+        "apiVersion: cilium.io/v1alpha1",
+        "kind: TracingPolicy",
+        "metadata:",
+        "  name: agent-lsm-sandbox-gate",
+        "  annotations:",
+        f"    {TETRAGON_MODE_ANNOTATION}: enforce",
+        "spec:",
+        "  podSelector:",
+        "    matchLabels:",
+        f"      {label_key}: {json.dumps(label_value)}",
+        "  kprobes:",
+    ]
+    for call, args, matches in _tetragon_kprobes(pol):
+        lines += _yaml_kprobe(call, args, matches)
+    return "\n".join(lines) + "\n"
 
 
 def format_sarif(findings: Sequence[LSMFinding]) -> dict[str, Any]:
@@ -365,11 +422,11 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("--flags", type=int, default=0)
     eval_p.add_argument("--uid", type=int, default=1000)
 
-    fuzz_p = sub.add_parser("fuzz", help="Run the fixed list of boundary probes against the simulated policy")
+    fuzz_p = sub.add_parser("fuzz", help="Run the policy-derived boundary probes against the simulated policy")
     fuzz_p.add_argument("--seed", type=int, default=42)
 
-    gen_p = sub.add_parser("generate", help="Synthesize kernel policy code")
-    gen_p.add_argument("--format", type=str, default="bpf", choices=["bpf", "tetragon"])
+    gen_p = sub.add_parser("generate", help="Print a Tetragon TracingPolicy that enforces the policy")
+    gen_p.add_argument("--format", type=str, default="tetragon", choices=["tetragon"])
 
     sarif_p = sub.add_parser("sarif", help="Evaluate event and export as SARIF")
     sarif_p.add_argument("--target", type=str, required=True)
@@ -392,9 +449,8 @@ def _handle_fuzz(args: argparse.Namespace, policy: LSMPolicy) -> int:
     return 0 if rep.monotonically_contained else 1
 
 
-def _handle_generate(args: argparse.Namespace, policy: LSMPolicy) -> int:
-    code = generate_bpf_c(policy) if args.format == "bpf" else generate_tetragon_policy(policy)
-    print(code)
+def _handle_generate(_args: argparse.Namespace, policy: LSMPolicy) -> int:
+    print(generate_tetragon_policy(policy), end="")
     return 0
 
 

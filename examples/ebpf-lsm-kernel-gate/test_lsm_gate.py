@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
-from typing import Final
+from pathlib import Path
+from typing import Any, Final
 
 import pytest
+import yaml
 from lsm_gate import (
     LSMEvent,
     LSMFinding,
@@ -15,7 +17,6 @@ from lsm_gate import (
     LSMVerdict,
     evaluate_event,
     format_sarif,
-    generate_bpf_c,
     generate_syz_path_mutations,
     generate_syz_socket_mutations,
     generate_tetragon_policy,
@@ -24,6 +25,15 @@ from lsm_gate import (
 )
 
 MOCK_DOMAIN: Final[str] = "http://example.com"
+
+# Each spelling reaches a blocked file once the kernel resolves `.`, `..` and repeated slashes.
+NORMALIZATION_VARIANTS: Final[tuple[tuple[str, str], ...]] = (
+    ("/etc/./shadow", "LSM003"),
+    ("/etc//shadow", "LSM003"),
+    ("/etc/../etc/shadow", "LSM005"),
+    ("//etc/shadow", "LSM003"),
+    ("/repo/.git/./hooks/pre-commit", "LSM003"),
+)
 
 
 def test_bprm_check_security_rules() -> None:
@@ -145,30 +155,123 @@ def test_syzkaller_evasion_mitigation() -> None:
 
 
 def test_dynamic_syzkaller_fuzz_campaign() -> None:
-    """Assert containment over the fixed list of mutated events (no random fuzzing)."""
+    """Assert containment over the policy-derived probe list (no random fuzzing)."""
     report = run_fuzz_campaign(LSMPolicy())
-    mut_paths = generate_syz_path_mutations("/workspace")
+    mut_paths = generate_syz_path_mutations()
     mut_socks = generate_syz_socket_mutations()
 
     assert (
         report.monotonically_contained,
-        report.containment_rate >= 0.85,
-        len(mut_paths) == 5,
-        len(mut_socks) == 6,
-    ) == (True, True, True, True)
+        (report.total_probes, report.blocked_probes, report.allowed_probes),
+        len(mut_paths),
+        len(mut_socks),
+    ) == (True, (31, 30, 1), 21, 6)
 
 
-def test_bpf_and_tetragon_policy_generation() -> None:
-    """Assert synthesis of valid BPF C and Tetragon TracingPolicy definitions."""
-    bpf_c = generate_bpf_c()
-    tetra = generate_tetragon_policy()
+def test_file_open_normalizes_path_variants() -> None:
+    """Assert that dot, double-slash and parent forms of a blocked path are blocked, and safe paths pass."""
+    results = [evaluate_event(LSMEvent(LSMHookType.FILE_OPEN, "python3", p)) for p, _ in NORMALIZATION_VARIANTS]
+    safe = evaluate_event(LSMEvent(LSMHookType.FILE_OPEN, "python3", "/workspace/./src//app.py"))
 
     assert (
-        ("SEC(\"lsm/bprm_check_security\")" in bpf_c),
-        ("SEC(\"lsm/file_open\")" in bpf_c),
-        ("kind: TracingPolicy" in tetra),
-        ("security_bprm_check" in tetra),
-    ) == (True, True, True, True)
+        [(r.verdict, r.rule_id) for r in results],
+        safe.verdict,
+    ) == (
+        [(LSMVerdict.BLOCK, rule) for _, rule in NORMALIZATION_VARIANTS],
+        LSMVerdict.ALLOW,
+    )
+
+
+def test_fuzz_path_probes_follow_policy() -> None:
+    """Assert that the path probes come from the policy and that the gate blocks every one."""
+    paths = generate_syz_path_mutations()
+    verdicts = {evaluate_event(LSMEvent(LSMHookType.FILE_OPEN, "runner", p)).verdict for p in paths}
+    custom = generate_syz_path_mutations(LSMPolicy(blocked_paths=("/srv/secret",)), base="/w")
+
+    assert (
+        {"/etc/./shadow", "/etc//shadow", "/etc/../etc/shadow", "/./root", "//root"} <= set(paths),
+        verdicts,
+        custom[:4],
+    ) == (
+        True,
+        {LSMVerdict.BLOCK},
+        ["/srv/secret", "/srv/./secret", "/srv//secret", "/srv/../srv/secret"],
+    )
+
+
+def _kprobes(policy: LSMPolicy | None = None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Parse the generated TracingPolicy and index its kprobes by kernel function."""
+    doc = yaml.safe_load(generate_tetragon_policy(policy))
+    return doc, {k["call"]: k for k in doc["spec"]["kprobes"]}
+
+
+def _selector_summary(kprobe: dict[str, Any]) -> list[tuple[list[tuple[int, str, list[str]]], list[str]]]:
+    """Reduce each selector of a kprobe to its argument matches and its actions."""
+    return [
+        (
+            [(m["index"], m["operator"], m["values"]) for m in sel.get("matchArgs", [])],
+            [a["action"] for a in sel.get("matchActions", [])],
+        )
+        for sel in kprobe.get("selectors", [])
+    ]
+
+
+def test_tetragon_policy_enforces_with_sigkill() -> None:
+    """Assert that each generated kprobe kills a caller that matches the default policy."""
+    doc, kprobes = _kprobes()
+    binaries = ["/chattr", "/nc", "/ncat", "/netcat", "/socat", "/tcpdump", "/telnet"]
+
+    assert (
+        doc["kind"],
+        doc["metadata"]["annotations"],
+        doc["spec"]["podSelector"],
+        {call: [(a["index"], a["type"]) for a in k["args"]] for call, k in kprobes.items()},
+        {call: _selector_summary(k) for call, k in kprobes.items()},
+    ) == (
+        "TracingPolicy",
+        {"agent-lsm-gate/mode": "enforce"},
+        {"matchLabels": {"app": "agent-sandbox"}},
+        {
+            "security_bprm_check": [(0, "linux_binprm")],
+            "security_file_open": [(0, "file")],
+            "security_socket_connect": [(0, "socket"), (1, "sockaddr")],
+        },
+        {
+            "security_bprm_check": [([(0, "Postfix", binaries)], ["Sigkill"])],
+            "security_file_open": [([(0, "Prefix", ["/etc/shadow", "/etc/sudoers", "/root", "/proc/kcore"])], ["Sigkill"])],
+            "security_socket_connect": [
+                ([(1, "Family", ["AF_INET", "AF_INET6"]), (1, "NotSAddr", ["127.0.0.0/8", "::1/128"])], ["Sigkill"])
+            ],
+        },
+    )
+
+
+def test_tetragon_policy_follows_custom_policy() -> None:
+    """Assert that the generator reads the policy and drops a kprobe that has nothing to match."""
+    pol = LSMPolicy(blocked_binaries=frozenset({"curl"}), blocked_paths=("~/.aws",), allow_loopback_only=False)
+    _, kprobes = _kprobes(pol)
+
+    assert {call: _selector_summary(k) for call, k in kprobes.items()} == {
+        "security_bprm_check": [([(0, "Postfix", ["/curl"])], ["Sigkill"])],
+        "security_socket_connect": [
+            ([(1, "Family", ["AF_INET", "AF_INET6"]), (1, "SAddr", ["169.254.0.0/16"])], ["Sigkill"])
+        ],
+    }
+
+
+def test_generate_ships_no_bpf_c(capsys: pytest.CaptureFixture[str]) -> None:
+    """Assert that generate refuses the removed bpf format, and that the README states the mode."""
+    with pytest.raises(SystemExit) as exc:
+        main(["generate", "--format", "bpf"])
+    capsys.readouterr()
+    rc = main(["generate"])
+    out = capsys.readouterr().out
+    readme = (Path(__file__).parent / "README.md").read_text(encoding="utf-8")
+
+    assert (
+        (exc.value.code, rc, "kind: TracingPolicy" in out, 'SEC("lsm/' in out),
+        ("agent-lsm-gate/mode: enforce" in readme, "ships no BPF C" in readme),
+    ) == ((2, 0, True, False), (True, True))
 
 
 def test_sarif_export_format() -> None:

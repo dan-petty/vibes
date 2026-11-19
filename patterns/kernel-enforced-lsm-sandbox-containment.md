@@ -26,7 +26,7 @@ When autonomous AI coding agents execute terminal tools, compile code, and run t
 
 To close the detect-then-kill gap, isolation must reside directly within the operating system kernel's authorization path using **Linux Security Module (BPF LSM)** hooks.
 
-The reference implementation does not do this. [`examples/ebpf-lsm-kernel-gate/lsm_gate.py`](../examples/ebpf-lsm-kernel-gate/lsm_gate.py) is a pure-Python simulation. It loads no BPF program and touches no kernel. Its file check compares raw strings, so it allows `/etc/./shadow` and `/etc//shadow`. Its probe list is a fixed set of 15 inputs, not [syzkaller](https://github.com/google/syzkaller), which is a coverage-guided kernel fuzzer that looks for kernel bugs.
+The reference implementation does not do this. [`examples/ebpf-lsm-kernel-gate/lsm_gate.py`](../examples/ebpf-lsm-kernel-gate/lsm_gate.py) is a pure-Python simulation. It loads no BPF program and touches no kernel. Its file check normalizes `.`, `..` and repeated slashes before it matches, so it blocks `/etc/./shadow` and `/etc//shadow`; it does not resolve symbolic links. Its probe list has 31 inputs, and the path probes come from the policy. It is not [syzkaller](https://github.com/google/syzkaller), which is a coverage-guided kernel fuzzer that looks for kernel bugs. For kernel enforcement, the example emits a Cilium Tetragon `TracingPolicy` instead of BPF C.
 
 ```mermaid
 sequenceDiagram
@@ -55,9 +55,9 @@ sequenceDiagram
 2. **Zero-Trust Egress Isolation**:
    Block socket connections to private RFC 1918/4193 addresses and cloud metadata endpoints (`169.254.169.254`) directly in `bpf_lsm_socket_connect`, allowing only loopback communications (`127.0.0.1`).
 3. **Boundary Mutation Probes**:
-   Continuously probe the LSM policy with synthesized traversal strings, bitwise flag mutations, and IP variants. Probes find bypasses; they cannot prove that none exist. `lsm_gate.py fuzz` runs 15 fixed probes and blocks 14 (rate 0.933); it allows `127.0.0.1` by design.
+   Continuously probe the LSM policy with synthesized traversal strings, bitwise flag mutations, and IP variants. Probes find bypasses; they cannot prove that none exist. `lsm_gate.py fuzz` runs 31 probes and blocks 30 (rate 0.968); it allows `127.0.0.1` by design.
 4. **Declarative Policy Synthesis**:
-   Compile declared security policies into portable BPF CO-RE C programs and Kubernetes-native Cilium Tetragon `TracingPolicy` CRDs. The generators in `lsm_gate.py` ignore the policy and print fixed templates. Each BPF program returns 0 (allow). The `TracingPolicy` has kprobes with no selectors, so Tetragon applies its default `Post` action: it records events and blocks nothing ([Tetragon selectors](https://tetragon.io/docs/concepts/tracing-policy/selectors/)). Enforcement needs a `Sigkill` or `Override` action.
+   Compile declared security policies into Kubernetes-native Cilium Tetragon `TracingPolicy` CRDs. `generate_tetragon_policy()` in `lsm_gate.py` reads the `LSMPolicy` and gives each kprobe a selector with a `Sigkill` action ([Tetragon selectors](https://tetragon.io/docs/concepts/tracing-policy/selectors/)). `Sigkill` stops the process; to make the call itself fail, add `Override` ([Tetragon enforcement](https://tetragon.io/docs/concepts/enforcement/)). The binary allowlist, relative paths and the privilege and evasion rules have no kernel selector. The example ships no BPF C.
 
 ---
 
