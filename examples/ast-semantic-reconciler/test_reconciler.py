@@ -1,7 +1,8 @@
 """Unit and integration test suite for Autonomous 3-Way AST Semantic Reconciler.
 
 Validates commutative disjoint symbol reconciliation, import sets unification,
-class method arbitration, and semantic collision detection under SARIF 2.1.0.
+class member arbitration, docstrings, the re-parse check, and semantic collision
+detection under SARIF 2.1.0.
 
 Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
@@ -11,6 +12,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import ast_reconciler
+import pytest
 from ast_reconciler import (
     ReconciliationStatus,
     SymbolKind,
@@ -204,3 +207,179 @@ def test_main_cli_execution_collision(tmp_path: Path) -> None:
     )
     code = main(["--base", str(b), "--ours", str(o), "--theirs", str(t), "--format", "markdown"])
     assert code == 1
+
+
+_COUNTER = (
+    '"""Module docs."""\n\n'
+    "class Counter:\n"
+    '    """Counter state."""\n'
+    "    count = 0\n\n"
+    "    def start(self):\n"
+    "        return 1\n"
+)
+
+
+def _class_shape(code: str, name: str) -> tuple[str | None, list[str]]:
+    """Return the docstring and the first line of each other member of a class."""
+    classes = {stmt.name: stmt for stmt in ast.parse(code).body if isinstance(stmt, ast.ClassDef)}
+    cls = classes[name]
+    doc = ast.get_docstring(cls)
+    members = cls.body[1:] if doc is not None else cls.body
+    return doc, [ast.unparse(member).splitlines()[0] for member in members]
+
+
+def test_reconcile_keeps_class_members_and_one_module_docstring() -> None:
+    """Verify that a merge keeps class members and writes the module docstring once."""
+    base = (
+        '"""Mod doc."""\n\nclass A:\n    """Class doc."""\n    X = 1\n\n    def f(self):\n        return 1\n'
+    )
+    ours = base + "\ndef g():\n    return 2\n"
+    theirs = base + "\ndef h():\n    return 3\n"
+    res = reconcile_3way(base, ours, theirs)
+    assert (
+        res.status,
+        res.merged_code.count("Mod doc."),
+        ast.get_docstring(ast.parse(res.merged_code)),
+        _class_shape(res.merged_code, "A"),
+        "def g" in res.merged_code and "def h" in res.merged_code,
+    ) == (
+        ReconciliationStatus.COMMUTATIVE_MERGE,
+        1,
+        "Mod doc.",
+        ("Class doc.", ["X = 1", "def f(self):"]),
+        True,
+    )
+
+
+def test_reconcile_unchanged_class_keeps_members() -> None:
+    """Verify that a class no branch changed keeps its attribute and docstring."""
+    res = reconcile_3way(_COUNTER, _COUNTER, _COUNTER)
+    assert (
+        res.status,
+        res.merged_code.count("Module docs."),
+        _class_shape(res.merged_code, "Counter"),
+    ) == (
+        ReconciliationStatus.CLEAN_MERGE,
+        1,
+        ("Counter state.", ["count = 0", "def start(self):"]),
+    )
+
+
+def test_reconcile_changed_class_keeps_members() -> None:
+    """Verify that a class one branch extends keeps its attribute and docstring."""
+    ours = _COUNTER + "\n    def reset(self):\n        return 0\n"
+    res = reconcile_3way(_COUNTER, ours, _COUNTER)
+    assert _class_shape(res.merged_code, "Counter") == (
+        "Counter state.",
+        ["count = 0", "def start(self):", "def reset(self):"],
+    )
+
+
+def test_reconcile_disjoint_class_members() -> None:
+    """Verify that an attribute from ours and a method from theirs both reach the class."""
+    ours = _COUNTER.replace("    count = 0\n", "    count = 0\n    limit = 10\n")
+    theirs = _COUNTER + "\n    def stop(self):\n        return 2\n"
+    res = reconcile_3way(_COUNTER, ours, theirs)
+    assert (res.status, _class_shape(res.merged_code, "Counter")) == (
+        ReconciliationStatus.COMMUTATIVE_MERGE,
+        ("Counter state.", ["count = 0", "limit = 10", "def start(self):", "def stop(self):"]),
+    )
+
+
+def test_reconcile_keeps_module_docstring_added_by_theirs() -> None:
+    """Verify that a module docstring that only theirs adds appears once."""
+    base = "def f():\n    return 1\n"
+    res = reconcile_3way(base, base, '"""Module docs."""\n' + base)
+    assert (
+        res.merged_code.count("Module docs."),
+        ast.get_docstring(ast.parse(res.merged_code)),
+    ) == (1, "Module docs.")
+
+
+def test_reconcile_keeps_property_getter_and_setter() -> None:
+    """Verify that two class members with the same name both survive a member merge."""
+    base = (
+        "class Box:\n"
+        "    @property\n"
+        "    def value(self):\n"
+        "        return self._v\n\n"
+        "    @value.setter\n"
+        "    def value(self, v):\n"
+        "        self._v = v\n"
+    )
+    ours = base + "\n    def a(self):\n        return 1\n"
+    theirs = base + "\n    def b(self):\n        return 2\n"
+    res = reconcile_3way(base, ours, theirs)
+    assert (res.merged_code.count("def value"), _class_shape(res.merged_code, "Box")[1]) == (
+        2,
+        ["@property", "@value.setter", "def a(self):", "def b(self):"],
+    )
+
+
+def test_reconcile_keeps_class_header_change_of_theirs() -> None:
+    """Verify that a new base class from theirs survives a method added by ours."""
+    ours = _COUNTER + "\n    def reset(self):\n        return 0\n"
+    theirs = _COUNTER.replace("class Counter:", "class Counter(Base):")
+    res = reconcile_3way(_COUNTER, ours, theirs)
+    assert ("class Counter(Base):" in res.merged_code, "def reset" in res.merged_code) == (True, True)
+
+
+def test_reconcile_class_header_collision_names_the_class() -> None:
+    """Verify that two different new base classes are a collision on the class itself."""
+    ours = (
+        _COUNTER.replace("class Counter:", "class Counter(Left):") + "\n    def a(self):\n        return 1\n"
+    )
+    theirs = _COUNTER.replace("class Counter:", "class Counter(Right):")
+    res = reconcile_3way(_COUNTER, ours, theirs)
+    names = [(c.symbol_name, c.symbol_kind) for c in res.collisions]
+    assert (res.status, names) == (ReconciliationStatus.SEMANTIC_COLLISION, [("Counter", SymbolKind.CLASS)])
+
+
+def test_reconcile_class_member_collision_names_the_member() -> None:
+    """Verify that a collision inside a class names the class and the member."""
+    ours = _COUNTER.replace("return 1", "return 2") + "\n    def a(self):\n        return 1\n"
+    theirs = _COUNTER.replace("return 1", "return 3")
+    res = reconcile_3way(_COUNTER, ours, theirs)
+    names = [(c.symbol_name, c.symbol_kind) for c in res.collisions]
+    assert (res.status, res.merged_code, names) == (
+        ReconciliationStatus.SEMANTIC_COLLISION,
+        "",
+        [("Counter.start", SymbolKind.FUNCTION)],
+    )
+
+
+def test_reconcile_reports_merge_that_does_not_parse(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that assembled code that does not parse becomes a collision, not output."""
+    monkeypatch.setattr(ast_reconciler, "assemble_merged_module", lambda *_args: "def broken(:\n")
+    res = reconcile_3way("x = 1\n", "x = 1\n", "x = 1\n")
+    names = [(c.symbol_name, c.symbol_kind) for c in res.collisions]
+    assert (res.status, res.merged_code, names) == (
+        ReconciliationStatus.SEMANTIC_COLLISION,
+        "",
+        [("<module>", SymbolKind.MODULE)],
+    )
+
+
+_CLEAN_MERGES = [
+    ("x = 1\n", "x = 1\ny = 2\n", "x = 1\nz = 3\n"),
+    (_COUNTER, _COUNTER, _COUNTER),
+    (_COUNTER, _COUNTER + "\n    def reset(self):\n        return 0\n", _COUNTER),
+    (
+        _COUNTER,
+        _COUNTER.replace("count = 0", "count = 1"),
+        _COUNTER + "\n    def stop(self):\n        pass\n",
+    ),
+    ("class E:\n    pass\n", "class E:\n    x = 1\n", "class E:\n    y = 2\n"),
+    (
+        "class N:\n    class M:\n        a = 1\n",
+        "class N:\n    class M:\n        a = 1\n        b = 2\n",
+        "class N:\n    class M:\n        a = 1\n        c = 3\n",
+    ),
+]
+
+
+@pytest.mark.parametrize(("base", "ours", "theirs"), _CLEAN_MERGES)
+def test_every_clean_merge_parses(base: str, ours: str, theirs: str) -> None:
+    """Verify that each clean merge in the table returns code that parses."""
+    res = reconcile_3way(base, ours, theirs)
+    assert (res.collisions, isinstance(ast.parse(res.merged_code), ast.Module)) == ([], True)

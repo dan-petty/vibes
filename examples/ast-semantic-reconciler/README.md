@@ -38,13 +38,14 @@ flowchart TD
     subgraph "Semantic Reconciliation Core"
         EB & EO & ET --> IR["3-Way Import Union & Deduplication"]
         EB & EO & ET --> SA["Symbol Graph Arbitration"]
-        EB & EO & ET --> MR["Class Method-Level Drilldown"]
+        EB & EO & ET --> MR["Class Member-Level Drilldown"]
     end
 
     subgraph "Synthesis & Telemetry Engine"
         IR & SA & MR --> CC{"Conflict Free?"}
-        CC -- "Yes" --> CG["AST Unparse & Validation (ast.unparse)"]
+        CC -- "Yes" --> CG["AST Unparse & Re-parse (ast.unparse, ast.parse)"]
         CC -- "No" --> CR["Structured Collision Diagnostics (SARIF 2.1.0)"]
+        CG -- "Parse fails" --> CR
     end
 ```
 
@@ -55,12 +56,19 @@ flowchart TD
 1. **Commutative Disjoint Function Reconciliation**:
    - Computes deterministic SHA-256 structural fingerprints (`hash_ast_node`), truncated to 16 hex characters.
    - Unifies independent function additions. The output order follows base, then ours, then theirs, so swapping `--ours` and `--theirs` changes the order of new symbols.
-2. **Recursive Class Method Arbitration**:
-   - Inspects `ast.ClassDef` bodies and merges disjoint method definitions across branches. The merged class lists its methods in alphabetical order.
+2. **Recursive Class Member Arbitration**:
+   - When only one branch changes a class, the reconciler keeps that branch's class as it is.
+   - When both branches change the same class, the reconciler merges the class body member by member: the docstring, attributes, methods, nested classes and other statements. Two members with the same name, for example a property getter and its setter, stay separate members.
+   - The class docstring comes first. The other members follow the order of ours, then the members that only theirs adds.
+   - A change to the class header (decorators, bases, keywords) from one branch is kept. Different header changes from both branches are a collision on the class.
 3. **Deterministic Import Set Union**:
    - Computes 3-way set differences (`(base & ours & theirs) | (ours - base) | (theirs - base)`), deduplicating the import lines and sorting them as plain strings. It does not apply the PEP 8 grouping of standard library, third-party and local imports.
 4. **Structured Collision Diagnostics**:
    - When a true semantic collision occurs (both branches modified the exact same function body incompatibly), the reconciler avoids emitting invalid syntax markers and instead produces structured diagnostic telemetry with exact AST node snippets and OASIS SARIF 2.1.0 output.
+   - A collision inside a class names the class and the member, for example `Service.start`.
+5. **Single Docstring and Re-parse Check**:
+   - The module docstring and each class docstring are merged like other symbols, so each appears once.
+   - The reconciler parses the merged code again with `ast.parse`. If the parse fails, it reports a `<module>` collision and writes no code.
 
 ---
 
@@ -81,7 +89,7 @@ python ast_reconciler.py --base base.py --ours ours.py --theirs theirs.py --form
 
 ### Git Custom Merge Driver Configuration
 
-The reconciler rebuilds the file with `ast.unparse`. The output loses every comment and the original formatting, and the module docstring appears twice (once as the docstring and once as a bare string statement). Use the merge driver only on files where that is acceptable.
+The reconciler rebuilds the file with `ast.unparse`. The output loses every comment and the original formatting. Use the merge driver only on files where that is acceptable.
 
 Configure git to route Python file merges through the AST Semantic Reconciler:
 
@@ -96,6 +104,12 @@ Configure git to route Python file merges through the AST Semantic Reconciler:
 # In .gitattributes
 *.py merge=ast-reconciler
 ```
+
+---
+
+## 📦 Dependencies
+
+The example uses only the Python standard library (`ast`, `copy`, `hashlib`, `argparse`), so you can copy the one file and run it.
 
 ---
 
