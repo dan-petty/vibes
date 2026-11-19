@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -33,14 +34,85 @@ def test_kinetic_probe_confirms_exploit(tmp_path: Path) -> None:
 
 
 def test_kinetic_probe_refutes_disproven_claim(tmp_path: Path) -> None:
-    """A probe that exits with non-zero indicates the vulnerability hypothesis was refuted."""
+    """A probe that handles the expected denial and exits with 1 refutes the hypothesis."""
     engine = KineticProbeEngine(workspace_root=tmp_path)
-    probe_code = "raise PermissionError('Denied by sandboxed security boundary')"
+    probe_code = (
+        "import sys\n"
+        "try:\n"
+        "    raise PermissionError('Denied by sandboxed security boundary')\n"
+        "except PermissionError:\n"
+        "    sys.exit(1)\n"
+    )
     result = engine.execute_probe(probe_code, claim_id="VIBES-CWE-22-SAFE")
 
     assert (result.verdict, result.exit_code) == (
         ProbeVerdict.KINETICALLY_REFUTED,
         1,
+    )
+
+
+@pytest.mark.parametrize(
+    ("probe_code", "expected_text"),
+    [
+        pytest.param("raise RuntimeError('boom')", "RuntimeError: boom", id="uncaught-exception"),
+        pytest.param("data = bytearray(256 * 1024 * 1024)", "MemoryError", id="over-memory-limit"),
+        pytest.param("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", "", id="killed-by-signal"),
+        pytest.param("import sys; sys.exit(3)", "", id="unexpected-exit-status"),
+    ],
+)
+def test_kinetic_probe_reports_broken_probe_as_inconclusive(
+    tmp_path: Path, probe_code: str, expected_text: str
+) -> None:
+    """A probe that crashes, exceeds the memory limit or exits unexpectedly refutes nothing."""
+    engine = KineticProbeEngine(workspace_root=tmp_path)
+    result = engine.execute_probe(probe_code, claim_id="VIBES-BROKEN-PROBE")
+
+    assert (result.verdict, expected_text in result.output) == ("inconclusive", True)
+
+
+def test_kinetic_probe_timeout_kills_probe_process_group(tmp_path: Path) -> None:
+    """A timeout kills the processes that the probe started, not only the probe."""
+    heartbeat = tmp_path / "heartbeat"
+    worker = (
+        "import pathlib, sys, time\n"
+        "end = time.monotonic() + 5.0\n"
+        "while time.monotonic() < end:\n"
+        "    with pathlib.Path(sys.argv[1]).open('a') as handle:\n"
+        "        handle.write('.')\n"
+        "    time.sleep(0.02)\n"
+    )
+    probe_code = (
+        "import pathlib, subprocess, sys, time\n"
+        f"heartbeat = pathlib.Path({str(heartbeat)!r})\n"
+        f"subprocess.Popen([sys.executable, '-c', {worker!r}, str(heartbeat)])\n"
+        "while not heartbeat.exists():\n"
+        "    time.sleep(0.01)\n"
+        "time.sleep(30)\n"
+    )
+    engine = KineticProbeEngine(workspace_root=tmp_path)
+    result = engine.execute_probe(probe_code, timeout=1.0)
+
+    time.sleep(0.1)
+    beats_at_return = heartbeat.stat().st_size if heartbeat.exists() else 0
+    time.sleep(0.3)
+    beats_later = heartbeat.stat().st_size if heartbeat.exists() else 0
+
+    assert (result.verdict, beats_at_return > 0, beats_later - beats_at_return) == (
+        ProbeVerdict.RESOURCE_EXHAUSTION,
+        True,
+        0,
+    )
+
+
+def test_kinetic_probe_reports_start_failure_as_error(tmp_path: Path) -> None:
+    """A probe that cannot start because the workspace is missing gives an error verdict."""
+    engine = KineticProbeEngine(workspace_root=tmp_path / "missing")
+    result = engine.execute_probe("import sys; sys.exit(0)")
+
+    assert (result.verdict, result.exit_code, result.output.startswith("Execution error:")) == (
+        ProbeVerdict.PROBE_ERROR,
+        -2,
+        True,
     )
 
 
