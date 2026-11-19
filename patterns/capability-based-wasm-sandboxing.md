@@ -20,7 +20,7 @@ Autonomous AI agents generate ephemeral tools (format converters, AST transforme
 
 ## 2. The Architectural Pattern: Object-Capability Perimeter
 
-The reference implementation is a pure-Python simulation: it runs no WebAssembly. It checks the 8-byte module header and section IDs, reads `import`/`export` lines from WIT text, and models gas and memory pages as counters over a Python list of `(op, cost)` pairs. Its capability IDs are the SHA-256 of the kind, the scope and a fixed salt, so anyone who knows the kind and scope can compute them, and the access checks compare only kind and scope. Real isolation needs a Wasm runtime, for example Wasmtime with fuel metering, store memory limits, and WASI preopened directories.
+The reference implementation is a pure-Python simulation: it runs no WebAssembly. It checks the 8-byte module header and section IDs, reads `import`/`export` lines from WIT text, and models gas and memory pages as counters over a Python list of `(op, cost)` pairs. Its capability IDs are random. The module records each handle that it mints, and the access checks refuse every other handle. Python code in the same process can still change that registry. Real isolation needs a Wasm runtime, for example Wasmtime with fuel metering, store memory limits, and WASI preopened directories.
 
 The **Capability-Based Wasm Sandboxing** pattern decouples code execution from host authority using the WebAssembly Component Model (WASI 0.2):
 
@@ -50,7 +50,7 @@ sequenceDiagram
 ## 3. Core Principles
 
 1. **Zero Ambient Authority**:
-   - The guest module cannot access any filesystem path, network socket, or environment variable unless explicitly provided as a capability handle. In a real runtime the handle is unforgeable because it is an index into a table that only the host can fill; a hash string is not.
+   - The guest module cannot access any filesystem path, network socket, or environment variable unless explicitly provided as a capability handle. In a real runtime the handle is unforgeable because it is an index into a table that only the host can fill. The example copies this with a registry of minted handles, but code in the same Python process can change the registry.
 2. **Deterministic Gas Metering**:
    - Every instruction decrements an instruction counter, deterministically neutralizing infinite loops and CPU exhaustion (CWE-400) without relying on asynchronous OS signals.
 3. **Linear Memory Ceilings**:

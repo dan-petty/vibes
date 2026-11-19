@@ -15,7 +15,7 @@ Containerized sandboxes (`docker run`, cgroups v2) mitigate ambient authority bu
 The **WASI 0.2 Component Model & Capability-Based Sandbox Gateway** is a pure-Python simulation of capability tokens, gas metering and linear memory containment. It runs no WebAssembly: the code imports no Wasm runtime (such as Wasmtime), instantiates nothing and measures no instantiation time. What it does:
 
 - `validate` checks a file's magic bytes, version and section IDs. It accepts core modules (version 1) only, so it rejects every Component Model binary (version `0x0d`, layer `1`).
-- A capability handle is a Python object. Its ID is a SHA-256 digest of kind, scope and a fixed salt, and no check reads the ID, so any caller can build a handle that passes. The tokens are not unforgeable.
+- A capability handle is a Python object. `create_capability` gives each handle a random ID (`secrets.token_hex`) and records the handle in a registry in the module. The access checks accept a handle only if the registry holds the same handle. A hand-built handle, or a minted ID copied into a handle with a wider scope, gets `CAP001` or `CAP002`. This is not isolation: Python code in the same process can read or change the registry.
 - Gas metering sums the costs of a supplied list of `(op, cost)` pairs, and memory containment is a page counter.
 
 ---
@@ -34,7 +34,7 @@ sequenceDiagram
 
     Agent->>Gateway: Submit tool bytecode (.wasm) & WIT interface
     Gateway->>Broker: Request capability grants (fs:read, net:dial)
-    Broker-->>Gateway: Mint SHA-256-derived capability handles
+    Broker-->>Gateway: Mint random capability handles and record each one
     Gateway->>Engine: Instantiate module with scoped capability table
     loop Metered Execution
         Engine->>Engine: Decrement gas per instruction (Halting Defense)
@@ -102,4 +102,4 @@ uv run pytest -q examples/wasm-capability-sandbox/test_wasm_sandbox.py
 
 ## 6. Zero-Dependency Statement
 
-This reference implementation strictly leverages the **Python standard library** (`argparse`, `dataclasses`, `enum`, `hashlib`, `json`, `pathlib`, `struct`, `sys`, `time`), requiring zero external packages or native C runtime extensions.
+This reference implementation strictly leverages the **Python standard library** (`argparse`, `dataclasses`, `enum`, `json`, `pathlib`, `secrets`, `struct`, `sys`, `time`), requiring zero external packages or native C runtime extensions.

@@ -8,11 +8,13 @@ Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from wasm_sandbox import (
     WASM_MAGIC,
     WASM_VERSION,
+    CapabilityHandle,
     CapabilityKind,
     DiagnosticRule,
     SandboxEnvironment,
@@ -103,6 +105,40 @@ def test_network_dial_capability(tmp_path: Path) -> None:
         True,
         DiagnosticRule.CAP002,
     )
+
+
+def test_hand_built_filesystem_handle_is_refused() -> None:
+    """Refuse a filesystem handle that the sandbox did not mint (CAP001)."""
+    forged = CapabilityHandle("cap-forged", CapabilityKind.FILESYSTEM_READ, "/etc", 0.0)
+    finding = check_filesystem_access("/etc/passwd", (forged,))
+    assert ((finding.rule, finding.target) if finding else None) == (DiagnosticRule.CAP001, "/etc/passwd")
+
+
+def test_minted_handle_id_with_wider_scope_is_refused(tmp_path: Path) -> None:
+    """Refuse a minted handle ID that a caller copies into a handle with a wider scope."""
+    cap = create_capability(CapabilityKind.FILESYSTEM_READ, str(tmp_path))
+    forged = replace(cap, scope="/etc")
+    finding = check_filesystem_access("/etc/passwd", (forged,))
+    assert (forged.handle_id, finding.rule if finding else None) == (cap.handle_id, DiagnosticRule.CAP001)
+
+
+def test_hand_built_network_handle_is_refused() -> None:
+    """Refuse a network handle that the sandbox did not mint (CAP002)."""
+    forged = CapabilityHandle("cap-forged", CapabilityKind.NETWORK_DIAL, "*", 0.0)
+    finding = check_network_dial("example.com:443", (forged,))
+    assert (finding.rule if finding else None) == DiagnosticRule.CAP002
+
+
+def test_each_minted_handle_keeps_its_grant(tmp_path: Path) -> None:
+    """Accept two handles minted for the same kind and scope, each with its own ID."""
+    first = create_capability(CapabilityKind.FILESYSTEM_READ, str(tmp_path))
+    second = create_capability(CapabilityKind.FILESYSTEM_READ, str(tmp_path))
+    target = str(tmp_path / "data.txt")
+    assert (
+        first.handle_id != second.handle_id,
+        check_filesystem_access(target, (first,)),
+        check_filesystem_access(target, (second,)),
+    ) == (True, None, None)
 
 
 def test_gas_metering_termination() -> None:

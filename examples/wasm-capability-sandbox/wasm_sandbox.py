@@ -3,6 +3,7 @@
 Simulates object-capability isolation, WIT interface contracts, deterministic
 gas metering, and linear memory containment in pure Python. It runs no WebAssembly,
 and the header check accepts core modules (version 1) only, not components.
+The access checks accept only capability handles that create_capability minted.
 
 Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 """
@@ -10,8 +11,8 @@ Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import secrets
 import struct
 import sys
 import time
@@ -61,7 +62,7 @@ class DiagnosticRule(StrEnum):
 
 @dataclass(frozen=True)
 class CapabilityHandle:
-    """Capability grant record. Any caller can build one; no check reads handle_id."""
+    """Capability grant record. The access checks accept it only if create_capability minted it."""
 
     handle_id: str
     kind: CapabilityKind
@@ -111,16 +112,24 @@ class ExecutionResult:
     findings: tuple[Finding, ...]
 
 
-def create_capability(kind: CapabilityKind, scope: str, salt: str = "wasi-cap") -> CapabilityHandle:
-    """Mint a capability handle whose ID is a deterministic SHA-256 digest of kind and scope."""
-    raw = f"{kind}:{scope}:{salt}".encode()
-    digest = hashlib.sha256(raw).hexdigest()[:16]
-    return CapabilityHandle(
-        handle_id=f"cap-{digest}",
+_MINTED_HANDLES: dict[str, CapabilityHandle] = {}
+
+
+def create_capability(kind: CapabilityKind, scope: str) -> CapabilityHandle:
+    """Mint a capability handle with a random ID and record it in the sandbox registry."""
+    handle = CapabilityHandle(
+        handle_id=f"cap-{secrets.token_hex(16)}",
         kind=kind,
         scope=scope,
         granted_at=time.time(),
     )
+    _MINTED_HANDLES[handle.handle_id] = handle
+    return handle
+
+
+def _is_minted(handle: CapabilityHandle) -> bool:
+    """Return True only if the registry holds this handle with the same kind, scope and time."""
+    return _MINTED_HANDLES.get(handle.handle_id) == handle
 
 
 def validate_wasm_header(data: bytes) -> WasmHeaderInfo:
@@ -235,7 +244,7 @@ def _has_fs_grant(target: str, handle: CapabilityHandle) -> bool:
     """Check if a capability handle authorizes target filesystem path."""
     if handle.kind not in (CapabilityKind.FILESYSTEM_READ, CapabilityKind.FILESYSTEM_WRITE):
         return False
-    return _is_scoped_path(target, handle.scope)
+    return _is_minted(handle) and _is_scoped_path(target, handle.scope)
 
 
 def check_filesystem_access(path: str, handles: tuple[CapabilityHandle, ...]) -> Finding | None:
@@ -254,7 +263,7 @@ def _matches_network_scope(target: str, handle: CapabilityHandle) -> bool:
     """Check if a capability handle authorizes target network destination."""
     if handle.kind != CapabilityKind.NETWORK_DIAL:
         return False
-    return handle.scope in ("*", target)
+    return _is_minted(handle) and handle.scope in ("*", target)
 
 
 def check_network_dial(target: str, handles: tuple[CapabilityHandle, ...]) -> Finding | None:
