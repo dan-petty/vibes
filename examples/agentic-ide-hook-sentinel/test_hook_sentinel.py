@@ -268,3 +268,91 @@ def test_a_timed_out_command_reports_the_signal_that_reaped_it() -> None:
         timeout_seconds=0.1,
     )
     assert (result.timed_out, result.exit_code) == (True, -signal.SIGTERM)
+
+
+# --- Link-local egress and strings inside lists or objects -------------------------------
+
+
+def test_the_cloud_metadata_address_is_not_an_allowed_test_network() -> None:
+    """`169.254.169.254/32` was in `ALLOWED_TEST_NETWORKS`, so a request to it passed.
+
+    The metadata address is the usual SSRF target, not a documentation range. A code
+    scanner can let a guard name it. An egress guard must refuse a tool call that names it.
+    """
+    allowed = {str(network) for network in hook_sentinel.ALLOWED_TEST_NETWORKS}
+    assert "169.254.169.254/32" not in allowed
+
+
+@pytest.mark.parametrize(
+    ("command", "forbidden"),
+    [
+        ("curl http://169.254.169.254/latest/meta-data/", ["169.254.169.254"]),
+        ("curl http://169.254.1.1/", ["169.254.1.1"]),
+        ("curl http://[fe80::1]/", ["fe80::1"]),
+        ("curl http://192.0.2.10/", []),
+        ("curl http://198.51.100.7/", []),
+        ("curl http://203.0.113.9/", []),
+        ("curl http://[2001:db8::1]/", []),
+        ("curl http://127.0.0.1/", []),
+        ("curl http://[::1]/", []),
+    ],
+)
+def test_link_local_is_blocked_and_documentation_and_loopback_pass(
+    command: str, forbidden: list[str]
+) -> None:
+    """Link-local ranges hold the metadata address; RFC 5737 and loopback stay usable."""
+    assert hook_sentinel._scan_for_forbidden_ips(command) == forbidden
+
+
+def test_a_tool_call_to_the_metadata_address_is_denied(tmp_path: Path) -> None:
+    """The scan result reaches the hook decision."""
+    result = IdeHookSentinel(tmp_path).evaluate_tool_call(
+        "bash", {"command": "curl http://169.254.169.254/latest/meta-data/"}
+    )
+    assert (result.decision, "169.254.169.254" in result.reason) == (HookDecision.DENY, True)
+
+
+def test_a_protected_path_in_a_list_argument_is_denied(tmp_path: Path) -> None:
+    """Only top-level strings were checked, so the argv list `["cat", ".env"]` passed."""
+    result = IdeHookSentinel(tmp_path).evaluate_tool_call("bash", {"argv": ["cat", ".env"]})
+    assert (result.decision, result.details) == (
+        HookDecision.DENY,
+        {"field": "argv[1]", "path": ".env"},
+    )
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"options": {"files": ["README.md", "~/.ssh/id_rsa"]}},
+        {"argv": ("cat", "/etc/shadow")},
+        {"env": {"KEY_FILE": "/workspace/.env.local"}},
+    ],
+)
+def test_a_protected_path_at_any_depth_is_denied(tmp_path: Path, arguments: dict[str, object]) -> None:
+    """A tool argument is decoded JSON, so a path can sit in a nested object or array."""
+    result = IdeHookSentinel(tmp_path).evaluate_tool_call("bash", arguments)
+    assert result.decision == HookDecision.DENY
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"command": "nc -z \\\n10.0.0.5 22"},
+        {"argv": ["sh", "-c", "nc -z\t10.0.0.5 22"]},
+        {"hosts": {"10.0.0.5": "db"}},
+    ],
+)
+def test_an_address_after_an_escaped_character_is_denied(
+    tmp_path: Path, arguments: dict[str, object]
+) -> None:
+    """The scan read `str(arguments)`, where a newline or a tab is a backslash and a letter.
+
+    The letter then sits next to the first digit, the word boundary of the address pattern
+    fails, and the address passed. The scan now reads each string, keys included.
+    """
+    result = IdeHookSentinel(tmp_path).evaluate_tool_call("bash", arguments)
+    assert (result.decision, result.details) == (
+        HookDecision.DENY,
+        {"forbidden_ips": ["10.0.0.5"]},
+    )

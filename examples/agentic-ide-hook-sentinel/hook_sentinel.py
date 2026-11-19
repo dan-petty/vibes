@@ -18,7 +18,7 @@ import os
 import re
 import signal
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -40,7 +40,6 @@ PROTECTED_PATH_PATTERNS: Final[tuple[str, ...]] = (
 
 IPV4_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
-# RFC 5737 Documentation blocks + loopback are allowed for safe testing
 # How long a process group is given to honour SIGTERM before SIGKILL follows.
 GRACE_SECONDS: Final[float] = 2.0
 
@@ -67,12 +66,17 @@ def _lsp_severity(diagnostic: dict[str, Any]) -> int:
     return _LSP_SEVERITY_NAMES.get(str(raw).strip().lower(), LSP_SEVERITY_ERROR)
 
 
+# RFC 5737 and RFC 3849 documentation blocks and loopback, which tests can use safely.
+#
+# The cloud metadata address is not here. `tools/sanitization_policy.py` lets code and
+# documentation name it, because a guard that blocks it must name it. This module is an
+# egress guard: a tool call that names the address is a request to it, and the address
+# serves the credentials of the host. It is in `169.254.0.0/16` below.
 ALLOWED_TEST_NETWORKS: Final[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]] = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
     ipaddress.ip_network("203.0.113.0/24"),
     ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.169.254/32"),
     ipaddress.ip_network("2001:db8::/32"),
     ipaddress.ip_network("::1/128"),
 )
@@ -240,11 +244,33 @@ def _is_protected_path(path_str: str) -> bool:
     return any(pat.lower() in lower_path for pat in PROTECTED_PATH_PATTERNS)
 
 
+def _iter_strings(value: object, location: str) -> Iterator[tuple[str, str]]:
+    """Yield each string in a tool argument at any depth, keys included, with its location.
+
+    A tool argument is decoded JSON, so an argv array or a nested object can hold a path or
+    an address. A check of top-level strings only let `["cat", ".env"]` pass. A check of
+    `str(arguments)` reads escaped text: a newline becomes a backslash and the letter `n`,
+    the letter sits next to the address after it, and the word boundary of the address
+    pattern fails.
+    """
+    if isinstance(value, str):
+        yield location, value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            child = f"{location}.{key}" if location else str(key)
+            yield from _iter_strings(key, child)
+            yield from _iter_strings(item, child)
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            yield from _iter_strings(item, f"{location}[{index}]")
+
+
 class IdeHookSentinel:
     """Zero-trust security and lifecycle coordinator for agentic IDEs.
 
     Guarantees:
-    - Pre-tool inspection: Blocks secret credential paths and private RFC 1918 IPs.
+    - Pre-tool inspection: Blocks secret credential paths and private or link-local IPs
+      in every string of the arguments, list items and nested objects included.
     - Pre-file-write bounds: Enforces <= 5MB file cap and workspace boundary containment.
     - Process group containment: Subprocesses isolated via POSIX process groups.
     - LSP diagnostic ingestion: Converts compiler diagnostics to corrective guidance.
@@ -255,10 +281,10 @@ class IdeHookSentinel:
 
     def evaluate_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> HookEvaluation:
         """Evaluate pre-tool execution arguments against zero-trust policies."""
-        arg_str = str(arguments)
+        strings = list(_iter_strings(arguments, ""))
 
-        # 1. Check for private RFC 1918 IP leakage
-        forbidden_ips = _scan_for_forbidden_ips(arg_str)
+        # 1. Check for private and link-local host addresses
+        forbidden_ips = [ip for _, text in strings for ip in _scan_for_forbidden_ips(text)]
         if forbidden_ips:
             return HookEvaluation(
                 decision=HookDecision.DENY,
@@ -267,12 +293,12 @@ class IdeHookSentinel:
             )
 
         # 2. Check for protected paths in tool arguments
-        for key, val in arguments.items():
-            if isinstance(val, str) and _is_protected_path(val):
+        for location, text in strings:
+            if _is_protected_path(text):
                 return HookEvaluation(
                     decision=HookDecision.DENY,
-                    reason=f"Access to protected credential or system path blocked: '{val}'",
-                    details={"field": key, "path": val},
+                    reason=f"Access to protected credential or system path blocked: '{text}'",
+                    details={"field": location, "path": text},
                 )
 
         return HookEvaluation(decision=HookDecision.ALLOW, reason="Tool execution verified safe")
