@@ -6,15 +6,21 @@ call), correlates review feedback with local AST state and mechanical invariant
 oracles (complexity, nesting, sanitization, docstrings), checks whether defects have
 been resolved, and writes resolution plans and GraphQL mutation text.
 
-CC001 and DOC001 check the definition that the thread names: the node's `symbolName`
-field, else the definition that encloses the review-time line in the base version of the
-file (`--base-root`), else the definition that the first comment's `diffHunk` shows. A
-function that moved is found by its name. The check fails when the file has no definition
-of that name, or when the thread names no symbol and no definition encloses the thread
-line. ND001 and SEC001 still read the thread line or the whole file.
+CC001, ND001 and DOC001 check the definition that the thread names: the node's
+`symbolName` field, else the definition that encloses the review-time line in the version
+of the file that the review was made on (`--base-root`), else the definition that the
+first comment's `diffHunk` shows. A function that moved is found by its name. The check
+fails when the file has no definition of that name, or when the thread names no symbol and
+no definition encloses the thread line, for example a line past the end of the file.
+SEC001 reads the whole file.
+
+A thread on the LEFT side of the diff (a comment on a deleted line) numbers its line in
+the left version of the file: the pull request's base at review time (`--left-root`). Its
+line is never read against the current file.
 
 Each reply states only what the tool measured. A CC001 reply gives the symbol, its radon
-complexity in the base version and now, and the limit.
+complexity in the base version and now, and the limit. An ND001 reply gives the symbol and
+its nesting depth, counted as the AST sentinel counts it.
 
 The reply and resolve mutations are not atomic: GraphQL runs mutation fields in order,
 with no transaction, so a failed resolve leaves the reply in place.
@@ -34,7 +40,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
-from metric_reference import cyclomatic_complexity
+from metric_reference import cyclomatic_complexity, nesting_depth
 
 # Rule identification patterns in review comments
 _RULE_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
@@ -61,6 +67,28 @@ _DEFINITION_TYPES: Final[tuple[type[_Definition], ...]] = (ast.FunctionDef, ast.
 # The CC001 and ND001 limits of AGENTS.md §10
 _COMPLEXITY_LIMIT: Final[int] = 10
 _NESTING_LIMIT: Final[int] = 5
+
+# The compound statements that the AST sentinel counts as one ND001 nesting level
+_NESTING_TYPES: Final[tuple[type[ast.AST], ...]] = (
+    ast.If,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.With,
+    ast.AsyncWith,
+    ast.Try,
+    ast.TryStar,
+    ast.ExceptHandler,
+    ast.Match,
+    ast.match_case,
+)
+
+
+class DiffSide(StrEnum):
+    """The side of the diff that a review thread is on, as GitHub names it."""
+
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
 
 
 class ResolutionStatus(StrEnum):
@@ -90,7 +118,8 @@ class ReviewThread:
     or an empty string when the payload does not show it. `symbol_is_explicit` is true
     when that name came from the node's `symbolName` field, not from the diff hunk.
     `original_line` is the commented line at review time (`originalLine`); zero means that
-    the payload gave only `line`.
+    the payload gave only `line`. `side` is the side of the diff: on the LEFT side, both
+    line numbers count lines of the pull request's base, not of the current file.
     """
 
     thread_id: str
@@ -101,11 +130,17 @@ class ReviewThread:
     symbol_name: str = ""
     symbol_is_explicit: bool = False
     original_line: int = 0
+    side: DiffSide = DiffSide.RIGHT
 
     @property
     def review_line(self) -> int:
         """Returns the commented line in the version of the file that the review was made on."""
         return self.original_line or self.line
+
+    @property
+    def current_line(self) -> int:
+        """Returns the thread line in the current file, or 0 for a LEFT-side line, which has none."""
+        return 0 if self.side == DiffSide.LEFT else self.line
 
 
 @dataclass(frozen=True)
@@ -190,16 +225,25 @@ def _parse_single_thread(node: dict[str, Any]) -> ReviewThread | None:
     line = int(node.get("line") or node.get("originalLine") or 1)
     raw_comments = _comment_nodes(node.get("comments", []))
     explicit = _explicit_symbol_name(node)
+    side = _diff_side(node, raw_comments)
     return ReviewThread(
         thread_id=thread_id,
         is_resolved=is_resolved,
         path=path,
         line=line,
         comments=[_parse_single_comment(item) for item in raw_comments],
-        symbol_name=explicit or _hunk_symbol_name(raw_comments),
+        symbol_name=explicit or _hunk_symbol_name(raw_comments, side),
         symbol_is_explicit=bool(explicit),
         original_line=int(node.get("originalLine") or node.get("original_line") or 0),
+        side=side,
     )
+
+
+def _diff_side(node: dict[str, Any], raw_comments: list[dict[str, Any]]) -> DiffSide:
+    """Reads the thread's diff side: GraphQL `diffSide`, else REST `side`; RIGHT when absent."""
+    first = raw_comments[0] if raw_comments else {}
+    raw = node.get("diffSide") or node.get("side") or first.get("side") or ""
+    return DiffSide.LEFT if str(raw).upper() == DiffSide.LEFT else DiffSide.RIGHT
 
 
 def _comment_nodes(raw_comments: Any) -> list[dict[str, Any]]:
@@ -216,18 +260,19 @@ def _explicit_symbol_name(node: dict[str, Any]) -> str:
     return str(explicit) if explicit else ""
 
 
-def _hunk_symbol_name(raw_comments: list[dict[str, Any]]) -> str:
+def _hunk_symbol_name(raw_comments: list[dict[str, Any]], side: DiffSide) -> str:
     """Reads the reviewed symbol name from the diff hunk of the first comment."""
     first_hunk = raw_comments[0].get("diffHunk", "") if raw_comments else ""
-    return symbol_from_diff_hunk(str(first_hunk or ""))
+    return symbol_from_diff_hunk(str(first_hunk or ""), side)
 
 
-def symbol_from_diff_hunk(diff_hunk: str) -> str:
+def symbol_from_diff_hunk(diff_hunk: str, side: DiffSide = DiffSide.RIGHT) -> str:
     """Names the definition that encloses the commented line of a review comment's diff hunk.
 
     GitHub ends a review comment's `diffHunk` at the commented line. The walk goes up from
-    that line through the new-side lines and keeps each `def` or `class` line that is less
-    indented than every line below it, so the result is a dotted path such as
+    that line through the lines of the comment's side (the new-side lines, or the old-side
+    lines for a LEFT-side comment on a deleted line) and keeps each `def` or `class` line
+    that is less indented than every line below it, so the result is a dotted path such as
     `Calc.compute`. When the hunk shows no enclosing definition and the walk did not reach
     module level, the hunk header's context text gives a bare name. That header can name a
     different definition than the one that holds the line (the class of a method, or the
@@ -235,8 +280,9 @@ def symbol_from_diff_hunk(diff_hunk: str) -> str:
     file. An empty string means the hunk shows no symbol.
     """
     lines = diff_hunk.splitlines()
-    new_side = [text[1:] for text in lines[1:] if text[:1] in (" ", "+")]
-    names, ceiling = _enclosing_definitions(new_side)
+    changed = "-" if side == DiffSide.LEFT else "+"
+    side_lines = [text[1:] for text in lines[1:] if text[:1] in (" ", changed)]
+    names, ceiling = _enclosing_definitions(side_lines)
     if not names and ceiling != 0 and lines:
         names = _header_definition(lines[0])
     return ".".join(names)
@@ -307,18 +353,20 @@ def _first_definition_named(scope: ast.AST, name: str) -> _Definition | None:
     return None
 
 
-def resolve_review_symbol(thread: ReviewThread, base_root: Path | None) -> str:
+def resolve_review_symbol(thread: ReviewThread, base_root: Path | None, left_root: Path | None = None) -> str:
     """Names the definition that a thread reviewed, from the best evidence that is available.
 
     The node's `symbolName` comes first. Next is the dotted path of the definitions that
-    enclose the review-time line in the base version of the file under `base_root` (the
-    files that the review was made on), for example `B.run`. The name from the diff hunk
-    is used only when that lookup fails: no base root, no such file, no parse, or no
-    definition at the line.
+    enclose the review-time line in the version of the file that the line numbers, for
+    example `B.run`: `base_root` holds the reviewed commit (the RIGHT side of the diff),
+    and `left_root` holds the pull request's base at review time (the LEFT side). The name
+    from the diff hunk is used only when that lookup fails: no root for the thread's side,
+    no such file, no parse, or no definition at the line.
     """
-    if thread.symbol_is_explicit or base_root is None:
+    review_root = left_root if thread.side == DiffSide.LEFT else base_root
+    if thread.symbol_is_explicit or review_root is None:
         return thread.symbol_name
-    tree = _parse_ast_safe(base_root / thread.path)
+    tree = _parse_ast_safe(review_root / thread.path)
     in_base = definition_path_at_line(tree, thread.review_line) if tree is not None else ""
     return in_base or thread.symbol_name
 
@@ -375,14 +423,15 @@ def _format_symbol_name(node: ast.AST) -> str:
 
 
 def verify_thread_resolution(
-    root_dir: Path, thread: ReviewThread, base_root: Path | None = None
+    root_dir: Path, thread: ReviewThread, base_root: Path | None = None, left_root: Path | None = None
 ) -> ThreadAnalysis:
     """Evaluates whether an open review thread has been resolved in the workspace.
 
     `base_root` holds the base version of the files: the version that the review was made
     on. With it, the thread's symbol name comes from that version (`resolve_review_symbol`)
-    and a CC001 reply states the old complexity. The analysis keeps the thread with that
-    name.
+    and a CC001 reply states the old complexity. `left_root` holds the pull request's base
+    at review time, where a LEFT-side thread's line is looked up. The analysis keeps the
+    thread with that name.
     """
     if thread.is_resolved:
         return _make_resolved_analysis(thread)
@@ -391,10 +440,10 @@ def verify_thread_resolution(
     if not target_path.exists():
         return _make_orphaned_analysis(thread)
 
-    thread = replace(thread, symbol_name=resolve_review_symbol(thread, base_root))
+    thread = replace(thread, symbol_name=resolve_review_symbol(thread, base_root, left_root))
     last_body = thread.comments[-1].body if thread.comments else ""
     rule_id = classify_comment_rule(last_body)
-    symbol_name = locate_ast_symbol(target_path, thread.line, thread.symbol_name)
+    symbol_name = locate_ast_symbol(target_path, thread.current_line, thread.symbol_name)
     base_path = base_root / thread.path if base_root is not None else None
 
     status, explanation, reply = _audit_rule_resolution(target_path, thread, rule_id, symbol_name, base_path)
@@ -437,7 +486,7 @@ def _audit_rule_resolution(
     dispatch: dict[str, Callable[[], tuple[ResolutionStatus, str, str]]] = {
         "SEC001": lambda: _audit_security_rule(content, symbol_name),
         "CC001": lambda: _audit_complexity_rule(content, thread, symbol_name, base_path),
-        "ND001": lambda: _audit_nesting_rule(content, thread.line, symbol_name),
+        "ND001": lambda: _audit_nesting_rule(content, thread, symbol_name),
         "DOC001": lambda: _audit_doc_rule(content, thread, symbol_name),
     }
     audit_fn = dispatch.get(rule_id)
@@ -522,8 +571,9 @@ def _locate_audit_target(
     """Finds the definition that a thread is about, or says why no definition can be checked.
 
     A thread with a symbol name is checked against the definition of that name, wherever it
-    now is. A thread without one falls back to the definition that encloses its line. The
-    lookup fails closed: no definition means no verified fix.
+    now is. A thread without one falls back to the definition that encloses its line in the
+    current file; a LEFT-side line has none. The lookup fails closed: no definition means
+    no verified fix.
     """
     tree = _parse_ast_safe_content(content)
     if tree is None:
@@ -533,10 +583,24 @@ def _locate_audit_target(
         if isinstance(named, kinds):
             return named, ""
         return None, f"No matching definition named '{thread.symbol_name}' exists in the current file."
-    enclosing = _find_enclosing_node(tree, thread.line, kinds)
+    enclosing = _find_enclosing_node(tree, thread.current_line, kinds)
     if enclosing is None:
-        return None, f"The thread names no symbol, and no matching definition encloses line {thread.line}."
+        return None, _unlocated_reason(content, thread)
     return enclosing, ""
+
+
+def _unlocated_reason(content: str, thread: ReviewThread) -> str:
+    """Says why a thread that names no symbol has no definition in the current file to check."""
+    if thread.side == DiffSide.LEFT:
+        return (
+            f"The thread is on the LEFT side of the diff, so line {thread.line} is a line of the "
+            "pull request's base, not of the current file. Neither the left version (--left-root) "
+            "nor the diff hunk names a definition at that line."
+        )
+    line_count = len(content.splitlines())
+    if thread.line > line_count:
+        return f"The thread names no symbol, and line {thread.line} is not in the current file ({line_count} lines)."
+    return f"The thread names no symbol, and no matching definition encloses line {thread.line}."
 
 
 def _parse_ast_safe_content(content: str) -> ast.AST | None:
@@ -547,31 +611,28 @@ def _parse_ast_safe_content(content: str) -> ast.AST | None:
         return None
 
 
-def _audit_nesting_rule(content: str, line: int, symbol_name: str) -> tuple[ResolutionStatus, str, str]:
-    """Audits indentation nesting depth around the target line."""
-    lines = content.splitlines()
-    if not (1 <= line <= len(lines)):
-        return (ResolutionStatus.FIX_VERIFIED, "Target line verified clean.", "Verified.")
+def _audit_nesting_rule(content: str, thread: ReviewThread, symbol_name: str) -> tuple[ResolutionStatus, str, str]:
+    """Audits the nesting depth of the function that the thread names against the limit.
 
-    depth = _calculate_line_depth(lines[line - 1])
-    measured = f"line {line} has nesting depth {depth} (leading spaces divided by 4)"
+    The depth is the deepest run of nested compound statements in the function, as the AST
+    sentinel counts it (`metric_reference.nesting_depth`).
+    """
+    func_node, failure = _locate_audit_target(content, thread, _FUNCTION_TYPES)
+    if func_node is None:
+        return (ResolutionStatus.ACTION_REQUIRED, failure, "")
+    depth = nesting_depth(func_node, _NESTING_TYPES)
+    measured = f"{thread.symbol_name or func_node.name} has nesting depth {depth}"
     if depth <= _NESTING_LIMIT:
         return (
             ResolutionStatus.FIX_VERIFIED,
-            f"Nesting depth {depth} <= {_NESTING_LIMIT} verified for line {line}.",
+            f"Nesting depth {depth} <= {_NESTING_LIMIT} verified for {symbol_name}.",
             f"Verified: {measured}, at or below the limit of {_NESTING_LIMIT}.",
         )
     return (
         ResolutionStatus.ACTION_REQUIRED,
-        f"Nesting depth {depth} exceeds ceiling of {_NESTING_LIMIT} in {symbol_name}.",
+        f"Nesting depth {depth} still exceeds ceiling of {_NESTING_LIMIT} in {symbol_name}.",
         f"Not fixed: {measured}, above the limit of {_NESTING_LIMIT}.",
     )
-
-
-def _calculate_line_depth(line_str: str) -> int:
-    """Calculates indentation depth for a single source line."""
-    indent = len(line_str) - len(line_str.lstrip(" "))
-    return indent // 4
 
 
 def _audit_doc_rule(content: str, thread: ReviewThread, symbol_name: str) -> tuple[ResolutionStatus, str, str]:
@@ -596,10 +657,13 @@ def _audit_doc_rule(content: str, thread: ReviewThread, symbol_name: str) -> tup
 
 
 def synchronize_threads(
-    root_dir: Path, threads: Sequence[ReviewThread], base_root: Path | None = None
+    root_dir: Path,
+    threads: Sequence[ReviewThread],
+    base_root: Path | None = None,
+    left_root: Path | None = None,
 ) -> list[ThreadAnalysis]:
     """Synchronizes a sequence of review threads with the active codebase state."""
-    return [verify_thread_resolution(root_dir, t, base_root) for t in threads]
+    return [verify_thread_resolution(root_dir, t, base_root, left_root) for t in threads]
 
 
 def generate_resolution_mutation(thread_id: str, reply_body: str) -> str:
@@ -695,7 +759,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     threads = _load_threads_from_input(args.input)
-    analyses = synchronize_threads(args.root, threads, args.base_root)
+    analyses = synchronize_threads(args.root, threads, args.base_root, args.left_root)
 
     _emit_outputs(analyses, args)
 
@@ -720,6 +784,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "Directory with the base version of the files: the version that the review was made on, "
             "for example a git worktree of the reviewed commit. It names the definition at each "
             "thread's review-time line and gives the old complexity in CC001 replies."
+        ),
+    )
+    parser.add_argument(
+        "--left-root",
+        type=Path,
+        help=(
+            "Directory with the left side of the reviewed diff: the pull request's base commit at "
+            "review time. It names the definition at the line of each LEFT-side thread (a comment "
+            "on a deleted line). Without it, such a thread uses its diff hunk, else stays unresolved."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Emit structured machine-readable JSON output.")
