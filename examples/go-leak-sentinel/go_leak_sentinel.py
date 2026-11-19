@@ -17,18 +17,30 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-# Frame patterns that mark a goroutine as a system daemon. `runtime.gopark` is also the
-# top frame of every blocked goroutine when the dump shows runtime frames
-# (GOTRACEBACK=system), so such dumps hide user leaks.
-SYSTEM_GOROUTINE_PATTERNS = (
-    "runtime.gopark",
-    "runtime.timerproc",
-    "runtime.gcBgMarkWorker",
-    "runtime.bgsweep",
-    "runtime.scavenger",
-    "internal/poll.runtime_pollWait",
-    "testing.(*T).Run",
+# Go treats a goroutine as a system goroutine when its entry function, the function that
+# the `go` statement started, is in package runtime and is not `runtime.main`
+# (runtime.isSystemGoroutine in src/runtime/traceback.go). A default dump and
+# runtime.NumGoroutine leave these goroutines out; GOTRACEBACK=system shows them. Do not
+# use `runtime.gopark` for this: every blocked goroutine parks there, user leaks included.
+RUNTIME_PREFIX = "runtime."
+RUNTIME_USER_ENTRIES = frozenset({"runtime.main"})
+# GOTRACEBACK=system shows this frame below the entry function of every goroutine.
+GOEXIT_FUNCTION = "runtime.goexit"
+
+# Default filters of go.uber.org/goleak (isTestStack, isStdLibStack and isTraceStack in
+# its options.go). They match the top function that a default dump shows. The testing
+# runner functions are skipped only while they wait on a channel receive.
+TEST_RUNNER_TOP_FUNCTIONS = frozenset(
+    {
+        "testing.RunTests",
+        "testing.(*T).Run",
+        "testing.(*T).Parallel",
+        "testing.runFuzzing",
+        "testing.runFuzzTests",
+    }
 )
+SIGNAL_TOP_FUNCTIONS = frozenset({"os/signal.signal_recv", "os/signal.loop"})
+TRACE_READER_FUNCTION = "runtime.ReadTrace"
 
 
 class GoroutineState(StrEnum):
@@ -113,6 +125,47 @@ class ConcurrencyAuditReport:
         return data
 
 
+def _is_hidden_runtime_function(function: str) -> bool:
+    """Return True for an unexported runtime function, which a default dump does not show."""
+    name = function.removeprefix(RUNTIME_PREFIX)
+    return name != function and not name[:1].isupper()
+
+
+def entry_function(frames: list[StackFrame]) -> str | None:
+    """Return the function that the `go` statement started.
+
+    Go prints the innermost frame first, so the entry function is the last frame, or the
+    frame above `runtime.goexit` when the dump shows runtime frames.
+    """
+    names = [f.function for f in frames if f.function != GOEXIT_FUNCTION]
+    return names[-1] if names else None
+
+
+def top_function(frames: list[StackFrame]) -> str | None:
+    """Return the top frame that a default dump shows, skipping frames such as `runtime.gopark`."""
+    names = [f.function for f in frames]
+    shown = [n for n in names if not _is_hidden_runtime_function(n)]
+    return (shown or names or [None])[0]
+
+
+def _is_goleak_default_ignore(frames: list[StackFrame], raw_state: str) -> bool:
+    """Return True for a goroutine that the default goleak filters ignore."""
+    top = top_function(frames)
+    if top in TEST_RUNNER_TOP_FUNCTIONS:
+        return raw_state.startswith("chan receive")
+    return top in SIGNAL_TOP_FUNCTIONS or any(f.function == TRACE_READER_FUNCTION for f in frames)
+
+
+def is_system_goroutine(frames: list[StackFrame], raw_state: str) -> bool:
+    """Return True for a runtime goroutine, or a goroutine that goleak ignores by default."""
+    entry = entry_function(frames)
+    if entry is None:
+        return False
+    if entry.startswith(RUNTIME_PREFIX) and entry not in RUNTIME_USER_ENTRIES:
+        return True
+    return _is_goleak_default_ignore(frames, raw_state)
+
+
 class GoroutineStackParser:
     """Parses raw text stack traces into structured GoroutineProfile models."""
 
@@ -122,7 +175,12 @@ class GoroutineStackParser:
     # so a dump full of blocked goroutines parsed to nothing and the sentinel reported a
     # CLEAN 100.0/100 — the failure mode of a leak detector that cannot read the dump.
     _HEADER_RE = re.compile(r"^goroutine\s+(\d+)\s+(?:[^\[\]]*\s)?\[([^\]]+)\]:")
-    _FRAME_RE = re.compile(r"^\s+(.+):(\d+)(?:\s+\+0x[0-9a-f]+)?$")
+    # The same levels add `fp=0x... sp=0x... pc=0x...` to each frame line that is not inlined.
+    # A pattern that ended at the `+0x` offset dropped those frames, so the parser kept only
+    # inlined frames and the file line after `created by`.
+    _FRAME_RE = re.compile(
+        r"^\s+(.+):(\d+)(?:\s+\+0x[0-9a-f]+)?(?:\s+fp=0x[0-9a-f]+\s+sp=0x[0-9a-f]+\s+pc=0x[0-9a-f]+)?$"
+    )
     _CREATED_RE = re.compile(r"^created by (.+) in goroutine \d+")
 
     @classmethod
@@ -160,7 +218,7 @@ class GoroutineStackParser:
         state_cat = cls._categorize_state(raw_state)
 
         frames, created_by = cls._extract_frames(lines[1:])
-        is_sys = cls._is_system_goroutine(frames)
+        is_sys = is_system_goroutine(frames, raw_state)
 
         return GoroutineProfile(
             goroutine_id=gid,
@@ -239,12 +297,6 @@ class GoroutineStackParser:
             return None
         return current_fn
 
-    @staticmethod
-    def _is_system_goroutine(frames: list[StackFrame]) -> bool:
-        if not frames:
-            return False
-        return any(any(pat in f.function for pat in SYSTEM_GOROUTINE_PATTERNS) for f in frames)
-
 
 class GoroutineLeakSentinel:
     """Audits Goroutine profiles and diagnoses concurrency defects."""
@@ -310,7 +362,7 @@ class GoroutineLeakSentinel:
     def _generate_remediations(cls, leaks: list[GoroutineProfile]) -> list[str]:
         rems: list[str] = []
         for p in leaks:
-            fn = p.frames[0].function if p.frames else f"goroutine_{p.goroutine_id}"
+            fn = top_function(p.frames) or f"goroutine_{p.goroutine_id}"
             template = REMEDIATION_TEMPLATES.get(p.state_category)
             if template:
                 rems.append(template.format(fn=fn))

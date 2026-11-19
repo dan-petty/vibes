@@ -105,5 +105,5 @@ No detection or false-positive rates were measured. The table compares propertie
 
 ### Core Engineering Invariants
 - **Fail at the Source**: Concurrency invariants must be asserted inside the test that exercises them, converting latent leaks into test failures.
-- **Filter by Creator, Not by Wait State**: Ignore goroutines by their top user function or creation site, as `goleak.IgnoreTopFunction` does. Do not filter `runtime.gopark` or `internal/poll.runtime_pollWait`: every blocked goroutine parks in `runtime.gopark`, and a goroutine blocked on I/O waits in `runtime_pollWait`, so these filters hide real leaks. (`go_leak_sentinel.py` notes this for `runtime.gopark`.)
+- **Filter by Creator, Not by Wait State**: Ignore goroutines by their top user function or creation site, as `goleak.IgnoreTopFunction` does. Do not filter `runtime.gopark` or `internal/poll.runtime_pollWait`: every blocked goroutine parks in `runtime.gopark`, and a goroutine blocked on I/O waits in `runtime_pollWait`, so these filters hide real leaks. (`go_leak_sentinel.py` finds runtime goroutines by their entry function instead.)
 - **Unified Polyglot Architecture**: Parity between Go native testing hooks and Python test runner verification ensures seamless quality gating across multi-language agentic platforms.
