@@ -43,7 +43,7 @@ The directory map oracle is the clearest case. It was built specifically because
 A second regularity showed up alongside the first: **the initial measurement was frequently of the instrument rather than the artifact.**
 
 - The workbench's top-ranked defect, scored 370.0, was a 2.04s test whose body ran in 0.38s; the rest was interpreter boot. No edit to the file could have satisfied the threshold.
-- The new error budget engine reported a **20x burn rate** on its first iteration, because the engine divides its burn rate by the elapsed window (an SRE burn rate does not) and one iteration is 5% of a twenty-iteration window.
+- The new error budget engine reported a **20x burn rate** on its first iteration, because the engine then divided its burn rate by the elapsed window (an SRE burn rate does not, and the engine no longer does) and one iteration is 5% of a twenty-iteration window.
 - Its toil indicator read `0.000` off a denominator of **one**.
 - A roadmap entry written early in the session claimed the per-file interpreter cost was "~1.7s × N". Measured properly it was 0.27s × 23 — the 1.7s figure was a cold-start artifact promoted to a planning assumption.
 

@@ -23,6 +23,8 @@ This directory is the committed error budget history for the `vibes` self-improv
 }
 ```
 
+The ledger stores counts only. Each time `status` runs, it calculates the burn rate (window error ratio / allowed error ratio) and the budget consumed (errors so far / errors the whole window allows) from these counts. A change to that arithmetic needs no change to the shards.
+
 ---
 
 ## Why It Is Committed, and Why It Is Sharded

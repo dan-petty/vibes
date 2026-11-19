@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
@@ -39,13 +40,15 @@ from typing import Any, Final
 DEFAULT_HISTORY_PATH: Final[Path] = Path(".data/slo_history.json")
 MAX_HISTORY_ITERATIONS: Final[int] = 100
 FAST_FEEDBACK_CEILING_SECONDS: Final[float] = 2.0
-# `burn_rate` below is `consumed` (window error ratio / allowed error ratio) divided by the
-# elapsed fraction of the window. That is not the SRE burn rate (error ratio / allowed
-# ratio): with a quarter of the window elapsed, half the allowed error rate gives 2.0.
+# SRE Workbook, chapter 5 ("Alerting on SLOs"): burn rate = window error ratio / allowed
+# error ratio (1 - target). At burn rate 1 the budget runs out exactly when the window
+# closes. Budget consumed = errors so far / errors the whole window allows, which is
+# burn rate * (iterations / window_iterations). Elapsed time does not divide the burn rate.
 CRITICAL_BURN_RATE: Final[float] = 2.0
-# This engine's burn rate divides by the elapsed window, so one early failure looks catastrophic.
-# Requiring a minimum sample is what stops one unlucky run from freezing the whole loop —
-# the noise this engine exists to remove. A zero-budget objective still trips immediately.
+# Early in a window the burn rate rests on few events, so one failure can make it look
+# catastrophic. Requiring a minimum sample is what stops one unlucky run from freezing the
+# whole loop — the noise this engine exists to remove. Budget exhaustion has no such floor,
+# so a zero-budget objective still trips immediately.
 MIN_BURN_RATE_ITERATIONS: Final[int] = 3
 # An objective that never consumes budget across a full window is not steering anything.
 SLACK_BUDGET_THRESHOLD: Final[float] = 0.0
@@ -113,13 +116,15 @@ class BudgetState:
     objective: ServiceLevelObjective
     observed: float
     iterations: int
+    # Fraction of the whole window's error budget spent so far. Above 1.0 means overspent.
     consumed: float
+    # Window error ratio / allowed error ratio. Infinite when a zero budget has any error.
     burn_rate: float
     status: BudgetStatus
 
     @property
     def remaining(self) -> float:
-        """Return the unconsumed fraction of the error budget."""
+        """Return the unconsumed fraction of the whole window's error budget."""
         return max(0.0, 1.0 - self.consumed)
 
 
@@ -341,12 +346,16 @@ def _window_totals(history: Sequence[dict[str, Any]], sli: str, window: int) -> 
     return sum(good for good, _ in pairs), sum(valid for _, valid in pairs)
 
 
-def _consumed_fraction(observed: float, target: float) -> float:
-    """Return the fraction of the error budget spent, treating a 1.0 target as zero-budget."""
+def _burn_rate(observed: float, target: float) -> float:
+    """Return the SRE burn rate: window error ratio over allowed error ratio.
+
+    A 1.0 target allows no errors, so any error burns an infinite multiple of the budget.
+    """
+    errors = 1.0 - observed
     budget = 1.0 - target
     if budget <= 0.0:
-        return 0.0 if observed >= 1.0 else 1.0
-    return min((1.0 - observed) / budget, 1.0) if observed < 1.0 else 0.0
+        return math.inf if errors > 0.0 else 0.0
+    return errors / budget
 
 
 @dataclass(frozen=True)
@@ -367,12 +376,12 @@ class BudgetSample:
 
     @property
     def is_exhausted(self) -> bool:
-        """The window error ratio has reached the allowed ratio (burn rate 1 or more in SRE terms)."""
+        """The errors so far have spent the error budget of the whole window."""
         return self.consumed >= 1.0
 
     @property
     def is_burning(self) -> bool:
-        """Spending faster than the window elapses, on enough iterations to believe it."""
+        """Spending over CRITICAL_BURN_RATE times the allowed rate, on enough iterations to believe it."""
         return self.burn_rate > CRITICAL_BURN_RATE and self.iterations >= MIN_BURN_RATE_ITERATIONS
 
     @property
@@ -403,9 +412,10 @@ def evaluate_objective(
     good, valid = _window_totals(history, objective.sli, objective.window_iterations)
     observed = 1.0 if valid == 0 else good / valid
     iterations = min(len(history), objective.window_iterations)
-    consumed = _consumed_fraction(observed, objective.target)
-    elapsed = max(iterations / objective.window_iterations, 1e-9)
-    burn_rate = consumed / elapsed
+    burn_rate = _burn_rate(observed, objective.target)
+    # Errors so far over the errors the whole window allows, when the event rate stays as
+    # it is: the burn rate scaled by the elapsed fraction of the window.
+    consumed = burn_rate * iterations / objective.window_iterations
     window_full = iterations >= objective.window_iterations
     return BudgetState(
         objective=objective,
@@ -531,6 +541,35 @@ def _handle_record(args: argparse.Namespace) -> int:
     return 0
 
 
+_UNBOUNDED_REASON: Final[str] = (
+    "The objective allows no errors, so one error exhausts the budget. The burn rate and the "
+    "budget consumed are infinite, and JSON has no value for infinity."
+)
+
+
+def _finite_or_none(value: float) -> float | None:
+    """Return the value, or None when it is infinite or NaN."""
+    return value if math.isfinite(value) else None
+
+
+def _state_record(state: BudgetState) -> dict[str, Any]:
+    """Return one budget state as strict JSON data (RFC 8259 has no infinity).
+
+    A zero-budget objective with errors has an infinite burn rate and budget consumed. The
+    record holds null for both values and a `reason` that says why.
+    """
+    record = {
+        **asdict(state),
+        "objective": asdict(state.objective),
+        "status": state.status.value,
+        "consumed": _finite_or_none(state.consumed),
+        "burn_rate": _finite_or_none(state.burn_rate),
+    }
+    if record["consumed"] is None or record["burn_rate"] is None:
+        record["reason"] = _UNBOUNDED_REASON
+    return record
+
+
 def _handle_status(args: argparse.Namespace) -> int:
     """Report error budget state, the phase the loop should occupy, and the release verdict.
 
@@ -543,9 +582,9 @@ def _handle_status(args: argparse.Namespace) -> int:
     release = decide_phase(gating_states(states))
     if args.json:
         print(json.dumps({
-            "objectives": [{**asdict(s), "objective": asdict(s.objective), "status": s.status.value} for s in states],
+            "objectives": [_state_record(s) for s in states],
             "decision": {**asdict(decision), "phase": decision.phase.value},
-        }, indent=2, default=str))
+        }, indent=2, default=str, allow_nan=False))
     else:
         print("\n".join(render_status(states, decision)))
         print(f"Release gate: {'BLOCKED by ' + release.driver if release.phase is LoopPhase.REACTIVE_REMEDIATION else 'clear'}")
