@@ -92,7 +92,7 @@ No benchmark of eBPF tracing exists in this repository. `tools/ebpf_tracer.py` r
 
 ## 4. Mechanical Oracles & Tetragon/Falco Invariant Enforcement
 
-The canonical implementation in [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py) audits JSON Lines event records against five diagnostic rules. Each record is a flat object (`event_type` or `type`, `comm`, `args`, `path`, `daddr`, `dport`, `syscall`) or a native Tetragon `process_exec` record, the JSON that `tetra getevents -o json` and the Tetragon export file write. The parser maps `process_exec.process.binary`, `arguments`, `pid` and `time` to an `execve` event. It reads other native Tetragon records, such as `process_kprobe`, and Falco JSON as `unknown` events, so events of those kinds need a conversion step first:
+The canonical implementation in [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py) audits JSON Lines event records against five diagnostic rules. Each record is a flat object (`event_type` or `type`, `comm`, `args`, `path`, `daddr`, `dport`, `syscall`), a native Tetragon `process_exec` or `process_kprobe` record (the JSON that `tetra getevents -o json` and the Tetragon export file write), or a Falco JSON alert. The parser maps `process_exec.process.binary`, `arguments`, `pid` and `time` to an `execve` event. For a `process_kprobe` record, it removes the arch prefix and the `sys_` prefix from `function_name` (`__x64_sys_setuid` becomes `setuid`) and uses the result as the event type and the syscall. It reads the path from the first `string_arg`, `file_arg`, `path_arg` or `linux_binprm_arg`, and the destination from a `sock_arg` or `sockaddr_arg`. An exec hook (`sys_execve`, `sys_execveat`, `security_bprm_check`) fires before the new program runs, so `process.binary` is still the caller; the parser takes the program from the path argument. For a Falco alert, it maps the `output_fields` `evt.type`, `proc.pid`, `proc.name`, `proc.cmdline`, `fd.name`, `fd.rip` and `fd.rport`. The output of every default Falco rule names `evt.type`. A Falco alert without `evt.type`, and other native Tetragon records such as `process_exit`, become `unknown` events:
 
 ```mermaid
 stateDiagram-v2
@@ -142,7 +142,7 @@ To establish zero-trust eBPF introspection across production agent fleets:
 ### 1. Phased Operational Rollout: Observe → Alert → Enforce
 1. **Phase 1 (Observation & Baseline Profiling)**: Deploy `ebpf_tracer.py` in `--preset audit_only` during CI test runs and benchmark execution. Capture the exact set of benign syscalls, binaries, and network destinations required by the agent.
 2. **Phase 2 (Automated Policy Synthesis)**: Use the module function `generate_tetragon_policy()` to write a Tetragon `TracingPolicy` custom resource, or `generate_falco_policy()` to write Falco rules. Falco detects and alerts; it does not block.
-3. **Phase 3 (Inline Kernel Enforcement)**: Apply the synthesized Tetragon policy in production. Its selectors send `Sigkill` when a process executes a binary of the EBPF001 deny list. The kernel stops only the calls that the selectors match; the policy does not hook `execveat`. The observed binaries of Phase 1 go into the annotation `ebpf-tracer/observed-binaries` for review; the policy does not enforce them. Its `podSelector` limits the policy to the pods with the label `app.kubernetes.io/name: agent-sandbox`, the label of [`sandbox-pod.yaml`](../../resources/k8s/agent-sandbox/sandbox-pod.yaml); `--pod-label key=value` sets another label. Without a `podSelector`, Tetragon applies a policy to every process on the node.
+3. **Phase 3 (Inline Kernel Enforcement)**: Apply the synthesized Tetragon policy in production. Its `sys_execve` and `sys_execveat` kprobes send `Sigkill` when a process executes a binary of the EBPF001 deny list. The kernel stops only the calls that the selectors match. The selectors compare the path that the caller gives, so they do not stop an `execveat` call with `AT_EMPTY_PATH`, which gives an empty path (`fexecve` makes this call). The observed binaries of Phase 1 go into the annotation `ebpf-tracer/observed-binaries` for review; the policy does not enforce them. Its `podSelector` limits the policy to the pods with the label `app.kubernetes.io/name: agent-sandbox`, the label of [`sandbox-pod.yaml`](../../resources/k8s/agent-sandbox/sandbox-pod.yaml); `--pod-label key=value` sets another label. Without a `podSelector`, Tetragon applies a policy to every process on the node.
 
 ### 2. Concrete Tetragon TracingPolicy Template
 
@@ -180,9 +180,31 @@ spec:
                 - "/ncat"
           matchActions:
             - action: Sigkill
+    - call: "sys_execveat"
+      syscall: true
+      args:
+        - index: 1
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Equal"
+              values:
+                - "nc"
+                - "ncat"
+          matchActions:
+            - action: Sigkill
+        - matchArgs:
+            - index: 1
+              operator: "Postfix"
+              values:
+                - "/nc"
+                - "/ncat"
+          matchActions:
+            - action: Sigkill
 ```
 
-The generator lists all nine binaries of the deny list; the template shows two. Tetragon acts when any selector of a kprobe matches. `Postfix` on `/nc` matches `/bin/nc` and `/usr/bin/nc`, but not `/usr/bin/ncal`.
+The generator lists all nine binaries of the deny list; the template shows two. Tetragon acts when any selector of a kprobe matches. `Postfix` on `/nc` matches `/bin/nc` and `/usr/bin/nc`, but not `/usr/bin/ncal`. The path is argument 0 of `execve` and argument 1 of `execveat`. The policy does not hook `security_bprm_check`, which both calls reach: its `linux_binprm` path is the resolved file, so on a Debian image `/usr/bin/nc` resolves to `/usr/bin/nc.openbsd`, and `Postfix` on `/nc` does not match it.
 
 ### 3. Mechanical Integration Checklist
 - [x] Canonical tool implementation: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)

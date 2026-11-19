@@ -9,6 +9,7 @@ All assertions use structural tuple equality checks to maintain proactive comple
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Final
@@ -60,8 +61,137 @@ TETRAGON_PROCESS_EXEC: Final[dict[str, Any]] = {
     "time": "2026-11-19T10:00:00.123456789Z",
 }
 
-# How Tetragon applies the string operators of the `sys_execve` selectors.
+# How Tetragon applies the string operators of the exec kprobe selectors.
 TETRAGON_STRING_OPS: Final[dict[str, Any]] = {"Equal": str.__eq__, "Postfix": str.endswith}
+
+
+def _tetragon_kprobe(binary: str, arguments: str, function_name: str, args: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return a native Tetragon `process_kprobe` record of one call in the sandbox pod.
+
+    Field names from api/v1/tetragon/tetragon.proto (ProcessKprobe, KprobeArgument), v1.8.0.
+    A syscall kprobe names the kernel symbol, such as `__x64_sys_setuid`.
+    """
+    return {
+        "process_kprobe": {
+            "process": {
+                "exec_id": "ZXhhbXBsZS1ub2RlOjQzMDA=",
+                "pid": 4300,
+                "uid": 1000,
+                "cwd": "/workspace",
+                "binary": binary,
+                "arguments": arguments,
+                "flags": "execve clone",
+                "start_time": "2026-11-19T10:00:00.123456789Z",
+                "pod": {"namespace": "default", "name": "agent-sandbox"},
+                "tid": 4300,
+            },
+            "parent": {"pid": 4200, "binary": "/bin/bash", "arguments": "-c ./run.sh"},
+            "function_name": function_name,
+            "args": args,
+            "action": "KPROBE_ACTION_POST",
+            "policy_name": "agent-sandbox-containment",
+        },
+        "node_name": "<worker-node>",
+        "time": "2026-11-19T10:00:01.5Z",
+    }
+
+
+def _falco_alert(rule: str, output_fields: dict[str, Any]) -> dict[str, Any]:
+    """Return a Falco JSON alert (`json_output: true`); `output_fields` holds the fields of the rule output."""
+    return {
+        "hostname": "<worker-node>",
+        "output": f"10:00:01.500000000: Warning {rule}",
+        "priority": "Warning",
+        "rule": rule,
+        "source": "syscall",
+        "tags": ["agent", "ebpf", "sandbox"],
+        "time": "2026-11-19T10:00:01.500000000Z",
+        "output_fields": {"evt.time": 1795082401500000000, "container.image.repository": None, **output_fields},
+    }
+
+
+# Each native record and the flat record that describes the same call; both must give the same finding.
+NATIVE_AND_FLAT_RECORDS: Final[dict[str, tuple[dict[str, Any], dict[str, Any]]]] = {
+    "kprobe-execveat-EBPF001": (
+        _tetragon_kprobe("/bin/sh", "-c nc -lvp 4444", "__x64_sys_execveat", [{"string_arg": "/usr/bin/nc"}]),
+        {"event_type": "execve", "syscall": "execveat", "pid": 4300, "comm": "nc", "args": "/usr/bin/nc"},
+    ),
+    "kprobe-tcp_connect-EBPF002": (
+        _tetragon_kprobe(
+            "/usr/bin/curl",
+            "http://169.254.169.254/latest/meta-data/",
+            "tcp_connect",
+            [
+                {
+                    "sock_arg": {
+                        "family": "AF_INET",
+                        "type": "SOCK_STREAM",
+                        "protocol": "IPPROTO_TCP",
+                        "saddr": "192.0.2.10",
+                        "daddr": "169.254.169.254",
+                        "sport": 40112,
+                        "dport": 80,
+                        "state": "TCP_SYN_SENT",
+                    }
+                }
+            ],
+        ),
+        {"event_type": "connect", "syscall": "tcp_connect", "pid": 4300, "comm": "curl", "daddr": "169.254.169.254", "dport": 80},
+    ),
+    "kprobe-file_permission-EBPF003": (
+        _tetragon_kprobe(
+            "/bin/cat",
+            "/etc/passwd",
+            "security_file_permission",
+            [{"file_arg": {"path": "/etc/passwd", "permission": "-rw-r--r--"}}, {"int_arg": 4}],
+        ),
+        {"event_type": "file_open", "pid": 4300, "comm": "cat", "path": "/etc/passwd"},
+    ),
+    "kprobe-setuid-EBPF004": (
+        _tetragon_kprobe("/bin/su", "root", "__x64_sys_setuid", [{"int_arg": 0}]),
+        {"event_type": "privilege_change", "syscall": "setuid", "pid": 4300, "comm": "su"},
+    ),
+    "kprobe-ptrace-EBPF005": (
+        _tetragon_kprobe("/usr/bin/gdb", "-p 1", "__x64_sys_ptrace", [{"long_arg": 16}]),
+        {"event_type": "ptrace_evasion", "syscall": "ptrace", "pid": 4300, "comm": "gdb", "args": "/usr/bin/gdb -p 1"},
+    ),
+    "falco-execve-EBPF001": (
+        _falco_alert(
+            "agent_sandbox_least_privilege",
+            {"evt.type": "execve", "proc.name": "nc", "proc.pid": 4300, "proc.cmdline": "nc -lvp 4444", "fd.name": None},
+        ),
+        {"event_type": "execve", "syscall": "execve", "pid": 4300, "comm": "nc", "args": "nc -lvp 4444"},
+    ),
+    "falco-connect-EBPF002": (
+        _falco_alert(
+            "Outbound connection to metadata",
+            {
+                "evt.type": "connect",
+                "fd.name": "192.0.2.10:40112->169.254.169.254:80",
+                "fd.rip": "169.254.169.254",
+                "fd.rport": 80,
+                "proc.name": "curl",
+                "proc.cmdline": "curl http://169.254.169.254/latest/meta-data/",
+            },
+        ),
+        {"event_type": "connect", "syscall": "connect", "comm": "curl", "daddr": "169.254.169.254", "dport": 80},
+    ),
+    "falco-openat-EBPF003": (
+        _falco_alert(
+            "Read sensitive file untrusted",
+            {"evt.type": "openat", "fd.name": "/etc/shadow", "proc.name": "cat", "proc.cmdline": "cat /etc/shadow"},
+        ),
+        {"event_type": "openat", "comm": "cat", "path": "/etc/shadow"},
+    ),
+    "falco-setuid-EBPF004": (
+        _falco_alert("Non sudo setuid", {"evt.type": "setuid", "proc.name": "su", "proc.cmdline": "su root"}),
+        {"event_type": "privilege_change", "syscall": "setuid", "comm": "su"},
+    ),
+    "falco-ptrace-EBPF005": (
+        _falco_alert("PTRACE attached to process", {"evt.type": "ptrace", "proc.name": "gdb", "proc.cmdline": "gdb -p 1"}),
+        {"syscall": "ptrace", "comm": "gdb", "args": "gdb -p 1"},
+    ),
+}
 
 
 def test_parse_trace_event_normalization() -> None:
@@ -126,6 +256,85 @@ def test_parse_native_tetragon_process_exec() -> None:
         [EbpfEventType.EXECVE, EbpfEventType.FILE_OPEN],
         [("EBPF001", 4242), ("EBPF003", 7)],
     )
+
+
+@pytest.mark.parametrize("case", sorted(NATIVE_AND_FLAT_RECORDS))
+def test_native_kprobe_and_falco_records_give_the_flat_record_finding(case: str) -> None:
+    """Verify that a native Tetragon `process_kprobe` record or a Falco alert gives the finding of its flat record."""
+    native, flat = NATIVE_AND_FLAT_RECORDS[case]
+    tracer = EbpfSandboxTracer(TracerPreset.STRICT)
+    native_findings = tracer.audit_event(parse_trace_event(native))
+
+    assert ([f.rule_id for f in native_findings], native_findings) == (
+        [case.rsplit("-", 1)[1]],
+        tracer.audit_event(parse_trace_event(flat)),
+    )
+
+
+def test_parse_native_exec_kprobe_and_falco_alerts() -> None:
+    """Verify the events of an exec kprobe record and of Falco alerts with and without `evt.type`.
+
+    An exec hook fires before the new program runs, so `process` is still the caller and the
+    path argument names the program. The Falco alert without `evt.type` is the example of the
+    Falco output documentation; its event type stays unknown.
+    """
+    execveat = NATIVE_AND_FLAT_RECORDS["kprobe-execveat-EBPF001"][0]
+    falco_exec = NATIVE_AND_FLAT_RECORDS["falco-execve-EBPF001"][0]
+    shell_alert = {
+        "hostname": "falco-xczjd",
+        "priority": "Critical",
+        "rule": "Terminal shell in container",
+        "source": "syscall",
+        "time": "2023-05-25T13:44:05.478445995Z",
+        "output_fields": {
+            "container.id": "ee97d9c4186f",
+            "evt.time": 1685022245478445995,
+            "k8s.ns.name": "default",
+            "proc.cmdline": "sh -c clear; (bash || ash || sh)",
+            "proc.name": "sh",
+            "proc.pname": "runc",
+            "proc.tty": 34816,
+            "user.loginuid": -1,
+            "user.name": "root",
+        },
+    }
+
+    assert [parse_trace_event(r) for r in (execveat, falco_exec, shell_alert)] == [
+        EbpfTraceEvent(
+            event_type=EbpfEventType.EXECVE,
+            pid=4300,
+            process_name="nc",
+            command_line="/usr/bin/nc",
+            target_path="/usr/bin/nc",
+            syscall="execveat",
+            timestamp=1795082401.5,
+        ),
+        EbpfTraceEvent(
+            event_type=EbpfEventType.EXECVE,
+            pid=4300,
+            process_name="nc",
+            command_line="nc -lvp 4444",
+            syscall="execve",
+            timestamp=1795082401.5,
+        ),
+        EbpfTraceEvent(
+            event_type=EbpfEventType.UNKNOWN,
+            pid=0,
+            process_name="sh",
+            command_line="sh -c clear; (bash || ash || sh)",
+            timestamp=1685022245.478445,
+        ),
+    ]
+
+
+def test_falco_rule_output_names_the_fields_that_the_parser_reads() -> None:
+    """Verify that an alert of the generated Falco rule carries the event type and the PID."""
+    assert sorted(re.findall(r"%([\w.]+)", generate_falco_policy([]))) == [
+        "evt.type",
+        "proc.cmdline",
+        "proc.name",
+        "proc.pid",
+    ]
 
 
 def test_clean_trace_has_zero_violations() -> None:
@@ -379,7 +588,7 @@ def test_policy_synthesis_tetragon_and_falco() -> None:
 
 
 def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
-    """Verify the syscall kprobe and that each key is a field of the Tetragon TracingPolicy CRD.
+    """Verify the `execve` and `execveat` syscall kprobes and that each key is a field of the TracingPolicy CRD.
 
     Field names and enums follow the CRD of Tetragon v1.8.0
     (pkg/k8s/apis/cilium.io/client/crds/v1alpha1/cilium.io_tracingpolicies.yaml). The CRD
@@ -388,7 +597,6 @@ def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
     """
     policy = generate_tetragon_policy([EbpfTraceEvent(EbpfEventType.EXECVE, 1, "python3")])
     custom = generate_tetragon_policy([], pod_label=("team", "agents"))
-    kprobe = policy["spec"]["kprobes"][0]
     binaries = ["chattr", "nc", "ncat", "netcat", "nmap", "socat", "tcpdump", "telnet", "wireshark"]
 
     assert (
@@ -396,25 +604,30 @@ def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
         sorted(policy["spec"]),
         policy["spec"]["podSelector"],
         custom["spec"]["podSelector"],
-        len(policy["spec"]["kprobes"]),
-        (kprobe["call"], kprobe["syscall"], kprobe["args"]),
-        kprobe["selectors"],
+        policy["spec"]["kprobes"],
     ) == (
         ["apiVersion", "kind", "metadata", "spec"],
         ["kprobes", "podSelector"],
         {"matchLabels": {"app.kubernetes.io/name": "agent-sandbox"}},
         {"matchLabels": {"team": "agents"}},
-        1,
-        ("sys_execve", True, [{"index": 0, "type": "string"}]),
         [
             {
-                "matchArgs": [{"index": 0, "operator": "Equal", "values": binaries}],
-                "matchActions": [{"action": "Sigkill"}],
-            },
-            {
-                "matchArgs": [{"index": 0, "operator": "Postfix", "values": [f"/{b}" for b in binaries]}],
-                "matchActions": [{"action": "Sigkill"}],
-            },
+                "call": call,
+                "syscall": True,
+                "args": [{"index": index, "type": "string"}],
+                "selectors": [
+                    {
+                        "matchArgs": [{"index": index, "operator": "Equal", "values": binaries}],
+                        "matchActions": [{"action": "Sigkill"}],
+                    },
+                    {
+                        "matchArgs": [{"index": index, "operator": "Postfix", "values": [f"/{b}" for b in binaries]}],
+                        "matchActions": [{"action": "Sigkill"}],
+                    },
+                ],
+            }
+            # execve(path, argv, envp) and execveat(dirfd, path, argv, envp, flags): the path index differs.
+            for call, index in (("sys_execve", 0), ("sys_execveat", 1))
         ],
     )
 
@@ -428,13 +641,15 @@ def _kernel_kills(kprobe: dict[str, Any], path: str) -> bool:
 
 
 def test_tetragon_selectors_kill_where_the_audit_flags() -> None:
-    """Verify that the `sys_execve` selectors kill the paths that EBPF001 flags, and no other path."""
-    kprobe = generate_tetragon_policy([])["spec"]["kprobes"][0]
+    """Verify that the selectors of each exec kprobe kill the paths that EBPF001 flags, and no other path."""
+    kprobes = generate_tetragon_policy([])["spec"]["kprobes"]
     tracer = EbpfSandboxTracer(TracerPreset.STRICT)
     paths = ["/usr/bin/nc", "/bin/ncat", "nc", "./socat", "/usr/bin/ncal", "/usr/bin/nc.openbsd", "/usr/bin/python3"]
+    flagged = {p: bool(tracer.audit_event(EbpfTraceEvent(EbpfEventType.EXECVE, 1, p))) for p in paths}
 
-    assert {p: _kernel_kills(kprobe, p) for p in paths} == {
-        p: bool(tracer.audit_event(EbpfTraceEvent(EbpfEventType.EXECVE, 1, p))) for p in paths
+    assert {k["call"]: {p: _kernel_kills(k, p) for p in paths} for k in kprobes} == {
+        "sys_execve": flagged,
+        "sys_execveat": flagged,
     }
 
 
