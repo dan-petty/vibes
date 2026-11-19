@@ -48,7 +48,7 @@ flowchart TD
     Runtime -->|"Docker / Podman"| Container["Hardened Container Namespace"]
     Runtime -->|"CI / Offline Fallback"| Simulator["Simulator (setrlimit + seccomp-BPF)"]
 
-    Container --> Timeout{"Timeout Watcher (os.killpg)"}
+    Container --> Timeout{"Timeout Watcher (os.killpg, plus engine kill for a container)"}
     Simulator --> Timeout
 
     Timeout --> Bound["Output Buffer Bounding (<= 64KB)"]
@@ -64,7 +64,7 @@ The `CIS-5.1` to `CIS-5.8` labels are this example's own numbering (`CIS_CONTROL
 ### 1. POSIX Process Group Sets (`os.setsid` & `os.killpg`)
 To ensure that all descendants of a sandboxed execution are terminated when a timeout expires or an error occurs:
 - The harness starts the child with `start_new_session=True`, so the child calls `setsid()` and leads a new session and process group.
-- On termination or timeout, the harness sends signals to the entire group using `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`, waits 50 ms, and sends `signal.SIGKILL`. This kills every process still in the group. A descendant that calls `setsid()` itself (a daemonizing fork) leaves the group and survives; a PID namespace or a cgroup kill (`cgroup.kill`, Linux 5.14 and later) covers that case. In container mode the group holds only the `docker` or `podman` client: the client forwards SIGTERM to the container, but SIGKILL stops only the client.
+- On termination or timeout, the harness sends signals to the entire group using `os.killpg(os.getpgid(proc.pid), signal.SIGTERM)`, waits 50 ms, and sends `signal.SIGKILL`. This kills every process still in the group. A descendant that calls `setsid()` itself (a daemonizing fork) leaves the group and survives; a PID namespace or a cgroup kill (`cgroup.kill`, Linux 5.14 and later) covers that case. In container mode the group holds only the `docker` or `podman` client, and a signal to the client does not stop the container. The client forwards SIGTERM, which a container's PID 1 ignores unless it installs a handler, and SIGKILL stops only the client. So each run gets a unique `--name`, and on timeout the harness runs `docker kill <name>` (or `podman kill <name>`) before it signals the group.
 
 ### 2. Zero-Trust Environment Stripping
 Host environments contain hundreds of variables, many of which contain secrets or configuration overrides. The harness enforces a strict allowlist:
@@ -88,15 +88,15 @@ Output exceeding the threshold is split into leading and trailing head/tail chun
 
 ## 4. Empirical Containment Matrix
 
-`sandbox.py --demo` runs three payloads with a 0.15 s timeout. Results on 2026-11-19:
+`sandbox.py --demo` runs three payloads. The simulator uses a 0.15 s timeout. A container uses the 5 s policy default, because a container start takes longer than 0.15 s. Results on 2026-11-19:
 
-| Payload | Simulator (`--demo --simulator`) | Docker engine (`--demo`) |
+| Payload | Simulator (`--demo --simulator`, 0.15 s) | Docker engine (`--demo`, 5 s) |
 |---|---|---|
-| Safe computation (`print(sum(i * i for i in range(100)))`) | Passed, 68 ms | Failed |
-| Timeout (`time.sleep(10)`) | Contained at 207 ms | Contained at 202 ms, before the container started |
-| Output flooding (`print('X' * 200000)`) | Truncated to 65,535 characters | Failed, no output |
+| Safe computation (`print(sum(i * i for i in range(100)))`) | Passed, 68 ms | Passed, 720 ms |
+| Timeout (`time.sleep(10)`) | Contained at 207 ms | Contained at 5,212 ms by `docker kill` |
+| Output flooding (`print('X' * 200000)`) | Truncated to 65,535 characters | Truncated to 65,535 characters |
 
-In container mode, a run with a 60 s timeout exits with code 127: the harness passes the host interpreter path into the `python:3.12-slim` image, where it does not exist. The demo has no filesystem-mutation, egress or fork-bomb payload. `test_the_simulator_denies_a_payload_the_network` checks that the simulator's seccomp filter refuses `socket()` with `EPERM`. No test checks a read-only root filesystem or a PID limit at run time.
+An earlier version passed the host interpreter path (`sys.executable`) into the `python:3.12-slim` image, where it does not exist. Every container payload exited with code 127, and the audit still reported the policy as compliant. That version also signaled only the client on timeout: a `sleep` container kept running after the harness returned. The harness now runs `python3` from the image and kills the container by name. `test_the_demo_payloads_pass_in_a_container` runs the three payloads in a real container, and skips when neither `docker` nor `podman` is on `PATH`. The demo has no filesystem-mutation, egress or fork-bomb payload. `test_the_simulator_denies_a_payload_the_network` checks that the simulator's seccomp filter refuses `socket()` with `EPERM`. No test checks a read-only root filesystem or a PID limit at run time.
 
 ---
 
