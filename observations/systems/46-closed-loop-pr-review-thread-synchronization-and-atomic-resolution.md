@@ -1,11 +1,11 @@
-# Observation 46: Closed-Loop PR Review Thread Synchronization & Atomic Resolution
+# Observation 46: Closed-Loop PR Review Thread Synchronization & Sequential Resolution
 
 > **Project**: `vibes` & `devops-cli`  
 > **Environment**: GitHub GraphQL API v4, Python 3.12+, Python AST, OASIS SARIF 2.1.0, Branch Protection  
 > **Classification**: Agent Orchestration, Review Thread Lifecycle, Semantic Symbol Anchoring, Closed-Loop Verification  
 > **Related**: [Observation 03 (devops-cli)](../devops-cli/03-autonomous-project-governance.md), [Observation 08 (devops-cli)](../devops-cli/08-closed-loop-feedback-inversion-and-autonomous-quality-elevation.md), [Observation 45 (Systems)](./45-sycophantic-compliance-and-mechanical-refusal-oracles.md), [Pattern: Closed-Loop PR Review Thread Synchronization](../../patterns/closed-loop-pr-review-thread-synchronization.md)  
 > **Key Metric**: Not measured. The reference tool reads review threads from a JSON file and prints GraphQL mutations; no grounding or false-resolution rate was recorded.  
-> **TLDR**: A stale line number can point at the wrong code after later commits; a thread synchronizer should map each thread to current code, verify the fix mechanically, and only then reply and resolve via GraphQL. The reference tool still keys on the line number, and some of its checks pass without a fix.  
+> **TLDR**: A stale line number can point at the wrong code after later commits; a thread synchronizer should map each thread to current code, verify the fix mechanically, and only then reply and resolve via GraphQL. The reference tool finds the function of a complexity or docstring thread by its review-time name and fails the thread when that function is gone; its nesting and sanitization checks still read the line or the whole file.  
 > **ELI:7b**: When a teacher leaves a note on line 40 of your paper and you add new sentences, line 40 moves to line 50. If a robot only looks at line 40, it gets confused. Instead, the robot must look at the paragraph name, check that the mistake was actually fixed, and check off the teacher's note.  
 
 ---
@@ -92,7 +92,7 @@ flowchart TD
         DEC -->|Missing File| OP[Status: ORPHANED_PATH]
     end
 
-    subgraph Resolution["4. Atomic Mutation & Telemetry"]
+    subgraph Resolution["4. Sequential Mutations & Telemetry"]
         VF --> GQL["Printed GraphQL Mutation:\naddPullRequestReviewThreadReply + resolveReviewThread"]
         AR --> SARIF["OASIS SARIF 2.1.0 Telemetry Output"]
         OP --> SARIF
@@ -100,7 +100,9 @@ flowchart TD
 ```
 
 ### 1. Robust AST Symbol Locating
-`locate_ast_symbol` parses the current file with Python's `ast` module and finds the most specific function, method, or class node that encloses `thread.line` (or `originalLine` when `line` is missing) (`_is_symbol_node`, `_node_encloses_line`). It still keys on the thread's line number, so it does not correct drift: if the code moved, it names whatever symbol now sits at that line. If the line falls outside any declaration or the file is non-Python, it falls back to `file scope`.
+`parse_review_threads` keeps the review-time symbol name of each thread: the node's `symbolName` field, else the definitions that enclose the commented line in the first comment's `diffHunk` (GitHub ends that hunk at the commented line), else the hunk header's context text (`symbol_from_diff_hunk`). `locate_ast_symbol` parses the current file with Python's `ast` module and finds the definition of that name (`find_symbol_by_name`), so a function that moved is still found. A dotted name such as `Calc.compute` is resolved part by part; a bare name takes the outermost, then earliest, match. The hunk header can name a different definition than the one that holds the line, so a payload that knows the name should send `symbolName`.
+
+A thread with no symbol name falls back to the most specific function, method, or class node that encloses `thread.line` (or `originalLine` when `line` is missing). That fallback does not correct drift: if the code moved, it names whatever symbol now sits at that line. If the line falls outside any declaration it reports `module level`; a non-Python file is `file scope`.
 
 ### 2. Heuristic Rule Classification
 `classify_comment_rule` parses the comment bodies using regex dispatch patterns to classify the complaint into deterministic categories:
@@ -113,13 +115,13 @@ flowchart TD
 
 ### 3. Mechanical Fix Verification Oracles
 For each thread, `verify_thread_resolution` evaluates whether the defect has actually been cured on disk:
-- For `CC001`, it recomputes McCabe cyclomatic complexity on the function at the thread's line using `compute_ast_complexity`. If $M \le 10$, it certifies resolution. If no function encloses the line, it also certifies resolution, so a complex function that moved away from the line passes.
+- For `CC001`, it scores the function that the thread names with radon's McCabe cyclomatic complexity (`metric_reference.cyclomatic_complexity`). If $M \le 10$, it certifies resolution. If the file has no function of that name, or the thread names no symbol and no function encloses its line, the thread stays `ACTION_REQUIRED`.
 - For `ND001`, it divides the indentation of the single target line by four. If that depth is $\le 5$, it certifies resolution. A line number outside the file also passes.
 - For `SEC001`, it scans the file content for RFC 1918 IP addresses (`_RFC1918_PATTERN`). If clean, it certifies resolution. A complaint about a secret, token or credential passes when the file has no RFC 1918 address: credentials are not checked.
-- For `DOC001`, any non-empty file passes.
+- For `DOC001`, it requires a non-empty docstring on the definition that the thread names, or on the one that encloses the line when the thread names none. A missing definition, a missing docstring, or a file that does not parse as Python (for example Markdown) keeps the thread `ACTION_REQUIRED`. The check shows that a docstring exists; it cannot show that a typo or a link was fixed.
 - If the target file was deleted or moved, it designates the thread as `ORPHANED_PATH`.
 
-### 4. Atomic Resolution Mutations & SARIF Telemetry
+### 4. Sequential Resolution Mutations & SARIF Telemetry
 When a thread is certified as `FIX_VERIFIED`, `generate_resolution_mutation` constructs one GraphQL document with both mutations. GraphQL runs top-level mutation fields one after another (GraphQL specification, "Mutation" execution), but it does not roll back the reply if the resolve fails, so the pair is not atomic:
 ```graphql
 mutation {
@@ -142,4 +144,4 @@ The reply text is fixed: it says the function was refactored into table dispatch
 2. **Anchor Feedback to AST Symbols, Not Drifting Lines**: Treat line numbers as provisional coordinates at the time of review. Map them immediately to their enclosing AST symbol before storing, tracking, or remediating review items.
 3. **Send Reply and Resolve in One Request**: Put `addPullRequestReviewThreadReply` and `resolveReviewThread` in one GraphQL document so they run in order in one round trip. This is not a transaction: if the resolve fails, the reply stays, so check both results.
 4. **Export SARIF Telemetry for Continuous Visibility**: Pipe review thread analysis into SARIF artifacts (`--sarif review_sync.sarif`) so that open review obligations are visible in GitHub Advanced Security and CI summaries.
-5. **Enforce Clean PR Exit Gates**: Wire `pr_thread_sync --exit-code` into PR pre-merge checks. It fails only when a thread is `ACTION_REQUIRED`; orphaned threads and threads that the loose checks above pass do not fail it, so it cannot guarantee that no actionable comment remains.
+5. **Enforce Clean PR Exit Gates**: Wire `pr_thread_sync --exit-code` into PR pre-merge checks. It fails only when a thread is `ACTION_REQUIRED`. Orphaned threads do not fail it, and the weaker checks above can pass a thread whose complaint is not fixed (`ND001` reads one line, `SEC001` does not check credentials, `DOC001` does not check typos or links), so it cannot guarantee that no actionable comment remains.

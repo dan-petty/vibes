@@ -1,4 +1,4 @@
-# Pattern: Closed-Loop PR Review Thread Synchronization — AST-Anchored Feedback Remediation & Atomic Resolution
+# Pattern: Closed-Loop PR Review Thread Synchronization — AST-Anchored Feedback Remediation & Sequential Resolution
 
 > **Pattern Class**: Agent Orchestration & Review Lifecycle  
 > **Problem**: Autonomous agents often push valid code fixes but fail to resolve GitHub PR review threads, get misled by drifting line coordinates, or hallucinate thread resolutions without verifying that the defect is fixed on disk.  
@@ -48,7 +48,7 @@ flowchart TD
         Oracle -->|"Still Violated"| Action[Status: ACTION_REQUIRED]
     end
 
-    subgraph Resolution ["4. Atomic Resolution & Telemetry"]
+    subgraph Resolution ["4. Sequential Resolution & Telemetry"]
         Clean --> Mutation["One GraphQL Mutation Request:\naddPullRequestReviewThreadReply +\nresolveReviewThread"]
         Action --> SARIF["Export OASIS SARIF 2.1.0 Telemetry"]
         Orphan --> SARIF
@@ -63,21 +63,23 @@ flowchart TD
    - Extracts thread IDs, resolution states, target relative file paths, and chronological comment bodies.
 
 2. **Semantic AST Grounding**:
-   - `locate_ast_symbol` loads the target file from the active branch and traverses the abstract syntax tree (`ast.walk`). It takes the thread's `line`, which GitHub moves with the diff while the thread is current; for an outdated thread it falls back to `originalLine`, which can point at a different symbol after the file changed.
-   - Identifies the enclosing function, method, or class declaration spanning the line coordinate.
+   - `parse_review_threads` keeps the review-time symbol name: the node's `symbolName` field, else the definitions that enclose the commented line in the first comment's `diffHunk`.
+   - `locate_ast_symbol` loads the target file from the active branch, traverses the abstract syntax tree (`ast.walk`) and finds the definition of that name wherever it moved (`find_symbol_by_name`).
+   - A thread with no symbol name falls back to the function, method, or class declaration that spans the thread's `line`. GitHub moves `line` with the diff while the thread is current; for an outdated thread the tool falls back to `originalLine`, which can point at a different symbol after the file changed.
    - Converts numeric coordinates into semantic coordinates (e.g. `function 'calculate_scores' (lines 40-58)`) for the report.
 
 3. **Mechanical Verification Oracles**:
    - `classify_comment_rule` parses review comments against invariant rules (`CC001`, `ND001`, `SEC001`, `DOC001`, `TYP001`).
    - Directly executes the relevant deterministic checker against the file on disk:
-     - Recomputes cyclomatic complexity via `compute_ast_complexity`.
+     - Scores the named function with radon's cyclomatic complexity (`metric_reference.cyclomatic_complexity`).
      - Measures the indentation depth of the target line (leading spaces divided by 4).
      - Scans the whole file for RFC 1918 private IP leaks (`_RFC1918_PATTERN`).
-     - For `DOC001` it only checks that the file is not empty, and a `CC001` thread whose line no longer falls inside a function is marked `FIX_VERIFIED`. These two checks are weak; review them before resolving.
+     - For `DOC001`, requires a non-empty docstring on the named definition. That shows that a docstring exists, not that a typo or a link was fixed.
+     - A `CC001` or `DOC001` thread whose definition cannot be found stays `ACTION_REQUIRED`: no definition means no verified fix.
    - Computes explicit resolution state: `FIX_VERIFIED`, `ACTION_REQUIRED`, `RESOLVED`, or `ORPHANED_PATH`.
 
-4. **Atomic Resolution & Standardized Telemetry**:
-   - For all `FIX_VERIFIED` threads, `generate_resolution_mutation` constructs one GraphQL mutation request combining reply publication and thread resolution. The tool prints it; it does not send it.
+4. **Sequential Resolution & Standardized Telemetry**:
+   - For all `FIX_VERIFIED` threads, `generate_resolution_mutation` constructs one GraphQL mutation request combining reply publication and thread resolution. GraphQL runs the two mutations in order with no rollback, so a failed resolve leaves the reply in place. The tool prints the request; it does not send it.
    - `export_sarif` serializes findings into OASIS SARIF 2.1.0 format, linking review thread IDs, rule IDs, file paths, and resolution statuses for CI ingestion.
 
 ---
@@ -87,7 +89,7 @@ flowchart TD
 The pattern is implemented in [`tools/pr_thread_sync.py`](../tools/pr_thread_sync.py):
 
 ```python
-# Atomic resolution query generation
+# Reply-and-resolve query generation: two mutations, run in order, no rollback
 def generate_resolution_mutation(thread_id: str, reply_body: str) -> str:
     """Synthesizes a GraphQL mutation query to reply to and resolve a review thread."""
     sanitized_body = json.dumps(reply_body)
