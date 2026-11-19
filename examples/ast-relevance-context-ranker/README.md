@@ -14,7 +14,7 @@ When autonomous AI coding agents navigate large, multi-file codebases, naive fil
 
 The **Graph-Ranked AST Context Optimizer** resolves both failures. It ingests the repository source tree into an abstract syntax tree (AST) symbol graph (functions, classes, methods, imports, and call/reference edges). It then computes **Personalized PageRank** over the symbol topology rooted at the agent's target focal symbols (the functions or classes being edited or investigated).
 
-It ranks individual AST symbol definitions by graph centrality and packs them greedily, highest score first, into a token budget. Token counts are estimates (`ceil(len(text) / 4)` plus 5 per symbol), not tokenizer counts. The packer includes or excludes whole symbols, so it never cuts a symbol body in half. The caller picks one fidelity tier (`--fidelity FULL|SIGNATURES|OUTLINE`); the packer does not fall back to a lower tier when the budget is full. It excludes the remaining symbols and reports `RNK003`. The `SIGNATURES` and `OUTLINE` tiers keep only the first line of each `def` or `class`, so their output is a summary and does not always parse as Python.
+It ranks individual AST symbol definitions by graph centrality and packs them greedily, highest score first, into a token budget. Token counts are estimates (`ceil(len(text) / 4)` plus 5 per symbol), not tokenizer counts. The packer includes or excludes whole symbols, so it never cuts a symbol body in half. The caller picks one fidelity tier (`--fidelity FULL|SIGNATURES|OUTLINE`); the packer does not fall back to a lower tier when the budget is full. It excludes the remaining symbols and reports `RNK003`. Each packed snippet is one complete statement, so it parses as Python on its own. `FULL` keeps the exact source of the statement and moves a method to column 0. `SIGNATURES` and `OUTLINE` write the whole `def` or `class` header with `ast.unparse` and add the body `...`; `SIGNATURES` also keeps the docstring. Decorators are left out.
 
 ---
 
@@ -59,7 +59,8 @@ where:
 - $d = 0.85$ is the damping factor.
 - $\text{In}(v) = \{u \in V \mid (u, v) \in E\}$ is the set of callers referencing symbol $v$.
 - $\text{OutDeg}(u) = |\{w \in V \mid (u, w) \in E\}|$ is the out-degree of symbol $u$.
-- Iteration stops when $\|r^{(k+1)} - r^{(k)}\|_1 < 10^{-5}$ or after 50 iterations (`DEFAULT_MAX_ITER`), whichever comes first.
+- Iteration stops when $\|r^{(k+1)} - r^{(k)}\|_1 < 10^{-5}$. If 100 iterations (`DEFAULT_MAX_ITER`) pass first, `compute_pagerank` raises `PageRankConvergenceError` and returns no scores.
+- Each step shrinks the $L_1$ change by at least the factor $d$, and the first change is at most 2. With $d = 0.85$ the change is below $10^{-5}$ by step 77 on any graph, so the default settings always converge.
 
 ---
 
@@ -97,4 +98,6 @@ uv run pytest -q examples/ast-relevance-context-ranker/test_context_ranker.py
 
 ## 6. Zero-Dependency Statement
 
-This reference implementation strictly leverages the **Python standard library** (`argparse`, `ast`, `collections.abc`, `dataclasses`, `enum`, `json`, `math`, `os`, `pathlib`, `typing`), requiring zero external runtime packages.
+This reference implementation strictly leverages the **Python standard library** (`argparse`, `ast`, `collections.abc`, `copy`, `dataclasses`, `enum`, `json`, `math`, `os`, `pathlib`, `typing`), requiring zero external runtime packages. A reader can copy one file and run it.
+
+The power iteration is written out here. `networkx.pagerank` covers the same need, and this repository declares NetworkX for `tools/`, but this example does not import it, so the file needs no installed package. The loop has the same contract as NetworkX: it stops below the tolerance and raises when the iteration limit comes first.

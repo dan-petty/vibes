@@ -1,15 +1,18 @@
 """Unit tests for AST Relevance Context Ranker & Optimizer.
 
 Verifies AST symbol extraction, graph construction, Personalized PageRank
-convergence, token-budgeted context packing, diagnostic invariant rules,
-and SARIF 2.1.0 telemetry export.
+convergence and its non-convergence error, token-budgeted context packing,
+packed snippets that parse as Python, diagnostic invariant rules, and SARIF
+2.1.0 telemetry export.
 
 Passes the AST Invariant Sentinel `strict` preset (M <= 6, depth <= 3).
 """
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -23,7 +26,9 @@ from context_ranker import (
     FidelityLevel,
     Finding,
     PageRankConfig,
+    PageRankConvergenceError,
     SymbolKind,
+    SymbolNode,
     build_symbol_graph,
     check_diagnostic_invariants,
     compute_pagerank,
@@ -67,6 +72,66 @@ def func_a() -> None:
 def func_b() -> None:
     func_a()
 """
+
+# f0 -> f1 -> ... -> f5 -> f0. Focused on f0, the L1 change shrinks by about the damping
+# factor per step, so this graph needs about 76 steps to reach the default tolerance.
+SIX_CYCLE_SOURCE = "".join(f"def f{i}() -> None:\n    f{(i + 1) % 6}()\n\n" for i in range(6))
+
+# Each symbol here once produced a snippet that `ast.parse` rejects: a method body with
+# its class indentation, an import with an indented `...`, a header cut at its first line,
+# a def or class header with no body, a docstring with a quote, a line that a form feed
+# shifted, and two imports on one line.
+PACK_SOURCE = '''import os
+from typing import (
+    Any,
+)
+import sys; import json
+
+
+class Store:
+    """Keep "quoted" values."""
+
+    def get(self, key: str) -> Any:
+        """Read one value.
+
+Continued at column 0.
+        """
+        return key
+
+    async def fetch(
+        self,
+        key: str,
+    ) -> str: return key
+
+
+def one_line(x: int): return x
+
+\x0c
+def multi_line(
+    a: int,
+    b: int): return a + b
+'''
+
+
+def _python_blocks(rendered: str) -> list[str]:
+    """Return the body of each fenced Python block in a rendered pack."""
+    return re.findall(r"^```python\n(.*?)^```$", rendered, flags=re.DOTALL | re.MULTILINE)
+
+
+def _parses(code: str) -> bool:
+    """Report whether `ast.parse` accepts the code."""
+    try:
+        ast.parse(code)
+    except SyntaxError:
+        return False
+    return True
+
+
+def _pack_parses(symbols: list[SymbolNode], fidelity: FidelityLevel) -> bool:
+    """Pack the symbols at one fidelity and report whether every fenced block parses."""
+    rendered = pack_context(build_symbol_graph(symbols), 5000, fidelity).rendered_text
+    blocks = _python_blocks(rendered)
+    return bool(blocks) and all(_parses(b) for b in blocks)
 
 
 def test_extract_symbols_from_source() -> None:
@@ -112,6 +177,30 @@ def test_pagerank_uniform_convergence() -> None:
     assert (node_count > 0, abs(total_score - 1.0) < 1e-3) == (True, True)
 
 
+def test_pagerank_converges_on_a_focused_cycle() -> None:
+    """Return scores only after the L1 change falls below the tolerance.
+
+    The loop stopped after 50 steps. On this cycle the change was still about 5.9e-4 at
+    step 50, and the scores were about 4.5e-4 (L1) from the fixed point.
+    """
+    graph = build_symbol_graph(extract_symbols_from_source(SIX_CYCLE_SOURCE, "cycle6.py"))
+    cfg = PageRankConfig(focal_symbols=("cycle6.py::f0",))
+    scores = compute_pagerank(graph, cfg)
+    d = cfg.damping
+    # Fixed point of r(f_i) = (1 - d) p(f_i) + d r(f_(i-1)), with p = 1 on f0 only.
+    expected = {f"cycle6.py::f{i}": (1 - d) * d**i / (1 - d**6) for i in range(6)}
+    error = sum(abs(scores[sid] - expected[sid]) for sid in expected)
+    assert error < 1e-4
+
+
+def test_pagerank_raises_when_max_iter_ends_first() -> None:
+    """Report non-convergence; never return scores that are still moving."""
+    graph = build_symbol_graph(extract_symbols_from_source(SIX_CYCLE_SOURCE, "cycle6.py"))
+    cfg = PageRankConfig(max_iter=50, focal_symbols=("cycle6.py::f0",))
+    with pytest.raises(PageRankConvergenceError, match="did not converge in 50 steps"):
+        compute_pagerank(graph, cfg)
+
+
 def test_personalized_pagerank_elevates_focal_symbol() -> None:
     """Verify Personalized PageRank gives highest score to focal symbol."""
     symbols = extract_symbols_from_source(SAMPLE_SOURCE, "calc.py")
@@ -142,6 +231,38 @@ def test_pack_context_fidelity_degradation() -> None:
     res_sig = pack_context(graph, budget_tokens=2000, fidelity=FidelityLevel.SIGNATURES)
     res_out = pack_context(graph, budget_tokens=2000, fidelity=FidelityLevel.OUTLINE)
     assert ("..." in res_sig.rendered_text, "lines" in res_out.rendered_text) == (True, True)
+
+
+@pytest.mark.parametrize("fidelity", list(FidelityLevel))
+def test_every_packed_snippet_parses(fidelity: FidelityLevel) -> None:
+    """Each symbol, packed alone, must give Python that `ast.parse` accepts at every tier."""
+    symbols = extract_symbols_from_source(PACK_SOURCE, "pack.py")
+    failed = [s.name for s in symbols if not _pack_parses([s], fidelity)]
+    assert (len(symbols), failed, _pack_parses(symbols, fidelity)) == (9, [], True)
+
+
+@pytest.mark.parametrize("fidelity", [FidelityLevel.SIGNATURES, FidelityLevel.OUTLINE])
+def test_signature_tiers_keep_whole_headers(fidelity: FidelityLevel) -> None:
+    """Keep each annotation and closing parenthesis; drop a body that shares the header line.
+
+    A form feed once shifted every later line, so a header came from the wrong line.
+    """
+    graph = build_symbol_graph(extract_symbols_from_source(PACK_SOURCE, "pack.py"))
+    text = pack_context(graph, 5000, fidelity).rendered_text
+    assert (
+        "class Store:" in text,
+        "def one_line(x: int):" in text,
+        "b: int):" in text,
+        "key: str)" in text,
+        "return a + b" in text,
+    ) == (True, True, True, True, False)
+
+
+def test_signatures_docstring_is_a_string_literal() -> None:
+    """Write the docstring with `repr`, so a quote in it cannot close the literal early."""
+    graph = build_symbol_graph(extract_symbols_from_source(PACK_SOURCE, "pack.py"))
+    text = pack_context(graph, 5000, FidelityLevel.SIGNATURES).rendered_text
+    assert repr('Keep "quoted" values.') in text
 
 
 def test_diagnostic_orphans_and_cycles() -> None:

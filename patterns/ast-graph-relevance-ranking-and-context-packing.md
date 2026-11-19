@@ -34,7 +34,7 @@ sequenceDiagram
     Agent->>Crawler: Target Repository + Focal Symbol (e.g. auth.py::login)
     Crawler->>AST: Parse Python Files -> Extract Symbol Nodes & Name-Reference Edges
     AST->>PPR: Build Graph G=(V, E) + Personalization Vector p0
-    PPR->>PPR: Power Iteration (d=0.85, tol=1e-5, stops after 50 steps even if not converged)
+    PPR->>PPR: Power Iteration (d=0.85, tol=1e-5, raises if 100 steps pass first)
     PPR->>Packer: Ranked Symbols [auth.py::login, auth.py::verify_hash, ...]
     Packer->>Packer: Pack within Budget B (one fidelity: FULL, SIGNATURES or OUTLINE)
     Packer->>Agent: Model-Ready Context Pack (whole symbols, no line-limit cuts)
@@ -51,7 +51,7 @@ sequenceDiagram
 3. **Graceful Fidelity Degradation**:
    - When token limits prevent packing all high-relevance symbols, degrade bodies to signatures and docstrings (`FidelityLevel.SIGNATURES`) instead of dropping symbols entirely. The reference implementation does not degrade automatically: `pack_context` uses one fidelity for every symbol and drops the symbols that do not fit (reported as `RNK003`).
 4. **Syntactic Completeness**:
-   - Every snippet in the packed context corresponds to one whole AST node, so the packer never cuts a block at a token limit. The snippets are not always parseable alone: in the reference implementation, `FULL` method bodies keep their class indentation and omit decorators, and `SIGNATURES`/`OUTLINE` keep only the first line of a multi-line signature.
+   - Every snippet in the packed context corresponds to one whole AST node, so the packer never cuts a block at a token limit. Each snippet is one complete statement and parses alone. In the reference implementation, `FULL` takes the exact statement source (`ast.get_source_segment`) and moves a method body to column 0, and `SIGNATURES`/`OUTLINE` write the whole header with `ast.unparse` and add the body `...`. Decorators are left out.
 
 ---
 

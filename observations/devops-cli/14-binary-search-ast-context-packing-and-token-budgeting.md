@@ -82,13 +82,13 @@ flowchart TD
 2. **Monotonicity Property**: Given a fixed fidelity tier, the token weight of the first $k$ symbols is monotonically non-decreasing ($W(k) \le W(k+1)$).
 3. **Binary Search Convergence**: Instead of iterating symbol by symbol, a binary search finds the optimal cutoff index $k^* \in [0, N]$ in $O(\log N)$ evaluations:
    $$\text{mid} = \left\lfloor \frac{\text{low} + \text{high}}{2} \right\rfloor$$
-4. **Syntactic Parsability**: Because truncation occurs at symbol boundaries and stubs bodies with `...`, packed context parses with `ast.parse()` in nearly all cases. The example documents one exception in `pack_source_to_budget`: a one-line `def` whose header holds a colon before the body colon (`def f(x: int): return x`) is cut at the first colon, so its `DOCSTRINGS` and `SIGNATURES` renderings do not parse.
+4. **Syntactic Parsability**: Because truncation occurs at symbol boundaries and stubs bodies with `...`, packed context parses with `ast.parse()`. The example writes each header with `ast.unparse` instead of a source slice. An earlier slice cut `def f(x: int): return x` at its first colon (`def f(x:`), and its `DOCSTRINGS` and `SIGNATURES` renderings did not parse.
 
 ---
 
 ## 5. Verifiable Impact & Key Takeaways
 
-1. **Few Broken Syntax Trees**: Packed modules parse with `ast.parse()` except for the one-line `def` case documented in the example.
+1. **No Broken Syntax Trees**: Packed modules parse with `ast.parse()`. The example tests annotated one-line headers and multi-line headers.
 2. **Fuller Budget Use**: Symbol-level packing fills the budget more fully than whole-file greedy packing. No utilization figure was measured.
 3. **Logarithmic Search**: For 50 symbols, the binary search needs at most $\lceil \log_2 51 \rceil = 6$ evaluations. No timing was recorded for the example; `devops-cli` issue #118 set a target of under 10 ms for 1,000-line trees.
 

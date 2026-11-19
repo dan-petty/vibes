@@ -74,6 +74,7 @@ print(f"Packed {count} symbols at {tier} fidelity ({len(rendered_context)} chars
 ## 4. Guardrails & Anti-Patterns
 
 - ❌ **Anti-Pattern: Character Slicing (`text[:max_chars]`)**: Slicing raw strings fractures code syntax and can split combined characters; slicing encoded bytes also splits multi-byte UTF-8 sequences.
+- ❌ **Anti-Pattern: Slicing a Header from Text**: A cut at the first colon turns `def f(x: int): return x` into `def f(x:`, and a cut at the line of the first body statement drops the closing line of a multi-line header. Write the header from the parsed node instead: the reference implementation calls `ast.unparse` on a copy of the node whose body is `...`.
 - ❌ **Anti-Pattern: Dropping Imports**: Top-level imports provide vital context for type signatures. Ensure imports are prioritized and preserved during symbol slicing.
 - ⚠️ **Guardrail: Guarantee Syntax Tree Integrity**: Always assert that the rendered context can be parsed by the language grammar (`ast.parse()` for Python, CST parsers for TypeScript/Rust) before injecting it into prompt templates.
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import copy
 import json
 import math
 import os
@@ -22,7 +23,10 @@ from typing import Any, Final
 
 DEFAULT_DAMPING: Final[float] = 0.85
 DEFAULT_TOLERANCE: Final[float] = 1e-5
-DEFAULT_MAX_ITER: Final[int] = 50
+# Each power step shrinks the L1 change by at least the damping factor, and the first change
+# is at most 2. At d = 0.85 the change is below 1e-5 by step 77 on any graph, so 100 steps
+# (also the NetworkX default) always converge with the default damping and tolerance.
+DEFAULT_MAX_ITER: Final[int] = 100
 DEFAULT_BUDGET_TOKENS: Final[int] = 2000
 MAX_SAFE_FILE_SIZE: Final[int] = 5_000_000
 
@@ -82,6 +86,10 @@ class SymbolNode:
     score: float = 0.0
 
 
+class PageRankConvergenceError(RuntimeError):
+    """Power iteration used `max_iter` steps and the L1 change did not fall below `tolerance`."""
+
+
 @dataclass(frozen=True)
 class PageRankConfig:
     """Parameters controlling PageRank power iteration."""
@@ -114,29 +122,41 @@ def estimate_tokens(text: str) -> int:
     return max(1, math.ceil(len(text) / 4.0))
 
 
-def _slice_source(lines: Sequence[str], start: int, end: int) -> str:
-    """Slice line range 1-indexed inclusive."""
-    bounded_start = max(0, start - 1)
-    bounded_end = min(len(lines), end)
-    return "\n".join(lines[bounded_start:bounded_end])
+def _statement_source(source_text: str, node: ast.stmt) -> str:
+    """Return the exact source of one statement, moved to column 0 so that it parses alone.
+
+    `ast.get_source_segment` cuts at the statement's own start and end, with the line
+    breaks that the tokenizer uses; `str.splitlines` also breaks on a form feed. The
+    later lines of a method keep the class indentation, so remove the indentation of
+    the first line from each line that starts with it.
+    """
+    segment = ast.get_source_segment(source_text, node, padded=True) or ""
+    lines = segment.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    indent = lines[0][: len(lines[0]) - len(lines[0].lstrip())]
+    return "\n".join(line.removeprefix(indent) for line in lines)
 
 
-def _extract_function_signature(fn_node: ast.FunctionDef | ast.AsyncFunctionDef, lines: Sequence[str]) -> str:
-    """Extract def header line or signature slice."""
-    if fn_node.lineno <= len(lines):
-        return lines[fn_node.lineno - 1].strip()
-    return f"def {fn_node.name}():"
+def _declaration_header(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> str:
+    """Render the `def` or `class` header from the AST, so that it is always complete.
+
+    A source slice kept only the first line of a multi-line header and kept a body
+    that shares the header line. `ast.unparse` writes the whole header on one line.
+    """
+    stub = copy.copy(node)
+    stub.decorator_list = []
+    stub.body = [ast.Expr(ast.Constant(...))]
+    return ast.unparse(stub).rsplit("\n", 1)[0]
 
 
 def _make_function_symbol(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     file_path: str,
-    lines: Sequence[str],
+    source_text: str,
     kind: SymbolKind,
 ) -> SymbolNode:
     """Construct a SymbolNode for a function or method."""
     end_line = getattr(node, "end_lineno", node.lineno)
-    body = _slice_source(lines, node.lineno, end_line)
+    body = _statement_source(source_text, node)
     vis = _ReferenceVisitor()
     vis.visit(node)
     vis.names.discard(node.name)
@@ -149,7 +169,7 @@ def _make_function_symbol(
         line_start=node.lineno,
         line_end=end_line,
         docstring=ast.get_docstring(node),
-        signature=_extract_function_signature(node, lines),
+        signature=_declaration_header(node),
         body_code=body,
         tokens=estimate_tokens(body),
         references=sorted(vis.names),
@@ -159,11 +179,11 @@ def _make_function_symbol(
 def _make_class_symbol(
     node: ast.ClassDef,
     file_path: str,
-    lines: Sequence[str],
+    source_text: str,
 ) -> tuple[SymbolNode, list[SymbolNode]]:
     """Construct class SymbolNode and nested member methods."""
     end_line = getattr(node, "end_lineno", node.lineno)
-    body = _slice_source(lines, node.lineno, end_line)
+    body = _statement_source(source_text, node)
     vis = _ReferenceVisitor()
     vis.visit(node)
     vis.names.discard(node.name)
@@ -176,25 +196,25 @@ def _make_class_symbol(
         line_start=node.lineno,
         line_end=end_line,
         docstring=ast.get_docstring(node),
-        signature=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else f"class {node.name}:",
+        signature=_declaration_header(node),
         body_code=body,
         tokens=estimate_tokens(body),
         references=sorted(vis.names),
     )
-    methods = _extract_class_methods(node, file_path, lines)
+    methods = _extract_class_methods(node, file_path, source_text)
     return class_sym, methods
 
 
 def _extract_class_methods(
     cls_node: ast.ClassDef,
     file_path: str,
-    lines: Sequence[str],
+    source_text: str,
 ) -> list[SymbolNode]:
     """Extract nested methods from a class definition."""
     methods: list[SymbolNode] = []
     for item in cls_node.body:
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            m_sym = _make_function_symbol(item, file_path, lines, SymbolKind.METHOD)
+            m_sym = _make_function_symbol(item, file_path, source_text, SymbolKind.METHOD)
             m_sym.symbol_id = f"{file_path}::{cls_node.name}.{item.name}"
             m_sym.name = f"{cls_node.name}.{item.name}"
             methods.append(m_sym)
@@ -204,11 +224,11 @@ def _extract_class_methods(
 def _make_import_symbol(
     node: ast.Import | ast.ImportFrom,
     file_path: str,
-    lines: Sequence[str],
+    source_text: str,
 ) -> SymbolNode:
     """Construct an import statement SymbolNode."""
     end_line = getattr(node, "end_lineno", node.lineno)
-    body = _slice_source(lines, node.lineno, end_line)
+    body = _statement_source(source_text, node)
     names: list[str] = [alias.name for alias in node.names]
     line_name = f"import_{node.lineno}"
     return SymbolNode(
@@ -237,18 +257,18 @@ def _safe_parse_ast(source_text: str) -> ast.Module | None:
 def _dispatch_stmt_symbols(
     stmt: ast.stmt,
     file_path: str,
-    lines: Sequence[str],
+    source_text: str,
 ) -> list[SymbolNode]:
     """Convert an AST statement into its constituent symbol nodes."""
     if isinstance(stmt, ast.FunctionDef):
-        return [_make_function_symbol(stmt, file_path, lines, SymbolKind.FUNCTION)]
+        return [_make_function_symbol(stmt, file_path, source_text, SymbolKind.FUNCTION)]
     if isinstance(stmt, ast.AsyncFunctionDef):
-        return [_make_function_symbol(stmt, file_path, lines, SymbolKind.ASYNC_FUNCTION)]
+        return [_make_function_symbol(stmt, file_path, source_text, SymbolKind.ASYNC_FUNCTION)]
     if isinstance(stmt, ast.ClassDef):
-        cls_sym, methods = _make_class_symbol(stmt, file_path, lines)
+        cls_sym, methods = _make_class_symbol(stmt, file_path, source_text)
         return [cls_sym, *methods]
     if isinstance(stmt, (ast.Import, ast.ImportFrom)):
-        return [_make_import_symbol(stmt, file_path, lines)]
+        return [_make_import_symbol(stmt, file_path, source_text)]
     return []
 
 
@@ -257,10 +277,9 @@ def extract_symbols_from_source(source_text: str, file_path: str) -> list[Symbol
     tree = _safe_parse_ast(source_text)
     if tree is None:
         return []
-    lines = source_text.splitlines()
     symbols: list[SymbolNode] = []
     for stmt in tree.body:
-        symbols.extend(_dispatch_stmt_symbols(stmt, file_path, lines))
+        symbols.extend(_dispatch_stmt_symbols(stmt, file_path, source_text))
     return symbols
 
 
@@ -348,19 +367,30 @@ def _run_pagerank_loop(
     graph: SymbolGraph,
     cfg: PageRankConfig,
 ) -> dict[str, float]:
-    """Execute iterative power method until convergence or max iterations."""
+    """Run the power method until the L1 change falls below the tolerance.
+
+    Raises PageRankConvergenceError when `max_iter` steps pass first: scores that are
+    still moving are not a ranking.
+    """
     current = dict(p)
+    diff = math.inf
     for _ in range(cfg.max_iter):
         next_r = _pagerank_iteration(nodes, (current, p), graph, cfg.damping)
         diff = sum(abs(next_r[k] - current[k]) for k in nodes)
         current = next_r
         if diff < cfg.tolerance:
-            break
-    return current
+            return current
+    raise PageRankConvergenceError(
+        f"PageRank did not converge in {cfg.max_iter} steps: "
+        f"the last L1 change {diff:.3g} is not below the tolerance {cfg.tolerance:g}"
+    )
 
 
 def compute_pagerank(graph: SymbolGraph, config: PageRankConfig | None = None) -> dict[str, float]:
-    """Compute Personalized PageRank scores over symbol graph."""
+    """Compute Personalized PageRank scores over symbol graph.
+
+    Raises PageRankConvergenceError when the iteration does not converge in `max_iter` steps.
+    """
     cfg = config or PageRankConfig()
     nodes = list(graph.nodes.keys())
     if not nodes:
@@ -458,13 +488,26 @@ def _audit_cycles(graph: SymbolGraph, out: list[Finding]) -> None:
 
 
 def _render_symbol_content(sym: SymbolNode, fidelity: FidelityLevel) -> str:
-    """Render symbol content according to chosen fidelity tier."""
-    if fidelity == FidelityLevel.FULL:
+    """Render one symbol as a complete top-level statement at the chosen fidelity tier.
+
+    An import is a whole statement at every tier. A `def` or `class` header gets the body
+    `...`, and at SIGNATURES its docstring first, written with `repr` so that a quote in
+    the docstring cannot close the literal early.
+    """
+    if fidelity == FidelityLevel.OUTLINE:
+        return _render_outline(sym)
+    if fidelity == FidelityLevel.FULL or sym.kind == SymbolKind.IMPORT:
         return sym.body_code
-    if fidelity == FidelityLevel.SIGNATURES:
-        doc = f'    """{sym.docstring}"""\n    ...' if sym.docstring else "    ..."
-        return f"{sym.signature}\n{doc}"
-    return f"{sym.signature}  # [{sym.kind}] lines {sym.line_start}-{sym.line_end}"
+    doc = f"    {sym.docstring!r}\n" if sym.docstring else ""
+    return f"{sym.signature}\n{doc}    ..."
+
+
+def _render_outline(sym: SymbolNode) -> str:
+    """Render the OUTLINE tier: the header or import, a kind and line comment, and `...`."""
+    marker = f"  # [{sym.kind}] lines {sym.line_start}-{sym.line_end}"
+    if sym.kind == SymbolKind.IMPORT:
+        return f"{sym.body_code}{marker}"
+    return f"{sym.signature}{marker}\n    ..."
 
 
 @dataclass
