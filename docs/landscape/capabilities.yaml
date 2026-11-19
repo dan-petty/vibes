@@ -67,7 +67,7 @@ feature_catalog:
   lsm_kernel_gate: Simulates BPF LSM policy decisions in Python and fuzzes that simulated policy; loads no BPF program and enforces nothing in the kernel
   semantic_reconciliation: Resolves git worktree merge collisions via commutative AST symbol graphs
   wasm_sandboxing: Simulates a WASI 0.2 capability sandbox in Python (capability tokens, gas metering); runs no Wasm runtime
-  ast_crdt: In-process simulation of concurrent AST edits by several agents; does not guarantee strong eventual consistency
+  ast_crdt: In-process simulation of concurrent AST edits by several agents; replicas converge under causal delivery, with concurrent moves in timestamp order
 
 # `kind` is declared, never inferred. Classifying prose by keyword is the proxy that made
 # the self-hardening audit reject a real guardrail, and the same trap applies here: a

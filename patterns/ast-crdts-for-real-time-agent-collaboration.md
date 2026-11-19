@@ -20,7 +20,7 @@ When multiple autonomous agents (e.g. an architect and an implementation worker)
 
 ## 2. The Architectural Pattern: Replicated AST Tree Data Types
 
-The **AST-CRDT** pattern elevates distributed replication from character offsets to **grammatical AST syntax nodes**. A CRDT proper guarantees that replicas which received the same operations converge, in any delivery order ([Shapiro et al., SSS 2011](https://doi.org/10.1007/978-3-642-24550-3_29)). The reference implementation is an in-process simulation that does not meet that bar: it shows the data model, not a proven CRDT.
+The **AST-CRDT** pattern elevates distributed replication from character offsets to **grammatical AST syntax nodes**. A CRDT proper guarantees that replicas which received the same operations converge, in any delivery order ([Shapiro et al., SSS 2011](https://doi.org/10.1007/978-3-642-24550-3_29)). The reference implementation is an in-process simulation. Its replicas converge when operations arrive in causal order, and a seeded property test checks concurrent moves, but no proof covers it.
 
 ```mermaid
 sequenceDiagram
@@ -46,11 +46,11 @@ sequenceDiagram
 1. **Syntactic Unit Granularity**:
    - Mutations operate on semantic nodes (`IMPORT`, `CLASS`, `FUNCTION`, `DECORATOR`, `STATEMENT`) rather than individual characters.
 2. **Fractional Sibling Ordering**:
-   - Sibling order within a parent node is set by position keys, with ties broken by immutable node identifiers (`agent:lamport:counter`). A real implementation needs dense keys (for example rationals); the reference implementation stores keys as strings and compares them lexicographically, so `"10.0"` sorts before `"2.0"`.
+   - Sibling order within a parent node is set by position keys, with ties broken by immutable node identifiers (`agent:lamport:counter`). The keys must be dense: a key must exist between any two siblings. The reference implementation stores each key as a string that holds an exact rational number and compares the keys as numbers, so `"10.0"` sorts after `"2.0"`. `position_between()` returns the midpoint of two keys.
 3. **Strong Eventual Consistency (SEC)**:
-   - Target property: any two replicas that have processed the same set of operations converge to the exact same AST state, regardless of operation arrival order. The reference implementation does not provide it. Two concurrent moves of the same node to different parents leave the replicas with different parents, and an insert that arrives before its parent attaches to the root and stays there.
+   - Target property: any two replicas that have processed the same set of operations converge to the exact same AST state, regardless of operation arrival order. The reference implementation provides it when operations arrive in causal order, and concurrent moves can arrive in any order. An insert that arrives before its parent attaches to the root and stays there.
 4. **Deterministic Cycle Prevention (`CRDT001`)**:
-   - A move that would make a node its own ancestor in the replica's current state is rejected and recorded as `CRDT001`, so each replica stays acyclic. The reference implementation does not compare Lamport timestamps here, so replicas can reject different moves and diverge.
+   - A move that would make a node its own ancestor is rejected and recorded as `CRDT001`, so each replica stays acyclic. The reference implementation evaluates moves in Lamport timestamp order, with the agent ID as tie-breaker. A late move with an earlier timestamp undoes the later moves, is applied, and then redoes them with the cycle check. Thus every replica rejects the same moves (Kleppmann et al., "A highly-available move operation for replicated trees", IEEE TPDS 2022).
 
 ---
 

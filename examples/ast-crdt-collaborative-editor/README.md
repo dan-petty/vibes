@@ -12,12 +12,14 @@ When multiple autonomous AI coding agents collaborate on the same codebase simul
 
 Text CRDTs (RGA, and the text types of Yjs and Automerge) replicate character sequences. A merge of concurrent character edits can produce text that is not valid syntax, for example when two agents edit the same identifier or block. This repository has no benchmark that measures how often that occurs.
 
-The **AST Tree-CRDT** sketch replicates AST nodes instead of characters. It uses Lamport clocks, string sort keys for sibling order, and three operation primitives (`INSERT_NODE`, `DELETE_NODE`, `MOVE_NODE`). It is an in-process simulation: peers are Python objects, and `sync_peers()` exchanges their operation logs. There is no network transport.
+The **AST Tree-CRDT** sketch replicates AST nodes instead of characters. It uses Lamport clocks, exact rational sort keys for sibling order, and three operation primitives (`INSERT_NODE`, `DELETE_NODE`, `MOVE_NODE`). It is an in-process simulation: peers are Python objects, and `sync_peers()` exchanges their operation logs. There is no network transport.
 
-It is not a complete CRDT and does not guarantee Strong Eventual Consistency (SEC):
+Concurrent moves converge. The code uses the move operation of Kleppmann et al., "A highly-available move operation for replicated trees" (IEEE TPDS 2022). Each replica keeps a move log in timestamp order: Lamport clock, then agent ID. When a move arrives, the replica undoes each logged move with a later timestamp, applies the new move, and then redoes the undone moves. Each apply and each redo runs the cycle check. Thus every replica evaluates the moves in the same order and gets the same tree. `test_concurrent_moves_converge` delivers 200 seeded random sets of ten moves to three replicas in different orders and checks that the replicas end with one tree and no cycle.
 
-- Concurrent moves that would make a cycle diverge. Each replica keeps the move that it applied first and rejects the other, so two peers end with different trees. A replicated tree with a safe move operation needs undo and redo of moves in timestamp order (Kleppmann et al., "A highly-available move operation for replicated trees", IEEE TPDS 2022).
-- An insert whose parent has not arrived attaches to `root` and is not moved when the parent arrives. A delete of a node that has not arrived is dropped. These operations commute only under causal delivery.
+It is not a complete CRDT. These limits remain:
+
+- The tree converges only under causal delivery: each operation must arrive after the inserts that it refers to. An insert whose parent has not arrived attaches to `root` and is not moved when the parent arrives. A delete or a move of a node that has not arrived has no effect.
+- The `findings` list is local to each replica. A replica keeps the `CRDT001` finding of a move that it rejected, also when a move with an earlier timestamp arrives later and makes the rejected move valid.
 - `materialize_to_source()` renders only top-level imports, functions and classes, and does not check node names. A name such as `"not valid"` produces source that `ast.parse` rejects.
 
 ---
@@ -50,8 +52,8 @@ This section is not a proof. It states the property that a CRDT needs and what t
 
 $$State \star Op_1 \star Op_2 \equiv State \star Op_2 \star Op_1$$
 
-1. **Insert**: Siblings sort by the `pos` string, compared as text (so `"10.0"` sorts before `"2.0"`), with ties broken by the node ID string `agent_id:lamport:counter`. A repeated insert of the same node ID is ignored. Inserts commute when the parent is already present.
-2. **Move and cycle check**: If $Op_1$ moves node $X$ under $Y$ and $Op_2$ moves $Y$ under $X$, applying both makes a cycle ($X \to Y \to X$). The code rejects whichever move arrives second if it makes a cycle (`CRDT001`). It does not compare Lamport timestamps, so the two replicas keep different moves and diverge.
+1. **Insert**: Siblings sort by the numeric value of `pos`, an exact rational number in a string (`"2.5"` or `"5/2"`), so `"10.0"` sorts after `"2.0"`. Ties break by the node ID string `agent_id:lamport:counter`. `position_between(left, right)` returns the midpoint of two positions, so a key is always available between two siblings. A repeated insert of the same node ID is ignored. Inserts commute when the parent is already present.
+2. **Move and cycle check**: If $Op_1$ moves node $X$ under $Y$ and $Op_2$ moves $Y$ under $X$, applying both makes a cycle ($X \to Y \to X$). Every replica evaluates the two moves in timestamp order. A replica that received $Op_2$ first undoes it, applies $Op_1$, and redoes $Op_2$. The later move makes the cycle, so every replica rejects it (`CRDT001`) and the replicas converge. A move that the replica already holds is ignored.
 3. **Delete**: A delete marks the node as a tombstone ($is\_tombstone = \text{True}$). It commutes with other operations only when the node is already present.
 
 ---
@@ -84,4 +86,4 @@ uv run pytest -q examples/ast-crdt-collaborative-editor/test_ast_crdt.py
 
 ## 6. Zero-Dependency Statement
 
-This reference implementation strictly leverages the **Python standard library** (`argparse`, `collections.abc`, `dataclasses`, `enum`, `json`, `sys`, `typing`), requiring zero external packages or native C runtime extensions.
+This reference implementation strictly leverages the **Python standard library** (`argparse`, `bisect`, `collections.abc`, `dataclasses`, `enum`, `fractions`, `json`, `sys`, `typing`), requiring zero external packages or native C runtime extensions.

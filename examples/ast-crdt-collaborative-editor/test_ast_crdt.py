@@ -1,8 +1,9 @@
 """Unit and integration test suite for Real-Time AST Tree-CRDT.
 
-Validates convergence of two concurrent inserts, string-key sibling ordering, the
-single-replica cycle check, orphan attachment, materialization of valid names, SARIF
-export, and CLI commands. No test covers concurrent moves, which diverge.
+Validates convergence of two concurrent inserts, convergence of concurrent moves in
+seeded random delivery orders, numeric sibling ordering and midpoint positions, the cycle
+check on apply and on redo, orphan attachment, materialization of valid names, SARIF
+export, and CLI commands.
 
 Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 """
@@ -10,9 +11,12 @@ Certified compliant with AST Invariant Sentinel (M <= 4, depth <= 2).
 from __future__ import annotations
 
 import ast
+import random
 
+import pytest
 from ast_crdt import (
     ASTTreeCRDT,
+    CRDTOperation,
     DiagnosticRule,
     InsertTarget,
     NodeKind,
@@ -24,9 +28,12 @@ from ast_crdt import (
     export_sarif,
     format_markdown_report,
     get_active_children,
+    is_ancestor,
     main,
     materialize_to_source,
     next_node_id,
+    position_between,
+    position_key,
     sync_peers,
 )
 
@@ -166,3 +173,130 @@ def test_cli_entry_points() -> None:
     rc_help = main([])
     rc_insp = main(["inspect", "--agent-id", "test-agent"])
     assert (rc_help, rc_insp) == (0, 0)
+
+
+_NODES = ("n1", "n2", "n3", "n4", "n5")
+_AGENTS = ("agent-a", "agent-b", "agent-c")
+
+
+def _replica(agent_id: str) -> ASTTreeCRDT:
+    """Build a replica that holds five classes under root."""
+    crdt = ASTTreeCRDT(agent_id=agent_id)
+    for i, nid in enumerate(_NODES, start=1):
+        apply_operation(crdt, create_insert_op("agent-a", 1, InsertTarget(nid, "root", f"{i}.0", NodeKind.CLASS, nid)))
+    return crdt
+
+
+def _apply_all(crdt: ASTTreeCRDT, ops: list[CRDTOperation]) -> ASTTreeCRDT:
+    """Apply operations in the given arrival order."""
+    for op in ops:
+        apply_operation(crdt, op)
+    return crdt
+
+
+def _random_move(rng: random.Random) -> CRDTOperation:
+    """Draw one move with a small timestamp range, so ties and cycle attempts occur."""
+    dest = (rng.choice(("root", *_NODES)), str(rng.randint(1, 12)))
+    return create_move_op(rng.choice(_AGENTS), rng.randint(2, 6), rng.choice(_NODES), dest)
+
+
+def _random_moves(seed: int) -> list[CRDTOperation]:
+    """Draw ten seeded random moves."""
+    rng = random.Random(seed)
+    return [_random_move(rng) for _ in range(10)]
+
+
+def _snapshot(crdt: ASTTreeCRDT) -> tuple[list[tuple[str, str, str]], list[list[str]]]:
+    """Capture parent and position of each node, and the child order of each parent."""
+    nodes = sorted((n.node_id, n.parent_id, n.pos) for n in crdt.node_map.values())
+    children = [[n.node_id for n in get_active_children(crdt, pid)] for pid in ("root", *_NODES)]
+    return nodes, children
+
+
+def _delivery(ops: list[CRDTOperation], order_seed: int) -> ASTTreeCRDT:
+    """Deliver the operations to a new replica in a seeded random order."""
+    order = list(ops)
+    random.Random(order_seed).shuffle(order)
+    return _apply_all(_replica(f"replica-{order_seed}"), order)
+
+
+def _is_tree(crdt: ASTTreeCRDT) -> bool:
+    """Check that every node reaches root, so the moves made no cycle."""
+    return all(is_ancestor(crdt.node_map, "root", nid) for nid in _NODES)
+
+
+def _converges(seed: int) -> bool:
+    """Check that three delivery orders of one random move set give one acyclic tree."""
+    ops = _random_moves(seed)
+    replicas = [_delivery(ops, seed * 10 + k) for k in range(3)]
+    shapes = [_snapshot(r) for r in replicas]
+    return (shapes[1:], _is_tree(replicas[0])) == ([shapes[0], shapes[0]], True)
+
+
+def test_concurrent_moves_converge() -> None:
+    """Verify that replicas reach one tree for the same moves in any delivery order."""
+    failed_seeds = [seed for seed in range(200) if not _converges(seed)]
+    assert failed_seeds == []
+
+
+def test_later_move_wins_in_both_orders() -> None:
+    """Verify that the move with the greater Lamport timestamp sets the parent."""
+    early = create_move_op("agent-b", 5, "n3", ("n1", "1.0"))
+    late = create_move_op("agent-a", 6, "n3", ("n2", "1.0"))
+    in_order = _apply_all(_replica("r1"), [early, late]).node_map["n3"]
+    reversed_ = _apply_all(_replica("r2"), [late, early]).node_map["n3"]
+    assert [(n.parent_id, n.pos) for n in (in_order, reversed_)] == [("n2", "1.0"), ("n2", "1.0")]
+
+
+def test_equal_lamport_moves_use_agent_id() -> None:
+    """Verify that the agent ID breaks a tie of equal Lamport timestamps."""
+    move_a = create_move_op("agent-a", 7, "n3", ("n1", "1.0"))
+    move_b = create_move_op("agent-b", 7, "n3", ("n2", "1.0"))
+    first = _apply_all(_replica("r1"), [move_a, move_b]).node_map["n3"].parent_id
+    second = _apply_all(_replica("r2"), [move_b, move_a]).node_map["n3"].parent_id
+    assert (first, second) == ("n2", "n2")
+
+
+def test_cycle_check_runs_on_redo() -> None:
+    """Verify that a late, earlier move is applied first and the later cycle move is rejected once."""
+    x_under_y = create_move_op("agent-a", 5, "n1", ("n2", "1.0"))
+    y_under_x = create_move_op("agent-b", 6, "n2", ("n1", "1.0"))
+    unrelated = create_move_op("agent-c", 2, "n3", ("n4", "1.0"))
+    in_order = _apply_all(_replica("r1"), [unrelated, x_under_y, y_under_x])
+    late = _apply_all(_replica("r2"), [y_under_x, x_under_y, unrelated])
+    results = [
+        (r.node_map["n1"].parent_id, r.node_map["n2"].parent_id, [(f.rule, f.target) for f in r.findings])
+        for r in (in_order, late)
+    ]
+    expected = ("n2", "root", [(DiagnosticRule.CRDT001, "n2")])
+    assert results == [expected, expected]
+
+
+def _child_insert(index: int) -> CRDTOperation:
+    """Build the insert of function child-<index> under root at position <index>.0."""
+    target = InsertTarget(f"child-{index}", "root", f"{index}.0", NodeKind.FUNCTION, f"f{index}")
+    return create_insert_op("agent-1", 1, target)
+
+
+_TEN_CHILDREN = [f"child-{index}" for index in range(1, 11)]
+
+
+def test_ten_children_keep_numeric_order() -> None:
+    """Verify that sibling positions compare as numbers, so 10 sorts after 9."""
+    crdt = _apply_all(_make_sample_crdt(), [_child_insert(index) for index in range(10, 0, -1)])
+    order = [n.node_id for n in get_active_children(crdt, "root")]
+    assert order == _TEN_CHILDREN
+
+
+def test_position_between_stays_exact() -> None:
+    """Verify that sixty nested midpoints stay distinct and sort between their neighbours."""
+    keys = ["9", "10"]
+    for _ in range(60):
+        keys.insert(1, position_between(keys[0], keys[1]))
+    assert (sorted(keys, key=position_key), len(set(keys))) == (keys, 62)
+
+
+def test_non_numeric_position_is_rejected() -> None:
+    """Verify that a move to a position that is not a number fails at construction."""
+    with pytest.raises(ValueError, match="Invalid literal for Fraction"):
+        create_move_op("agent-1", 1, "n1", ("root", "first"))
