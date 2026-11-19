@@ -53,7 +53,7 @@ flowchart TD
     SimulatorEngine --> Result
 ```
 
-- **Container Mode**: When `docker` or `podman` is on `PATH`, calls its CLI (`docker run --rm ...`) with the flags in the table above. It does not check that the runtime is rootless. `run_python_code` passes the host interpreter path (`sys.executable`) as the command inside the `python:3.12-slim` image, where that path does not exist, so Python payloads fail in this mode; the tests check only the argument list. For this mode `RuntimeEnforcementAuditor` reports all eight controls as enforced from the flags alone; it does not inspect the running container.
+- **Container Mode**: When `docker` or `podman` is on `PATH`, calls its CLI (`docker run --rm --name <name> ...`) with the flags in the table above. It does not check that the runtime is rootless. `run_python_code` runs `python3` from the `python:3.12-slim` image, because the host interpreter path in `sys.executable` does not exist in the image. Each run gets a unique `--name`. On timeout the harness runs `docker kill <name>` (or `podman kill <name>`), and then signals the client's process group: a signal to the client alone does not stop the container. If the `kill` fails, the result's `stderr` says so. For this mode `RuntimeEnforcementAuditor` reports all eight controls as enforced from the flags alone; it does not inspect the running container.
 - **Simulator Mode**: When running in offline or nested environments without a container socket, uses POSIX process group isolation (`os.setsid`), bounded execution timers, sanitized environments, `setrlimit` caps, and a **seccomp-BPF filter installed in the child between `fork` and `exec`** — kernel-enforced, unprivileged, and irrevocable. The memory cap is `RLIMIT_AS` (address space per process), not a cgroup, and the process cap is `RLIMIT_NPROC`, which counts every process of the user. This is the path that actually runs on most developer machines and in most CI jobs, and until [`syscall_filter.py`](./syscall_filter.py) it enforced nothing.
 - **Buffer Bounding**: Output streams are strictly capped to 64KB (`MAX_OUTPUT_BYTES = 65536`) with truncation markers to prevent CWE-400 memory bloat.
 
@@ -115,7 +115,7 @@ Output:
 ==========================================================================
 ```
 
-Timings vary by host. The "Infinite Loop" probe is `time.sleep(10)`, stopped by the demo's 0.15 s timeout.
+Timings vary by host. The "Infinite Loop" probe is `time.sleep(10)`, stopped by the simulator demo's 0.15 s timeout. Without `--simulator`, a container demo uses the 5 s policy default, because a container start takes longer than 0.15 s. There, `docker kill` stops the probe's container at 5 s.
 
 ---
 
@@ -125,7 +125,7 @@ Timings vary by host. The "Infinite Loop" probe is `time.sleep(10)`, stopped by 
 python3 -m pytest -v examples/ephemeral-container-sandbox/test_sandbox.py
 ```
 
-The 17 tests in `test_sandbox.py` validate:
+The 24 tests in `test_sandbox.py` validate:
 - Policy immutability and default CIS controls.
 - Audit scoring deductions on insecure configurations.
 - Docker and Podman argument synthesis.
@@ -133,6 +133,8 @@ The 17 tests in `test_sandbox.py` validate:
 - Safe payload execution and output retrieval.
 - Timeout enforcement and process tree termination.
 - Buffer overflow bounding and denial-of-service prevention.
+- Container mode against a fake `docker` on `PATH`: `python3` from the image, a unique `--name` for each run, and `docker kill <name>` on timeout.
+- The demo payloads in a real container. This test skips when neither `docker` nor `podman` is on `PATH`.
 
 ---
 

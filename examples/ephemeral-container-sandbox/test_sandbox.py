@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,6 +15,7 @@ sys.path.insert(0, str(_app_dir))
 import pytest
 import syscall_filter
 from sandbox import (
+    CONTAINER_IMAGE,
     CISAuditReport,
     CISPolicyAuditor,
     ContainerCommandBuilder,
@@ -19,7 +23,9 @@ from sandbox import (
     RuntimeEnforcementAuditor,
     SandboxExecutionResult,
     SandboxSecurityPolicy,
+    demo_policy,
     main,
+    run_benchmark_matrix,
 )
 
 
@@ -277,3 +283,132 @@ def test_the_simulator_still_runs_ordinary_work() -> None:
     """A containment control that breaks benign payloads is a control someone disables."""
     result = ContainerSandboxHarness(force_simulator=True).run_python_code("print('ordinary work')")
     assert (result.exit_code, result.stdout.strip()) == (0, "ordinary work")
+
+
+# --- Container mode, driven by a fake engine on PATH ------------------------------------
+#
+# No container engine is needed for these: the fake records each argument list it gets
+# and sleeps on `run` for FAKE_ENGINE_RUN_SECONDS, so the tests check the command lines
+# that the harness sends and the order in which it stops a run.
+
+_FAKE_ENGINE = """\
+import json, os, sys, time
+with open({log!r}, "a", encoding="utf-8") as log:
+    log.write(json.dumps(sys.argv[1:]) + "\\n")
+if sys.argv[1] == "run":
+    time.sleep(float(os.environ.get("FAKE_ENGINE_RUN_SECONDS", "0")))
+sys.exit(int(os.environ.get("FAKE_ENGINE_KILL_STATUS", "0")) if sys.argv[1] == "kill" else 0)
+"""
+
+
+@pytest.fixture
+def fake_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Put a fake `docker` first on PATH and return the file where it logs its calls."""
+    log = tmp_path / "engine-calls.jsonl"
+    fake = tmp_path / "docker"
+    fake.write_text(f"#!{sys.executable}\n" + _FAKE_ENGINE.format(log=str(log)), encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ.get('PATH', '')}")
+    return log
+
+
+def _engine_calls(log: Path) -> list[list[str]]:
+    """Read the argument lists the fake engine recorded, in call order."""
+    if not log.exists():
+        return []
+    return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+
+
+def _run_name(run_args: list[str]) -> str:
+    """Return the `--name` value of a recorded `run` call."""
+    return run_args[run_args.index("--name") + 1]
+
+
+def test_the_container_runs_the_image_interpreter_not_the_host_path(fake_engine: Path) -> None:
+    """The host interpreter path does not exist in the image, so the container must not get it.
+
+    With `sys.executable` passed through, every payload exited with code 127 in a real
+    container, and the audit still called the policy compliant.
+    """
+    harness = ContainerSandboxHarness(container_engine="docker")
+    result = harness.run_python_code("print('in the image')")
+    after_image = result.command[result.command.index(CONTAINER_IMAGE) + 1:]
+    assert (harness.engine, after_image[:2], sys.executable in result.command) == ("docker", ["python3", "-c"], False)
+
+
+def test_the_simulator_keeps_the_host_interpreter() -> None:
+    """The simulator runs in the current environment, where the host interpreter is the one to use."""
+    result = ContainerSandboxHarness(force_simulator=True).run_python_code("print('host')")
+    assert (result.command[0], result.exit_code) == (sys.executable, 0)
+
+
+def test_each_container_run_gets_its_own_name(fake_engine: Path) -> None:
+    """A unique `--name` per run is what lets a timeout kill one container and no other."""
+    harness = ContainerSandboxHarness(container_engine="docker")
+    harness.run_python_code("pass")
+    harness.run_python_code("pass")
+    names = [_run_name(call) for call in _engine_calls(fake_engine) if call[0] == "run"]
+    assert (len(names), len(set(names))) == (2, 2)
+
+
+def test_a_container_timeout_kills_that_container_by_name(
+    fake_engine: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A signal to the host client does not stop the container; the engine's `kill` does.
+
+    The client process group holds only the `docker` client. Killing it leaves the
+    container running, so on timeout the harness must ask the engine to kill the container
+    by the name it gave at `run`, and must name no other container.
+    """
+    monkeypatch.setenv("FAKE_ENGINE_RUN_SECONDS", "30")
+    harness = ContainerSandboxHarness(SandboxSecurityPolicy(timeout_seconds=0.5), container_engine="docker")
+    result = harness.run_python_code("import time\ntime.sleep(30)")
+    calls = _engine_calls(fake_engine)
+    runs = [call for call in calls if call[0] == "run"]
+    kills = [call for call in calls if call[0] == "kill"]
+    assert (result.timed_out, result.exit_code, len(runs), kills) == (True, 124, 1, [["kill", _run_name(runs[0])]])
+
+
+def test_a_failed_container_kill_is_reported(fake_engine: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A container that may still run must not be reported as a clean timeout."""
+    monkeypatch.setenv("FAKE_ENGINE_RUN_SECONDS", "30")
+    monkeypatch.setenv("FAKE_ENGINE_KILL_STATUS", "1")
+    harness = ContainerSandboxHarness(SandboxSecurityPolicy(timeout_seconds=0.5), container_engine="docker")
+    result = harness.run_python_code("import time\ntime.sleep(30)")
+    assert (result.timed_out, "docker kill vibes-sandbox-" in result.stderr, "failed" in result.stderr) == (
+        True, True, True,
+    )
+
+
+def test_the_demo_timeout_leaves_room_for_a_container_start() -> None:
+    """A container start takes longer than 0.15 s, so only the simulator demo uses that timeout."""
+    assert (demo_policy("docker").timeout_seconds, demo_policy("podman").timeout_seconds,
+            demo_policy("simulator").timeout_seconds) == (5.0, 5.0, 0.15)
+
+
+# --- A real engine, when this host has one ----------------------------------------------
+
+_LIVE_ENGINE = ContainerSandboxHarness._resolve_engine(None, force_sim=False)
+
+
+def _image_problem(engine: str) -> str | None:
+    """Return why the engine cannot supply the image, or None when the image is ready.
+
+    The pull runs here, outside the demo's 5 s timeout, so a first pull does not time out
+    the first payload.
+    """
+    inspect = [engine, "image", "inspect", CONTAINER_IMAGE]
+    if subprocess.run(inspect, capture_output=True, timeout=60, check=False).returncode == 0:
+        return None
+    pulled = subprocess.run([engine, "pull", CONTAINER_IMAGE], capture_output=True, text=True, timeout=300, check=False)
+    return None if pulled.returncode == 0 else pulled.stderr.strip()[:256]
+
+
+@pytest.mark.skipif(_LIVE_ENGINE == "simulator", reason="no container engine: neither docker nor podman is on PATH")
+def test_the_demo_payloads_pass_in_a_container() -> None:
+    """Executed, not declared: the three demo payloads run in a real container."""
+    problem = _image_problem(_LIVE_ENGINE)
+    if problem:
+        pytest.skip(f"{_LIVE_ENGINE} cannot supply {CONTAINER_IMAGE}: {problem}")
+    matrix = run_benchmark_matrix(ContainerSandboxHarness(policy=demo_policy(_LIVE_ENGINE)))
+    assert [(name, passed) for name, passed, _ in matrix] == [(name, True) for name, _, _ in matrix]

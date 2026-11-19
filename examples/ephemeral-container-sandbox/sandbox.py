@@ -27,8 +27,10 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 # Kept importable whether this file is run from its own directory, imported by a test
@@ -43,6 +45,15 @@ import syscall_filter
 # Bounded output constraints
 MAX_OUTPUT_BYTES = 65536
 TRUNCATION_MARKER = "\n... [TRUNCATED DUE TO BUFFER LIMIT] ...\n"
+# The image that container mode runs payloads in, and the interpreter on its PATH. The host
+# interpreter path in `sys.executable` does not exist in the image.
+CONTAINER_IMAGE = "python:3.12-slim"
+CONTAINER_PYTHON = "python3"
+# How long `<engine> kill` may take to stop a container that ran past its timeout.
+ENGINE_KILL_TIMEOUT_SECONDS = 10.0
+# The simulator starts a payload in milliseconds, so its demo can use a short timeout. A
+# container start takes longer, so a container demo keeps the policy default.
+SIMULATOR_DEMO_TIMEOUT_SECONDS = 0.15
 DEFAULT_SAFE_VARS = frozenset({"PATH", "LANG", "LC_ALL", "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"})
 
 # The eight controls, in the order both auditors report them.
@@ -275,9 +286,16 @@ class ContainerCommandBuilder:
         image: str,
         command: list[str],
         policy: SandboxSecurityPolicy,
+        name: str | None = None,
     ) -> list[str]:
-        """Construct secure argument list without shell interpolation."""
+        """Construct secure argument list without shell interpolation.
+
+        `name` becomes `--name`, which lets the harness stop this container with
+        `<engine> kill <name>`.
+        """
         args: list[str] = [engine, "run", "--rm"]
+        if name:
+            args.extend(["--name", name])
 
         if policy.read_only_rootfs:
             args.append("--read-only")
@@ -348,15 +366,33 @@ class ContainerSandboxHarness:
         return self.run_command(cmd)
 
     def _run_container(self, command: list[str]) -> SandboxExecutionResult:
-        docker_cmd = [sys.executable if c == sys.executable else c for c in command]
-        image = "python:3.12-slim"
+        # The image has its own interpreter. Only the program name is replaced, never an argument.
+        if command[:1] == [sys.executable]:
+            command = [CONTAINER_PYTHON, *command[1:]]
+        name = f"vibes-sandbox-{uuid.uuid4().hex}"
         run_args = ContainerCommandBuilder.build_run_args(
             engine=self.engine,
-            image=image,
-            command=docker_cmd,
+            image=CONTAINER_IMAGE,
+            command=command,
             policy=self.policy,
+            name=name,
         )
-        return self._execute_subprocess(run_args, runtime_name=self.engine)
+        return self._execute_subprocess(
+            run_args, runtime_name=self.engine, on_timeout=partial(self._kill_container, name)
+        )
+
+    def _kill_container(self, name: str) -> str:
+        """Stop the named container through its engine, and return a note if that fails.
+
+        A signal to the host process group reaches only the `docker` or `podman` client,
+        and the container keeps running. The engine's `kill` stops the container itself.
+        """
+        kill = [self.engine, "kill", name]
+        try:
+            subprocess.run(kill, capture_output=True, text=True, timeout=ENGINE_KILL_TIMEOUT_SECONDS, check=True)
+        except (OSError, subprocess.SubprocessError) as err:
+            return f"\n{' '.join(kill)} failed: {str(err)[:256]}"
+        return ""
 
     def _run_simulator(self, command: list[str]) -> SandboxExecutionResult:
         sanitized_env = self.sanitize_env(dict(os.environ))
@@ -396,6 +432,7 @@ class ContainerSandboxHarness:
         runtime_name: str,
         env: dict[str, str] | None = None,
         confine: Callable[[], None] | None = None,
+        on_timeout: Callable[[], str] | None = None,
     ) -> SandboxExecutionResult:
         start = time.monotonic()
         timed_out = False
@@ -419,6 +456,8 @@ class ContainerSandboxHarness:
             timed_out = True
             exit_code = 124
             stderr_raw = f"Execution timed out after {self.policy.timeout_seconds}s"
+            if on_timeout is not None:
+                stderr_raw += on_timeout()
             self._terminate_process_tree(proc)
         except OSError as err:
             exit_code = 1
@@ -458,6 +497,13 @@ class ContainerSandboxHarness:
         return content[:half] + TRUNCATION_MARKER + content[-half:]
 
 
+def demo_policy(engine: str) -> SandboxSecurityPolicy:
+    """Return the demo policy for an engine: a short timeout only where a start is fast."""
+    if engine == "simulator":
+        return SandboxSecurityPolicy(timeout_seconds=SIMULATOR_DEMO_TIMEOUT_SECONDS)
+    return SandboxSecurityPolicy()
+
+
 def run_benchmark_matrix(harness: ContainerSandboxHarness) -> list[tuple[str, bool, str]]:
     """Execute standard sandbox containment test matrix."""
     results: list[tuple[str, bool, str]] = []
@@ -488,7 +534,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--simulator", action="store_true", help="Force local simulator runtime instead of container")
     args = parser.parse_args(argv)
 
-    policy = SandboxSecurityPolicy(timeout_seconds=0.15 if args.demo else 5.0)
+    engine = ContainerSandboxHarness._resolve_engine(None, args.simulator)
+    policy = demo_policy(engine) if args.demo else SandboxSecurityPolicy()
 
     if args.audit or not args.demo:
         _print_audit_report(CISPolicyAuditor.audit(policy))
@@ -496,7 +543,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         # a property of the declaration; this one is a property of the run about to happen,
         # and reporting only the first is how this harness came to certify a containment it
         # was not applying.
-        engine = ContainerSandboxHarness._resolve_engine(None, args.simulator)
         _print_enforcement_report(RuntimeEnforcementAuditor.audit(policy, engine))
 
     if args.demo:
