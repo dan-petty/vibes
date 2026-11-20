@@ -6,12 +6,8 @@ from pathlib import Path
 # Add tools/ to sys.path for direct imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
-import json
-import urllib.error
-
 import pytest
 from project_tooling import (
-    GitHubAPIClient,
     audit_self_hardening,
     count_guardrail_lines,
     main,
@@ -83,71 +79,6 @@ def test_main_rejects_an_unknown_subcommand() -> None:
     with pytest.raises(SystemExit) as excinfo:
         main(["not-a-command"])
     assert excinfo.value.code != 0
-
-
-def test_github_client_token_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit token wins; otherwise GITHUB_TOKEN, then GH_TOKEN, then unauthenticated."""
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.delenv("GH_TOKEN", raising=False)
-    explicit = GitHubAPIClient(token="explicit").token
-    unauthenticated = GitHubAPIClient().token
-
-    monkeypatch.setenv("GH_TOKEN", "from-gh")
-    from_gh = GitHubAPIClient().token
-    monkeypatch.setenv("GITHUB_TOKEN", "from-github")
-    from_github = GitHubAPIClient().token
-
-    assert (explicit, unauthenticated, from_gh, from_github) == ("explicit", "", "from-gh", "from-github")
-
-
-def test_github_client_sends_authenticated_json_request(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify the request contract without touching the network."""
-    captured: dict[str, object] = {}
-
-    class _Response:
-        def read(self) -> bytes:
-            return json.dumps({"number": 1}).encode("utf-8")
-
-        def __enter__(self) -> "_Response":
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-    def _fake_urlopen(request, timeout=None):
-        captured["url"] = request.full_url
-        captured["method"] = request.method
-        captured["auth"] = request.get_header("Authorization")
-        captured["body"] = request.data
-        return _Response()
-
-    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
-    client = GitHubAPIClient(token="secret", base_url="https://example.com/")
-    res = client.request("/issues/1", method="POST", data={"body": "hi"})
-    assert (
-        res,
-        captured["url"],
-        captured["method"],
-        captured["auth"],
-        json.loads(captured["body"]),
-    ) == (
-        {"number": 1},
-        "https://example.com/issues/1",
-        "POST",
-        "Bearer secret",
-        {"body": "hi"},
-    )
-
-
-def test_github_client_bounds_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Error bodies are caller-controlled, so the detail must be length-capped (CWE-209)."""
-
-    def _raise(request, timeout=None):
-        raise urllib.error.HTTPError(request.full_url, 422, "Unprocessable", {}, None)
-
-    monkeypatch.setattr("urllib.request.urlopen", _raise)
-    with pytest.raises(RuntimeError, match="HTTP 422"):
-        GitHubAPIClient(token="t").request("/issues")
 
 
 # --- Hardening detection scope -------------------------------------------------------

@@ -81,7 +81,7 @@ def test_prioritization_scoring_hierarchy() -> None:
     )
     res_sec = SDLCResource(
         "2", SDLCResourceKind.ISSUE, 2, "Fix SSRF Vulnerability",
-        labels=["security", "bug"], priority=PriorityLevel.P0_CRITICAL, effort_points=2, business_value=10
+        labels=["type/security", "type/bug"], priority=PriorityLevel.P0_CRITICAL, effort_points=2, business_value=10
     )
     res_pr = SDLCResource(
         "3", SDLCResourceKind.PULL_REQUEST, 3, "Auth Refactor PR",
@@ -98,6 +98,33 @@ def test_prioritization_scoring_hierarchy() -> None:
         score_pr > score_normal,
         score_sec > 1000.0,
     ) == (True, True, True)
+
+
+def _labelled_score(*labels: str) -> float:
+    """Score one low-priority issue that carries only the given labels."""
+    res = SDLCResource(
+        "9", SDLCResourceKind.ISSUE, 9, "Labelled item",
+        labels=list(labels), priority=PriorityLevel.P3_LOW, effort_points=1, business_value=2
+    )
+    return PrioritizationScorer.score_resource(res, DependencyGraph([res]))
+
+
+def test_a_declared_type_bug_label_scores_as_a_defect() -> None:
+    """The type/ names that .github/labels.yml declares carry the label modifiers."""
+    base = _labelled_score()
+    assert (
+        _labelled_score("type/bug") - base,
+        _labelled_score("type/security") - _labelled_score("type/bug"),
+        _labelled_score("type/feature") - base,
+        _labelled_score("status/blocked") - base,
+    ) == (250.0, 150.0, 100.0, 0.0)
+
+
+def test_label_names_that_labels_yml_does_not_declare_add_nothing() -> None:
+    """A bare name such as `bug` is not a declared label, so it must not move the rank."""
+    base = _labelled_score()
+    bare = ("bug", "security", "regression", "feature", "docs", "enhancement")
+    assert {name: _labelled_score(name) - base for name in bare} == dict.fromkeys(bare, 0.0)
 
 
 def test_recommend_action_prioritizes_failing_pr_first() -> None:

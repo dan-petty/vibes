@@ -378,7 +378,8 @@ def test_export_feedback_to_sdlc_tasks() -> None:
         tasks[0]["priority"],
         tasks[0]["kind"],
         "PROACTIVE_REFACTOR" in tasks[0]["title"],
-    ) == (1, "P2_MEDIUM", "issue", True)
+        tasks[0]["labels"],
+    ) == (1, "P2_MEDIUM", "issue", True, ["type/feature", "proactive_refactor"])
 
 
 def test_cli_export_backlog_flag(tmp_path: Path) -> None:

@@ -34,14 +34,15 @@ PRIORITY_BASE_WEIGHTS = {
     "P3_LOW": 50.0,
 }
 
-# Label severity modifiers
-LABEL_WEIGHT_MODIFIERS = {
-    "security": 400.0,
-    "bug": 250.0,
-    "regression": 300.0,
+# Label severity modifiers, keyed on the names that .github/labels.yml declares. `type/bug`
+# also covers a regression. `performance` is the one local name: the workbench writes its
+# feedback category as a label, and labels.yml declares no performance type.
+LABEL_WEIGHT_MODIFIERS: Final[dict[str, float]] = {
+    "type/security": 400.0,
+    "type/bug": 250.0,
     "performance": 150.0,
-    "feature": 100.0,
-    "docs": 50.0,
+    "type/feature": 100.0,
+    "type/docs": 50.0,
 }
 
 
@@ -190,11 +191,8 @@ class PrioritizationScorer:
 
     @staticmethod
     def _label_modifiers(labels: list[str]) -> float:
-        bonus = 0.0
-        for lbl in labels:
-            clean_lbl = lbl.lower().replace("type/", "").replace("priority/", "")
-            bonus += LABEL_WEIGHT_MODIFIERS.get(clean_lbl, 0.0)
-        return bonus
+        """Sum the label modifiers. A name that labels.yml does not declare adds nothing."""
+        return sum((LABEL_WEIGHT_MODIFIERS.get(label.lower(), 0.0) for label in labels), 0.0)
 
     @staticmethod
     def _pr_modifiers(res: SDLCResource) -> float:
