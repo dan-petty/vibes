@@ -38,7 +38,7 @@ test = [
 # CI installs and the versions a contributor installs must come from one place.
 lint = [
     "mypy>=2.0",
-    "ruff>=0.16",
+    "ruff>=0.17",
     "types-PyYAML",
     "types-jsonschema",
 ]

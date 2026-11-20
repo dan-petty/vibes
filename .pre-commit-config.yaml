@@ -10,6 +10,18 @@ repos:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md, --markdown-linebreak-ext=markdown]
 
+  # The rev pins the ruff version, so each contributor runs the same ruff. It must satisfy
+  # the ruff floor in pyproject.toml; Renovate updates the two together (.github/renovate.json).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        name: Ruff (correctness, modernization, import order)
+        # The hook entry is `ruff check --force-exclude`: ruff skips a staged file that its
+        # exclude settings match, also when pre-commit names the file. N staged filenames per
+        # invocation. Configuration lives in pyproject.toml so the hook, CI and a developer's
+        # own `ruff check` cannot disagree about the rule set.
+
   - repo: local
     hooks:
       - id: ast-invariant-sentinel
@@ -20,16 +32,6 @@ repos:
         # N staged filenames per invocation; sentinel.py audits every one (argparse nargs="*").
         pass_filenames: true
         additional_dependencies: []
-
-      - id: ruff
-        name: Ruff (correctness, modernization, import order)
-        language: python
-        entry: ruff check --force-exclude
-        files: \.py$
-        # N staged filenames per invocation. Configuration lives in pyproject.toml so the
-        # hook, CI and a developer's own `ruff check` cannot disagree about the rule set.
-        pass_filenames: true
-        additional_dependencies: [ruff>=0.6]
 
       - id: docs-validator
         name: Docs Validator (fences, Mermaid, tables, links)

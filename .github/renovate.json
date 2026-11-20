@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate opens the dependency update pull requests of vibes. The shared preset of devops-cli sets the schedule and the groups: security fixes and patch releases come at once, other updates come each Monday with the minor updates of each ecosystem in one group, and no update waits for a minimum release age.",
+  "extends": [
+    "github>dan-petty/devops-cli//.github/renovate/base"
+  ],
+  "labels": ["type/chore"],
+  "commitMessagePrefix": "chore:",
+  "dependencyDashboard": {
+    "labels": ["type/chore"]
+  },
+  "vulnerabilityAlerts": {
+    "description": "vibes declares no scope/ labels and uses no scope in titles. No automerge: the ruleset of main requires no status check.",
+    "labels": ["type/security"],
+    "commitMessagePrefix": "fix:"
+  },
+  "kubernetes": {
+    "managerFilePatterns": ["/^resources/k8s/.+\\.ya?ml$/"]
+  },
+  "packageRules": [
+    {
+      "description": "pyproject.toml and the pre-commit hooks hold >= floors and no lock file. CI installs the newest release, so each update raises the floor to the version that CI tests (AGENTS.md, section 5). With the default range strategy, a >= floor admits each new release and Renovate changes nothing, also for a security fix.",
+      "matchDatasources": ["pypi"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "A floor in the pre-commit hooks and the same floor in pyproject.toml move in one pull request. The shared preset puts the hooks in a different group.",
+      "matchDatasources": ["pypi"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python dependencies"
+    },
+    {
+      "description": "A new Python minor waits for an approval on the Dependency Dashboard (shared preset). The Python image gets its own branch, so the other images do not wait for that approval.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["python"],
+      "groupName": "python image"
+    },
+    {
+      "description": "The python-version inputs of the workflows name the floor of requires-python in pyproject.toml and the first entry of the CI matrix. A person changes the three together.",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "matchDepNames": ["python"],
+      "enabled": false
+    },
+    {
+      "description": "The ruff floor of pyproject.toml and the rev of the ruff-pre-commit hook move together, so the hook and CI run the same ruff.",
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
+      "groupName": "ruff"
+    },
+    {
+      "description": "A new major of an image can stop reading the config that the stack mounts.",
+      "matchFileNames": ["resources/**"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "prBodyNotes": [
+        "Before the merge, start the stack of `resources/docker-compose/` with the new image and check that the service loads each config file that it mounts."
+      ]
+    }
+  ]
+}
