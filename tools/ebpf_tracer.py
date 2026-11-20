@@ -310,12 +310,15 @@ def _kprobe_arg_value(arg: dict[str, Any], arg_type: str, field: str) -> Any:
 
 def _kprobe_arg_fields(args: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Read the path and the destination address and port from the arguments of a kprobe record."""
+    found = (
+        (key, _kprobe_arg_value(arg, arg_type, field))
+        for arg in args
+        for arg_type, field, key in TETRAGON_KPROBE_ARG_FIELDS
+    )
     fields: dict[str, Any] = {}
-    for arg in args:
-        for arg_type, field, key in TETRAGON_KPROBE_ARG_FIELDS:
-            value = _kprobe_arg_value(arg, arg_type, field)
-            if value is not None:
-                fields.setdefault(key, value)
+    for key, value in found:
+        if value is not None:
+            fields.setdefault(key, value)
     return fields
 
 
