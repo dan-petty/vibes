@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 """Autonomous GitHub Project Tooling & Recursive Development Engine.
 
-Enables autonomous agents and automated workflows to:
-1. Enforce the recursive self-hardening loop (checking that defect fixes harden AGENTS.md).
-2. Run client-side rate-managed GitHub API queries and comments.
+Enforces the recursive self-hardening loop: it checks that a defect fix hardens AGENTS.md.
+`recursive-hardening.yml` runs the `verify-hardening` audit on the diff of a merged pull request.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import re
 import sys
-import urllib.error
-import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
 @dataclass
@@ -30,33 +24,6 @@ class HardeningAuditResult:
     new_guardrails_detected: int
     is_compliant: bool
     summary: str
-
-
-class GitHubAPIClient:
-    """Rate-managed client for GitHub REST and GraphQL APIs."""
-
-    def __init__(self, token: str | None = None, base_url: str = "https://api.github.com") -> None:
-        self.token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-        self.base_url = base_url.rstrip("/")
-
-    def request(self, endpoint: str, method: str = "GET", data: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Execute an authenticated HTTP request against GitHub API."""
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        payload = json.dumps(data).encode("utf-8") if data else None
-
-        req = urllib.request.Request(url, data=payload, method=method)
-        req.add_header("Accept", "application/vnd.github+json")
-        req.add_header("User-Agent", "vibes-autonomous-project-tooling/0.2.0")
-        if self.token:
-            req.add_header("Authorization", f"Bearer {self.token}")
-
-        try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as err:
-            err_body = err.read().decode("utf-8", errors="ignore")
-            raise RuntimeError(f"GitHub API error HTTP {err.code}: {err_body[:256]}") from err
 
 
 AGENTS_FILENAME = "AGENTS.md"

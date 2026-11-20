@@ -111,9 +111,9 @@ class RoadmapItem:
 
     def to_backlog_task(self, number: int) -> dict[str, object]:
         """Render as an SDLC backlog task, matching the workbench's export schema."""
-        labels = ["enhancement", "roadmap", self.milestone]
+        labels = ["type/feature", "roadmap", self.milestone]
         if self.blocked_reason:
-            labels.append("blocked")
+            labels.append("status/blocked")
         return {
             "resource_id": f"roadmap-{number}",
             "kind": "issue",

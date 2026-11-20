@@ -1409,7 +1409,7 @@ class ResourceIterationWorkbench:
                     "kind": "issue",
                     "number": 1000 + idx,
                     "title": f"[{item.category.value}] {item.headline}",
-                    "labels": ["enhancement", item.category.value.lower()],
+                    "labels": ["type/feature", item.category.value.lower()],
                     "lifecycle_state": "Backlog",
                     "priority": priority_map.get(item.priority, "P2_MEDIUM"),
                     "effort_points": 2 if item.priority == FeedbackPriority.LOW else 5,

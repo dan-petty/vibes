@@ -194,6 +194,14 @@ def test_blocked_items_are_labelled_and_explained_in_the_backlog(tmp_path: Path)
     task = parse_roadmap(roadmap)[0].to_backlog_task(2001)
     assert (
         task["blocked_reason"],
-        "blocked" in task["labels"],
+        task["labels"],
         str(task["prescriptive_guidance"]).startswith("Blocked: no upstream API yet."),
-    ) == ("no upstream API yet", True, True)
+    ) == ("no upstream API yet", ["type/feature", "roadmap", "v0.3.0", "status/blocked"], True)
+
+
+def test_an_unblocked_roadmap_task_carries_the_declared_feature_label(tmp_path: Path) -> None:
+    """A deliverable is labelled `type/feature`, the name that .github/labels.yml declares."""
+    roadmap = tmp_path / "ROADMAP.md"
+    roadmap.write_text("### Milestone (v0.3.0)\n\n- [ ] **Thing**:\n", encoding="utf-8")
+    task = parse_roadmap(roadmap)[0].to_backlog_task(2001)
+    assert task["labels"] == ["type/feature", "roadmap", "v0.3.0"]

@@ -24,7 +24,7 @@ def _card(number: int, title: str, **overrides: object) -> dict:
         "kind": "issue",
         "number": number,
         "title": title,
-        "labels": ["enhancement"],
+        "labels": ["type/feature"],
         "lifecycle_state": "Backlog",
         "priority": "P2_MEDIUM",
         "effort_points": 2,
@@ -204,7 +204,7 @@ def _roadmap_card(number: int, title: str, **overrides: object) -> dict:
         number,
         title,
         resource_id=f"roadmap-{number}",
-        labels=["enhancement", "roadmap", "v0.5.0"],
+        labels=["type/feature", "roadmap", "v0.5.0"],
         **overrides,
     )
 
