@@ -148,23 +148,42 @@ _CPP001_PATTERN: Final[re.Pattern[str]] = re.compile(
 _CPP_LITERAL_PATTERN: Final[re.Pattern[str]] = re.compile(r'"(?:\\.|[^\\"])*"|\'(?:\\.|[^\\\'])*\'')
 
 
-def _is_deleted_function(code: str, match: re.Match[str]) -> bool:
-    """Return True when a 'delete' token is the body of a deleted function ('= delete')."""
-    return match.group(1) == "delete" and code[: match.start()].rstrip().endswith("=")
+def _is_deleted_function(code: str, match: re.Match[str], previous: str) -> bool:
+    """Return True when a 'delete' token is the body of a deleted function ('= delete').
+
+    ``previous`` is the last code character of the lines before ``code``. It lets a
+    declaration that a line break splits between '=' and 'delete' count as deleted.
+    """
+    if match.group(1) != "delete":
+        return False
+    before = code[: match.start()].rstrip() or previous
+    return before.endswith("=")
 
 
-def _find_cpp001_token(line: str) -> re.Match[str] | None:
-    """Return the first manual memory token outside literals and deleted-function bodies."""
-    code = _CPP_LITERAL_PATTERN.sub('""', line)
+def _find_cpp001_token(code: str, previous: str) -> re.Match[str] | None:
+    """Return the first manual memory token that is not the body of a deleted function."""
     for m in _CPP001_PATTERN.finditer(code):
-        if not _is_deleted_function(code, m):
+        if not _is_deleted_function(code, m, previous):
             return m
     return None
 
 
-def _check_cpp001_line(line: str, line_no: int, filename: str) -> CppFinding | None:
-    """Check line for direct calls to delete, delete[], free, or malloc."""
-    m = _find_cpp001_token(line)
+def _check_cpp001_manual_memory(lines: Sequence[str], filename: str) -> list[CppFinding]:
+    """Check each line for manual memory calls, reading a declaration across line breaks."""
+    findings: list[CppFinding] = []
+    previous = ""
+    for line_no, line in enumerate(lines, start=1):
+        code = _CPP_LITERAL_PATTERN.sub('""', line)
+        finding = _check_cpp001_line(code, line_no, filename, previous)
+        if finding is not None:
+            findings.append(finding)
+        previous = code.rstrip()[-1:] or previous
+    return findings
+
+
+def _check_cpp001_line(code: str, line_no: int, filename: str, previous: str) -> CppFinding | None:
+    """Check a literal-free line for direct calls to delete, delete[], free, or malloc."""
+    m = _find_cpp001_token(code, previous)
     if not m:
         return None
     token = m.group(1).split()[0].split("(")[0]
@@ -303,15 +322,36 @@ def _check_cpp003_rule_of_five(source: str, filename: str) -> list[CppFinding]:
     return findings
 
 
+_CPP004_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
+    # Raw pointer member variable: 'T* name;'
+    re.compile(r"^\s*(?P<type>[A-Za-z0-9_:]+)\s*\*\s*(?P<name>[A-Za-z0-9_]+_?)\s*;\s*$"),
+    # New allocation assigned to a raw pointer: 'T* name = new ...'
+    re.compile(r"\b(?P<type>[A-Za-z0-9_:]+)\s*\*\s*(?P<name>[A-Za-z0-9_]+)\s*=\s*new\s+"),
+)
+# Keywords that start an expression, so the '*' after them is a unary dereference, not a pointer type.
+_CPP_EXPRESSION_KEYWORDS: Final[frozenset[str]] = frozenset(
+    {"return", "throw", "co_return", "co_yield", "co_await", "delete", "else", "do"}
+)
+
+
+def _is_raw_pointer_declaration(match: re.Match[str]) -> bool:
+    """Return True when a CPP004 match declares a pointer, not a dereference such as 'return *this;'."""
+    return match["type"] not in _CPP_EXPRESSION_KEYWORDS and match["name"] != "this"
+
+
+def _find_raw_pointer(line_s: str) -> re.Match[str] | None:
+    """Return the first raw pointer declaration in a stripped line."""
+    for pattern in _CPP004_PATTERNS:
+        match = pattern.search(line_s)
+        if match and _is_raw_pointer_declaration(match):
+            return match
+    return None
+
+
 def _check_cpp004_line(line: str, line_no: int, filename: str) -> CppFinding | None:
     """Check line for raw pointer member variables or raw new allocations."""
     line_s = line.strip()
-    # Check raw pointer member variable pattern
-    mem_pattern = re.compile(r"^\s*(?:[A-Za-z0-9_:]+)\s*\*\s*([A-Za-z0-9_]+_?)\s*;\s*$")
-    # Check new allocation assigned to raw pointer
-    new_pattern = re.compile(r"\b(?:[A-Za-z0-9_:]+)\s*\*\s*([A-Za-z0-9_]+)\s*=\s*new\s+")
-
-    match = mem_pattern.search(line_s) or new_pattern.search(line_s)
+    match = _find_raw_pointer(line_s)
     if not match:
         return None
 
@@ -320,7 +360,7 @@ def _check_cpp004_line(line: str, line_no: int, filename: str) -> CppFinding | N
         return None
 
     loc = f"{filename}:{line_no}"
-    var_name = match.group(1)
+    var_name = match["name"]
     h = _compute_hash(f"CPP004:{loc}:{var_name}")
     return CppFinding(
         rule_id="CPP004",
@@ -416,27 +456,20 @@ class CppLifetimeSentinel:
         """Initialize sentinel with audit sensitivity preset."""
         self.preset = preset
 
-    def _audit_line_invariants(self, line: str, idx: int, filename: str) -> list[CppFinding]:
-        """Audit single line against per-line rules CPP001 and CPP004."""
-        findings: list[CppFinding] = []
-        f1 = _check_cpp001_line(line, idx, filename)
-        if f1 is not None:
-            findings.append(f1)
-
-        if self.preset != SentinelPreset.RELAXED:
-            f4 = _check_cpp004_line(line, idx, filename)
-            if f4 is not None:
-                findings.append(f4)
-        return findings
+    def _audit_raw_pointers(self, lines: Sequence[str], filename: str) -> list[CppFinding]:
+        """Audit each line against the per-line rule CPP004, unless the preset is relaxed."""
+        if self.preset == SentinelPreset.RELAXED:
+            return []
+        findings = (_check_cpp004_line(line, idx, filename) for idx, line in enumerate(lines, start=1))
+        return [f for f in findings if f is not None]
 
     def audit_source(self, source: str, filename: str = "main.cpp") -> list[CppFinding]:
         """Audit single C++ source string for all lifetime rules."""
-        findings: list[CppFinding] = []
         clean_source = strip_cpp_comments(source)
         lines = clean_source.splitlines()
 
-        for idx, line in enumerate(lines, start=1):
-            findings.extend(self._audit_line_invariants(line, idx, filename))
+        findings = _check_cpp001_manual_memory(lines, filename)
+        findings.extend(self._audit_raw_pointers(lines, filename))
 
         findings.extend(_check_cpp002_dangling_views(clean_source, filename))
         findings.extend(_check_cpp003_rule_of_five(clean_source, filename))
