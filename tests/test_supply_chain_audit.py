@@ -135,6 +135,33 @@ def test_only_genuinely_external_endpoints_count_as_egress() -> None:
     }
 
 
+def test_a_single_label_service_name_is_not_egress(tmp_path: Path) -> None:
+    """A Compose or Kubernetes service name resolves inside the stack, so it is not egress.
+
+    `http://prometheus:9090` in a Grafana data source failed the audit as a plaintext
+    external endpoint (#272). A name with a dot still leaves the machine.
+    """
+    verdicts = {
+        url: is_external_endpoint(url)
+        for url in (
+            "http://prometheus:9090",
+            "http://otel-collector:4318/v1/traces",
+            "https://api.github.com/repos",
+            "https://pypi.org/simple",
+        )
+    }
+    (tmp_path / "datasources.yaml").write_text("url: http://prometheus:9090\n", encoding="utf-8")
+    assert (verdicts, inventory_endpoints(tmp_path)) == (
+        {
+            "http://prometheus:9090": False,
+            "http://otel-collector:4318/v1/traces": False,
+            "https://api.github.com/repos": True,
+            "https://pypi.org/simple": True,
+        },
+        [],
+    )
+
+
 def test_endpoint_inventory_skips_documentation_fixtures(tmp_path: Path) -> None:
     """The sanitization mandate's own placeholders must not read as network risk."""
     (tmp_path / "svc.py").write_text(
