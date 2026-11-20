@@ -46,6 +46,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from example_loader import load_example
+
 STANDARD_VERSION: Final[str] = "v1.0.0"
 
 TOOLING_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
@@ -151,14 +153,6 @@ def _compute_sha256(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
-def _load_example(example: str, module: str) -> Any:
-    """Import a module from `examples/`, which is a directory of standalone programs."""
-    directory = (TOOLING_ROOT / "examples" / example).resolve()
-    if str(directory) not in sys.path:
-        sys.path.insert(0, str(directory))
-    return __import__(module)
-
-
 def _source_files(root: Path, suffixes: Sequence[str]) -> list[Path]:
     """Return the repository's own files below root, as `source_tree_policy` defines them."""
     from source_tree_policy import iter_source_files
@@ -175,7 +169,7 @@ def _finding(root: Path, file_path: str, line: int, message: str) -> str:
 
 def _sentinel_run(root: Path, preset_name: str) -> InstrumentRun:
     """Run the AST invariant sentinel with one of its presets over the target root."""
-    sentinel = _load_example("ast-invariant-sentinel", "sentinel")
+    sentinel = load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel")
     preset = sentinel.PRESETS[preset_name]
     config = sentinel.SentinelConfig(
         preset_name=preset.name,
@@ -285,7 +279,7 @@ def _evaluate_p6_prompts(root: Path) -> tuple[InstrumentRun, ...]:
 
 def _evaluate_p7_change_management(root: Path) -> tuple[InstrumentRun, ...]:
     """Audit Pillar 7: deprecation contracts against the project version."""
-    lifecycle = _load_example("deprecation-lifecycle-sentinel", "deprecation_sentinel")
+    lifecycle = load_example(TOOLING_ROOT, "deprecation-lifecycle-sentinel", "deprecation_sentinel")
     version = _project_version(root)
     try:
         lifecycle.parse_semver(version)

@@ -34,6 +34,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from example_loader import load_example
 from sanitization_policy import private_hosts_in
 
 CANONICAL_MOCK_HOST: Final[str] = "example.com"
@@ -519,14 +520,6 @@ def _is_unpruned_file(child: Path) -> bool:
     return child.is_file() and not any(part.startswith(".") for part in child.parts)
 
 
-def _load_sentinel() -> Any:
-    """Import the AST invariant sentinel from `examples/`, which is not a package."""
-    directory = str(TOOLING_ROOT / "examples" / "ast-invariant-sentinel")
-    if directory not in sys.path:
-        sys.path.insert(0, directory)
-    return __import__("sentinel")
-
-
 def _waiver_finding(location: str, line_number: int, message: str) -> SecurityFinding:
     """Report one header waiver that waives nothing."""
     return SecurityFinding(
@@ -553,7 +546,7 @@ def apply_header_waivers(
     Use this only on files that a person reviews, such as the source of a repository. In text
     that nobody reviewed, a waiver would let its author mute the scanner.
     """
-    sentinel = _load_sentinel()
+    sentinel = load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel")
     policy = sentinel.WaiverPolicy(WAIVER_TAG, WAIVABLE_RULES, "Rule")
     scan = sentinel.scan_waivers(location, source, policy)
     waived = tuple(scan.waived)

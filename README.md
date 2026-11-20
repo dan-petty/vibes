@@ -561,6 +561,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── sanitization_policy.py         # Single definition of addresses code and docs may name
 │   ├── upstream_facts.py              # Shared: GitHub repository facts and maturity scoring
 │   ├── source_tree_policy.py          # Single definition of which paths are repository source
+│   ├── example_loader.py              # Single definition of how tools import an example module
 │   └── verify_mermaid.mjs             # Mermaid render gate using the real engine under jsdom
 │
 └── tests/                             # Automated test suites for tools and harnesses
@@ -605,6 +606,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
     ├── test_fuzz_harness.py           # Asserts every fuzzing property fires on a broken instrument
     ├── test_sarif_report.py           # Unit tests for SARIF emission and schema conformance
     ├── test_source_tree_policy.py     # Unit tests pinning one corpus definition across instruments
+    ├── test_example_loader.py         # Unit tests pinning one example loader across the tools
     ├── test_supply_chain_audit.py     # Unit tests for dependency inventory, risk and mechanical fixes
     ├── test_upstream_facts.py         # Unit tests for repository facts and maturity scoring
     ├── test_docs_validator.py         # Unit tests for documentation syntax and link validation
