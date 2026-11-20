@@ -34,6 +34,8 @@ from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 TRACER_VERSION: Final[str] = "1.0.0"
 
 DISALLOWED_BINARIES: Final[frozenset[str]] = frozenset(
@@ -697,7 +699,7 @@ def export_sarif(summary: EbpfAuditSummary, target_uri: str) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

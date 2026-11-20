@@ -8,8 +8,10 @@ nothing still reports, because that is the only way a fixed alert ever closes.
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from sarif_report import (
     ADAPTERS,
     DEFAULT_SCHEMA_PATH,
+    SARIF_SCHEMA_URI,
     SARIF_VERSION,
     Result,
     Rule,
@@ -35,6 +38,7 @@ from sarif_report import (
 from sarif_report import (
     main as sarif_main,
 )
+from source_tree_policy import iter_source_files
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = REPO_ROOT / DEFAULT_SCHEMA_PATH
@@ -484,3 +488,72 @@ def test_sarif_report_decomposed_helpers(tmp_path: Path, capsys: pytest.CaptureF
         True,
         True,
     )
+
+
+# `sarif_report` holds the one schema URL for tools/. Nine writers had their own copy of the
+# URL, and those copies pointed at a raw path in the oasis-tcs GitHub repository. That path
+# returns HTTP 404. Readers copy one example file at a time, so each example keeps its own
+# constant. The tests below make sure that no tool or example uses the old location again.
+TOOLS_DIR = REPO_ROOT / "tools"
+EXAMPLES_DIR = REPO_ROOT / "examples"
+RETIRED_SCHEMA_LOCATION = "raw.githubusercontent.com/oasis-tcs/sarif-spec"
+CODE_SUFFIXES = (".py", ".go", ".rs", ".mjs")
+
+
+def _sarif_schema_values(tree: ast.AST) -> Iterator[ast.expr]:
+    """Yield the `$schema` value of every dict literal that also has `runs`: a SARIF log."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        pairs = zip(node.keys, node.values, strict=True)
+        keyed = {k.value: v for k, v in pairs if isinstance(k, ast.Constant)}
+        if "runs" in keyed and "$schema" in keyed:
+            yield keyed["$schema"]
+
+
+def _imports_shared_uri(tree: ast.AST) -> bool:
+    """Tell whether a module imports `SARIF_SCHEMA_URI` from `sarif_report` under that name."""
+    return any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "sarif_report"
+        and any(alias.name == "SARIF_SCHEMA_URI" and alias.asname is None for alias in node.names)
+        for node in ast.walk(tree)
+    )
+
+
+def _writer_report(path: Path) -> tuple[int, list[str]]:
+    """Count the SARIF logs a module builds, and name each one not using the shared URL."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    shared = _imports_shared_uri(tree)
+    values = list(_sarif_schema_values(tree))
+    drifted = [
+        f"{path.name}:{value.lineno}"
+        for value in values
+        if not (shared and isinstance(value, ast.Name) and value.id == "SARIF_SCHEMA_URI")
+    ]
+    return len(values), drifted
+
+
+def test_every_tools_sarif_writer_uses_the_shared_schema_uri() -> None:
+    """Each SARIF log built in tools/ takes `$schema` from `sarif_report`, never a literal."""
+    reports = [
+        _writer_report(path) for path in sorted(TOOLS_DIR.glob("*.py")) if path.name != "sarif_report.py"
+    ]
+    drifted = [name for _, names in reports for name in names]
+    assert (sum(count for count, _ in reports) > 0, drifted) == (True, [])
+
+
+def test_no_code_points_at_the_retired_schema_location() -> None:
+    """No tool or example writes the oasis-tcs GitHub path, which returns HTTP 404."""
+    stale = [
+        str(path.relative_to(REPO_ROOT))
+        for root in (TOOLS_DIR, EXAMPLES_DIR)
+        for path in iter_source_files(root, CODE_SUFFIXES)
+        if RETIRED_SCHEMA_LOCATION in path.read_text(encoding="utf-8", errors="replace")
+    ]
+    assert stale == []
+
+
+def test_shared_schema_uri_is_the_published_oasis_location() -> None:
+    """The shared URL names the OASIS errata 01 publication, not a repository mirror."""
+    assert SARIF_SCHEMA_URI.startswith("https://docs.oasis-open.org/sarif/sarif/v2.1.0/")

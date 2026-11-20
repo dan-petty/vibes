@@ -47,6 +47,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from example_loader import load_example
+from sarif_report import SARIF_SCHEMA_URI
 
 STANDARD_VERSION: Final[str] = "v1.0.0"
 
@@ -500,7 +501,7 @@ def export_sarif_json(result: CertificationResult) -> dict[str, Any]:
         for p in result.pillars
     ]
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

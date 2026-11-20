@@ -28,6 +28,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
 from source_tree_policy import iter_source_files
 
 INFORMATION_URI: Final[str] = "https://github.com/dan-petty/vibes"
@@ -478,7 +479,7 @@ def format_sarif(summary: AuditSummary) -> dict[str, Any]:
     ]
 
     return {
-        "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

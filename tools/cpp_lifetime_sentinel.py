@@ -20,6 +20,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 SENTINEL_VERSION: Final[str] = "v1.0.0"
 
 CPP_EXTENSIONS: Final[tuple[str, ...]] = (
@@ -547,7 +549,7 @@ def export_sarif(summary: CppAuditSummary, target_uri: str) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {
