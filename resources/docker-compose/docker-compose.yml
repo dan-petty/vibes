@@ -35,7 +35,7 @@ services:
 
   # Prometheus Metric Store & Alerts
   prometheus:
-    image: prom/prometheus:v2.55.0
+    image: prom/prometheus:v2.55.1
     container_name: vibes-prometheus
     restart: unless-stopped
     ports:
@@ -51,7 +51,7 @@ services:
 
   # Valkey L2 AST & Tool Caching
   valkey:
-    image: valkey/valkey:8.0.1
+    image: valkey/valkey:8.0.13
     container_name: vibes-valkey
     restart: unless-stopped
     command:
@@ -72,7 +72,7 @@ services:
 
   # Grafana Dashboard & Visualizations
   grafana:
-    image: grafana/grafana:11.3.0
+    image: grafana/grafana:11.3.9
     container_name: vibes-grafana
     restart: unless-stopped
     ports:
