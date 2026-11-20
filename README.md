@@ -241,7 +241,7 @@ flowchart LR
     Intake --> AgentDev[Agent TDD Implementation]
     AgentDev --> PRSentinel["pr-sentinel.yml<br>(AST Invariant Gate)"]
     PRSentinel --> Merge[Merge PR]
-    Merge --> Hardening["recursive-hardening.yml<br>(AGENTS.md Audit)"]
+    Merge -->|"needs-guardrail"| Hardening["recursive-hardening.yml<br>(AGENTS.md Audit)"]
     Hardening --> Next[Self-Hardened Knowledge Base]
 ```
 
@@ -267,7 +267,7 @@ flowchart LR
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**CodeQL Static Analysis (`.github/workflows/codeql.yml`)**](./.github/workflows/codeql.yml): CodeQL's default security queries over the Python code and the GitHub Actions workflows.
 - [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Runs the AST invariant sentinel on the Python files a pull request changes and fails on complexity creep or private IP literals.
-- [**Recursive Self-Hardening (`.github/workflows/recursive-hardening.yml`)**](./.github/workflows/recursive-hardening.yml): After a pull request labeled `type/bug` merges, opens a follow-up issue labeled `type/docs` if the pull request did not change `AGENTS.md`. It does not block the merge.
+- [**Recursive Self-Hardening (`.github/workflows/recursive-hardening.yml`)**](./.github/workflows/recursive-hardening.yml): After a pull request labeled `needs-guardrail` merges, opens a follow-up issue labeled `type/docs` if the pull request added no line to `AGENTS.md`. Apply the label to a defect fix that a written rule would have prevented; the `type/bug` label alone starts no audit. It does not block the merge.
 - [**Scheduled Instrument Fuzzing (`.github/workflows/fuzz.yml`)**](./.github/workflows/fuzz.yml): Daily exploration and cross-hash-seed determinism check, publishing minimized inputs as artifacts rather than committing them.
 
 ---

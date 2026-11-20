@@ -25,22 +25,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Inspect PR Labels for Defect Classification
+      - name: Inspect PR Labels for the needs-guardrail Opt-In
         id: classify
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const labels = context.payload.pull_request.labels.map(l => l.name);
-            // `type/bug` is the defect label that .github/labels.yml declares and the
-            // roadmap intake applies. A gate on an undeclared label never fires and
-            // reports nothing.
-            const isDefect = labels.some(l => l.toLowerCase() === 'type/bug');
-            console.log(`PR #${context.payload.pull_request.number} isDefect: ${isDefect}`);
-            core.setOutput('is_defect', isDefect);
+            // Opt-in: a person or agent applies `needs-guardrail` to a defect fix whose
+            // cause a written rule in AGENTS.md would have prevented. `type/bug` alone
+            // does not start the audit: one rule per routine fix makes AGENTS.md grow
+            // without limit (Observation 31). .github/labels.yml declares the label; a
+            // gate on an undeclared label never fires and reports nothing.
+            const needsGuardrail = labels.some(l => l.toLowerCase() === 'needs-guardrail');
+            console.log(`PR #${context.payload.pull_request.number} needsGuardrail: ${needsGuardrail}`);
+            core.setOutput('needs_guardrail', needsGuardrail);
 
       - name: Audit Self-Hardening in Diff
         id: audit
-        if: steps.classify.outputs.is_defect == 'true'
+        if: steps.classify.outputs.needs_guardrail == 'true'
         env:
           # Never interpolated into the shell; see `pr-sentinel.yml` for the full reason.
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
@@ -93,10 +95,10 @@ jobs:
             const issueTitle = `[Self-Hardening]: Codify preventative guardrails in AGENTS.md for PR #${pr.number}`;
             const issueBody = `### 🔄 Positive Recursive Development: Missing AGENTS.md Hardening
 
-            Pull request #${pr.number} resolved a defect (*"${pr.title}"*), but no preventative guardrails or rules were added to \`AGENTS.md\`.
+            Pull request #${pr.number} (*"${pr.title}"*) has the \`needs-guardrail\` label, but it added no preventative rule to \`AGENTS.md\`.
 
-            **Autonomous Rule Mandate**:
-            > *Whenever an agent or workflow fixes a bug, it must harden \`AGENTS.md\` with defensive rules to prevent recurrence.*
+            **Rule**:
+            > *A defect fix with the \`needs-guardrail\` label must add a rule to \`AGENTS.md\` that prevents recurrence.*
 
             **Action Required**:
             - [ ] Review the root cause of PR #${pr.number}.

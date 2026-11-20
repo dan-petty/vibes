@@ -141,3 +141,7 @@
 - name: "certified-by-sentinel"
   color: "0E8A16"
   description: "pr-sentinel.yml passed: the AST invariant sentinel found no violation"
+
+- name: "needs-guardrail"
+  color: "D93F0B"
+  description: "Defect fix that a written AGENTS.md rule would have prevented; recursive-hardening.yml audits it"

@@ -186,7 +186,7 @@ Every pattern must then provide an actionable operational playbook:
 
 ## 7. Continuous Curation & Self-Hardening
 
-- **Prompt Defect Tracking**: If an AI agent encounters a formatting error, broken link, or ambiguity while operating in `vibes`, the agent MUST immediately fix the underlying cause and update `AGENTS.md` with defensive instructions.
+- **Prompt Defect Tracking**: If an AI agent encounters a formatting error, broken link, or ambiguity while operating in `vibes`, the agent MUST immediately fix the underlying cause. If a written rule would have prevented the defect, add that rule to `AGENTS.md` and label the fix `needs-guardrail` ([§8](#8-autonomous-recursive-development-protocol--project-tooling) rule 6).
 - **Fix the Class, Then Close the Hole That Let It In**: Repairing the defect is half the work. The other half is asking *what was supposed to catch this, and why didn't it*. Every entry in [§10a](#10a-measuring-and-believing-what-you-measured) exists because a defect was fixed and the same question was then asked about the gate.
   - If the answer is "nothing was looking", configure something and gate it — do not rely on the next agent repeating your one-off audit.
   - If the answer is "a gate exists but never fires on this input", the gate is the defect. A cap that is never reached, an `except` never entered, and a rule never evaluated are all indistinguishable from passing.
@@ -211,8 +211,9 @@ flowchart LR
     Push --> Watch["5. Watch the run to a conclusion<br/>gh run watch --exit-status"]
     Watch -->|"red"| Dev
     Watch -->|"green"| PR["6. Open PR -> pr-sentinel.yml Certifies"]
-    PR --> Merge["7. Merge & recursive-hardening.yml Audits"]
-    Merge --> Harden["8. Codify New Guardrail in AGENTS.md"]
+    PR --> Merge["7. Merge"]
+    Merge -->|"needs-guardrail"| Harden["8. recursive-hardening.yml Audits<br/>the AGENTS.md Guardrail"]
+    Merge -->|"no needs-guardrail"| Issue
     Harden --> Issue
 ```
 
@@ -228,8 +229,8 @@ flowchart LR
    - Automated fixes (`ruff check --fix`) can strip implicit exports or shift continuation lines. Declare public exports explicitly via `__all__` and re-run lints, type checks, and tests together.
 5. **Publish SARIF 2.1.0 Findings**:
    - Emit findings via [`tools/sarif_report.py`](./tools/sarif_report.py) (`--out findings.sarif`) so code scanning renders findings directly on PRs. Ensure schema validity against `artifacts/schemas/sarif-schema-2.1.0.json`.
-6. **Mandatory Self-Hardening Rule**:
-   - PRs addressing bugs, defects, or regressions MUST modify `AGENTS.md` with concrete preventative rules or fail `recursive-hardening.yml`. That workflow runs after merge on PRs labelled `type/bug`; it does not block the merge, and it opens a follow-up issue labelled `type/docs`.
+6. **Self-Hardening Rule for `needs-guardrail` Fixes**:
+   - Label a defect fix `needs-guardrail` when a written rule in `AGENTS.md` would have prevented the defect. A PR with this label MUST add that preventative rule to `AGENTS.md` or fail `recursive-hardening.yml`. That workflow runs after merge only on PRs labelled `needs-guardrail`; it does not block the merge, and it opens a follow-up issue labelled `type/docs`. The `type/bug` label alone starts no audit: one rule for each routine fix makes `AGENTS.md` too large ([Observation 31](./observations/systems/31-instruction-ratchet-bloat-and-counterfactual-agent-ablation.md)).
 7. **Multi-Path CLI Contracts (`nargs="*"`)**:
    - Tools invoked by `.pre-commit-config.yaml` (`pass_filenames: true`) receive N filenames per invocation. CLI entry points must accept `nargs="*"` and audit every supplied path. Never slice `argv[1]`.
 8. **Inbound Review Falsification & Batch Verification**:
