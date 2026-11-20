@@ -205,5 +205,5 @@ A -->|Condition (True)| B
 For AI agents operating in this repository, see [`AGENTS.md`](AGENTS.md) — specifically §8 (Autonomous Recursive Development Protocol) and §10 (The Five Mechanical Oracles). The closed-loop recursive development lifecycle is:
 
 ```text
-triage-issue → TDD → local sentinel → PR → pr-sentinel → merge → recursive-hardening → AGENTS.md update
+issue with one type/ label → TDD → local sentinel → PR → pr-sentinel → merge → recursive-hardening → AGENTS.md update
 ```

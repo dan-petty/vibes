@@ -2,7 +2,7 @@
 name: Observation Report
 about: Submit an empirical field observation or case study of agentic coding
 title: "[Observation]: "
-labels: ["observation", "curation"]
+labels: ["type/docs"]
 assignees: ""
 ---
 

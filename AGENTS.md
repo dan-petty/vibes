@@ -205,7 +205,7 @@ To keep the repository improving with little manual work, autonomous agents must
 
 ```mermaid
 flowchart LR
-    Triage["1. tools/project_tooling.py triage-issue"] --> Dev["2. TDD & Invariant Implementation"]
+    Issue["1. Issue with one type/ label"] --> Dev["2. TDD & Invariant Implementation"]
     Dev --> LocalSentinel["3. Local Sentinel Audit (Complexity <= 10)"]
     LocalSentinel --> Push["4. Commit AND Push"]
     Push --> Watch["5. Watch the run to a conclusion<br/>gh run watch --exit-status"]
@@ -213,12 +213,12 @@ flowchart LR
     Watch -->|"green"| PR["6. Open PR -> pr-sentinel.yml Certifies"]
     PR --> Merge["7. Merge & recursive-hardening.yml Audits"]
     Merge --> Harden["8. Codify New Guardrail in AGENTS.md"]
-    Harden --> Triage
+    Harden --> Issue
 ```
 
 ### Operational Rules for Agents:
-1. **Automated Issue Triage**:
-   - Run `python tools/project_tooling.py triage-issue --number <num> --title "<title>" --body-file <path>` to extract taxonomy labels and verify acceptance criteria.
+1. **Declared Labels Only**:
+   - The roadmap intake gives each issue one `type/` label. A workflow or issue template applies only labels that [`.github/labels.yml`](./.github/labels.yml) declares, and a workflow gates only on those labels. Declare a new label there first. GitHub does not apply an issue template label that does not exist, and a gate on an undeclared label never fires and reports nothing.
 2. **Pre-Push Local Sentinel Certification**:
    - Run `python examples/ast-invariant-sentinel/sentinel.py <modified_files>` ($M \le 10$, depth $\le 5$, zero RFC 1918 private IPs).
    - Execute full static suite: `ruff check tools tests examples benchmarks`, `(cd tools && mypy .) `, `pytest -q`, and `python tools/docs_validator.py .`.
@@ -229,7 +229,7 @@ flowchart LR
 5. **Publish SARIF 2.1.0 Findings**:
    - Emit findings via [`tools/sarif_report.py`](./tools/sarif_report.py) (`--out findings.sarif`) so code scanning renders findings directly on PRs. Ensure schema validity against `artifacts/schemas/sarif-schema-2.1.0.json`.
 6. **Mandatory Self-Hardening Rule**:
-   - PRs addressing bugs, defects, or regressions MUST modify `AGENTS.md` with concrete preventative rules or fail `recursive-hardening.yml`. That workflow runs after merge on PRs labelled `bug`, `defect` or `regression`; it does not block the merge, and it opens a hardening issue.
+   - PRs addressing bugs, defects, or regressions MUST modify `AGENTS.md` with concrete preventative rules or fail `recursive-hardening.yml`. That workflow runs after merge on PRs labelled `type/bug`; it does not block the merge, and it opens a follow-up issue labelled `type/docs`.
 7. **Multi-Path CLI Contracts (`nargs="*"`)**:
    - Tools invoked by `.pre-commit-config.yaml` (`pass_filenames: true`) receive N filenames per invocation. CLI entry points must accept `nargs="*"` and audit every supplied path. Never slice `argv[1]`.
 8. **Inbound Review Falsification & Batch Verification**:

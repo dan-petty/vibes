@@ -93,3 +93,8 @@
 - name: "budget/borrowed"
   color: "B60205"
   description: "Agent opening beyond the quota allowance; counts as debt until closed"
+
+# ── Workflow labels ───────────────────────────────────────────────────────────
+- name: "certified-by-sentinel"
+  color: "0E8A16"
+  description: "pr-sentinel.yml passed: the AST invariant sentinel found no violation"
