@@ -787,19 +787,28 @@ def scan_waivers(file_path: Path | str, source: str, policy: WaiverPolicy = SENT
     except (tokenize.TokenError, SyntaxError) as error:
         return WaiverScan(violations=_untokenized_violations(str(file_path), source, policy, error))
     tagged = [(number, text) for number, text in comments if f"{policy.tag}:" in text]
+    header = [comment for comment in tagged if comment[0] <= WAIVER_HEADER_LINE_LIMIT]
+    waived, violations = _header_waivers(str(file_path), header, policy)
+    violations.extend(_late_waiver_violations(str(file_path), tagged, waived, policy))
+    return WaiverScan(frozenset(waived), tuple(violations))
+
+
+def _header_waivers(
+    file_path: str, header: Sequence[tuple[int, str]], policy: WaiverPolicy
+) -> tuple[set[str], list[Violation]]:
+    """Return the names that the header pragmas waive, and a violation for each defective pragma."""
     waived: set[str] = set()
     violations: list[Violation] = []
-    for line_number, text in (comment for comment in tagged if comment[0] <= WAIVER_HEADER_LINE_LIMIT):
+    for line_number, text in header:
         match = policy.pragma.match(text.strip())
         defect = _waiver_defect(match, policy)
         if defect or match is None:
             violations.append(
-                Violation(str(file_path), line_number, "WaiverIntegrity", defect or "Invalid waiver.")
+                Violation(file_path, line_number, "WaiverIntegrity", defect or "Invalid waiver.")
             )
             continue
         waived.add(match.group(1))
-    violations.extend(_late_waiver_violations(str(file_path), tagged, waived, policy))
-    return WaiverScan(frozenset(waived), tuple(violations))
+    return waived, violations
 
 
 def _late_waiver_violations(

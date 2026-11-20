@@ -303,12 +303,17 @@ def _kernel_kills(kprobe: dict[str, Any], path: str) -> bool:
     )
 
 
+def _prefix_values(kprobe: dict[str, Any]) -> list[str]:
+    """Return the values of every `Prefix` match in the selectors of a kprobe."""
+    return [v for sel in kprobe["selectors"] for m in sel["matchArgs"] if m["operator"] == "Prefix" for v in m["values"]]
+
+
 def test_tetragon_file_selectors_match_whole_components() -> None:
     """Assert that the file selectors kill where the simulation blocks, and hold no `~` and no bare prefix."""
     text = generate_tetragon_policy()
     _, kprobes = _kprobes()
     file_open = kprobes["security_file_open"]
-    prefixes = [v for sel in file_open["selectors"] for m in sel["matchArgs"] if m["operator"] == "Prefix" for v in m["values"]]
+    prefixes = _prefix_values(file_open)
 
     assert (
         "~" in text,
