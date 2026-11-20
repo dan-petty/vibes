@@ -2,9 +2,9 @@
 
 High-density product roadmap, engineering milestones, and open-source curation strategy for the `vibes` living showcase and artifact repository.
 
-> **TLDR**: The multi-version milestone plan for `vibes`, tracking released milestones (v0.1–v0.4), the complete but unreleased v0.5, and the v1.0 north star of enterprise governance standards.
+> **TLDR**: The multi-version milestone plan for `vibes`, tracking released milestones (v0.1–v0.4) and two complete but unreleased milestones: v0.5 and the v1.0 enterprise governance standards.
 >
-> **ELI:7b**: The master checklist showing what features and exhibits this project has already shipped, what is done but not yet released, and where we are heading next.
+> **ELI:7b**: The master checklist showing what features and exhibits this project has already shipped and what is done but not yet released.
 >
 > 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
 
@@ -36,7 +36,6 @@ timeline
         v0.4.0 : Polyglot invariant harnesses and ephemeral sandboxes
     section Complete, not released
         v0.5.0 : Autonomous swarm orchestration and self-healing
-    section Ahead
         v1.0.0 : Enterprise governance, AIBOM, living standard and the Sovereign Human Core
 ```
 
@@ -193,7 +192,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
 
 ---
 
-### Milestone 6: Enterprise Governance, AIBOM & Living Standard (v1.0.0 - North Star)
+### Milestone 6: Enterprise Governance, AIBOM & Living Standard (v1.0.0 - Complete, Not Released)
 - [x] **Post-1.0 Deprecation Lifecycle Enforcement (`examples/deprecation-lifecycle-sentinel/`)**:
   - Executable release gate enforcing the deprecation contract (`since`, `remove_in`, `replacement`), runtime `DeprecationWarning` emission, major-boundary removal scheduling, and internal call-site migration.
   - Pre-1.0 inert by construction: the SemVer major-boundary rule does not bind while the major version of a deprecation's `since` version is `0`, so the repository keeps delete-on-sight freedom and inherits the discipline automatically at the 1.0 boundary.
@@ -257,7 +256,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
   - Accompanied by Observation 24 (`observations/systems/24-ebpf-process-tracing-for-agent-sandbox-introspection.md`) and a comprehensive 24-test suite in `tests/test_ebpf_tracer.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
 - [x] **Dynamic Multi-Model Router & Speculative Cascade Oracle (`tools/model_router.py`)**:
   - Routing simulator scoring a caller-supplied task complexity vector and the Shannon entropy of caller-supplied answer-cluster probabilities to pick a Local (7B), Fast (32B/Haiku), or Frontier (Sonnet/GPT-4o) tier. It calls no model.
-  - Enforces diagnostic rules `ROUT001` (Unnecessary Frontier Expenditure), `ROUT002` (Fragile Low-Tier Assignment), `ROUT003` (Speculative Cascade Rejection), `ROUT004` (Security-Critical Escalation), and `ROUT005` (High Semantic Entropy Uncertainty).
+  - Enforces diagnostic rules `ROUT001` (Unnecessary Frontier Expenditure) and `ROUT002` (Fragile Low-Tier Assignment). `ROUT003` (Speculative Cascade Rejection), `ROUT004` (Security-Critical Escalation) and `ROUT005` (High Semantic Entropy Uncertainty) are design entries in Observation 25; the code does not emit them.
   - Implements speculative cascading executing lightweight drafts against mechanical AST invariant oracles ($M \le 10, d \le 5$, zero RFC 1918 egress), accepting clean drafts or escalating to the frontier tier with the failed constraints attached. It calls no model, and no run measures its cost reduction.
   - Multi-format reporting exporting to OASIS SARIF 2.1.0, JSON telemetry, and formatted Markdown reports.
   - Accompanied by Observation 25 (`observations/systems/25-multi-model-capability-boundaries-and-dynamic-routing-oracles.md`) and a comprehensive 12-test suite in `tests/test_model_router.py` with structural tuple equality assertions and 100% pass rate, certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, parameters $\le 4$).
@@ -339,7 +338,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
    - Synchronizes `docs/landscape/SURVEY.md` with the zero-gap milestone and authors Chapter 10 of The Dummy's Guide to Agentic Engineering ("The Sovereign Human Core: When to Steer, When to Step Back, and How to Hold the Steering Wheel").
    - Accompanied by expanded unit test suite in `examples/polyglot-cst-parser/test_cst_parser.py` (13 passed in 0.05s), with all functions at $M \le 6$, depth $\le 3$, $\le 3$ params.
 - [x] **Verification Pyramid Auditor & Test Horizon Scaling Oracle** (`tools/verification_pyramid_auditor.py`, `tests/test_verification_pyramid_auditor.py`, `docs/TAXONOMY.md`):
-   - Audits test suites and validation workflows for verification horizon health, latency scaling risks, assertion density sprawl (`VER001`), uncontained subprocess invocations (`VER002`), shared state contention (`VER003`), monolithic cold start file sizing (`VER004`), and latency cliff traps (`VER005`).
+   - Audits test suites for assertion density sprawl (`VER001`), uncontained subprocess invocations (`VER002`), shared state contention (`VER003`), and monolithic cold start file sizing (`VER004`). The rule table also lists latency cliff traps (`VER005`), but no check emits it: the auditor does not measure run time.
    - Classifies test targets against the 4-Tier Verification Pyramid (Layer 0 In-Memory AST, Layer 1 Focused Slice, Layer 2 Pre-Commit Hooks, Layer 3 Gated Remote Matrix CI).
    - Emits Verification Health Score ($VHS \in [0, 100]$), Agent Friction Index ($VFI$), human-readable Markdown summaries, OASIS SARIF 2.1.0 telemetry, and JSON.
    - Accompanied by Observation 22 (`observations/devops-cli/22-the-verification-horizon-and-validation-latency-cliffs.md`), Pattern (`patterns/tiered-verification-pyramid-and-sub-second-oracles.md`), Chapter 8 of The Dummy's Guide (`docs/dummysguide/08-fast-checks-beat-slow-tests.md`), enriched taxonomy in `docs/TAXONOMY.md`, and comprehensive 13-test unit suite in `tests/test_verification_pyramid_auditor.py` with 98% coverage certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, $\le 4$ params).
