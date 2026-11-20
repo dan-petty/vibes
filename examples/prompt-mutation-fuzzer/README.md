@@ -166,7 +166,7 @@ The fuzzer supports five model provider backends out of the box (`examples/promp
 pytest examples/prompt-mutation-fuzzer/test_fuzzer.py -v
 ```
 
-All 27 unit tests validate perturbation generation, model provider adapters, zero-trust endpoint egress safety, AST invariant analysis, report scoring, attack taxonomy classification, baseline differential comparison, SARIF 2.1.0 telemetry export, and CLI argument handling.
+The unit tests validate perturbation generation, model provider adapters, zero-trust endpoint egress safety, AST invariant analysis, report scoring, attack taxonomy classification, baseline differential comparison, SARIF 2.1.0 telemetry export, and CLI argument handling.
 
 ---
 

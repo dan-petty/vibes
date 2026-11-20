@@ -153,7 +153,7 @@ Every pull request runs the following gates automatically via GitHub Actions:
 | Gate | Tool | Threshold |
 |---|---|---|
 | **Full test suite** | `pytest tests/ examples/ benchmarks/` | 100% pass |
-| **Coverage floor** | `pytest --cov=tools --cov=examples --cov=benchmarks` | $\ge 90\%$ (currently 94%) |
+| **Coverage floor** | `pytest --cov=tools --cov=examples --cov=benchmarks` | $\ge 90\%$ |
 | **AST invariant sentinel** | `sentinel.py` | Cyclomatic complexity ≤10, nesting ≤5 |
 | **Documentation validator** | `docs_validator.py --strict` | Zero errors, including the 5-section observation structure |
 | **Mermaid render gate** | `verify_mermaid.mjs` | Every diagram parses with the real engine |

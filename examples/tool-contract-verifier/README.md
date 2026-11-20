@@ -92,4 +92,4 @@ Please re-issue the tool invocation adhering strictly to the schema contract.
 python3 -m pytest -p no:cov -p no:logfire -p no:xdist -o addopts= examples/tool-contract-verifier/test_verifier.py
 ```
 
-All 10 unit tests validate schema generation, negative parameter assertions, type checking, bounds verification, output contracts, and CLI demo execution.
+The unit tests validate schema generation, negative parameter assertions, type checking, bounds verification, output contracts, and CLI demo execution.

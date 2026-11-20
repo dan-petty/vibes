@@ -190,6 +190,6 @@ cd examples/go-leak-sentinel && go vet ./... && go test ./...
 ├── sentinel.go             # Native Go sentinel library, test harness integration (Check, VerifyNone)
 ├── sentinel_test.go        # Go unit tests verifying leak detection & mock TestingT harness
 ├── go_leak_sentinel.py     # Python runtime stack dump parser & test runner verification engine
-├── test_go_leak_sentinel.py # Automated test suite (21 unit tests in < 0.6s)
+├── test_go_leak_sentinel.py # Automated test suite
 └── README.md               # Architecture, failure mode guide & usage (this file)
 ```

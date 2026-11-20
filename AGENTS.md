@@ -187,6 +187,7 @@ Every pattern must then provide an actionable operational playbook:
 ## 7. Continuous Curation & Self-Hardening
 
 - **Prompt Defect Tracking**: If an AI agent encounters a formatting error, broken link, or ambiguity while operating in `vibes`, the agent MUST immediately fix the underlying cause. If a written rule would have prevented the defect, add that rule to `AGENTS.md` and label the fix `needs-guardrail` ([§8](#8-autonomous-recursive-development-protocol--project-tooling) rule 6).
+  - Write a lesson that several fixes share once, in the section that owns it. Name the pull requests that it comes from, so that a later pass can check it (PR #293).
 - **Fix the Class, Then Close the Hole That Let It In**: Repairing the defect is half the work. The other half is asking *what was supposed to catch this, and why didn't it*. Every entry in [§10a](#10a-measuring-and-believing-what-you-measured) exists because a defect was fixed and the same question was then asked about the gate.
   - If the answer is "nothing was looking", configure something and gate it — do not rely on the next agent repeating your one-off audit.
   - If the answer is "a gate exists but never fires on this input", the gate is the defect. A cap that is never reached, an `except` never entered, and a rule never evaluated are all indistinguishable from passing.
@@ -351,6 +352,8 @@ Stochastic language generation must always be bounded by deterministic mechanica
 
 Of the tools in this table, `ci.yml` runs `sentinel.py`, `docs_validator.py` and `verify_mermaid.mjs` as gates on this repository (the pre-commit hooks run the first two), and runs `supply_chain_audit.py` only as a SARIF report. The other tools run on demand.
 
+A tool with a rule table declares each rule ID that it emits, once. A fixture makes each declared rule fire. A test finds each result `ruleId` in the driver rules, because the SARIF 2.1.0 schema does not check this (PR #268, PR #273, PR #280).
+
 ### Core Defensive Implementation Patterns
 
 1. **Table-Driven Dispatch & AST Flattening (`CC001`, `ND001`)**:
@@ -360,9 +363,11 @@ Of the tools in this table, `ci.yml` runs `sentinel.py`, `docs_validator.py` and
    - Consolidate linear assertions in test suites into structural tuple equality checks (`assert (actual_a, actual_b) == (expected_a, expected_b)`). Prevents linear tests from tripping $M \le 10$ while preserving full Pytest diff diagnostics.
 3. **Negative Tool Schemas & Prescriptive Prompts**:
    - Forbid undeclared arguments (`extra="forbid"` in Pydantic v2, `additionalProperties: false` in JSON Schema). Validation handlers must synthesize prescriptive error prompts detailing allowable arguments, so that the agent can correct the call on its next turn.
+   - Validate each generated artifact against the published schema of the system that reads it. Use an open validator: `jsonschema` (SARIF), `kubeconform -strict` (Tetragon `TracingPolicy`), `promtool` or `otelcol validate` (observability config). Give the command and the schema version in the pull request. Set `$schema` to the URI of the schema that the tests validate against. A generated policy selects only its target, by the label that the target's manifest sets (PR #212, PR #229, PR #238, PR #243, PR #264, PR #280).
 4. **Process Group Containment & Resource Bounds**:
    - Isolate subprocesses into POSIX process groups (`start_new_session=True` on `subprocess.Popen`) and terminate via `os.killpg(os.getpgid(proc.pid), SIGTERM/SIGKILL)`. Avoid `preexec_fn=os.setsid` in multithreaded runtimes to prevent fork-deadlocks.
    - Enforce pre-flight file size caps ($\le 5$MB) and verify `resolved_path.is_relative_to(base_root)` to prevent symlink recursion (`ELOOP`) and traversal escapes.
+   - Before a policy matches a path, convert the path to the form that the enforcement point sees. Normalize a path string with `posixpath.normpath`, and also collapse a leading `//`. A hook that reads `bprm->file` sees the link-resolved file, so also block the names that the links resolve to. Compare whole components with `is_relative_to`, never a string prefix: `/root` must not match `/rootfs` (PR #199, PR #205, PR #207, PR #243, PR #253).
 5. **The Sovereign Human Boundary & Autonomous Invariant Stewardship**:
    - AI agents operate as proactive cybernetic stewards (discovering and elevating invariants via AST introspection and kinetic probes).
    - Involve human developers exclusively at the Sovereign Triad boundary:
@@ -387,6 +392,8 @@ Every measurement defect survives a first, wrong reading of it. The rules govern
 6. **Fuzz Testing with Deterministic Replay**: Property fuzzing ([`tools/fuzz_harness.py`](./tools/fuzz_harness.py)) gates via deterministic corpus replay ([`artifacts/fuzz-corpus/`](./artifacts/fuzz-corpus/)). Normalize environment artifacts before asserting invariants across seeds.
 7. **Baseline Expirations & Strictness**: [`tools/finding_baseline.py`](./tools/finding_baseline.py) suppresses legacy technical debt by `(rule, file, subject)` fingerprints. Run `--strict` in CI to fail on stale entries. Never baseline this repository's own findings.
 8. **Default-Deny Seccomp Confinement**: Synthesize Linux seccomp-bpf filter profiles ([`tools/seccomp_synthesizer.py`](./tools/seccomp_synthesizer.py)) using default-deny / default-errno, retaining essential CPython syscalls while barring dangerous primitives (`ptrace`, `bpf`). Update `README.md` directory trees when adding tools.
+9. **Report What Was Not Evaluated**: A crash, a signal, a timeout, a missing instrument or output that does not parse gets its own verdict (`inconclusive`, `NOT EVALUATED`) and its reason. Never report it as a pass or as a refutation (PR #217, PR #220, PR #232, PR #249, PR #255, PR #273).
+10. **Counts Come From the Instrument**: Read a count from the output of the tool that measures it, never from a constant. Do not write a test count or a coverage percentage into a document about the current state. The number goes stale at the next change. Give the command that measures it instead (PR #255, PR #278, PR #292).
 
 > Detailed field incident case studies are documented in [`docs/RETROSPECTIVE.md §7`](./docs/RETROSPECTIVE.md#7-measuring-and-believing-what-you-measured).
 
