@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest>=9.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=1.0",
     "pytest-cov>=7.0",
     # The crawler imports httpx lazily so the exhibit still runs without it, but the
