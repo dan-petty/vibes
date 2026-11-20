@@ -25,10 +25,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from example_loader import load_example
 from radon.visitors import ComplexityVisitor
 from sanitization_policy import is_private_host
 
 ENGINE_VERSION: Final[str] = "v1.0.0"
+TOOLING_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 IP_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 NESTING_TYPES: Final[tuple[type[ast.AST], ...]] = (
@@ -296,25 +298,18 @@ def _check_string_constants_for_private_ips(tree: ast.AST, filename: str) -> lis
     return violations
 
 
-WAIVER_PRAGMA_RE: Final[re.Pattern[str]] = re.compile(
-    r"^#\s*sentinel:\s*allow\[([A-Za-z0-9_]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$"
+# The AST invariant sentinel owns the waiver parser and its rules (AGENTS.md §2.3). The engine
+# reads the `sentinel` tag; each name below waives the CEGIS004 private address check.
+WAIVABLE_RULES: Final[frozenset[str]] = frozenset(
+    {"ZeroTrustSanitization", "ZeroTrustEgressViolation", "CEGIS004"}
 )
-MIN_WAIVER_JUSTIFICATION_CHARS: Final[int] = 12
 
 
-def _has_sanitization_waiver(source_code: str) -> bool:
-    """Return True if source header declares an authorized ZeroTrustSanitization waiver."""
-    for line in source_code.splitlines()[:15]:
-        match = WAIVER_PRAGMA_RE.match(line.strip())
-        if not match:
-            continue
-        rule, reason = match.group(1), match.group("reason").strip()
-        if (
-            rule in ("ZeroTrustSanitization", "ZeroTrustEgressViolation", "CEGIS004")
-            and len(reason) >= MIN_WAIVER_JUSTIFICATION_CHARS
-        ):
-            return True
-    return False
+def _has_sanitization_waiver(source_code: str, filename: str) -> bool:
+    """Return True if a valid module-header waiver names the private address check."""
+    sentinel = load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel")
+    policy = sentinel.WaiverPolicy("sentinel", WAIVABLE_RULES)
+    return bool(sentinel.scan_waivers(filename, source_code, policy).waived)
 
 
 def _find_sprawl_line(func: ast.FunctionDef | ast.AsyncFunctionDef) -> int | None:
@@ -438,7 +433,7 @@ class ASTInvariantVerifier:
             return [_syntax_error_counterexample(err, filename)], 99, 99
 
         violations, max_cc, max_d = _inspect_ast_functions(tree, self.thresholds, filename)
-        if self.thresholds.enforce_zero_trust_ips and not _has_sanitization_waiver(source_code):
+        if self.thresholds.enforce_zero_trust_ips and not _has_sanitization_waiver(source_code, filename):
             violations.extend(_check_string_constants_for_private_ips(tree, filename))
 
         return violations, max_cc, max_d

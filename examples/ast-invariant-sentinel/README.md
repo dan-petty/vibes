@@ -144,7 +144,8 @@ violation reported.
 Another tool can use the same parser with its own tag and its own waivable rules:
 `scan_waivers(path, source, WaiverPolicy(tag, waivable, noun))`. A tool reads only the comments that
 carry its tag. The prompt injection scanner in `tools/` uses the tag `prompt-scanner` and waives only
-`INJ` and `EGR001`.
+`INJ` and `EGR001`. The CEGIS engine and the resource iteration workbench in `tools/` read the
+`sentinel` tag through the same parser.
 
 ---
 
