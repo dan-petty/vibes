@@ -625,6 +625,7 @@ _FILLER = "".join(f"# filler line {number}\n" for number in range(1, 16))
         pytest.param(f"{_FILLER}{_WAIVER}{_REASON}\n", False, id="waiver-on-line-16"),
         pytest.param(f"{_WAIVER} short\n", False, id="short-justification"),
         pytest.param(f'# Fixture.\n"""Doc.\n\n{_WAIVER}{_REASON}\n"""\n', False, id="waiver-in-string"),
+        pytest.param(f'"""Doc.\n\n{_WAIVER}{_REASON}\n"""\n', False, id="waiver-in-module-docstring"),
     ],
 )
 def test_scanner_honors_only_a_valid_header_waiver(tmp_path: Path, header: str, muted: bool) -> None:

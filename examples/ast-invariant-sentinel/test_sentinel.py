@@ -18,6 +18,7 @@ from sentinel import (
     ConfigOverrides,
     SentinelConfig,
     WaiverPolicy,
+    WaiverScan,
     _read_lsp_message,
     _write_lsp_message,
     audit_file,
@@ -257,6 +258,48 @@ def test_waiver_inside_string_literal_is_not_honored(tmp_path):
         'HOST = "http://192.168.1.10"\n',
     )
     assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]
+
+
+def test_waiver_inside_a_module_docstring_is_not_honored(tmp_path):
+    """A docstring is a string literal: its waiver text waives nothing, also with no real comment."""
+    module = _write_module(
+        tmp_path,
+        "docstring.py",
+        '"""Doc.\n\n# sentinel: allow[ZeroTrustSanitization] — text inside the docstring\n"""\n'
+        'HOST = "http://192.168.1.10"\n',
+    )
+    assert [v.invariant for v in audit_file(module)] == ["ZeroTrustSanitization"]
+
+
+def test_waiver_text_in_a_docstring_below_the_header_is_not_a_late_waiver():
+    """The late-waiver check reads the same comment tokens, so docstring text is not reported."""
+    padding = "\n" * 20
+    source = f'"""Doc.{padding}# sentinel: allow[ZeroTrustSanitization] — text inside the docstring\n"""\n'
+    assert scan_waivers("doc.py", source) == scan_waivers("doc.py", '"""Doc."""\n')
+
+
+def test_python_source_that_does_not_tokenize_honors_no_waiver():
+    """Without tokens no comment is known, so no waiver applies and the scan says why.
+
+    A broken file with no waiver text gets no waiver report: the sentinel reports it as
+    SyntaxIntegrity instead.
+    """
+    broken = 'HOST = """unterminated\n'
+    scan = scan_waivers("broken.py", f"# sentinel: allow[ZeroTrustSanitization] — a justified reason\n{broken}")
+    assert (
+        scan.waived,
+        [(v.line_number, v.invariant, "could not be tokenized" in v.message) for v in scan.violations],
+        scan_waivers("broken.py", broken),
+    ) == (frozenset(), [(1, "WaiverIntegrity", True)], WaiverScan())
+
+
+def test_polyglot_waiver_is_read_from_comment_lines_not_python_tokens():
+    """A Rust attribute is a Python comment token; it must not hide the `//` waiver below it."""
+    source = (
+        "#[derive(Debug)]\n"
+        "// sentinel: allow[ZeroTrustSanitization] — fixture for the polyglot detector\n"
+    )
+    assert scan_waivers("fixture.rs", source).waived == frozenset({"ZeroTrustSanitization"})
 
 
 def test_waiver_below_module_header_is_not_honored(tmp_path):

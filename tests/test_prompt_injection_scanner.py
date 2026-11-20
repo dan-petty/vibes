@@ -298,6 +298,25 @@ def test_waiver_inside_a_string_literal_is_not_honored(tmp_path: Path) -> None:
     assert _findings(path) == [("INJ003", 4)]
 
 
+def test_waiver_inside_a_module_docstring_is_not_honored(tmp_path: Path) -> None:
+    """A module docstring is a string literal, also when the file holds no real comment."""
+    path = tmp_path / "fixture.py"
+    path.write_text(f'"""Fixture.\n\n{VALID_INJ_WAIVER}\n"""\n{DELIMITER_LINE}\n', encoding="utf-8")
+    assert _findings(path) == [("INJ003", 5)]
+
+
+def test_waiver_in_a_file_that_does_not_tokenize_is_reported(tmp_path: Path) -> None:
+    """Without tokens the scanner cannot find a comment, so it honors no waiver and says why."""
+    path = tmp_path / "fixture.py"
+    path.write_text(f'{VALID_INJ_WAIVER}\nPROMPT = """<|im_start|>system\n', encoding="utf-8")
+    summary = scan_paths([path], honor_waivers=True)
+    defects = [f.message for f in summary.findings if f.rule_id == "WI001"]
+    assert (_findings(path), "could not be tokenized" in " ".join(defects)) == (
+        [("INJ003", 2), ("WI001", 1)],
+        True,
+    )
+
+
 def test_main_cli_honors_waivers_only_with_the_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """`--honor-waivers` makes the command line read the header waivers of the files it scans."""
     path = _waiver_fixture(tmp_path, VALID_INJ_WAIVER)

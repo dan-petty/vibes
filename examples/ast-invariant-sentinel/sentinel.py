@@ -79,6 +79,10 @@ IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 WAIVABLE_INVARIANTS = frozenset({"ZeroTrustSanitization"})
 WAIVER_HEADER_LINE_LIMIT = 15
 MIN_WAIVER_JUSTIFICATION_CHARS = 12
+# A source with one of these suffixes is Python: its waivers come from `tokenize` comment
+# tokens. "" covers a source with no file name, such as `audit_source(source)`.
+PYTHON_SOURCE_SUFFIXES: Final[frozenset[str]] = frozenset({"", ".py", ".pyi"})
+COMMENT_LINE_MARKERS: Final[tuple[str, ...]] = ("//", "#", "/*", "*")
 
 
 @dataclass(frozen=True)
@@ -719,30 +723,44 @@ class WaiverScan:
     violations: tuple[Violation, ...] = ()
 
 
-def _header_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
-    """Yield tokens from the module header, tolerating sources that fail to tokenize."""
-    try:
-        yield from itertools.takewhile(
-            lambda token: token.start[0] <= WAIVER_HEADER_LINE_LIMIT,
-            tokenize.generate_tokens(io.StringIO(source).readline),
-        )
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return
+def _python_comments(source: str) -> list[tuple[int, str]]:
+    """Return the real comment tokens of a Python source; raise when it does not tokenize.
+
+    `tokenize` never yields the text inside a string literal, so a docstring cannot hold a
+    waiver (AGENTS.md §2.3).
+    """
+    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+    return [(token.start[0], token.string) for token in tokens if token.type == tokenize.COMMENT]
 
 
-def _iter_header_comments(source: str) -> list[tuple[int, str]]:
-    """Return real comment tokens within the module header, ignoring string literals."""
-    tokens = [
-        (token.start[0], token.string) for token in _header_tokens(source) if token.type == tokenize.COMMENT
-    ]
-    if tokens:
-        return tokens
-    comments: list[tuple[int, str]] = []
-    for index, line in enumerate(source.splitlines()[:WAIVER_HEADER_LINE_LIMIT], 1):
-        stripped = line.strip()
-        if stripped.startswith(("//", "#", "/*", "*")):
-            comments.append((index, stripped))
-    return comments
+def _marked_comment_lines(source: str) -> list[tuple[int, str]]:
+    """Return the lines of a non-Python source that start with a comment marker.
+
+    The standard library has no lexer for Rust, Go, TypeScript, Bash or C, so a line that
+    starts with `//`, `#`, `/*` or `*` is read as a comment.
+    """
+    lines = ((number, line.strip()) for number, line in enumerate(source.splitlines(), 1))
+    return [(number, text) for number, text in lines if text.startswith(COMMENT_LINE_MARKERS)]
+
+
+def _source_comments(file_path: Path | str, source: str) -> list[tuple[int, str]]:
+    """Return the comments of a source: comment tokens for Python, marked lines otherwise."""
+    if Path(file_path).suffix in PYTHON_SOURCE_SUFFIXES:
+        return _python_comments(source)
+    return _marked_comment_lines(source)
+
+
+def _untokenized_violations(
+    file_path: str, source: str, policy: WaiverPolicy, error: Exception
+) -> tuple[Violation, ...]:
+    """Report that a Python source with waiver text does not tokenize, so no waiver applies."""
+    tagged = (number for number, line in enumerate(source.splitlines(), 1) if f"{policy.tag}:" in line)
+    line_number = next(tagged, None)
+    if line_number is None:
+        return ()
+    detail = next(iter(error.args), error)
+    message = f"Waiver not honored: the file could not be tokenized ({detail}), so no comment is known."
+    return (Violation(file_path, line_number, "WaiverIntegrity", message),)
 
 
 def _waiver_defect(match: re.Match[str] | None, policy: WaiverPolicy) -> str | None:
@@ -762,13 +780,17 @@ def scan_waivers(file_path: Path | str, source: str, policy: WaiverPolicy = SENT
 
     Return the names that the header waives, and a `WaiverIntegrity` violation for each
     pragma of this tag that waives nothing: malformed, not waivable, not justified in at
-    least 12 characters, or below line 15.
+    least 12 characters, or below line 15. A Python source that does not tokenize gets no
+    waiver, and one `WaiverIntegrity` violation when it holds text of this tag.
     """
+    try:
+        comments = _source_comments(file_path, source)
+    except (tokenize.TokenError, SyntaxError) as error:
+        return WaiverScan(violations=_untokenized_violations(str(file_path), source, policy, error))
+    tagged = [(number, text) for number, text in comments if f"{policy.tag}:" in text]
     waived: set[str] = set()
     violations: list[Violation] = []
-    for line_number, text in _iter_header_comments(source):
-        if f"{policy.tag}:" not in text:
-            continue
+    for line_number, text in (comment for comment in tagged if comment[0] <= WAIVER_HEADER_LINE_LIMIT):
         match = policy.pragma.match(text.strip())
         defect = _waiver_defect(match, policy)
         if defect or match is None:
@@ -777,12 +799,12 @@ def scan_waivers(file_path: Path | str, source: str, policy: WaiverPolicy = SENT
             )
             continue
         waived.add(match.group(1))
-    violations.extend(_late_waiver_violations(str(file_path), source, waived, policy))
+    violations.extend(_late_waiver_violations(str(file_path), tagged, waived, policy))
     return WaiverScan(frozenset(waived), tuple(violations))
 
 
 def _late_waiver_violations(
-    file_path: str, source: str, waived: set[str], policy: WaiverPolicy
+    file_path: str, comments: Sequence[tuple[int, str]], waived: set[str], policy: WaiverPolicy
 ) -> list[Violation]:
     """Report a waiver written below the header window, where it has no effect.
 
@@ -791,10 +813,8 @@ def _late_waiver_violations(
     code rather than about the waiver. Costing an hour once is enough; say it plainly.
     """
     late: list[Violation] = []
-    for index, line in enumerate(
-        source.splitlines()[WAIVER_HEADER_LINE_LIMIT:], WAIVER_HEADER_LINE_LIMIT + 1
-    ):
-        match = policy.pragma.match(line.strip())
+    for index, text in (comment for comment in comments if comment[0] > WAIVER_HEADER_LINE_LIMIT):
+        match = policy.pragma.match(text.strip())
         if match and match.group(1) not in waived:
             late.append(
                 Violation(
