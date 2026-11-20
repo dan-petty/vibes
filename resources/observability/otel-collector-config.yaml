@@ -27,6 +27,17 @@ processors:
     limit_percentage: 75
     spike_limit_percentage: 20
 
+  # Delete secret-bearing HTTP headers from span attributes before export, so no
+  # credential reaches Jaeger. Add a key here for each other header that carries one.
+  attributes/scrub:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+      - key: http.request.header.cookie
+        action: delete
+      - key: http.request.header.proxy-authorization
+        action: delete
+
   attributes/agent_defaults:
     actions:
       - key: environment
@@ -62,7 +73,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, attributes/agent_defaults, batch]
+      processors: [memory_limiter, attributes/scrub, attributes/agent_defaults, batch]
       exporters: [otlp/jaeger, debug]
     metrics:
       receivers: [otlp, prometheus]

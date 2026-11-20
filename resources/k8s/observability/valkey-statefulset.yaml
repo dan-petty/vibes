@@ -24,10 +24,21 @@ spec:
       containers:
         - name: valkey
           image: valkey/valkey:8.0.1
+          # The password comes from the valkey-auth Secret, which the deployer creates
+          # (see the README). The kubelet expands $(VALKEY_PASSWORD) without a shell.
+          # With a password set, protected mode accepts clients from other pods.
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: valkey-auth
+                  key: password
           command:
             - valkey-server
             - "--protected-mode"
             - "yes"
+            - "--requirepass"
+            - "$(VALKEY_PASSWORD)"
             - "--maxmemory"
             - "512mb"
             - "--maxmemory-policy"

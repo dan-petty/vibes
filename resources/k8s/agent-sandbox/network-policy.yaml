@@ -36,9 +36,14 @@ spec:
         - protocol: TCP
           port: 6379
 
-    # 3. Allow egress to in-cluster OpenTelemetry Collector
+    # 3. Allow egress to the in-cluster OpenTelemetry Collector, which runs in the
+    #    agent-observability namespace. A podSelector alone matches only pods in
+    #    agent-workloads, so the rule also selects the namespace.
     - to:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-observability
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: opentelemetry-collector
       ports:

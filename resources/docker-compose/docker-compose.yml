@@ -41,6 +41,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
+      - ../observability/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ../observability/prometheus-agent-alerts.yaml:/etc/prometheus/alerts.yaml:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -83,6 +84,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
+      - ../observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ../observability/grafana/agent-telemetry-dashboard.json:/var/lib/grafana/dashboards/agent-telemetry-dashboard.json:ro
     networks:
       - agent-mesh

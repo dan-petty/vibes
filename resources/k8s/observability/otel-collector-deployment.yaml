@@ -23,6 +23,15 @@ data:
         check_interval: 1s
         limit_percentage: 75
         spike_limit_percentage: 20
+      # Delete secret-bearing HTTP headers from span attributes before export.
+      attributes/scrub:
+        actions:
+          - key: http.request.header.authorization
+            action: delete
+          - key: http.request.header.cookie
+            action: delete
+          - key: http.request.header.proxy-authorization
+            action: delete
     exporters:
       otlp/jaeger:
         endpoint: jaeger.agent-observability.svc.cluster.local:4317
@@ -34,7 +43,7 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
+          processors: [memory_limiter, attributes/scrub, batch]
           exporters: [otlp/jaeger, debug]
 ---
 apiVersion: apps/v1

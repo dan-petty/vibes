@@ -14,7 +14,7 @@ Example Kubernetes manifests for isolated agent execution, egress network polici
 2. **SSRF & Network Egress Mitigation (`NetworkPolicy`)**:
    - Denies all inbound traffic to sandbox pods.
    - Restricts egress to cluster DNS (`kube-dns:53`), in-cluster Valkey (`:6379`), and in-cluster OTel Collector (`:4317`/`:4318`).
-   - The Valkey and OTel Collector rules have a `podSelector` and no `namespaceSelector`, so they match pods in `agent-workloads` only. Valkey runs there. The collector runs in `agent-observability`, so the sandbox cannot reach it until the rule adds `namespaceSelector` with `kubernetes.io/metadata.name: agent-observability`.
+   - The Valkey rule has a `podSelector` only, so it matches pods in `agent-workloads`, where Valkey runs. The collector runs in `agent-observability`, so its rule also has a `namespaceSelector` on `kubernetes.io/metadata.name: agent-observability`. Kubernetes 1.22 and later set this label on each namespace.
    - External egress is allowed only on TCP 80 and 443, and excludes private RFC 1918 CIDRs (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and cloud metadata (`169.254.169.254/32`).
    - A NetworkPolicy has effect only if the cluster network plugin enforces NetworkPolicy.
 3. **Resource Starvation Protection (`ResourceQuota` & `LimitRange`)**:
@@ -31,24 +31,31 @@ kubectl create namespace agent-workloads
 kubectl create namespace agent-observability
 ```
 
-### 2. Apply Observability Stack
+### 2. Create the Valkey Password Secret
+The Valkey StatefulSet reads its password from the Secret `valkey-auth` (key `password`) in `agent-workloads`. The repository holds no Secret manifest, so no password is committed. Create the Secret with a new random value:
+```bash
+kubectl create secret generic valkey-auth -n agent-workloads \
+  --from-literal=password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+```
+
+### 3. Apply Observability Stack
 ```bash
 kubectl apply -f resources/k8s/observability/
 ```
 
-### 3. Apply Hardened Sandbox Policies
+### 4. Apply Hardened Sandbox Policies
 ```bash
 kubectl apply -f resources/k8s/agent-sandbox/
 ```
 
-### 4. Verify Pod Sandbox Execution
+### 5. Verify Pod Sandbox Execution
 ```bash
 kubectl get pods -n agent-workloads
 kubectl logs agent-worker-sandbox -n agent-workloads
 ```
 
-> [!WARNING]
-> The Valkey StatefulSet runs `valkey-server --protected-mode yes` with no password. In that mode Valkey accepts only loopback and Unix socket clients, so it refuses connections from other pods until you configure a password (`--requirepass` from a Secret) or an ACL user.
+> [!NOTE]
+> The Valkey StatefulSet runs `valkey-server --protected-mode yes --requirepass $(VALKEY_PASSWORD)`, and `VALKEY_PASSWORD` comes from the `valkey-auth` Secret. With a password set, protected mode accepts clients from other pods, and each client must authenticate. A client pod reads the same Secret, for example as an environment variable through `secretKeyRef`. If the Secret does not exist, the Valkey pod does not start (`CreateContainerConfigError`).
 
 ---
 
