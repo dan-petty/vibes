@@ -3,16 +3,17 @@
 Audits JSON event records (one object per line) for unauthorized process execution,
 network egress violations, sensitive file access, privilege escalation, and anti-debugging
 evasion, and exports findings to OASIS SARIF 2.1.0. It attaches no eBPF program and traces
-nothing. A record is a flat object (keys such as `event_type`, `comm`, `path`, `daddr`) or
-a native Tetragon `process_exec` record. Other native Tetragon records, such as
-`process_kprobe`, and Falco JSON become `unknown` events; convert them to the flat form first.
+nothing. A record is a flat object (keys such as `event_type`, `comm`, `path`, `daddr`), a
+native Tetragon `process_exec` or `process_kprobe` record, or a Falco JSON alert. Other
+native Tetragon records, such as `process_exit`, and a Falco alert whose rule output has no
+`%evt.type` become `unknown` events.
 
 The sensitive-path check expands each `~/` entry below the configured home directories and
-compares whole path components. The Tetragon TracingPolicy has one `sys_execve` syscall
-kprobe that sends `Sigkill` when the executed path names a disallowed binary. Its
-`podSelector` limits it to the pods with the sandbox label (`--pod-label`). The observed
-binaries go into a metadata annotation; the policy does not enforce them. The Falco rule
-only alerts.
+compares whole path components. The Tetragon TracingPolicy has a `sys_execve` and a
+`sys_execveat` syscall kprobe that send `Sigkill` when the executed path names a disallowed
+binary. Its `podSelector` limits it to the pods with the sandbox label (`--pod-label`). The
+observed binaries go into a metadata annotation; the policy does not enforce them. The
+Falco rule only alerts.
 
 Maintains proactive complexity headroom (M <= 6, depth <= 3, parameters <= 4).
 """
@@ -71,6 +72,40 @@ TETRAGON_BASELINE_ANNOTATION: Final[str] = "ebpf-tracer/observed-binaries"
 # The label that resources/k8s/agent-sandbox/sandbox-pod.yaml puts on the sandbox pod. The
 # policy's podSelector uses it, so the Sigkill reaches sandbox pods only.
 TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app.kubernetes.io/name", "agent-sandbox")
+
+# The exec system calls and the argument index of their path: execve(path, argv, envp) and
+# execveat(dirfd, path, argv, envp, flags). Both kprobes match the path that the caller gives.
+TETRAGON_EXEC_SYSCALLS: Final[tuple[tuple[str, int], ...]] = (("sys_execve", 0), ("sys_execveat", 1))
+
+# A syscall kprobe event names the kernel symbol, such as `__x64_sys_setuid`. These are the
+# arch prefixes of Tetragon's pkg/arch/arch.go.
+TETRAGON_ARCH_PREFIXES: Final[tuple[str, ...]] = ("__x64_", "__arm64_", "__ia32_")
+
+# The typed arguments of a Tetragon `process_kprobe` record (KprobeArgument in
+# api/v1/tetragon/tetragon.proto) that the audit reads: (argument type, field, flat key).
+# A `string_arg` is the value itself. The first argument that has a field sets the key.
+TETRAGON_KPROBE_ARG_FIELDS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("string_arg", "", "path"),
+    ("file_arg", "path", "path"),
+    ("path_arg", "path", "path"),
+    ("linux_binprm_arg", "path", "path"),
+    ("sock_arg", "daddr", "daddr"),
+    ("sock_arg", "dport", "dport"),
+    ("sockaddr_arg", "addr", "daddr"),
+    ("sockaddr_arg", "port", "dport"),
+)
+
+# The Falco `output_fields` keys (https://falco.org/docs/reference/rules/supported-fields/)
+# and the flat keys that they set. `evt.type` is in the output of every default Falco rule.
+FALCO_OUTPUT_FIELDS: Final[dict[str, str]] = {
+    "evt.type": "event_type",
+    "proc.pid": "pid",
+    "proc.name": "comm",
+    "proc.cmdline": "command_line",
+    "fd.name": "path",
+    "fd.rip": "daddr",
+    "fd.rport": "dport",
+}
 
 # Kernel system calls only: `cap_set_proc` is the libcap function that calls `capset`.
 PRIVILEGE_SYSCALLS: Final[frozenset[str]] = frozenset(
@@ -206,6 +241,12 @@ def _compute_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
 
+def _event_seconds(raw: dict[str, Any]) -> float:
+    """Return the RFC 3339 `time` of a Tetragon record or a Falco alert in seconds, or 0.0 when it has none."""
+    event_time = str(raw.get("time", ""))
+    return datetime.fromisoformat(event_time).timestamp() if event_time else 0.0
+
+
 def _parse_tetragon_exec(raw: dict[str, Any]) -> EbpfTraceEvent:
     """Map a native Tetragon `process_exec` record to an execve event.
 
@@ -215,7 +256,6 @@ def _parse_tetragon_exec(raw: dict[str, Any]) -> EbpfTraceEvent:
     """
     process = raw["process_exec"].get("process", {})
     binary = str(process.get("binary", ""))
-    event_time = str(raw.get("time", ""))
     return EbpfTraceEvent(
         event_type=EbpfEventType.EXECVE,
         pid=int(process.get("pid", 0)),
@@ -223,14 +263,80 @@ def _parse_tetragon_exec(raw: dict[str, Any]) -> EbpfTraceEvent:
         command_line=f"{binary} {process.get('arguments', '')}".strip(),
         target_path=binary,
         syscall="execve",
-        timestamp=datetime.fromisoformat(event_time).timestamp() if event_time else 0.0,
+        timestamp=_event_seconds(raw),
     )
 
 
+def _syscall_name(symbol: str) -> str:
+    """Remove the arch prefix and the `sys_` prefix: `__x64_sys_setuid` gives `setuid`; `tcp_connect` stays."""
+    for prefix in TETRAGON_ARCH_PREFIXES:
+        symbol = symbol.removeprefix(prefix)
+    return symbol.removeprefix("sys_")
+
+
+def _kprobe_arg_value(arg: dict[str, Any], arg_type: str, field: str) -> Any:
+    """Return one field of a typed kprobe argument, or None; a `string_arg` is the value itself."""
+    value = arg.get(arg_type)
+    return value.get(field) if isinstance(value, dict) else value
+
+
+def _kprobe_arg_fields(args: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Read the path and the destination address and port from the arguments of a kprobe record."""
+    fields: dict[str, Any] = {}
+    for arg in args:
+        for arg_type, field, key in TETRAGON_KPROBE_ARG_FIELDS:
+            value = _kprobe_arg_value(arg, arg_type, field)
+            if value is not None:
+                fields.setdefault(key, value)
+    return fields
+
+
+def _tetragon_kprobe_record(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map a native Tetragon `process_kprobe` record to a flat record.
+
+    The function name without its syscall prefixes sets the event type and `syscall`. An
+    exec hook fires before the new program runs: `process` is still the caller, and the
+    path argument names the new program. Any other hook reports the calling process.
+    """
+    kprobe = raw["process_kprobe"]
+    call = _syscall_name(str(kprobe.get("function_name", "")))
+    record = {"event_type": call, "syscall": call, "timestamp": _event_seconds(raw)}
+    record.update(_kprobe_arg_fields(kprobe.get("args", [])))
+    process = kprobe.get("process", {})
+    binary = str(process.get("binary", ""))
+    command = f"{binary} {process.get('arguments', '')}".strip()
+    if _resolve_event_type(call) == EbpfEventType.EXECVE:
+        binary = command = str(record.get("path", ""))
+    record.update(pid=process.get("pid", 0), comm=PurePosixPath(binary).name or "unknown", command_line=command)
+    return record
+
+
+def _falco_record(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map a Falco JSON alert to a flat record.
+
+    `output_fields` holds the fields that the rule output names; a field with no value is
+    null. `evt.type` sets the event type and `syscall`; without it the event type is unknown.
+    """
+    fields = raw.get("output_fields") or {}
+    record = {key: fields[name] for name, key in FALCO_OUTPUT_FIELDS.items() if fields.get(name) is not None}
+    record.update(syscall=record.get("event_type", ""), timestamp=_event_seconds(raw))
+    return record
+
+
+# The native record forms, each found by its top-level key, and their maps to a flat record.
+_NATIVE_RECORD_MAPS: Final = (("process_kprobe", _tetragon_kprobe_record), ("output_fields", _falco_record))
+
+
 def parse_trace_event(raw: dict[str, Any]) -> EbpfTraceEvent:
-    """Parse a flat record or a native Tetragon `process_exec` record into an EbpfTraceEvent."""
+    """Parse a flat record, a native Tetragon `process_exec` or `process_kprobe` record, or a Falco alert."""
     if "process_exec" in raw:
         return _parse_tetragon_exec(raw)
+    native = next((to_flat for key, to_flat in _NATIVE_RECORD_MAPS if key in raw), None)
+    return _parse_flat_record(native(raw) if native else raw)
+
+
+def _parse_flat_record(raw: dict[str, Any]) -> EbpfTraceEvent:
+    """Parse a flat record into an EbpfTraceEvent."""
     raw_type = str(raw.get("event_type", raw.get("type", "unknown"))).lower()
     event_type = _resolve_event_type(raw_type)
 
@@ -252,11 +358,19 @@ def _resolve_event_type(raw_type: str) -> EbpfEventType:
     """Map string representation to EbpfEventType enum."""
     mapping = {
         "execve": EbpfEventType.EXECVE,
+        "execveat": EbpfEventType.EXECVE,
         "process_exec": EbpfEventType.EXECVE,
+        "security_bprm_check": EbpfEventType.EXECVE,
         "socket_connect": EbpfEventType.SOCKET_CONNECT,
         "connect": EbpfEventType.SOCKET_CONNECT,
+        "tcp_connect": EbpfEventType.SOCKET_CONNECT,
+        "security_socket_connect": EbpfEventType.SOCKET_CONNECT,
         "file_open": EbpfEventType.FILE_OPEN,
+        "open": EbpfEventType.FILE_OPEN,
         "openat": EbpfEventType.FILE_OPEN,
+        "openat2": EbpfEventType.FILE_OPEN,
+        "security_file_open": EbpfEventType.FILE_OPEN,
+        "security_file_permission": EbpfEventType.FILE_OPEN,
         "privilege_change": EbpfEventType.PRIVILEGE_CHANGE,
         "ptrace_evasion": EbpfEventType.PTRACE_EVASION,
     }
@@ -482,14 +596,15 @@ def generate_tetragon_policy(
 ) -> dict[str, Any]:
     """Synthesize a Tetragon TracingPolicy that kills a process when it executes a disallowed binary.
 
-    The `sys_execve` syscall kprobe reads the path that the caller gives (argument 0). It
-    sends `Sigkill` when the path is a disallowed binary name or ends in `/<name>`, the
-    same binaries that EBPF001 flags. Each operator has its own selector: a selector
-    matches only when all of its matches hold, and the kprobe acts when any selector
-    matches. The kprobe does not hook `execveat`. The `podSelector` limits the policy to
-    the pods with `pod_label`; without it, Tetragon applies the policy to every process
-    on the node. The observed binaries go into the `TETRAGON_BASELINE_ANNOTATION`
-    annotation for review; the policy does not enforce them.
+    One syscall kprobe for each call of `TETRAGON_EXEC_SYSCALLS` reads the path that the
+    caller gives. It sends `Sigkill` when the path is a disallowed binary name or ends in
+    `/<name>`, the same binaries that EBPF001 flags. Each operator has its own selector: a
+    selector matches only when all of its matches hold, and the kprobe acts when any
+    selector matches. An `execveat` call with `AT_EMPTY_PATH` gives an empty path, so no
+    selector matches it. The `podSelector` limits the policy to the pods with `pod_label`;
+    without it, Tetragon applies the policy to every process on the node. The observed
+    binaries go into the `TETRAGON_BASELINE_ANNOTATION` annotation for review; the policy
+    does not enforce them.
     """
     observed = sorted({e.process_name for e in events if e.event_type == EbpfEventType.EXECVE})
     binaries = sorted(DISALLOWED_BINARIES)
@@ -503,17 +618,18 @@ def generate_tetragon_policy(
             "podSelector": {"matchLabels": {label_key: label_value}},
             "kprobes": [
                 {
-                    "call": "sys_execve",
+                    "call": call,
                     "syscall": True,
-                    "args": [{"index": 0, "type": "string"}],
+                    "args": [{"index": index, "type": "string"}],
                     "selectors": [
                         {
-                            "matchArgs": [{"index": 0, "operator": operator, "values": values}],
+                            "matchArgs": [{"index": index, "operator": operator, "values": values}],
                             "matchActions": [{"action": "Sigkill"}],
                         }
                         for operator, values in matches
                     ],
                 }
+                for call, index in TETRAGON_EXEC_SYSCALLS
             ],
         },
     }
@@ -523,7 +639,11 @@ def generate_falco_policy(
     events: Sequence[EbpfTraceEvent],
     rule_name: str = "agent_sandbox_least_privilege",
 ) -> str:
-    """Synthesize Falco YAML rules file based on observed execution trace."""
+    """Synthesize Falco YAML rules file based on observed execution trace.
+
+    The output names `evt.type` and `proc.pid`, so that `parse_trace_event` reads an alert
+    of the rule as an execve event of that process.
+    """
     allowed = (
         ", ".join(f"'{e.process_name}'" for e in events if e.event_type == EbpfEventType.EXECVE) or "'python'"
     )
@@ -531,7 +651,8 @@ def generate_falco_policy(
         f"- rule: {rule_name}",
         "  desc: Detect unexpected agent process spawns outside baseline manifest",
         f"  condition: spawned_process and not proc.name in ({allowed})",
-        '  output: "Unexpected agent process execution (proc=%proc.name cmd=%proc.cmdline)"',
+        '  output: "Unexpected agent process execution (proc=%proc.name pid=%proc.pid cmd=%proc.cmdline '
+        'evt_type=%evt.type)"',
         "  priority: WARNING",
         "  tags: [agent, sandbox, ebpf]",
         "",
@@ -708,7 +829,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         "targets",
         nargs="*",
         default=[],
-        help="JSONL files of flat event records or native Tetragon process_exec records.",
+        help="JSONL files of flat event records, native Tetragon process_exec or process_kprobe "
+        "records, or Falco JSON alerts.",
     )
     parser.add_argument(
         "--home-dir",
