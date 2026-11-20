@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
 import pytest
@@ -52,8 +52,23 @@ COMPONENT_CASES: Final[dict[str, LSMVerdict]] = {
     "/root/.aws/credentials": LSMVerdict.BLOCK,
 }
 
-# How Tetragon applies the string operators that the file selectors use.
-TETRAGON_STRING_OPS: Final[dict[str, Any]] = {"Equal": str.__eq__, "Prefix": str.startswith}
+# How Tetragon applies the string operators that the file and exec selectors use.
+TETRAGON_STRING_OPS: Final[dict[str, Any]] = {"Equal": str.__eq__, "Prefix": str.startswith, "Postfix": str.endswith}
+
+# Programs as `security_bprm_check` sees them: the opened file, with its links resolved, and
+# whether the default policy denies it. Debian 13 links `nc` to `nc.openbsd` or
+# `nc.traditional`, `socat` to `socat1` and `telnet` to `inetutils-telnet`. A name that only
+# starts with a denied name, and `busybox`, which runs applets such as `nc`, are not denied.
+RESOLVED_EXEC_CASES: Final[dict[str, bool]] = {
+    "/usr/bin/nc": True,
+    "/usr/bin/nc.openbsd": True,
+    "/usr/bin/nc.traditional": True,
+    "/usr/bin/socat1": True,
+    "/usr/bin/inetutils-telnet": True,
+    "/usr/bin/ncfoo": False,
+    "/usr/bin/ncal": False,
+    "/usr/bin/busybox": False,
+}
 
 
 def test_bprm_check_security_rules() -> None:
@@ -306,10 +321,44 @@ def test_tetragon_file_selectors_match_whole_components() -> None:
     )
 
 
+def test_tetragon_exec_selectors_kill_resolved_files() -> None:
+    """Assert that the exec kprobe kills the files that Debian links a blocked name to, and no name that only starts with one."""
+    _, kprobes = _kprobes()
+    bprm = kprobes["security_bprm_check"]
+
+    assert {p: _kernel_kills(bprm, p) for p in RESOLVED_EXEC_CASES} == RESOLVED_EXEC_CASES
+
+
+def test_bprm_blocklist_covers_resolved_files() -> None:
+    """Assert that the simulated blocklist denies the same resolved files that the kernel selectors kill.
+
+    Every probe name is on the allowlist, so only the blocklist decides the verdict.
+    """
+    names = {p: PurePosixPath(p).name for p in RESOLVED_EXEC_CASES}
+    pol = LSMPolicy(allowed_binaries=frozenset(names.values()))
+    results = {p: evaluate_event(LSMEvent(LSMHookType.BPRM_CHECK, name, p), pol) for p, name in names.items()}
+
+    assert {p: r.verdict == LSMVerdict.BLOCK for p, r in results.items()} == RESOLVED_EXEC_CASES
+
+
 def test_tetragon_policy_enforces_with_sigkill() -> None:
     """Assert that each generated kprobe kills a caller that matches the default policy."""
     doc, kprobes = _kprobes()
-    binaries = ["/chattr", "/nc", "/ncat", "/netcat", "/socat", "/tcpdump", "/telnet"]
+    # The blocked names and the files that their links resolve to on Debian and Ubuntu.
+    binaries = [
+        "/chattr",
+        "/inetutils-telnet",
+        "/nc",
+        "/nc.openbsd",
+        "/nc.traditional",
+        "/ncat",
+        "/netcat",
+        "/socat",
+        "/socat1",
+        "/tcpdump",
+        "/telnet",
+        "/telnet.netkit",
+    ]
     # `/root/.ssh` and `/root/.aws` lie below `/root`, so the generator emits only `/root`.
     file_paths = ["/etc/shadow", "/etc/shadow-", "/etc/sudoers", "/root", "/home/user/.ssh", "/home/user/.aws", "/proc/kcore"]
 

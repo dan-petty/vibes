@@ -8,7 +8,9 @@ it does not resolve symbolic links. A `~` entry becomes one absolute path per co
 home directory. The probe list comes from the policy's absolute blocked paths plus fixed
 evasion, egress and binary probes; it is not syzkaller, and nothing is random. The
 Tetragon generator emits a TracingPolicy whose selectors send `Sigkill` for the policy's
-blocked binaries, absolute and home-relative paths, and egress. The module ships no BPF C.
+blocked binaries, absolute and home-relative paths, and egress. The exec hook sees the file
+with its links resolved, so the blocked names include the files that the links of a blocked
+binary resolve to on Debian and Ubuntu. The module ships no BPF C.
 
 Passes the strict sentinel preset (M <= 6, nesting depth <= 3).
 """
@@ -31,6 +33,21 @@ GATE_VERSION: Final[str] = "1.0.0"
 DISALLOWED_BINARIES: Final[frozenset[str]] = frozenset(
     {"nc", "ncat", "netcat", "socat", "telnet", "chattr", "tcpdump"}
 )
+
+# The files that the links of a blocked binary resolve to. `security_bprm_check` reads the
+# opened file (`bprm->file`), so it sees this name and not the link name. Debian 13
+# packages: netcat-openbsd and netcat-traditional point the alternatives `nc` and `netcat`
+# to `nc.openbsd` or `nc.traditional` (the ncat package points them to `ncat`, a blocked
+# name), inetutils-telnet points `telnet` to `inetutils-telnet`, and socat links `socat` to
+# `socat1`. The Ubuntu 22.04 telnet package installs `telnet.netkit`. A busybox applet
+# resolves to `busybox`, which is not blocked. Add the names of other images to
+# `LSMPolicy.blocked_binaries`.
+DISALLOWED_BINARY_FILES: Final[dict[str, frozenset[str]]] = {
+    "nc": frozenset({"nc.openbsd", "nc.traditional"}),
+    "netcat": frozenset({"nc.openbsd", "nc.traditional"}),
+    "telnet": frozenset({"inetutils-telnet", "telnet.netkit"}),
+    "socat": frozenset({"socat1"}),
+}
 
 DEFAULT_ALLOWED_BINARIES: Final[frozenset[str]] = frozenset(
     {"python", "pytest", "git", "bash", "sh", "ruff", "cargo", "go"}
@@ -159,10 +176,20 @@ def _evaluate_evasion(event: LSMEvent) -> LSMFinding | None:
     return None
 
 
+def denied_exec_names(policy: LSMPolicy) -> frozenset[str]:
+    """Return the blocked binaries and the files that their links resolve to (`DISALLOWED_BINARY_FILES`).
+
+    The simulated blocklist and the generated exec selector use these names, so both
+    deny `nc.openbsd` when the policy blocks `nc`.
+    """
+    files = (DISALLOWED_BINARY_FILES.get(name, frozenset()) for name in policy.blocked_binaries)
+    return policy.blocked_binaries.union(*files)
+
+
 def _evaluate_bprm(event: LSMEvent, policy: LSMPolicy) -> LSMFinding | None:
-    """Evaluate binary execution against allowlist and blocklist."""
+    """Evaluate binary execution against the blocklist (with resolved file names), then the allowlist."""
     comm = event.comm.strip().lower()
-    if comm in policy.blocked_binaries:
+    if comm in denied_exec_names(policy):
         return LSMFinding(
             "LSM001",
             LSMVerdict.BLOCK,
@@ -398,7 +425,7 @@ def _selectors_with_values(selectors: Sequence[list[ArgMatch]]) -> list[list[Arg
 
 def _tetragon_kprobes(policy: LSMPolicy) -> list[Kprobe]:
     """Map the policy to kprobes; drop a selector, then a kprobe, that has no value to match."""
-    binaries = tuple(f"/{b}" for b in sorted(policy.blocked_binaries))
+    binaries = tuple(f"/{b}" for b in sorted(denied_exec_names(policy)))
     kprobes: list[Kprobe] = [
         ("security_bprm_check", ((0, "linux_binprm"),), [[(0, "Postfix", binaries)]]),
         ("security_file_open", ((0, "file"),), _file_selectors(policy)),
@@ -431,8 +458,9 @@ def _yaml_kprobe(call: str, args: Sequence[tuple[int, str]], selectors: Sequence
 def generate_tetragon_policy(policy: LSMPolicy | None = None) -> str:
     """Emit a Cilium Tetragon TracingPolicy that sends Sigkill for the policy's blocked operations.
 
-    It covers the blocked binaries, the absolute blocked paths (with `~` entries expanded
-    under `home_dirs`) and egress. The binary allowlist, relative paths such as
+    It covers the blocked binaries and the files that their links resolve to
+    (`denied_exec_names`), the absolute blocked paths (with `~` entries expanded under
+    `home_dirs`) and egress. The binary allowlist, relative paths such as
     `.git/hooks`, and the privilege and evasion rules stay simulation-only. The
     `podSelector` limits the policy to the pods with `tetragon_pod_label`.
     """
