@@ -176,6 +176,9 @@ python3 examples/go-leak-sentinel/go_leak_sentinel.py --scan /path/to/stack.dump
 ### Run Automated Unit Tests
 ```bash
 uv run pytest examples/go-leak-sentinel/test_go_leak_sentinel.py
+
+# The Go tests need a Go toolchain. CI runs both commands with the Go version in go.mod.
+cd examples/go-leak-sentinel && go vet ./... && go test ./...
 ```
 
 ---
