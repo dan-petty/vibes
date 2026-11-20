@@ -223,6 +223,12 @@ def is_external_endpoint(url: str) -> bool:
     either local services or the deliberate placeholders the sanitization mandate requires,
     and reporting this repository's own documentation policy as a network risk would bury
     the one endpoint that matters under a dozen that do not.
+
+    A host name with no dot (`prometheus`, `otel-collector`) is a Docker Compose or
+    Kubernetes service name. The local resolver answers it inside the stack's own network,
+    so it is not egress either. A DNS search domain can still send such a name elsewhere;
+    this audit reads files, not resolver settings, and the owner accepted that limit (#272).
+    Every name with a dot stays external.
     """
     host = _host_of(url).split(":", 1)[0].strip("[]")
     if host.endswith(_ILLUSTRATIVE_SUFFIXES) or host in _ILLUSTRATIVE_SUFFIXES:
@@ -230,7 +236,7 @@ def is_external_endpoint(url: str) -> bool:
     try:
         return not _is_internal_address(ipaddress.ip_address(host))
     except ValueError:
-        return True
+        return not host or "." in host
 
 
 def _is_internal_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
