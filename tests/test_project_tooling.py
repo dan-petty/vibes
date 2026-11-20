@@ -13,59 +13,9 @@ import pytest
 from project_tooling import (
     GitHubAPIClient,
     audit_self_hardening,
-    classify_content,
     count_guardrail_lines,
     main,
-    parse_acceptance_criteria,
-    triage_issue_content,
 )
-
-
-def test_classify_content_multiple_matches():
-    title = "Investigate performance defect in AST repomap"
-    body = "Here is an empirical observation of the memory regression."
-    labels = classify_content(title, body)
-    assert "observation" in labels
-    assert "bug" in labels
-
-
-def test_classify_content_fallback():
-    title = "Hello world"
-    body = "Just saying hi"
-    labels = classify_content(title, body)
-    assert labels == ["triage-needed"]
-
-
-def test_parse_acceptance_criteria_mixed():
-    markdown = """
-## Acceptance Criteria
-- [ ] Implement parser
-- [x] Write unit tests
-- [X] Verify cyclomatic complexity
-- [ ] Add documentation
-"""
-    total, completed = parse_acceptance_criteria(markdown)
-    assert total == 4
-    assert completed == 2
-
-
-def test_triage_issue_content_incomplete():
-    body = "- [x] Step 1\n- [ ] Step 2"
-    res = triage_issue_content(42, "New observation on rate limiting", body)
-    assert (
-        res.issue_number,
-        "observation" in res.matched_labels,
-        res.total_criteria,
-        res.completed_criteria,
-        res.is_fully_certified,
-        "Work in progress" in res.suggested_comment,
-    ) == (42, True, 2, 1, False, True)
-
-
-def test_triage_issue_content_complete():
-    body = "- [x] Step 1\n- [x] Step 2"
-    res = triage_issue_content(101, "New pattern: CEGIS debugging", body)
-    assert (res.is_fully_certified, "All acceptance criteria are marked complete" in res.suggested_comment) == (True, True)
 
 
 def test_audit_self_hardening_defect_without_agents_md_fails():
@@ -112,30 +62,6 @@ def test_audit_self_hardening_non_defect_always_compliant():
     diff = "diff --git a/README.md b/README.md"
     result = audit_self_hardening(diff, is_defect_fix=False)
     assert result.is_compliant is True
-
-
-def test_triage_without_acceptance_criteria_says_so(tmp_path: Path) -> None:
-    """An issue with no checkboxes cannot engage the TDD loop, and must say why."""
-    result = triage_issue_content(42, "Add a thing", "Prose only, no checkboxes.")
-    assert (result.completed_criteria, result.total_criteria) == (0, 0)
-    assert "acceptance criteria" in result.suggested_comment.lower()
-
-
-def test_main_triage_reads_body_from_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """The CLI path autonomous-triage.yml invokes: body arrives as a file, never inline."""
-    body = tmp_path / "issue.md"
-    body.write_text("An empirical observation.\n- [x] done\n- [ ] pending\n", encoding="utf-8")
-
-    exit_code = main(["triage-issue", "--number", "7", "--title", "Observation report", "--body-file", str(body)])
-    out = capsys.readouterr().out
-    assert exit_code == 0
-    assert "Issue #7" in out and "1/2" in out
-
-
-def test_main_triage_tolerates_a_missing_body(capsys: pytest.CaptureFixture[str]) -> None:
-    """`--body-file` is optional; omitting it must not crash the triage workflow."""
-    assert main(["triage-issue", "--number", "9", "--title", "defect in parser"]) == 0
-    assert "Issue #9" in capsys.readouterr().out
 
 
 def test_main_verify_hardening_exit_code_carries_the_verdict(tmp_path: Path) -> None:

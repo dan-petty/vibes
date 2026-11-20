@@ -2,7 +2,7 @@
 name: Artifact Submission
 about: Propose a new prompt harness, schema, or task template for inclusion in vibes
 title: "[Artifact]: "
-labels: ["artifact", "curation"]
+labels: ["type/docs"]
 assignees: ""
 ---
 

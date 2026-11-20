@@ -31,7 +31,10 @@ jobs:
         with:
           script: |
             const labels = context.payload.pull_request.labels.map(l => l.name);
-            const isDefect = labels.some(l => ['bug', 'defect', 'regression'].includes(l.toLowerCase()));
+            // `type/bug` is the defect label that .github/labels.yml declares and the
+            // roadmap intake applies. A gate on an undeclared label never fires and
+            // reports nothing.
+            const isDefect = labels.some(l => l.toLowerCase() === 'type/bug');
             console.log(`PR #${context.payload.pull_request.number} isDefect: ${isDefect}`);
             core.setOutput('is_defect', isDefect);
 
@@ -106,5 +109,5 @@ jobs:
               repo: context.repo.repo,
               title: issueTitle,
               body: issueBody,
-              labels: ['hardening', 'triage-needed']
+              labels: ['type/docs']
             });

@@ -237,9 +237,8 @@ Read the complete [**Strategic Roadmap (`docs/ROADMAP.md`)**](./docs/ROADMAP.md)
 
 ```mermaid
 flowchart LR
-    Issue[Issue / Goal] --> Triage["autonomous-triage.yml<br>(tools/project_tooling.py)"]
-    Triage --> Ground[Auto-Label & Ground Acceptance Criteria]
-    Ground --> AgentDev[Agent TDD Implementation]
+    Issue[Issue / Goal] --> Intake["Roadmap intake<br>(one type/ label)"]
+    Intake --> AgentDev[Agent TDD Implementation]
     AgentDev --> PRSentinel["pr-sentinel.yml<br>(AST Invariant Gate)"]
     PRSentinel --> Merge[Merge PR]
     Merge --> Hardening["recursive-hardening.yml<br>(AGENTS.md Audit)"]
@@ -248,7 +247,7 @@ flowchart LR
 
 ### Tooling & Automated Workflows:
 - [**JIT Instruction Governor & Ablation Engine (`tools/instruction_governor.py`)**](./tools/instruction_governor.py): Targets instruction ratchet bloat and lost-in-the-middle attention decay by parsing instructions into token-weighted sections, mapping mechanical gate codes to rule sections (Rule Attribution Matrix), synthesizing lean two-tier JIT prompt envelopes ($\le 2$k kernel + targeted overlays), and flagging ablation candidates with a static heuristic. It runs no counterfactual experiment.
-- [**Project Tooling CLI (`tools/project_tooling.py`)**](./tools/project_tooling.py): Rate-managed client for issue classification, acceptance criteria parsing, and self-hardening audits.
+- [**Project Tooling CLI (`tools/project_tooling.py`)**](./tools/project_tooling.py): Self-hardening audit (`verify-hardening`) that `recursive-hardening.yml` runs on the diff of a merged pull request, and a GitHub REST client.
 - [**SDLC Project Manager CLI (`tools/sdlc_project_manager.py`)**](./tools/sdlc_project_manager.py): Deterministic multi-dimensional priority scoring, a dependency cycle check (not yet called by the ranking), and agent next-action dispatch. It reads and writes local JSON files and does not call the GitHub API.
 - [**Resource Iteration Workbench (`tools/resource_iteration_workbench.py`)**](./tools/resource_iteration_workbench.py): Continuous Scan -> Run -> Review -> Feedback -> Iterate engine computing quality scores, proactive refactoring opportunities, and automated SDLC backlog tasks.
 - [**Automated AST Conditional Refactorer (`tools/ast_refactorer.py`)**](./tools/ast_refactorer.py): Mechanical AST rewriting engine auto-decomposing branching ladders ($M \ge 7$) and nesting depth into table dispatch mappings, early-return guard clauses, pure predicate helpers, and consolidated assertion tuples. It re-parses each result and confirms that complexity and nesting depth did not rise; it does not check behavior, and the guard-clause transform can change return values.
@@ -267,9 +266,8 @@ flowchart LR
 - [**Conversation-to-Case-Study Synthesizer (`tools/conversation_synthesizer.py`)**](./tools/conversation_synthesizer.py): Automated pipeline ingesting raw agent trajectory logs (JSONL transcripts), enforcing zero-trust redaction (RFC 5737 IPs, example.com hostnames, secret masking, user path generalization), extracting quantitative telemetry and AST complexity metrics, and drafting structured 5-section observation reports with Mermaid diagrams.
 - [**Continuous Quality Gate (`.github/workflows/ci.yml`)**](./.github/workflows/ci.yml): Multi-version Python test matrix and AST Invariant Sentinel validation.
 - [**CodeQL Static Analysis (`.github/workflows/codeql.yml`)**](./.github/workflows/codeql.yml): CodeQL's default security queries over the Python code and the GitHub Actions workflows.
-- [**Autonomous Issue Triage (`.github/workflows/autonomous-triage.yml`)**](./.github/workflows/autonomous-triage.yml): Automatic taxonomy labeling and onboarding checklist generation.
 - [**PR Architectural Sentinel (`.github/workflows/pr-sentinel.yml`)**](./.github/workflows/pr-sentinel.yml): Runs the AST invariant sentinel on the Python files a pull request changes and fails on complexity creep or private IP literals.
-- [**Recursive Self-Hardening (`.github/workflows/recursive-hardening.yml`)**](./.github/workflows/recursive-hardening.yml): After a pull request labeled `bug`, `defect` or `regression` merges, opens a follow-up issue if the pull request did not change `AGENTS.md`. It does not block the merge.
+- [**Recursive Self-Hardening (`.github/workflows/recursive-hardening.yml`)**](./.github/workflows/recursive-hardening.yml): After a pull request labeled `type/bug` merges, opens a follow-up issue labeled `type/docs` if the pull request did not change `AGENTS.md`. It does not block the merge.
 - [**Scheduled Instrument Fuzzing (`.github/workflows/fuzz.yml`)**](./.github/workflows/fuzz.yml): Daily exploration and cross-hash-seed determinism check, publishing minimized inputs as artifacts rather than committing them.
 
 ---
@@ -304,7 +302,6 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   └── workflows/                     # Autonomous recursive CI/CD workflows
 │       ├── ci.yml                     # Multi-version test & AST invariant certification
 │       ├── codeql.yml                 # CodeQL default security queries (Python, Actions)
-│       ├── autonomous-triage.yml      # Autonomous taxonomy labeling & onboarding
 │       ├── fuzz.yml                   # Daily instrument fuzzing & hash-seed determinism check
 │       ├── pr-sentinel.yml            # Automated PR diff invariant gate & certification
 │       └── recursive-hardening.yml    # Closed-loop AGENTS.md hardening audit
@@ -527,7 +524,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── prompt_injection_scanner.py    # Adversarial prompt injection & CWE-200 egress security scanner
 │   ├── deprecation_protocol.py        # Enterprise change management & version deprecation protocol
 │   ├── living_standard_certifier.py   # Seven-pillar certificate; each pillar runs an existing instrument
-│   ├── project_tooling.py             # CLI for issue triage and self-hardening audits
+│   ├── project_tooling.py             # CLI for the self-hardening audit of merged pull requests
 │   ├── pr_triage_bot.py               # Closed-Loop PR Triage & Invariant Review Bot
 │   ├── pr_thread_sync.py              # PR review thread synchronizer; prints reply-and-resolve mutations
 │   ├── conversation_synthesizer.py    # Autonomous conversation-to-case-study synthesizer
