@@ -7,6 +7,10 @@ datasources:
     uid: prometheus
     type: prometheus
     access: proxy
+    # Plaintext is deliberate and bounded, as for the collector's Jaeger exporter: this
+    # hop stays on the agent-mesh Compose network, and Compose publishes Prometheus and
+    # Grafana only to 127.0.0.1. A deployment that crosses a host or trust boundary must
+    # use https and a CA.
     url: http://prometheus:9090
     isDefault: true
     editable: false
