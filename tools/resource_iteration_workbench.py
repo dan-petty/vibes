@@ -28,6 +28,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from example_loader import load_example
 from sanitization_policy import is_private_host, parse_address, private_hosts_in
 from source_tree_policy import iter_source_files
 
@@ -36,25 +37,21 @@ MAX_ALLOWED_COMPLEXITY = 10
 MAX_ALLOWED_NESTING = 5
 TEST_LATENCY_CEILING_SECONDS = 2.0
 CANONICAL_MOCK_DOMAIN = "example.com"
+TOOLING_ROOT = Path(__file__).resolve().parent.parent
 
 # Allowed documentation networks for zero-trust compliance
 
 IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-WAIVER_PRAGMA_RE = re.compile(r"^#\s*sentinel:\s*allow\[([A-Za-z]+)\]\s*(?:[-—:]\s*)?(?P<reason>\S.*)$")
-MIN_WAIVER_JUSTIFICATION_CHARS = 12
 
 
-def _has_sanitization_waiver(content: str) -> bool:
-    """Return True if the module header declares an authorized ZeroTrustSanitization waiver."""
-    for line in content.splitlines()[:15]:
-        match = WAIVER_PRAGMA_RE.match(line.strip())
-        if (
-            match
-            and match.group(1) == "ZeroTrustSanitization"
-            and len(match.group("reason").strip()) >= MIN_WAIVER_JUSTIFICATION_CHARS
-        ):
-            return True
-    return False
+def _has_sanitization_waiver(content: str, path: Path) -> bool:
+    """Return True if a valid module-header waiver names ZeroTrustSanitization.
+
+    The AST invariant sentinel owns the waiver parser and its rules (AGENTS.md §2.3), so
+    the workbench honors exactly the waivers that the sentinel honors.
+    """
+    sentinel = load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel")
+    return "ZeroTrustSanitization" in sentinel.scan_waivers(path, content).waived
 
 
 PYTEST_PASSED_RE = re.compile(r"(\d+)\s+passed")
@@ -525,9 +522,9 @@ def _count_code_lines(content: str) -> int:
     return sum(1 for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#"))
 
 
-def _resolve_sanitization(tree: ast.AST, content: str, is_test: bool) -> list[str]:
+def _resolve_sanitization(tree: ast.AST, content: str, is_test: bool, path: Path) -> list[str]:
     """Check sanitization unless waived or a test suite."""
-    if is_test or _has_sanitization_waiver(content):
+    if is_test or _has_sanitization_waiver(content, path):
         return []
     return ASTMetricCalculator.check_sanitization(tree)
 
@@ -560,7 +557,7 @@ class ResourceScanner:
         for fn in func_nodes:
             agg.update(cls._inspect_function(fn))
 
-        san_violations = _resolve_sanitization(tree, content, res_type == ResourceType.TEST_SUITE)
+        san_violations = _resolve_sanitization(tree, content, res_type == ResourceType.TEST_SUITE, path)
 
         return ResourceScanMetrics(
             file_path=str(path),

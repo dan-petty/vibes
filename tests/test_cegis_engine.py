@@ -115,6 +115,33 @@ def test_verifier_zero_trust_private_ip() -> None:
     assert ("CEGIS004" in rules, violations[0].violating_pattern) == (True, private_ip)
 
 
+_PRIVATE_IP: Final[str] = ".".join(["10", "0", "0", "5"])
+_WAIVER: Final[str] = "# sentinel: allow[ZeroTrustSanitization]"
+_REASON: Final[str] = " - negative fixture for the detector"
+_FILLER: Final[str] = "".join(f"# filler line {number}\n" for number in range(1, 16))
+
+
+@pytest.mark.parametrize(
+    ("header", "muted"),
+    [
+        pytest.param(f"{_WAIVER}{_REASON}\n", True, id="header-waiver"),
+        pytest.param(f"# sentinel: allow[CEGIS004]{_REASON}\n", True, id="cegis-rule-name"),
+        pytest.param(f"{_FILLER}{_WAIVER}{_REASON}\n", False, id="waiver-on-line-16"),
+        pytest.param(f"{_WAIVER} short\n", False, id="short-justification"),
+        pytest.param(f'# Fixture.\n"""Doc.\n\n{_WAIVER}{_REASON}\n"""\n', False, id="waiver-in-string"),
+    ],
+)
+def test_verifier_honors_only_a_valid_header_waiver(header: str, muted: bool) -> None:
+    """Mute CEGIS004 only for a waiver that the shared sentinel parser accepts (AGENTS.md §2.3).
+
+    The parser reads comment tokens in the first 15 lines and needs a justification of at
+    least 12 characters. Text inside a string literal is not a waiver.
+    """
+    code = f'{header}ENDPOINT = "http://{_PRIVATE_IP}:8080/api"\n'
+    violations, _, _ = ASTInvariantVerifier().verify_source(code, "fixture.py")
+    assert ("CEGIS004" in [v.rule_id for v in violations]) is not muted
+
+
 def test_verifier_assertion_sprawl() -> None:
     """Verify consecutive linear assert statements in test functions trigger CEGIS005."""
     code = (

@@ -571,3 +571,30 @@ def test_a_failing_smell_quantifier_degrades_the_loop_instead_of_breaking_it(
     FeedbackAnalyzer._analyze_structural_decay([], feedback, tmp_path)
 
     assert (feedback, "quantifier exploded" in capsys.readouterr().err) == ([], True)
+
+
+_PRIVATE_IP = ".".join(["10", "0", "0", "5"])
+_WAIVER = "# sentinel: allow[ZeroTrustSanitization]"
+_REASON = " - negative fixture for the detector"
+_FILLER = "".join(f"# filler line {number}\n" for number in range(1, 16))
+
+
+@pytest.mark.parametrize(
+    ("header", "muted"),
+    [
+        pytest.param(f"{_WAIVER}{_REASON}\n", True, id="header-waiver"),
+        pytest.param(f"{_FILLER}{_WAIVER}{_REASON}\n", False, id="waiver-on-line-16"),
+        pytest.param(f"{_WAIVER} short\n", False, id="short-justification"),
+        pytest.param(f'# Fixture.\n"""Doc.\n\n{_WAIVER}{_REASON}\n"""\n', False, id="waiver-in-string"),
+    ],
+)
+def test_scanner_honors_only_a_valid_header_waiver(tmp_path: Path, header: str, muted: bool) -> None:
+    """Skip the sanitization check only for a waiver that the shared sentinel parser accepts.
+
+    The parser reads comment tokens in the first 15 lines and needs a justification of at
+    least 12 characters (AGENTS.md §2.3). Text inside a string literal is not a waiver.
+    """
+    module = tmp_path / "fixture.py"
+    module.write_text(f'{header}ENDPOINT = "http://{_PRIVATE_IP}:8080/api"\n', encoding="utf-8")
+    metrics = ResourceScanner.scan_python_file(module)
+    assert (metrics.sanitization_violations == []) is muted

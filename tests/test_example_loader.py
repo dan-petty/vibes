@@ -14,10 +14,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
+import cegis_engine
 import example_loader
 import fuzz_harness
 import living_standard_certifier
 import prompt_injection_scanner
+import resource_iteration_workbench
 import sarif_report
 from example_loader import load_example
 
@@ -102,6 +104,13 @@ def test_a_missing_example_module_raises_an_error_that_names_its_path(
 
 def test_the_tools_share_one_loader() -> None:
     """Each tool that runs an example uses the shared loader, not a copy of its own."""
-    tools = (sarif_report, fuzz_harness, living_standard_certifier, prompt_injection_scanner)
+    tools = (
+        sarif_report,
+        fuzz_harness,
+        living_standard_certifier,
+        prompt_injection_scanner,
+        cegis_engine,
+        resource_iteration_workbench,
+    )
 
     assert [tool.load_example for tool in tools] == [example_loader.load_example] * len(tools)

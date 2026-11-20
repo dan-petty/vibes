@@ -86,8 +86,9 @@ class WaiverPolicy:
     """The waiver grammar of one tool: the tag it reads and the rules that a file can waive.
 
     A tool reads only the comments that carry its own tag, so it never honors or reports a
-    waiver of another tool. The prompt injection scanner in `tools/` calls `scan_waivers` with
-    its own policy: one parser and one set of rules for both tools (AGENTS.md §2.3).
+    waiver of another tool. The prompt injection scanner, the CEGIS engine and the resource
+    iteration workbench in `tools/` call `scan_waivers`: one parser and one set of rules for
+    all of them (AGENTS.md §2.3).
     """
 
     tag: str
