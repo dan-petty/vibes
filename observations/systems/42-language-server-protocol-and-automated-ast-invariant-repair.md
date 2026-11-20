@@ -78,11 +78,11 @@ We implemented the core Language Server Protocol (LSP 3.17) using standard libra
 
 ### B. Safe, AST-Verified Source Auto-Remediation (`auto_fix_source`)
 
-The auto-fix engine performs deterministic mechanical repairs across three primary domains:
+The auto-fix engine performs deterministic mechanical repairs in two domains, and it leaves waivers to a person:
 
 1. **Zero-Trust IP Sanitization**: Identifies prohibited private and link-local IPv4 addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`) in string literals and rewrites them to RFC 5737 safe documentation addresses (`192.0.2.1`).
 2. **Mock Domain Canonicalization**: Normalizes non-canonical subdomains (`https://api.example.com`) to the standardized root dummy domain (`https://example.com`).
-3. **Waiver Justification Repair**: Detects bare or truncated `# sentinel: allow[...]` pragmas and formats compliant justifications meeting minimum character length requirements.
+3. **No Waiver Justification Repair**: A bare or short `# sentinel: allow[...]` waiver stays as written, and the audit reports it as `WaiverIntegrity`. Only a person knows why a waiver exists. An earlier version added the text "sanitized mock reference", which passed the 12-character rule and gave no reason.
 4. **Pre-Write AST Invariant Verification**: Verifies candidate output with `ast.parse` before emitting changes; if candidate code fails syntax parsing, the repair is aborted, so a repair never writes code that does not parse. The check does not show that behavior is unchanged: a rewritten address changes what the code connects to.
 
 ---
