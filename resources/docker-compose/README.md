@@ -8,12 +8,14 @@ A multi-container local evaluation environment with distributed tracing, a metri
 
 | Service | Image | Local Port | Role |
 |---|---|---|---|
-| **`jaeger`** | `jaegertracing/all-in-one:1.62.0` | `:16686` (UI), `:4317` (gRPC), `:4318` (HTTP) | Distributed trace collector and timeline waterfall UI. |
+| **`jaeger`** | `jaegertracing/jaeger:2.23.0` | `:16686` (UI), `:4317` (gRPC), `:4318` (HTTP) | Distributed trace collector and timeline waterfall UI (Jaeger v2). Its healthcheck fails when the UI does not answer on `:16686`. |
 | **`otel-collector`** | `otel/opentelemetry-collector-contrib:0.112.0` | `:8889` (Prometheus), `:13133` (Health) | Ingestion pipeline with batching and a memory limiter. It inserts two attributes and scrubs nothing. |
 | **`prometheus`** | `prom/prometheus:v2.55.0` | `:9090` (UI) | Metrics database. The agent alert rules file is mounted but not loaded. |
 | **`valkey`** | `valkey/valkey:8.0.1` | `:6379` | In-memory cache (`256mb`, `allkeys-lru`). No other service in the stack uses it. |
 | **`grafana`** | `grafana/grafana:11.3.0` | `:3000` (UI) | Dashboards. The agent dashboard JSON is mounted but not provisioned. |
-| **`agent-sandbox`** | `python:3.14-slim` | *Internal only* | Non-root (`10001`), read-only container with CPU and memory limits. It runs `sleep infinity`; use `docker exec` to run code in it. |
+| **`agent-sandbox`** | `python:3.14.10-slim` | *Internal only* | Non-root (`10001`), read-only container with CPU and memory limits. It runs `sleep infinity`; use `docker exec` to run code in it. |
+
+Each image has a pinned version tag. The Kubernetes manifests in [`../k8s/`](../k8s/README.md) use the same tag for each service that they also run.
 
 ```mermaid
 flowchart LR
@@ -78,4 +80,3 @@ docker compose down
 - **Prometheus loads no agent rules and does not scrape the collector.** The service starts with the default `prometheus.yml` of the image, which scrapes only `localhost:9090` and has no active `rule_files`. `prometheus-agent-alerts.yaml` is mounted at `/etc/prometheus/alerts.yaml` but is not loaded. To connect them, mount a `prometheus.yml` that lists `rule_files: [/etc/prometheus/alerts.yaml]` and a scrape job for `otel-collector:8889`.
 - **Grafana does not load the dashboard.** Grafana reads dashboard files only through a provider in `/etc/grafana/provisioning/dashboards/`, and the stack provisions no provider and no data source. Add a Prometheus data source at `http://prometheus:9090`, then import `agent-telemetry-dashboard.json` by hand.
 - **No code in this repository emits the `vibes_agent_*` metrics** that the alert rules and the dashboard read.
-- **The `jaeger` healthcheck always passes**, because its command ends with `|| exit 0`.
