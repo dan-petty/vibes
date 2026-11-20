@@ -32,6 +32,7 @@ from pr_thread_sync import (
     synchronize_threads,
     verify_thread_resolution,
 )
+from sarif_report import DEFAULT_SCHEMA_PATH, validate_log
 
 
 def test_thread_data_structures_and_parsing() -> None:
@@ -199,6 +200,30 @@ def test_graphql_mutations_and_sarif_telemetry() -> None:
 
     assert (sarif["version"], len(results), results[0]["ruleId"]) == ("2.1.0", 2, "PR_THREAD_ND001")
     assert (summary["total"], summary["fix_verified"], summary["action_required"]) == (2, 1, 1)
+
+
+def test_sarif_declares_each_rule_once_for_threads_that_share_it() -> None:
+    """Two threads with the same rule give one rule descriptor, and the log passes the OASIS schema."""
+    rules = ("CC001", "ND001", "CC001")
+    analyses = [
+        ThreadAnalysis(
+            ReviewThread(f"T{index}", False, f"m{index}.py", 1, []),
+            ResolutionStatus.ACTION_REQUIRED,
+            rule,
+            "fn",
+            "Not fixed",
+            "",
+        )
+        for index, rule in enumerate(rules)
+    ]
+
+    log = export_sarif(analyses)
+    run = log["runs"][0]
+    declared = [rule["id"] for rule in run["tool"]["driver"]["rules"]]
+    undeclared = {result["ruleId"] for result in run["results"]} - set(declared)
+
+    assert (declared, undeclared, len(run["results"])) == (["PR_THREAD_CC001", "PR_THREAD_ND001"], set(), 3)
+    assert validate_log(log, REPO_ROOT / DEFAULT_SCHEMA_PATH) == []
 
 
 def test_cli_execution_with_fixture(tmp_path: Path, capsys: object) -> None:
