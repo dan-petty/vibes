@@ -1,19 +1,17 @@
 services:
   # Distributed Tracing UI & OTLP Ingest
   jaeger:
-    image: jaegertracing/all-in-one:1.62.0
+    image: jaegertracing/jaeger:2.23.0
     container_name: vibes-jaeger
     restart: unless-stopped
     ports:
       - "127.0.0.1:16686:16686" # Web UI
       - "127.0.0.1:4317:4317"   # OTLP gRPC
       - "127.0.0.1:4318:4318"   # OTLP HTTP
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
     networks:
       - agent-mesh
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:16686/ | grep -q 'Jaeger UI' || exit 0"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:16686/ | grep -q 'Jaeger UI'"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -93,7 +91,7 @@ services:
 
   # Hardened Local Agent Execution Sandbox
   agent-sandbox:
-    image: python:3.14-slim
+    image: python:3.14.10-slim
     container_name: vibes-agent-sandbox
     restart: unless-stopped
     user: "10001:10001"

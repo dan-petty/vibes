@@ -18,10 +18,7 @@ spec:
     spec:
       containers:
         - name: jaeger
-          image: jaegertracing/all-in-one:latest
-          env:
-            - name: COLLECTOR_OTLP_ENABLED
-              value: "true"
+          image: jaegertracing/jaeger:2.23.0
           resources:
             requests:
               cpu: "100m"

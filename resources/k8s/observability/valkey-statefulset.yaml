@@ -23,7 +23,7 @@ spec:
         fsGroup: 999
       containers:
         - name: valkey
-          image: valkey/valkey:latest
+          image: valkey/valkey:8.0.1
           command:
             - valkey-server
             - "--protected-mode"

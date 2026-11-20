@@ -1,6 +1,6 @@
 # Kubernetes Manifests for Hardened Agent Sandboxes & Observability
 
-Example Kubernetes manifests for isolated agent execution, egress network policies, and in-cluster telemetry collection. All 11 resources pass `kubeconform -strict`. The Jaeger and Valkey workloads use `:latest` image tags.
+Example Kubernetes manifests for isolated agent execution, egress network policies, and in-cluster telemetry collection. All 11 resources pass `kubeconform -strict`. Each image has a pinned version tag, the same tag that the [Docker Compose stack](../docker-compose/README.md) uses for that service.
 
 ---
 

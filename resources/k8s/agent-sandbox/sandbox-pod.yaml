@@ -19,7 +19,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: sandbox-executor
-      image: python:3.14-slim
+      image: python:3.14.10-slim
       command: ["python3", "-c", "import sys; print('Vibes Sandbox Initialized'); sys.exit(0)"]
       workingDir: /workspace
       securityContext:
