@@ -127,7 +127,7 @@ flowchart TD
 
 ## 4. Telemetry & Empirical Findings
 
-No synthesis benchmark backs a before/after comparison. The repository contains no task set, no generated C++, and no compiler or AddressSanitizer harness. What it does contain is `tests/test_cpp_lifetime_sentinel.py` (13 tests).
+No synthesis benchmark backs a before/after comparison. The repository contains no task set, no generated C++, and no compiler or AddressSanitizer harness. What it does contain is `tests/test_cpp_lifetime_sentinel.py` (16 tests).
 
 Running the sentinel on the snippets in this document (`python tools/cpp_lifetime_sentinel.py --export-json <out> <file>`, 2026-11-19) gives:
 
@@ -137,9 +137,9 @@ Running the sentinel on the snippets in this document (`python tools/cpp_lifetim
 | Section 2.2, dangling `string_view` | `CPP002` |
 | Section 2.3, incomplete Rule of Five | `CPP003` |
 | Section 2.4, use-after-move | `CPP005` |
-| Section 5, compliant `ConnectionSession` | One `CPP004` (`this`) |
+| Section 5, compliant `ConnectionSession` | None |
 
-The last row shows one false positive: `return *this;` matches the raw pointer member pattern of `CPP004`. The two `= delete` lines give no `CPP001`. `CPP004` has medium severity, so the summary marks the class compliant. No CI job or hook runs this tool.
+The compliant class in the last row gives no finding. `CPP004` ignores `return *this;`, because a `*` after `return`, `throw` or a similar keyword is a dereference, not a raw pointer. The two `= delete` lines give no `CPP001`. No CI job or hook runs this tool.
 
 ---
 
@@ -148,7 +148,7 @@ The last row shows one false positive: `return *this;` matches the raw pointer m
 The sentinel checks the following invariants. They are line-based heuristics, not proofs:
 
 ### Invariant 1: The Zero-Manual-Deallocation Gate (`CPP001`)
-Raw calls to `delete`, `delete[]`, `free`, `malloc`, `calloc` and `realloc` are flagged. The scanner ignores comments, string and character literals, and a `delete` that follows `=` on the same line (a deleted function, such as `A(const A&) = delete;`). A `= delete` that a line break splits still matches. Dynamic allocations must utilize standard RAII containers (`std::vector`, `std::string`) or smart pointers (`std::make_unique<T>()`, `std::make_shared<T>()`).
+Raw calls to `delete`, `delete[]`, `free`, `malloc`, `calloc` and `realloc` are flagged. The scanner ignores comments, string and character literals, and a `delete` that follows `=` (a deleted function, such as `A(const A&) = delete;`). This is also true when a line break or a comment comes between `=` and `delete`. Dynamic allocations must utilize standard RAII containers (`std::vector`, `std::string`) or smart pointers (`std::make_unique<T>()`, `std::make_shared<T>()`).
 
 ### Invariant 2: Explicit Lifetime Contract on Views (`CPP002`)
 Functions returning `std::string_view` or `std::span` must accept arguments marked with `[[clang::lifetimebound]]` or return references to persistent string literals/class members. The sentinel flags only one form: a function with such a return type whose body returns, by name, a local `std::string` variable.

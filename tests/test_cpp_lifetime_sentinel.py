@@ -78,10 +78,15 @@ def test_cpp001_manual_memory_management() -> None:
     )
 
 
+def _rule_lines(source: str, rule_id: str) -> list[int]:
+    """Return the line numbers of the findings of one rule in a source string."""
+    findings = CppLifetimeSentinel(SentinelPreset.STRICT).audit_source(source, "rule_of_five.hpp")
+    return [f.line_number for f in findings if f.rule_id == rule_id]
+
+
 def _cpp001_lines(source: str) -> list[int]:
     """Return the line numbers of the CPP001 findings in a source string."""
-    findings = CppLifetimeSentinel(SentinelPreset.STRICT).audit_source(source, "rule_of_five.hpp")
-    return [f.line_number for f in findings if f.rule_id == "CPP001"]
+    return _rule_lines(source, "CPP001")
 
 
 def test_cpp001_ignores_deleted_functions() -> None:
@@ -100,6 +105,28 @@ def test_cpp001_ignores_deleted_functions() -> None:
         "void drop_all(int* q) { delete[] q; }\n"
     )
     assert _cpp001_lines(source) == [9, 10, 11]
+
+
+def test_cpp001_ignores_deleted_functions_split_across_lines() -> None:
+    """Verify a '= delete' that a line break splits gives no CPP001, and delete expressions still do."""
+    source = (
+        "class Handle {\n"
+        "public:\n"
+        "    Handle(const Handle&)\n"
+        "        = delete;\n"
+        "    Handle& operator=(const Handle&) =\n"
+        "        delete;\n"
+        "    Handle(Handle&&) = // moved by swap only\n"
+        "        delete;\n"
+        "};\n"
+        "void drop(int* p) { delete p; }\n"
+        "int last = 0;\n"
+        "void drop_split(int* p) {\n"
+        "    delete\n"
+        "        p;\n"
+        "}\n"
+    )
+    assert _cpp001_lines(source) == [10, 13]
 
 
 def test_cpp001_ignores_comments_and_string_literals() -> None:
@@ -175,6 +202,56 @@ def test_cpp004_unmanaged_raw_pointer() -> None:
         ["CPP004"],
         [CppSeverity.MEDIUM],
     )
+
+
+def test_cpp004_ignores_dereference_expressions() -> None:
+    """Verify unary dereferences give no CPP004, and raw pointer declarations still do."""
+    source = (
+        "struct Node {\n"
+        "    Node& operator=(const Node& other) {\n"
+        "        value_ = other.value_;\n"
+        "        return *this;\n"
+        "    }\n"
+        "    int read(int* p) {\n"
+        "        return *p;\n"
+        "    }\n"
+        "    void fail(Error* e) {\n"
+        "        throw *e;\n"
+        "    }\n"
+        "    Node* parent_;\n"
+        "    int value_;\n"
+        "};\n"
+        "void make() {\n"
+        "    T* p = new T;\n"
+        "}\n"
+    )
+    assert _rule_lines(source, "CPP004") == [12, 16]
+
+
+def test_compliant_rule_of_five_class_has_zero_findings() -> None:
+    """Verify the compliant Rule of Five class of observation 04 yields zero findings."""
+    source = """
+    class ConnectionSession {
+    public:
+        explicit ConnectionSession(int fd) : fd_(fd) {}
+        ~ConnectionSession() { if (fd_ >= 0) close(fd_); }
+
+        ConnectionSession(const ConnectionSession&) = delete;
+        ConnectionSession& operator=(const ConnectionSession&) = delete;
+        ConnectionSession(ConnectionSession&& other) noexcept : fd_(std::exchange(other.fd_, -1)) {}
+        ConnectionSession& operator=(ConnectionSession&& other) noexcept {
+            if (this != &other) {
+                if (fd_ >= 0) close(fd_);
+                fd_ = std::exchange(other.fd_, -1);
+            }
+            return *this;
+        }
+    private:
+        int fd_;
+    };
+    """
+    summary = CppLifetimeSentinel(SentinelPreset.STRICT).audit_string(source, "connection_session.hpp")
+    assert (summary.findings, summary.is_compliant) == ((), True)
 
 
 def test_cpp005_use_after_move_hazard() -> None:
