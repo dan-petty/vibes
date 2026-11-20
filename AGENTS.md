@@ -240,8 +240,10 @@ flowchart LR
     - Commit and `git push` in the same pass. Monitor PR checks to conclusion (`devops pr wait`). Never weaken assertions, force-push, or leave unmonitored runs.
 11. **Workflow Safety & Contract Verification**:
     - Pass dynamic context through `env:`, never via `${{ }}` expressions inside `run:` blocks. Assert workflow CLI flags and options in [`tests/test_workflow_contracts.py`](./tests/test_workflow_contracts.py).
-12. **Tri-Surface Work Tracking**:
-    - Manage work across three distinct surfaces: [`docs/ROADMAP.md`](./docs/ROADMAP.md) for scheduled deliverables, `.data/sdlc_backlog.json` for mechanical findings, and GitHub Issues for non-derivable conversations or decisions.
+12. **New Work Goes to GitHub Issues**:
+    - File each piece of work that must be done as one GitHub issue: `devops roadmap intake --title "<type>: <Summary>" --body-file <file> --confirm`. Intake gives the issue one `type/` label, the `source/agent` label, value and effort labels and, last, a `priority/` label. The issue then goes to the backlog. Intake names a possible duplicate, but search the open issues before you file.
+    - Labels and milestones hold the status and the order of the work. No roadmap job reads a project board ([devops-cli ADR 0016](https://github.com/dan-petty/devops-cli/blob/main/docs/adr/0016-labels-hold-the-roadmap-items-fields.md)). A person plans the milestones. Take the issues of an open milestone first, then the backlog by `priority/` label, highest first.
+    - Do not add work items to [`docs/ROADMAP.md`](./docs/ROADMAP.md). It records the milestones and their delivered scope. `.data/sdlc_backlog.json` is local output of the exhibit tools in §9.3, not a place to plan work.
 13. **Dual-Surface Interface & Agent Experience (AX) Integrity**:
     - Software interfaces must expose synchronized dual surfaces: human teleology and observability (UX) alongside machine-verifiable negative schemas and structured diagnostics (AX).
     - All tools and MCP servers must enforce negative schemas (`additionalProperties: false`) to eliminate parameter hallucination spirals. Errors must return machine-actionable counterexamples rather than conversational prose.
@@ -251,20 +253,20 @@ flowchart LR
 
 ---
 
-## 9. Autonomous Innovative Self-Improvement & Mandatory Roadmap Evolution
+## 9. Autonomous Innovative Self-Improvement & Work Intake
 
-To foster an autonomous, creative, and continuously self-improving engineering intelligence, AI agents operating in `vibes` must actively advance the repository's strategic roadmap:
+AI agents operating in `vibes` advance the repository when they file the work that they find as GitHub issues ([§8.12](#8-autonomous-recursive-development-protocol--project-tooling)). Labels and milestones then set the order:
 
-1. **Automatic Roadmap Ingestion for Issues, Struggles, Challenges & Insights**:
-   - Whenever encountering **any issue, struggle, friction point, debugging challenge, technical hurdle, cognitive barrier, or insight** during any task or interaction, AI agents **MUST AUTOMATICALLY ADD AN ITEM TO THE ROADMAP (`docs/ROADMAP.md`)** under the appropriate upcoming milestone or future research track.
-   - Document the underlying friction and the proposed engineering solution or architectural guardrail to transform real-world engineering hurdles into permanent systemic capabilities.
-   - The roadmap holds the *deliverable*. Where the item is instead a discrete piece of work needing a decision or a conversation, [§8.12](#8-autonomous-recursive-development-protocol--project-tooling) says to open an issue and which surface owns which kind of work.
-2. **Automatic Roadmap Ingestion for Features, Suggestions & Integrations**:
-   - Whenever identifying **features, constructive suggestions, workflow automations, refactoring ideas, or third-party integrations** that could improve the codebase, AI agents **MUST AUTOMATICALLY ADD ITEMS TO THE ROADMAP (`docs/ROADMAP.md`)** to design, track, and implement them.
-   - Ground every innovative suggestion into measurable deliverables with clear Value vs. Effort positioning and acceptance criteria.
+1. **File an Issue for Friction That Needs Work**:
+   - When a task shows a defect, a missing guardrail or a friction point that a change can remove, file one issue for that change. Do not record every struggle or insight. Record only work that somebody must do.
+   - In the issue, write the friction that you saw and the change or guardrail that removes it, so that the next agent can make it a permanent capability.
+2. **File an Issue for Features, Suggestions & Integrations**:
+   - When you find a feature, a workflow automation, a refactoring or a third-party integration that would improve the repository, file it as an issue with its Conventional Commit type.
+   - Give each issue acceptance criteria that a command or a test can verify. Intake sets the value, effort and priority labels.
 3. **Closing the Positive Feedback Loop**:
    - Every work generator in this repository is defect-shaped. The workbench reports decay, the sentinel reports invariant breaches, the quantifier reports smells — all of them answer *what is wrong with what exists*, and none answers *what should exist next*. Measured directly: with the repository certified at 100.0/100 the backlog held **0 items** while the roadmap held **11 open ones**. An agentic project can exhaust its mechanically-derivable work while everything it set out to build remains untouched, and the loop will report that state as success.
-   - Run all three stages, in this order, so declared intent and measured defects reach one prioritizer:
+   - The open issues are the one queue for declared intent and measured defects. Pick your next task from them ([§8.12](#8-autonomous-recursive-development-protocol--project-tooling)), not with the tools below.
+   - [`tools/roadmap_ingest.py`](./tools/roadmap_ingest.py) and [`tools/sdlc_project_manager.py`](./tools/sdlc_project_manager.py) are exhibits of this loop on local files. They run three stages, in this order, so that declared intent and measured defects reach one prioritizer:
 
      ```bash
      python3 tools/resource_iteration_workbench.py --export-backlog .data/sdlc_backlog.json
@@ -278,13 +280,15 @@ To foster an autonomous, creative, and continuously self-improving engineering i
    - A roadmap card's **declared** fields — priority, sizing, blocker, guidance — are re-read from the roadmap on every pass; its `lifecycle_state` belongs to the board and is never reset by a re-read.
 
 4. **Look Outward as Well as Inward**:
-   - Every generator listed above is inward-facing. None of them can observe that a capability treated here as finished is behind the field, or that a problem was solved better elsewhere. [`tools/landscape_survey.py`](./tools/landscape_survey.py) is the outward-facing generator and feeds the same prioritizer:
+   - Every generator listed above is inward-facing. None of them can observe that a capability treated here as finished is behind the field, or that a problem was solved better elsewhere. [`tools/landscape_survey.py`](./tools/landscape_survey.py) is the outward-facing generator. File each gap that you accept as an issue ([§8.12](#8-autonomous-recursive-development-protocol--project-tooling)):
 
      ```bash
      python3 tools/landscape_survey.py refresh                 # facts from GitHub (network)
      python3 tools/landscape_survey.py report --out docs/landscape/SURVEY.md
-     python3 tools/landscape_survey.py roadmap --top 4         # dry run; --write applies
+     python3 tools/landscape_survey.py roadmap --top 4         # dry run: prints the proposals
      ```
+
+   - Do not pass `--write` to a `roadmap` subcommand. It appends the proposals to `docs/ROADMAP.md`, which takes no new work.
 
    - **Operational Lessons & Field Post-Mortems**:
      For detailed case studies and root-cause post-mortems of hard-won operational lessons (quoting escapes, parser boundaries, protocol handling, signal escalations, and landscape integration), see [`docs/RETROSPECTIVE.md#6-hard-won-field-incident-post-mortems--operational-lessons`](./docs/RETROSPECTIVE.md#6-hard-won-field-incident-post-mortems--operational-lessons).
@@ -296,26 +300,27 @@ To foster an autonomous, creative, and continuously self-improving engineering i
      python3 tools/supply_chain_audit.py inventory            # requirements, actions, packages, egress
      python3 tools/supply_chain_audit.py audit [--strict]     # risks, severe first
      python3 tools/supply_chain_audit.py fix [--write]        # mechanical repairs only
-     python3 tools/supply_chain_audit.py roadmap [--write]    # the rest, as deliverables
+     python3 tools/supply_chain_audit.py roadmap              # the rest, as proposals to file as issues
      ```
 
    - **Actions are code that runs with repository credentials.** `uses: x@v7` is a tag the upstream can repoint at any commit. Pin to the 40-character SHA and keep the tag as a trailing comment — a bare hash tells a reader nothing about which version they are on, and a pin nobody can read is a pin nobody will update.
    - **A `>=` floor is a compatibility claim, and CI never checks it.** CI installs the newest release, so the configuration the gates certify is the newest one. `pytest>=8.0` while 9.x is tested asserts something no run has verified. Below 1.0 the *minor* carries compatibility, so `ruff>=0.6` against 0.16 is the same drift.
    - **A package installed mid-workflow is a dependency.** `npm install jsdom` with no version executes different third-party code on every run and appears in no manifest. Pin it.
    - **Egress means genuinely external.** Loopback, RFC 1918, link-local and RFC 5737 addresses are local services or the sanitization mandate's own placeholders; reporting them as network risk buries the one endpoint that matters under a dozen that do not. That judgement is deliberately separate from `sanitization_policy.is_documentable`, which answers a different question.
-   - **Fix what is mechanical, schedule what needs judgement.** Raising a floor and pinning a SHA are reversible rewrites with a verifiable outcome. Choosing a replacement for an unmaintained dependency is not, so it becomes a roadmap proposal instead of an edit. After any `--write`, re-run the full gate set before committing.
+   - **Fix what is mechanical, schedule what needs judgement.** Raising a floor and pinning a SHA are reversible rewrites with a verifiable outcome. Choosing a replacement for an unmaintained dependency is not, so it becomes an issue instead of an edit. After `fix --write`, re-run the full gate set before committing.
 
 6. **Record a Deferral, Do Not Re-Decide It**:
    - Passing over the same item twice on the same grounds is a defect in the loop, not a preference. The prioritizer has no memory, so an unrecorded judgement is re-derived — and re-litigated — on every pass.
-   - Annotate the roadmap item itself. The reason is mandatory and travels with the card:
+   - Record the deferral on the issue: add the `status/blocked` label and write the reason in a comment. The reason is mandatory and stays with the issue.
+   - The exhibit `roadmap_ingest.py` applies the same contract to a deliverable in a Markdown roadmap. There the reason travels with the card:
 
      ```markdown
      - [ ] **Some Deliverable (P1 - High)** (blocked: needs live review threads this repo does not produce):
      ```
 
    - `roadmap_ingest.py` lifts the reason into `blocked_reason`, and the prioritizer refuses to schedule the item on **every** path. Blocking only the implement path is not enough: the fallback simply returned the same card under a different action type.
-   - Deferred items are **printed alongside the recommendation**, never hidden. The risk with a deferral is not that it is wrong but that it becomes permanent unnoticed. Removing the annotation is the entire cost of re-enabling the work.
-   - Do not express a deferral by deleting the item, marking it rejected, or lowering its priority. Those destroy the reason; only the blocker preserves it.
+   - Deferred items are **printed alongside the recommendation**, never hidden. The risk with a deferral is not that it is wrong but that it becomes permanent unnoticed. Removing the label or the annotation is the entire cost of re-enabling the work.
+   - Do not express a deferral by closing the issue, deleting the item, marking it rejected, or lowering its priority. Those destroy the reason; only the blocker preserves it.
 
    - Defects outrank features by construction, so a healthy repository advances the roadmap and an unhealthy one repairs itself first. Items whose value and effort are absent from the prioritization matrix are ranked on defaults and say so: add a matrix row to rank one deliberately rather than by assumption.
    - Rejected work is never ingested. The roadmap's anti-pattern rows record decisions *not* to build things, and a loop that schedules them has inverted the decision it was given.
@@ -406,7 +411,7 @@ Record into [`docs/reliability/iterations/`](./docs/reliability/iterations/) —
    - Optimizing test execution latency (sub-second test runner execution).
    - Automating machine-fixable backlog (`ast_refactorer.py` or `docs_validator --fix`).
 3. **Objective Review** — entered when *every* budget closes a full window completely unspent. Tighten targets or spend risk.
-4. **Phase 3 (Continuous Self-Hardening)**: Ingest friction points and architectural struggles into [`docs/ROADMAP.md`](./docs/ROADMAP.md) and codify invariants into `AGENTS.md`.
+4. **Phase 3 (Continuous Self-Hardening)**: File friction points and architectural struggles that need work as GitHub issues ([§8.12](#8-autonomous-recursive-development-protocol--project-tooling)) and codify invariants into `AGENTS.md`.
 
 > [!IMPORTANT]
 > **Gating objectives are not steering objectives.** Only defect indicators gate: `invariant_compliance` (a violated invariant) and `gate_pass_rate` (a resource failing its own gate). `feedback_latency`, `headroom_saturation` and `toil_containment` steer — they move the loop phase and never block a release.

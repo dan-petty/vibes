@@ -126,7 +126,7 @@ stateDiagram-v2
     Phase2 --> Phase2: Proactive Headroom Optimization (M <= 6)
     Phase2 --> Phase2: 100% Public Docstrings & Type Annotations
     Phase2 --> Phase2: Assertion Tuple Consolidation
-    Phase2 --> Phase3: Self-Hardening: Ingest Roadmap & AGENTS.md
+    Phase2 --> Phase3: Self-Hardening: File Issues & Update AGENTS.md
     Phase3 --> [*]: Release Ready
 ```
 
@@ -135,7 +135,7 @@ stateDiagram-v2
    - Decomposing functions operating near the complexity ceiling ($7 \le M \le 10$).
    - Filling public docstrings and missing parameter type annotations.
    - Reducing test suite latency by bypassing heavy workspace plugins.
-3. **Phase 3 (Continuous Self-Hardening)**: Every friction point, debugging insight, and architectural struggle is added by the agent to [`docs/ROADMAP.md`](./ROADMAP.md) and codified into [`AGENTS.md`](../AGENTS.md), ensuring that hard-won operational insights become permanent systemic guardrails.
+3. **Phase 3 (Continuous Self-Hardening)**: The agent files each friction point and architectural struggle that needs work as a GitHub issue ([`AGENTS.md` §8.12](../AGENTS.md#8-autonomous-recursive-development-protocol--project-tooling)) and codifies the lesson into [`AGENTS.md`](../AGENTS.md), ensuring that hard-won operational insights become permanent systemic guardrails.
 
 ---
 

@@ -2,9 +2,9 @@
 
 High-density product roadmap, engineering milestones, and open-source curation strategy for the `vibes` living showcase and artifact repository.
 
-> **TLDR**: The multi-version milestone plan for `vibes`, tracking completed releases (v0.1–v0.3), current living showcases (v0.4–v0.5), and future enterprise governance standards (v1.0).
+> **TLDR**: The multi-version milestone plan for `vibes`, tracking released milestones (v0.1–v0.4), the complete but unreleased v0.5, and the v1.0 north star of enterprise governance standards.
 >
-> **ELI:7b**: The master checklist showing what features and exhibits this project has already shipped, what we are currently building, and where we are heading next.
+> **ELI:7b**: The master checklist showing what features and exhibits this project has already shipped, what is done but not yet released, and where we are heading next.
 >
 > 💡 *Looking for the core fundamentals without technical mumbo jumbo? See [The Dummy's Guide to Agentic Engineering](./dummysguide/README.md).*
 
@@ -23,6 +23,9 @@ High-density product roadmap, engineering milestones, and open-source curation s
 
 ## Release Milestones (Chronological Order)
 
+> [!NOTE]
+> This file records the milestones and their delivered scope. It takes no new work: file new work as a GitHub issue ([AGENTS.md §8.12](../AGENTS.md#8-autonomous-recursive-development-protocol--project-tooling)).
+
 ```mermaid
 timeline
     title Milestone arc, foundations to living standard
@@ -31,8 +34,9 @@ timeline
         v0.2.0 : Interactive testbeds and executable sample apps
         v0.3.0 : Multi-agent benchmark suites and observability mesh
         v0.4.0 : Polyglot invariant harnesses and ephemeral sandboxes
-    section Ahead
+    section Complete, not released
         v0.5.0 : Autonomous swarm orchestration and self-healing
+    section Ahead
         v1.0.0 : Enterprise governance, AIBOM, living standard and the Sovereign Human Core
 ```
 
@@ -48,7 +52,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
 
 ---
 
-### Milestone 4: Polyglot Invariant Harnesses & Ephemeral Sandboxes (v0.4.0 - In Flight)
+### Milestone 4: Polyglot Invariant Harnesses & Ephemeral Sandboxes (v0.4.0 - Released)
 - [x] **Contract-Driven Application Factory (`tools/app_factory.py`)**:
   - Turns a declared contract into a runnable application whose contract layer — table dispatch, JSON Schema with `additionalProperties: false`, prescriptive multi-problem rejections, timed invocations, CLI, tests and README — is generated, and whose domain logic is written once and never overwritten.
   - Gated rather than claimed: `tests/test_app_factory.py` runs the AST invariant sentinel, ruff, mypy, the documentation validator and the generated suite over the real output, because generated code fails those gates in predictable ways and a generator that ships a cleanup task is not a factory.
@@ -104,7 +108,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
 
 ---
 
-### Milestone 5: Autonomous Swarm Orchestration & Self-Healing (v0.5.0 - Planned)
+### Milestone 5: Autonomous Swarm Orchestration & Self-Healing (v0.5.0 - Complete, Not Released)
 - [x] **Reliability SLO Engine & Error-Budget-Driven Phase Policy (`tools/reliability_slo.py`)**:
   - Five service level indicators measured as good events over valid events — `gate_pass_rate`, `invariant_compliance`, `feedback_latency`, `headroom_saturation`, and `toil_containment` — each with a target, a rolling window, and a stated rationale.
   - Error budget arithmetic with burn rate and a minimum-sample floor, replacing the binary `health == 100.0` inversion in `AGENTS.md` §11. Spending budget below target is normal operation; exhausting or burning it freezes proactive work.
@@ -344,7 +348,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
 
 ## Research & Observation Backlog (Living Research Queue)
 
-Upcoming field observations, empirical studies, and architectural investigations to be authored and added to `observations/`:
+Field observations, empirical studies and architectural investigations that this queue scheduled for `observations/`. Every topic below is complete. File a new research topic as a GitHub issue.
 
 | Topic / Working Title | Target Domain | Key Research Question | Status / Outcome |
 |---|---|---|---|
@@ -383,11 +387,11 @@ Upcoming field observations, empirical studies, and architectural investigations
 
 ## Value vs. Effort Prioritization Matrix
 
-Every item still open, placed by the same value and effort judgements the table records. The rejected anti-patterns are plotted alongside deliberately — a roadmap is defined as much by what it refuses as by what it schedules:
+No deliverable in this file is open. The chart places a selection of delivered items by the same value and effort judgements the table records. The rejected anti-patterns are plotted alongside deliberately — a roadmap is defined as much by what it refuses as by what it schedules:
 
 ```mermaid
 quadrantChart
-    title Open deliverables and rejected anti-patterns
+    title Delivered items and rejected anti-patterns
     x-axis "Low effort" --> "High effort"
     y-axis "Low value" --> "High value"
     quadrant-1 "Major projects"
