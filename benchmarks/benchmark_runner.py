@@ -14,6 +14,7 @@ import argparse
 import ast
 import functools
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -220,6 +221,10 @@ def _inspect_rust_source(source: str) -> dict[str, Any]:
 
 _CARGO_TIMEOUT_SECONDS = 45
 
+# The libtest harness prints one summary line per test binary (unit tests, integration
+# tests, doc-tests), for example "test result: ok. 4 passed; 0 failed; 0 ignored; ...".
+_CARGO_RESULT_LINE = re.compile(r"^test result: \w+\. (\d+) passed;", re.MULTILINE)
+
 
 class CargoTestRun(NamedTuple):
     """Outcome of ``cargo test`` on the benchmark crate. ``detail`` is empty when it passed."""
@@ -227,6 +232,12 @@ class CargoTestRun(NamedTuple):
     passed: bool
     test_count: int
     detail: str
+
+
+def _parse_cargo_test_output(stdout: str) -> int | None:
+    """Sum the passed counts of all ``test result:`` lines. None when cargo printed no such line."""
+    counts = [int(match.group(1)) for match in _CARGO_RESULT_LINE.finditer(stdout)]
+    return sum(counts) if counts else None
 
 
 @functools.cache
@@ -250,9 +261,12 @@ def _run_cargo_test_suite(crate_dir: Path) -> CargoTestRun:
         return CargoTestRun(False, 0, f"cargo test timed out after {_CARGO_TIMEOUT_SECONDS} s")
     except OSError as exc:
         return CargoTestRun(False, 0, f"cargo test could not start: {exc}")
+    passed_count = _parse_cargo_test_output(res.stdout)
     if res.returncode != 0:
-        return CargoTestRun(False, 0, f"cargo test exited with code {res.returncode}")
-    return CargoTestRun(True, 4, "")
+        return CargoTestRun(False, passed_count or 0, f"cargo test exited with code {res.returncode}")
+    if passed_count is None:
+        return CargoTestRun(False, 0, "cargo test printed no 'test result:' line")
+    return CargoTestRun(True, passed_count, "")
 
 
 def run_rust_typestate_benchmark() -> TrackResult:

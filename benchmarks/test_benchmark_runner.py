@@ -34,6 +34,22 @@ requires_cargo = pytest.mark.skipif(
 
 _CARGO_TOML = '[package]\nname = "stand_in"\nversion = "0.1.0"\n'
 
+# What ``cargo test --quiet`` prints on stdout for a crate with two test binaries:
+# the unit tests of the library and its doc-tests.
+_CARGO_OUTPUT_TWO_BINARIES = """
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+"""
+
+_NO_RESULT_LINE = "cargo test printed no 'test result:' line"
+
 
 def test_calculate_cyclomatic_complexity() -> None:
     """Verify cyclomatic complexity calculation on branch statement AST nodes."""
@@ -160,16 +176,67 @@ def test_cargo_suite_fails_when_cargo_test_does_not_finish(
     assert _run_cargo_test_suite(tmp_path) == (False, 0, detail)
 
 
-def test_cargo_suite_fails_when_cargo_test_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """A non-zero exit of cargo test fails the track and names the exit code."""
-    _put_stand_in_cargo_on_path(monkeypatch, tmp_path)
-    (tmp_path / "Cargo.toml").write_text(_CARGO_TOML, encoding="utf-8")
+def _replace_cargo_run(monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str) -> None:
+    """Make subprocess.run give this exit code and stdout instead of running cargo."""
     monkeypatch.setattr(
         benchmark_runner.subprocess,
         "run",
-        lambda args, **_kwargs: subprocess.CompletedProcess(args, 101, "", ""),
+        lambda args, **_kwargs: subprocess.CompletedProcess(args, returncode, stdout, ""),
     )
-    assert _run_cargo_test_suite(tmp_path) == (False, 0, "cargo test exited with code 101")
+
+
+@pytest.mark.parametrize(
+    ("stdout", "test_count"),
+    [
+        ("", 0),
+        ("running 3 tests\n..F\ntest result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured\n", 2),
+    ],
+    ids=["no-output", "one-test-failed"],
+)
+def test_cargo_suite_fails_when_cargo_test_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stdout: str, test_count: int
+) -> None:
+    """A non-zero exit of cargo test fails the track, names the exit code and keeps the passed count."""
+    _put_stand_in_cargo_on_path(monkeypatch, tmp_path)
+    (tmp_path / "Cargo.toml").write_text(_CARGO_TOML, encoding="utf-8")
+    _replace_cargo_run(monkeypatch, 101, stdout)
+    assert _run_cargo_test_suite(tmp_path) == (False, test_count, "cargo test exited with code 101")
+
+
+def test_cargo_suite_sums_passed_tests_over_all_test_binaries(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The count comes from the result line of each test binary, not from a fixed number."""
+    _put_stand_in_cargo_on_path(monkeypatch, tmp_path)
+    (tmp_path / "Cargo.toml").write_text(_CARGO_TOML, encoding="utf-8")
+    _replace_cargo_run(monkeypatch, 0, _CARGO_OUTPUT_TWO_BINARIES)
+    assert _run_cargo_test_suite(tmp_path) == (True, 5, "")
+
+
+def test_cargo_suite_fails_when_cargo_output_has_no_result_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Exit code 0 with no result line does not prove that a test ran."""
+    _put_stand_in_cargo_on_path(monkeypatch, tmp_path)
+    (tmp_path / "Cargo.toml").write_text(_CARGO_TOML, encoding="utf-8")
+    _replace_cargo_run(monkeypatch, 0, "running 3 tests\n...\n")
+    assert _run_cargo_test_suite(tmp_path) == (False, 0, _NO_RESULT_LINE)
+
+
+@pytest.mark.usefixtures("fresh_cargo_cache")
+def test_rust_track_fails_and_names_the_cause_when_cargo_output_has_no_result_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The scorecard shows why the track failed when cargo prints no result line."""
+    _put_stand_in_cargo_on_path(monkeypatch, tmp_path)
+    _replace_cargo_run(monkeypatch, 0, "")
+    res = run_rust_typestate_benchmark()
+    assert (res.passed, res.score, res.metrics["cargo_tests_passed"], res.summary) == (
+        False,
+        0.0,
+        0,
+        f"Rust track not verified: {_NO_RESULT_LINE}.",
+    )
 
 
 @pytest.mark.usefixtures("fresh_cargo_cache")
