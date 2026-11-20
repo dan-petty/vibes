@@ -133,7 +133,7 @@ updated_node, updated_code = parser.incremental_reparse(node, source_code, edit)
 python3 -m pytest -v examples/polyglot-cst-parser/test_cst_parser.py
 ```
 
-All 13 unit tests validate:
+The unit tests validate:
 - Language detection across extensions (`.py`, `.rs`, `.go`, `.ts`, `.sh`).
 - Symbol extraction for all 5 languages.
 - Complexity ($M$) and nesting depth calculations.

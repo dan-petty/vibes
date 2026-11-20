@@ -125,7 +125,7 @@ Timings vary by host. The "Infinite Loop" probe is `time.sleep(10)`, stopped by 
 python3 -m pytest -v examples/ephemeral-container-sandbox/test_sandbox.py
 ```
 
-The 24 tests in `test_sandbox.py` validate:
+The tests in `test_sandbox.py` validate:
 - Policy immutability and default CIS controls.
 - Audit scoring deductions on insecure configurations.
 - Docker and Podman argument synthesis.
