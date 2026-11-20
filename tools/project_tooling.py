@@ -100,7 +100,7 @@ def generate_hardening_summary(
         )
     return (
         "Recursive hardening violation: This PR fixes a defect, but AGENTS.md was not updated. "
-        "Autonomous engineering requires codifying preventative instructions on every defect fix."
+        "A defect fix labeled needs-guardrail must add the rule that prevents it to AGENTS.md."
     )
 
 
@@ -132,7 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Subcommand: verify-hardening
     harden_p = subparsers.add_parser("verify-hardening", help="Verify self-hardening on a PR diff")
     harden_p.add_argument("--diff-file", type=Path, required=True, help="File containing git diff")
-    harden_p.add_argument("--is-defect", action="store_true", help="The pull request fixes a defect (label type/bug)")
+    harden_p.add_argument("--is-defect", action="store_true", help="The pull request fixes a defect that needs a guardrail (label needs-guardrail)")
 
     args = parser.parse_args(argv)
     diff_text = args.diff_file.read_text(encoding="utf-8")
