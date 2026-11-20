@@ -299,18 +299,14 @@ def _check_string_constants_for_private_ips(tree: ast.AST, filename: str) -> lis
     return violations
 
 
-# The AST invariant sentinel owns the waiver parser and its rules (AGENTS.md §2.3). The engine
-# reads the `sentinel` tag; each name below waives the CEGIS004 private address check.
-WAIVABLE_RULES: Final[frozenset[str]] = frozenset(
-    {"ZeroTrustSanitization", "ZeroTrustEgressViolation", "CEGIS004"}
-)
-
-
 def _has_sanitization_waiver(source_code: str, filename: str) -> bool:
-    """Return True if a valid module-header waiver names the private address check."""
+    """Return True if a valid module-header waiver names ZeroTrustSanitization.
+
+    The AST invariant sentinel owns the waiver parser and its rules (AGENTS.md §2.3), so the
+    engine honors exactly the waivers that the sentinel honors. The waiver stops CEGIS004.
+    """
     sentinel = load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel")
-    policy = sentinel.WaiverPolicy("sentinel", WAIVABLE_RULES)
-    return bool(sentinel.scan_waivers(filename, source_code, policy).waived)
+    return "ZeroTrustSanitization" in sentinel.scan_waivers(filename, source_code).waived
 
 
 def _find_sprawl_line(func: ast.FunctionDef | ast.AsyncFunctionDef) -> int | None:

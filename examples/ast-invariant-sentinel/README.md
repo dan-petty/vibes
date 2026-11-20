@@ -136,6 +136,12 @@ never disarm the gate:
 # sentinel: allow[ZeroTrustSanitization] — negative fixtures asserting the detector fires
 ```
 
+A module docstring is a string literal too, so waiver text inside it waives nothing. A Python file
+that does not tokenize gets no waiver, and its waiver text raises `WaiverIntegrity`. The standard
+library has no lexer for the polyglot languages (`.rs`, `.go`, `.ts`, `.sh`, `.c` and the others in
+`POLYGLOT_LANGUAGE_EXTENSIONS`), so in those files a line that starts with `//`, `#`, `/*` or `*` is
+the comment.
+
 Only `ZeroTrustSanitization` is waivable. `CyclomaticComplexity` and `NestingDepth` are not: a metric
 you can opt out of is not an invariant. A malformed waiver, one naming a non-waivable invariant, or one
 lacking a justification of at least 12 characters raises `WaiverIntegrity` **and** leaves the original
@@ -145,7 +151,8 @@ Another tool can use the same parser with its own tag and its own waivable rules
 `scan_waivers(path, source, WaiverPolicy(tag, waivable, noun))`. A tool reads only the comments that
 carry its tag. The prompt injection scanner in `tools/` uses the tag `prompt-scanner` and waives only
 `INJ` and `EGR001`. The CEGIS engine and the resource iteration workbench in `tools/` read the
-`sentinel` tag through the same parser.
+`sentinel` tag through the same parser and the same waivable set, so only `ZeroTrustSanitization`
+stops their private address check.
 
 ---
 
