@@ -82,6 +82,26 @@ jobs:
         run: |
           pytest tests/ examples/ benchmarks/ -v --tb=short
 
+      # The Go half of the leak sentinel exhibit. Go does not depend on the Python
+      # version, so one leg runs it. The module has no dependencies and no go.sum,
+      # so there is nothing to cache.
+      - name: Set up Go
+        if: matrix.python-version == '3.12'
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
+        with:
+          go-version-file: examples/go-leak-sentinel/go.mod
+          cache: false
+
+      - name: Vet the Go Leak Sentinel
+        if: matrix.python-version == '3.12'
+        working-directory: examples/go-leak-sentinel
+        run: go vet ./...
+
+      - name: Test the Go Leak Sentinel
+        if: matrix.python-version == '3.12'
+        working-directory: examples/go-leak-sentinel
+        run: go test ./...
+
       - name: Enforce Test Coverage Floor
         run: |
           # addopts is overridden because pytest.ini disables the coverage plugin to keep

@@ -21,7 +21,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 
 @dataclass(frozen=True)
@@ -218,24 +218,41 @@ def _inspect_rust_source(source: str) -> dict[str, Any]:
     }
 
 
+_CARGO_TIMEOUT_SECONDS = 45
+
+
+class CargoTestRun(NamedTuple):
+    """Outcome of ``cargo test`` on the benchmark crate. ``detail`` is empty when it passed."""
+
+    passed: bool
+    test_count: int
+    detail: str
+
+
 @functools.cache
-def _run_cargo_test_suite(crate_dir: Path) -> tuple[bool, int]:
-    """Execute cargo test on Rust benchmark crate if cargo is available."""
+def _run_cargo_test_suite(crate_dir: Path) -> CargoTestRun:
+    """Run cargo test on the Rust benchmark crate. A run that did not happen counts no tests."""
     cargo_bin = shutil.which("cargo")
-    if not cargo_bin or not (crate_dir / "Cargo.toml").is_file():
-        return True, 4
+    if not cargo_bin:
+        return CargoTestRun(False, 0, "cargo is not on PATH")
+    if not (crate_dir / "Cargo.toml").is_file():
+        return CargoTestRun(False, 0, "no Cargo.toml in the crate directory")
     try:
         res = subprocess.run(
             [cargo_bin, "test", "--quiet"],
             cwd=str(crate_dir),
             capture_output=True,
             text=True,
-            timeout=45,
+            timeout=_CARGO_TIMEOUT_SECONDS,
             check=False,
         )
-        return res.returncode == 0, 4 if res.returncode == 0 else 0
-    except (subprocess.TimeoutExpired, OSError):
-        return True, 4
+    except subprocess.TimeoutExpired:
+        return CargoTestRun(False, 0, f"cargo test timed out after {_CARGO_TIMEOUT_SECONDS} s")
+    except OSError as exc:
+        return CargoTestRun(False, 0, f"cargo test could not start: {exc}")
+    if res.returncode != 0:
+        return CargoTestRun(False, 0, f"cargo test exited with code {res.returncode}")
+    return CargoTestRun(True, 4, "")
 
 
 def run_rust_typestate_benchmark() -> TrackResult:
@@ -245,13 +262,13 @@ def run_rust_typestate_benchmark() -> TrackResult:
     src_content = src_path.read_text(encoding="utf-8") if src_path.is_file() else ""
 
     static_metrics = _inspect_rust_source(src_content)
-    tests_passed, test_count = _run_cargo_test_suite(crate_dir)
+    cargo = _run_cargo_test_suite(crate_dir)
 
     passed = (
         static_metrics["forbid_unsafe"]
         and static_metrics["unsafe_count"] == 0
         and static_metrics["type_states_present"]
-        and tests_passed
+        and cargo.passed
     )
 
     metrics = {
@@ -259,12 +276,14 @@ def run_rust_typestate_benchmark() -> TrackResult:
         "unsafe_blocks": static_metrics["unsafe_count"],
         "memory_overhead_bytes": 0,
         "type_states_verified": 4,
-        "cargo_tests_passed": test_count,
+        "cargo_tests_passed": cargo.test_count,
     }
 
     score = 100.0 if passed else 0.0
     summary = (
-        f"Verified compile-time type-state invariants: 0 unsafe blocks, 0 bytes memory overhead, {test_count} tests passed."
+        f"Verified compile-time type-state invariants: 0 unsafe blocks, 0 bytes memory overhead, {cargo.test_count} tests passed."
+        if cargo.passed
+        else f"Rust track not verified: {cargo.detail}."
     )
 
     return TrackResult(
