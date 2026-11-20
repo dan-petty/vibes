@@ -1,0 +1,21 @@
+# Prometheus configuration for the Docker Compose stack.
+# Compose mounts this file at /etc/prometheus/prometheus.yml and the alert rules at
+# /etc/prometheus/alerts.yaml. The rule_files path is the path in the container, so run
+# promtool in the container (see the Docker Compose README).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yaml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # The collector's Prometheus exporter: metrics that agents send over OTLP, with the
+  # vibes_agent_ name prefix.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]

@@ -1,0 +1,12 @@
+# Grafana dashboard provider for the Docker Compose stack.
+# Compose mounts agent-telemetry-dashboard.json into the path below.
+apiVersion: 1
+
+providers:
+  - name: vibes-agent
+    orgId: 1
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
