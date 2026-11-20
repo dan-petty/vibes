@@ -11,7 +11,10 @@ native Tetragon records, such as `process_exit`, and a Falco alert whose rule ou
 The sensitive-path check expands each `~/` entry below the configured home directories and
 compares whole path components. The Tetragon TracingPolicy has a `sys_execve` and a
 `sys_execveat` syscall kprobe that send `Sigkill` when the executed path names a disallowed
-binary. Its `podSelector` limits it to the pods with the sandbox label (`--pod-label`). The
+binary, and a `security_bprm_check` kprobe that sends `Sigkill` when the file that the
+kernel opened has a disallowed name. The last kprobe also kills an `execveat` call with
+`AT_EMPTY_PATH` (glibc `fexecve`), which gives the syscall kprobes an empty path. Its
+`podSelector` limits the policy to the pods with the sandbox label (`--pod-label`). The
 observed binaries go into a metadata annotation; the policy does not enforce them. The
 Falco rule only alerts.
 
@@ -52,6 +55,24 @@ DISALLOWED_BINARIES: Final[frozenset[str]] = frozenset(
     }
 )
 
+# The files that the links of the deny list resolve to. A kernel hook that reads the opened
+# file, such as `security_bprm_check`, sees this name and not the link name. Debian 13
+# packages: netcat-openbsd and netcat-traditional point the alternatives `nc` and `netcat`
+# to `nc.openbsd` or `nc.traditional` (the ncat package points them to `ncat`, a denied
+# name), inetutils-telnet points `telnet` to `inetutils-telnet`, and socat links `socat` to
+# `socat1`. The Ubuntu 22.04 telnet package installs `telnet.netkit`. A busybox applet
+# resolves to `busybox`, which is not denied.
+DISALLOWED_BINARY_FILES: Final[dict[str, frozenset[str]]] = {
+    "nc": frozenset({"nc.openbsd", "nc.traditional"}),
+    "netcat": frozenset({"nc.openbsd", "nc.traditional"}),
+    "telnet": frozenset({"inetutils-telnet", "telnet.netkit"}),
+    "socat": frozenset({"socat1"}),
+}
+
+# The program names that EBPF001 flags and that the TracingPolicy kills: the link names and
+# the names of the files that they resolve to.
+DENIED_EXEC_NAMES: Final[frozenset[str]] = DISALLOWED_BINARIES.union(*DISALLOWED_BINARY_FILES.values())
+
 SENSITIVE_PATH_PREFIXES: Final[tuple[str, ...]] = (
     "/etc/shadow",
     "/etc/passwd",
@@ -78,6 +99,13 @@ TETRAGON_POD_LABEL: Final[tuple[str, str]] = ("app.kubernetes.io/name", "agent-s
 # The exec system calls and the argument index of their path: execve(path, argv, envp) and
 # execveat(dirfd, path, argv, envp, flags). Both kprobes match the path that the caller gives.
 TETRAGON_EXEC_SYSCALLS: Final[tuple[tuple[str, int], ...]] = (("sys_execve", 0), ("sys_execveat", 1))
+
+# The LSM function that each exec calls after the kernel opens the file, and its argument.
+# Tetragon reads a `linux_binprm` argument as the path of `bprm->file`
+# (bpf/process/types/basic.h), so the kprobe gets the opened file also when the path
+# argument is empty: `execveat(fd, "", argv, envp, AT_EMPTY_PATH)`, which glibc `fexecve`
+# makes. The path is absolute and has its links resolved.
+TETRAGON_EXEC_FILE_HOOK: Final[tuple[str, int, str]] = ("security_bprm_check", 0, "linux_binprm")
 
 # A syscall kprobe event names the kernel symbol, such as `__x64_sys_setuid`. These are the
 # arch prefixes of Tetragon's pkg/arch/arch.go.
@@ -284,12 +312,15 @@ def _kprobe_arg_value(arg: dict[str, Any], arg_type: str, field: str) -> Any:
 
 def _kprobe_arg_fields(args: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Read the path and the destination address and port from the arguments of a kprobe record."""
+    found = (
+        (key, _kprobe_arg_value(arg, arg_type, field))
+        for arg in args
+        for arg_type, field, key in TETRAGON_KPROBE_ARG_FIELDS
+    )
     fields: dict[str, Any] = {}
-    for arg in args:
-        for arg_type, field, key in TETRAGON_KPROBE_ARG_FIELDS:
-            value = _kprobe_arg_value(arg, arg_type, field)
-            if value is not None:
-                fields.setdefault(key, value)
+    for key, value in found:
+        if value is not None:
+            fields.setdefault(key, value)
     return fields
 
 
@@ -397,7 +428,7 @@ def _check_ebpf001_binary(event: EbpfTraceEvent) -> EbpfFinding | None:
         return None
 
     proc_base = Path(event.process_name).name.lower()
-    is_disallowed = proc_base in DISALLOWED_BINARIES or "bash -i" in event.command_line
+    is_disallowed = proc_base in DENIED_EXEC_NAMES or "bash -i" in event.command_line
     if not is_disallowed:
         return None
 
@@ -591,6 +622,29 @@ class EbpfSandboxTracer:
         )
 
 
+def _sigkill_kprobe(
+    call: str, syscall: bool, arg: tuple[int, str], matches: Sequence[tuple[str, list[str]]]
+) -> dict[str, Any]:
+    """Return a kprobe on `call` that reads one argument (index, type) and sends `Sigkill` when a match holds.
+
+    Each operator has its own selector: a selector matches only when all of its matches
+    hold, and the kprobe acts when any selector matches.
+    """
+    index, arg_type = arg
+    return {
+        "call": call,
+        "syscall": syscall,
+        "args": [{"index": index, "type": arg_type}],
+        "selectors": [
+            {
+                "matchArgs": [{"index": index, "operator": operator, "values": values}],
+                "matchActions": [{"action": "Sigkill"}],
+            }
+            for operator, values in matches
+        ],
+    }
+
+
 def generate_tetragon_policy(
     events: Sequence[EbpfTraceEvent],
     policy_name: str = "agent-sandbox-containment",
@@ -598,42 +652,32 @@ def generate_tetragon_policy(
 ) -> dict[str, Any]:
     """Synthesize a Tetragon TracingPolicy that kills a process when it executes a disallowed binary.
 
-    One syscall kprobe for each call of `TETRAGON_EXEC_SYSCALLS` reads the path that the
-    caller gives. It sends `Sigkill` when the path is a disallowed binary name or ends in
-    `/<name>`, the same binaries that EBPF001 flags. Each operator has its own selector: a
-    selector matches only when all of its matches hold, and the kprobe acts when any
-    selector matches. An `execveat` call with `AT_EMPTY_PATH` gives an empty path, so no
-    selector matches it. The `podSelector` limits the policy to the pods with `pod_label`;
-    without it, Tetragon applies the policy to every process on the node. The observed
-    binaries go into the `TETRAGON_BASELINE_ANNOTATION` annotation for review; the policy
-    does not enforce them.
+    The names are `DENIED_EXEC_NAMES`, the names that EBPF001 flags. One syscall kprobe for
+    each call of `TETRAGON_EXEC_SYSCALLS` reads the path that the caller gives and sends
+    `Sigkill` when the path is a name or ends in `/<name>`. An `execveat` call with
+    `AT_EMPTY_PATH` gives an empty path, so these selectors do not match it. The
+    `TETRAGON_EXEC_FILE_HOOK` kprobe reads the absolute path of the file that the kernel
+    opened and sends `Sigkill` when it ends in `/<name>`, so it also kills that call. This
+    path is the resolved file, so the names include `DISALLOWED_BINARY_FILES`. When a link
+    points to a file whose name is not denied, such as a busybox applet, only the syscall
+    kprobes match it, and only by the link name. The `podSelector` limits the policy to the
+    pods with `pod_label`; without it, Tetragon applies the policy to every process on the
+    node. The observed binaries go into the `TETRAGON_BASELINE_ANNOTATION` annotation for
+    review; the policy does not enforce them.
     """
     observed = sorted({e.process_name for e in events if e.event_type == EbpfEventType.EXECVE})
-    binaries = sorted(DISALLOWED_BINARIES)
-    matches = (("Equal", binaries), ("Postfix", [f"/{b}" for b in binaries]))
+    binaries = sorted(DENIED_EXEC_NAMES)
+    postfix = ("Postfix", [f"/{b}" for b in binaries])
+    by_path = (("Equal", binaries), postfix)
+    kprobes = [_sigkill_kprobe(call, True, (i, "string"), by_path) for call, i in TETRAGON_EXEC_SYSCALLS]
+    file_call, file_index, file_type = TETRAGON_EXEC_FILE_HOOK
+    kprobes.append(_sigkill_kprobe(file_call, False, (file_index, file_type), (postfix,)))
     label_key, label_value = pod_label
     return {
         "apiVersion": "cilium.io/v1alpha1",
         "kind": "TracingPolicy",
         "metadata": {"name": policy_name, "annotations": {TETRAGON_BASELINE_ANNOTATION: ",".join(observed)}},
-        "spec": {
-            "podSelector": {"matchLabels": {label_key: label_value}},
-            "kprobes": [
-                {
-                    "call": call,
-                    "syscall": True,
-                    "args": [{"index": index, "type": "string"}],
-                    "selectors": [
-                        {
-                            "matchArgs": [{"index": index, "operator": operator, "values": values}],
-                            "matchActions": [{"action": "Sigkill"}],
-                        }
-                        for operator, values in matches
-                    ],
-                }
-                for call, index in TETRAGON_EXEC_SYSCALLS
-            ],
-        },
+        "spec": {"podSelector": {"matchLabels": {label_key: label_value}}, "kprobes": kprobes},
     }
 
 

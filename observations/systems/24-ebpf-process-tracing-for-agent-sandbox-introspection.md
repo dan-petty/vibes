@@ -127,7 +127,7 @@ stateDiagram-v2
 
 ### The Five Diagnostic Invariants
 
-1. **`EBPF001` (Unauthorized Binary Execution)**: Fires when an `execve` event names a binary on a fixed deny list (`nc`, `ncat`, `netcat`, `telnet`, `nmap`, `socat`, `tcpdump`, `wireshark`, `chattr`) or its arguments contain `bash -i`. There is no allow-list manifest, and `curl` and `wget` are not on the list.
+1. **`EBPF001` (Unauthorized Binary Execution)**: Fires when an `execve` event names a binary on a fixed deny list (`nc`, `ncat`, `netcat`, `telnet`, `nmap`, `socat`, `tcpdump`, `wireshark`, `chattr`) or a file that their links resolve to (`nc.openbsd`, `nc.traditional`, `inetutils-telnet`, `telnet.netkit`, `socat1`), or when its arguments contain `bash -i`. There is no allow-list manifest, and `curl` and `wget` are not on the list.
 2. **`EBPF002` (Network Egress Violation)**: Fires when a connect event targets an address that Python's `ipaddress` marks private (the IANA not-globally-reachable set, which includes RFC 1918 and loopback) or link-local, which includes the cloud metadata address `169.254.169.254`. There is no destination allow-list.
 3. **`EBPF003` (Sensitive File Tampering / Workspace Escape)**: Fires when an open event's path is an entry of a fixed sensitive-path list (`/etc/shadow`, `/etc/passwd`, `/etc/sudoers`, `/root`, `/proc/kcore`, and `~/.ssh`-style credential directories) or lies below one. The check compares whole path components after it collapses `.`, `..` and repeated slashes, so `/root` covers `/root/.ssh` but not `/rootfs`. Kernel paths are absolute, so each `~/` entry is written below each home directory that `--home-dir` gives (default `/root`). It does not check workspace containment and does not resolve symbolic links.
 4. **`EBPF004` (Namespace & Privilege Escalation Attempt)**: Fires on a `privilege_change` event or a syscall named `setuid`, `setgid`, `capset`, `unshare` or `pivot_root`. The list holds kernel system calls only: `cap_set_proc` is the libcap function that calls `capset`, so an event names `capset`.
@@ -142,7 +142,7 @@ To establish zero-trust eBPF introspection across production agent fleets:
 ### 1. Phased Operational Rollout: Observe → Alert → Enforce
 1. **Phase 1 (Observation & Baseline Profiling)**: Deploy `ebpf_tracer.py` in `--preset audit_only` during CI test runs and benchmark execution. Capture the exact set of benign syscalls, binaries, and network destinations required by the agent.
 2. **Phase 2 (Automated Policy Synthesis)**: Use the module function `generate_tetragon_policy()` to write a Tetragon `TracingPolicy` custom resource, or `generate_falco_policy()` to write Falco rules. Falco detects and alerts; it does not block.
-3. **Phase 3 (Inline Kernel Enforcement)**: Apply the synthesized Tetragon policy in production. Its `sys_execve` and `sys_execveat` kprobes send `Sigkill` when a process executes a binary of the EBPF001 deny list. The kernel stops only the calls that the selectors match. The selectors compare the path that the caller gives, so they do not stop an `execveat` call with `AT_EMPTY_PATH`, which gives an empty path (`fexecve` makes this call). The observed binaries of Phase 1 go into the annotation `ebpf-tracer/observed-binaries` for review; the policy does not enforce them. Its `podSelector` limits the policy to the pods with the label `app.kubernetes.io/name: agent-sandbox`, the label of [`sandbox-pod.yaml`](../../resources/k8s/agent-sandbox/sandbox-pod.yaml); `--pod-label key=value` sets another label. Without a `podSelector`, Tetragon applies a policy to every process on the node.
+3. **Phase 3 (Inline Kernel Enforcement)**: Apply the synthesized Tetragon policy in production. Its `sys_execve`, `sys_execveat` and `security_bprm_check` kprobes send `Sigkill` when a process executes a binary that EBPF001 flags. The kernel stops only the calls that the selectors match. The syscall kprobes compare the path that the caller gives. The `security_bprm_check` kprobe compares the file that the kernel opened, so it also stops an `execveat` call with `AT_EMPTY_PATH`, which gives an empty path (`fexecve` makes this call). The observed binaries of Phase 1 go into the annotation `ebpf-tracer/observed-binaries` for review; the policy does not enforce them. Its `podSelector` limits the policy to the pods with the label `app.kubernetes.io/name: agent-sandbox`, the label of [`sandbox-pod.yaml`](../../resources/k8s/agent-sandbox/sandbox-pod.yaml); `--pod-label key=value` sets another label. Without a `podSelector`, Tetragon applies a policy to every process on the node.
 
 ### 2. Concrete Tetragon TracingPolicy Template
 
@@ -169,7 +169,7 @@ spec:
               operator: "Equal"
               values:
                 - "nc"
-                - "ncat"
+                - "nc.openbsd"
           matchActions:
             - action: Sigkill
         - matchArgs:
@@ -177,7 +177,7 @@ spec:
               operator: "Postfix"
               values:
                 - "/nc"
-                - "/ncat"
+                - "/nc.openbsd"
           matchActions:
             - action: Sigkill
     - call: "sys_execveat"
@@ -191,7 +191,7 @@ spec:
               operator: "Equal"
               values:
                 - "nc"
-                - "ncat"
+                - "nc.openbsd"
           matchActions:
             - action: Sigkill
         - matchArgs:
@@ -199,12 +199,40 @@ spec:
               operator: "Postfix"
               values:
                 - "/nc"
-                - "/ncat"
+                - "/nc.openbsd"
+          matchActions:
+            - action: Sigkill
+    - call: "security_bprm_check"
+      syscall: false
+      args:
+        - index: 0
+          type: "linux_binprm"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Postfix"
+              values:
+                - "/nc"
+                - "/nc.openbsd"
           matchActions:
             - action: Sigkill
 ```
 
-The generator lists all nine binaries of the deny list; the template shows two. Tetragon acts when any selector of a kprobe matches. `Postfix` on `/nc` matches `/bin/nc` and `/usr/bin/nc`, but not `/usr/bin/ncal`. The path is argument 0 of `execve` and argument 1 of `execveat`. The policy does not hook `security_bprm_check`, which both calls reach: its `linux_binprm` path is the resolved file, so on a Debian image `/usr/bin/nc` resolves to `/usr/bin/nc.openbsd`, and `Postfix` on `/nc` does not match it.
+The generator lists all nine binaries of the deny list and the five files that their links resolve to; the template shows two names. Tetragon acts when any selector of a kprobe matches. `Postfix` on `/nc` matches `/bin/nc` and `/usr/bin/nc`, but not `/usr/bin/ncal` or `/usr/bin/ncfoo`. The path is argument 0 of `execve` and argument 1 of `execveat`.
+
+The syscall kprobes read the path that the caller gives. The call `execveat(fd, "", argv, envp, AT_EMPTY_PATH)`, which glibc `fexecve` makes, gives an empty path, so no syscall selector matches it. Each exec, this call included, reaches `security_bprm_check` after the kernel opens the file. Tetragon reads its `linux_binprm` argument as the path of that file (`bprm->file`): an absolute path with the links resolved. Tetragon reads this argument only in its BPF programs for kernel 5.3 or later. On a Debian image, `/usr/bin/nc` resolves to `/usr/bin/nc.openbsd`, so `Postfix` on `/nc` alone does not match it. The generator therefore adds the names of the resolved files, from the Debian 13 and Ubuntu 22.04 packages (`DISALLOWED_BINARY_FILES` in the tool), and keeps the syscall kprobes:
+
+| Exec in the sandbox pod (Debian, Alpine) | Syscall kprobes: path that the caller gives | `security_bprm_check` kprobe: opened file |
+|---|---|---|
+| `execve("/usr/bin/nc")` | Kill (`/nc`) | Kill (`/nc.openbsd`) |
+| `fexecve` of `/usr/bin/nc` | No match (empty path) | Kill (`/nc.openbsd`) |
+| `execve("/proc/self/fd/3")` for the same file | No match | Kill (`/nc.openbsd`) |
+| A new link `/tmp/x` to `nc.openbsd` | No match | Kill (`/nc.openbsd`) |
+| Alpine `nc`, a link to `busybox` | Kill (`/nc`) | No match (`busybox` is not denied) |
+| `fexecve` of `busybox` with `argv[0]` `nc` | No match | No match |
+| A copy of `nc` with another name | No match | No match |
+
+The trade-off: the `security_bprm_check` kprobe closes the empty-path gap, but it matches names, and the names of resolved files differ between distributions. A distribution that links a denied name to a file that is not on the list, a busybox applet, and a copy with a new name still run. The other options were worse. The `security_bprm_check` kprobe alone does not see a busybox applet by its link name. The trace cannot supply the resolved names: Tetragon writes the path that the caller gives (`bprm->filename`) as `process_exec.process.binary`, and a baseline run does not run the denied binaries. A BPF LSM hook (`lsmhooks`, `bprm_check_security`) with `Override` can return `-EPERM` in place of `Sigkill`, but it needs `bpf` in the active LSM list of the kernel, and it matches the same resolved names. A name deny list is a tripwire, not containment. For containment, use an image that does not have these binaries.
 
 ### 3. Mechanical Integration Checklist
 - [x] Canonical tool implementation: [`tools/ebpf_tracer.py`](../../tools/ebpf_tracer.py)
