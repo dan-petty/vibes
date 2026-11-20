@@ -1,9 +1,10 @@
 """Tests for the Verification Pyramid Auditor & Test Horizon Scaling Oracle.
 
-Verifies detection of linear assertion density sprawl (VER001), uncontained
-subprocess invocations (VER002), shared state race hazards (VER003),
-monolithic file sizing (VER004), metrics scoring, SARIF/Markdown exports, and
-that a fixture triggers each rule in the rule table.
+Verifies detection of unparseable source (VER000), linear assertion density
+sprawl (VER001), uncontained subprocess invocations (VER002), shared state race
+hazards (VER003), monolithic file sizing (VER004), metrics scoring,
+SARIF/Markdown exports, that a fixture triggers each rule in the rule table,
+and that the SARIF run declares the rule of each result.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
+from sarif_report import DEFAULT_SCHEMA_PATH, validate_log
 from verification_pyramid_auditor import (
     RULE_DESCRIPTORS,
     AuditSummary,
@@ -149,7 +151,20 @@ def test_unparseable_source_handling(tmp_path: Path) -> None:
     broken_file.write_text("def broken_syntax(:\n", encoding="utf-8")
 
     funcs, asserts, structs, findings = audit_test_file(broken_file)
-    assert (funcs, asserts, structs, len(findings), findings[0].rule_code) == (0, 0, 0, 1, "VER000")
+    desc = RULE_DESCRIPTORS[VerificationRule.UNPARSEABLE_SOURCE]
+    finding = findings[0]
+    assert (funcs, asserts, structs, len(findings)) == (0, 0, 0, 1)
+    assert (finding.rule_code, finding.rule_name, finding.severity, finding.recommendation) == (
+        desc.code.value,
+        desc.name,
+        desc.severity.value,
+        desc.recommendation,
+    )
+    assert (desc.code.value, desc.name, desc.severity) == (
+        "VER000",
+        "UnparseableSource",
+        VerificationSeverity.ERROR,
+    )
 
 
 def test_calculate_metrics() -> None:
@@ -289,6 +304,7 @@ def test_is_structural_assertion_any_predicate() -> None:
 
 
 RULE_FIXTURES: dict[str, str] = {
+    "test_fixture_unparseable.py": "def broken_syntax(:\n",
     "test_fixture_sprawl.py": "def test_linear():\n" + "    assert 1 == 1\n" * 4,
     "test_fixture_spawn.py": "import subprocess\ndef test_spawn():\n    subprocess.Popen(['echo'])\n",
     "test_fixture_contention.py": "def test_coverage_file():\n    path = '.coverage'\n",
@@ -305,3 +321,16 @@ def test_every_rule_in_table_is_emitted(tmp_path: Path) -> None:
     never_emitted = sorted(code.value for code in RULE_DESCRIPTORS if code.value not in emitted)
 
     assert never_emitted == []
+
+
+def test_sarif_run_declares_every_result_rule(tmp_path: Path) -> None:
+    """Each result ruleId is in the driver rules, and the log conforms to the OASIS schema."""
+    for name, source in RULE_FIXTURES.items():
+        (tmp_path / name).write_text(source, encoding="utf-8")
+
+    log = format_sarif(audit_test_suite([tmp_path]))
+    run = log["runs"][0]
+    declared = {rule["id"] for rule in run["tool"]["driver"]["rules"]}
+    undeclared = sorted({result["ruleId"] for result in run["results"]} - declared)
+
+    assert (undeclared, validate_log(log, REPO_ROOT / DEFAULT_SCHEMA_PATH)) == ([], [])

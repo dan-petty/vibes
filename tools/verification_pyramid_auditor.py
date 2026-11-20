@@ -43,6 +43,7 @@ MAX_TESTS_PER_FILE_THRESHOLD: Final[int] = 30
 class VerificationRule(StrEnum):
     """Diagnostic rule codes for verification horizon and pyramid health."""
 
+    UNPARSEABLE_SOURCE = "VER000"
     ASSERTION_DENSITY_SPRAWL = "VER001"
     UNCONTAINED_PROCESS_SPAWN = "VER002"
     SHARED_STATE_CONTENTION = "VER003"
@@ -69,6 +70,13 @@ class RuleDescriptor:
 
 
 RULE_DESCRIPTORS: Final[dict[VerificationRule, RuleDescriptor]] = {
+    VerificationRule.UNPARSEABLE_SOURCE: RuleDescriptor(
+        code=VerificationRule.UNPARSEABLE_SOURCE,
+        name="UnparseableSource",
+        severity=VerificationSeverity.ERROR,
+        short_description="Test file cannot be read or parsed as Python, so no other rule checked it.",
+        recommendation="Fix file syntax or encoding.",
+    ),
     VerificationRule.ASSERTION_DENSITY_SPRAWL: RuleDescriptor(
         code=VerificationRule.ASSERTION_DENSITY_SPRAWL,
         name="AssertionDensitySprawl",
@@ -268,14 +276,15 @@ def _parse_source_tree(path: Path) -> tuple[ast.AST | None, VerificationFinding 
         content = path.read_text(encoding="utf-8")
         return ast.parse(content, filename=str(path)), None
     except (SyntaxError, UnicodeDecodeError, OSError) as err:
+        desc = RULE_DESCRIPTORS[VerificationRule.UNPARSEABLE_SOURCE]
         finding = VerificationFinding(
-            rule_code="VER000",
-            rule_name="UnparseableSource",
+            rule_code=desc.code.value,
+            rule_name=desc.name,
             file_path=str(path),
             line_number=1,
             message=f"Failed to parse source: {err}",
-            severity=VerificationSeverity.ERROR.value,
-            recommendation="Fix file syntax or encoding.",
+            severity=desc.severity.value,
+            recommendation=desc.recommendation,
         )
         return None, finding
 
