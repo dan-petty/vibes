@@ -38,6 +38,9 @@ from providers import (
 MAX_ALLOWED_COMPLEXITY = 10
 MAX_ALLOWED_NESTING = 5
 CANONICAL_MOCK_DOMAIN = "example.com"
+SARIF_SCHEMA_URI = (
+    "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
+)
 ALLOWED_TEST_NETWORKS = [
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
@@ -329,7 +332,7 @@ def export_sarif(report: FuzzSuiteReport, diff: FuzzBaselineDiff | None = None) 
         run_dict["properties"] = {"baselineDiff": diff.to_dict()}
 
     sarif_doc = {
-        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [run_dict],
     }

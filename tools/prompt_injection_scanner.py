@@ -36,6 +36,7 @@ from typing import Any, Final
 
 from example_loader import load_example
 from sanitization_policy import private_hosts_in
+from sarif_report import SARIF_SCHEMA_URI
 
 CANONICAL_MOCK_HOST: Final[str] = "example.com"
 
@@ -647,7 +648,7 @@ def export_sarif_json(summary: ScanSummary) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

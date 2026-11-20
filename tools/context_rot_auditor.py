@@ -20,6 +20,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 AUDITOR_VERSION: Final[str] = "v1.0.0"
 
 # Heuristic token estimation ratio for source and markdown text
@@ -732,7 +734,7 @@ def export_sarif(summary: AuditSummary, target_uri: str) -> dict[str, Any]:
         })
 
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

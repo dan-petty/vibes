@@ -24,15 +24,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 # Invariant thresholds
 DEFAULT_MAX_MILESTONE_ISSUES: Final[int] = 50
 CRITICAL_MEGA_MILESTONE_ISSUES: Final[int] = 100
 MIN_CONVERGENCE_RATIO: Final[float] = 1.2
 WINDOW_DAYS_DEFAULT: Final[float] = 7.0
 
-SARIF_SCHEMA_URI: Final[str] = (
-    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
-)
 
 
 class MilestonePhase(StrEnum):

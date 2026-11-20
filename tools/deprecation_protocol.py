@@ -24,6 +24,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 SEMVER_RE: Final[re.Pattern[str]] = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
 CANONICAL_MOCK_HOST: Final[str] = "example.com"
 MAX_SCAN_FILE_SIZE_BYTES: Final[int] = 10 * 1024 * 1024
@@ -379,7 +381,7 @@ def export_sarif_json(summary: ProtocolSummary) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

@@ -28,6 +28,7 @@ from typing import Any, Final
 from example_loader import load_example
 from radon.visitors import ComplexityVisitor
 from sanitization_policy import is_private_host
+from sarif_report import SARIF_SCHEMA_URI
 
 ENGINE_VERSION: Final[str] = "v1.0.0"
 TOOLING_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
@@ -710,7 +711,7 @@ def export_sarif(result: CEGISResult, filepath: str) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

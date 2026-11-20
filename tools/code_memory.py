@@ -17,6 +17,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 DEFAULT_INDEX_FILE: Final[str] = ".data/code_memory_index.json"
 MAX_MERMAID_NODES: Final[int] = 20
 HIGH_BLAST_RADIUS_THRESHOLD: Final[int] = 5
@@ -666,7 +668,7 @@ def generate_sarif(findings: list[CodeMemoryFinding]) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

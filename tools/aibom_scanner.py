@@ -28,6 +28,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from sarif_report import SARIF_SCHEMA_URI
+
 MAX_WEIGHT_INSPECT_BYTES: Final[int] = 50 * 1024 * 1024
 MAX_SAFETENSORS_HEADER_BYTES: Final[int] = 10 * 1024 * 1024
 HASH_CHUNK_SIZE: Final[int] = 64 * 1024
@@ -626,7 +628,7 @@ def export_sarif_json(report: AibomReport) -> dict[str, Any]:
         )
 
     return {
-        "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

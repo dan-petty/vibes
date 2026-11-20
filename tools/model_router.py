@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from sarif_report import SARIF_SCHEMA_URI
+
 # Default model definitions across tiers
 DEFAULT_LOCAL_MODEL = "qwen-2.5-coder-7b"
 DEFAULT_FAST_MODEL = "claude-3-5-haiku"
@@ -329,7 +331,7 @@ class ModelRouter:
             )
 
         return {
-            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "$schema": SARIF_SCHEMA_URI,
             "version": "2.1.0",
             "runs": [
                 {

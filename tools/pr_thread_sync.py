@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from metric_reference import cyclomatic_complexity, nesting_depth
+from sarif_report import SARIF_SCHEMA_URI
 
 # Rule identification patterns in review comments
 _RULE_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
@@ -684,7 +685,7 @@ def export_sarif(analyses: Sequence[ThreadAnalysis]) -> dict[str, Any]:
     ]
 
     return {
-        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "version": "2.1.0",
         "runs": [
             {

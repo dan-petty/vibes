@@ -21,7 +21,7 @@ from typing import Any, Final
 
 SCHEMA_SARIF_VERSION: Final[str] = "2.1.0"
 SCHEMA_SARIF_URI: Final[str] = (
-    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+    "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 )
 
 RULE_CODES: Final[dict[str, str]] = {
