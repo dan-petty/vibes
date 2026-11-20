@@ -236,7 +236,8 @@ def test_workbench_full_cycle_skip_tests(tmp_path: Path) -> None:
         report.overall_score,
         len(report.resources_evaluated) >= 1,
         baseline_file.is_file(),
-    ) == (HealthStatus.HEALTHY, 100.0, True, True)
+        report.to_dict()["smell_metrics"],
+    ) == (HealthStatus.HEALTHY, 100.0, True, True, {"status": "available", "reason": ""})
 
     # Re-running with existing baseline computes deltas
     report2 = workbench.run_cycle(execute_tests=False)
@@ -276,7 +277,7 @@ def test_feedback_analyzer_refactoring_headroom() -> None:
         quality_score=100.0,
         scan_metrics=scan,
     )
-    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    feedback, _ = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     refactors = [f for f in feedback if f.category == FeedbackCategory.PROACTIVE_REFACTOR]
     assert (
         len(refactors),
@@ -299,7 +300,7 @@ def test_feedback_analyzer_documentation_and_typing() -> None:
         quality_score=100.0,
         scan_metrics=scan,
     )
-    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    feedback, _ = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     docs = [f for f in feedback if f.category == FeedbackCategory.DOCUMENTATION]
     types = [f for f in feedback if f.category == FeedbackCategory.TYPE_SAFETY]
     assert (
@@ -322,7 +323,7 @@ def test_feedback_analyzer_test_parity() -> None:
         quality_score=100.0,
         scan_metrics=mod_scan,
     )
-    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    feedback, _ = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     parity = [f for f in feedback if f.category == FeedbackCategory.TEST_PARITY]
     assert (
         len(parity),
@@ -345,7 +346,7 @@ def test_feedback_analyzer_positive_reinforcement() -> None:
         quality_score=100.0,
         scan_metrics=mod_scan,
     )
-    feedback = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
+    feedback, _ = FeedbackAnalyzer.generate_feedback([eval_item], Path("."))
     reinforce = [f for f in feedback if f.category == FeedbackCategory.POSITIVE_REINFORCEMENT]
     assert len(reinforce) == 1
     assert "elegant" in reinforce[0].headline
@@ -565,12 +566,49 @@ def test_a_failing_smell_quantifier_degrades_the_loop_instead_of_breaking_it(
         def analyze(paths: object, include_advisory: bool = True) -> object:
             raise OSError("quantifier exploded")
 
-    monkeypatch.setattr(workbench, "_load_smell_quantifier", lambda: _FailingQuantifier())
+    monkeypatch.setattr(workbench, "load_example", lambda root, example, module: _FailingQuantifier())
     feedback: list[ImprovementFeedback] = []
 
-    FeedbackAnalyzer._analyze_structural_decay([], feedback, tmp_path)
+    smell_metrics = FeedbackAnalyzer._analyze_structural_decay([], feedback, tmp_path)
 
-    assert (feedback, "quantifier exploded" in capsys.readouterr().err) == ([], True)
+    assert (
+        feedback,
+        smell_metrics.status,
+        "quantifier exploded" in smell_metrics.reason,
+        "quantifier exploded" in capsys.readouterr().err,
+    ) == ([], "unavailable", True, True)
+
+
+def test_a_missing_smell_quantifier_is_named_in_the_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cycle that has no smell metrics says so in its result, and gives the reason.
+
+    The workbench had its own loader. It returned None on ImportError, so the report had
+    no smell metrics and no sign that they were missing (AGENTS.md §10a.4).
+    """
+    import resource_iteration_workbench as workbench
+
+    real_load_example = workbench.load_example
+
+    def _load_without_quantifier(root: Path, example: str, module: str) -> object:
+        if example == "code-smell-quantifier":
+            raise ModuleNotFoundError("No module named 'radon'", name="radon")
+        return real_load_example(root, example, module)
+
+    monkeypatch.setattr(workbench, "load_example", _load_without_quantifier)
+    (tmp_path / "app.py").write_text("def hello(): return 'world'\n", encoding="utf-8")
+    bench = ResourceIterationWorkbench(root_dir=tmp_path, baseline_path=tmp_path / "baseline.json")
+
+    report = bench.run_cycle(execute_tests=False)
+    smell_metrics = report.to_dict()["smell_metrics"]
+
+    assert (
+        smell_metrics["status"],
+        "code-smell-quantifier" in smell_metrics["reason"],
+        "No module named 'radon'" in smell_metrics["reason"],
+        smell_metrics["reason"] in bench.render_report(report),
+    ) == ("unavailable", True, True, True)
 
 
 _PRIVATE_IP = ".".join(["10", "0", "0", "5"])

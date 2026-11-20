@@ -85,6 +85,7 @@ Rather than going passive when code meets passing thresholds, the feedback engin
 - **Test Parity**: Flags non-test modules lacking companion test suites in `tests/test_<stem>.py`.
 - **Contract Completeness**: Identifies public functions missing descriptive docstrings or explicit type annotations.
 - **Latency Budget**: Flags test suites exceeding fast-feedback targets ($> 2.0$s) to protect agent iteration agility.
+- **Structural Decay**: Runs the code smell quantifier (`examples/code-smell-quantifier/`) on the scanned modules and adds its gating findings. If the quantifier cannot load or run, the cycle continues without these findings. The report field `smell_metrics` then has the status `unavailable` and the reason, and the scorecard shows the same reason.
 - **Positive Reinforcement**: Certifies and highlights exemplary architectural patterns to guide peer agents.
 
 ### 5. Phase 5: ITERATE / BACKLOG (Recursive Action Dispatch)

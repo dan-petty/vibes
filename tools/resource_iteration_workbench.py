@@ -38,6 +38,7 @@ MAX_ALLOWED_NESTING = 5
 TEST_LATENCY_CEILING_SECONDS = 2.0
 CANONICAL_MOCK_DOMAIN = "example.com"
 TOOLING_ROOT = Path(__file__).resolve().parent.parent
+SMELL_EXAMPLE = "code-smell-quantifier"
 
 # Allowed documentation networks for zero-trust compliance
 
@@ -222,6 +223,28 @@ class ImprovementFeedback:
         }
 
 
+@dataclass(frozen=True)
+class SmellMetrics:
+    """Whether the code smell quantifier measured this cycle, and the reason when it did not.
+
+    The quantifier is an example program, so a checkout can lack it or its dependencies.
+    The loop then continues without smell findings, and this record says so in the report
+    (AGENTS.md §10a.4).
+    """
+
+    status: str = "available"
+    reason: str = ""
+
+    @classmethod
+    def unavailable(cls, reason: str) -> SmellMetrics:
+        """Record that the report has no smell findings, and the reason."""
+        return cls(status="unavailable", reason=reason)
+
+    def to_dict(self) -> dict[str, str]:
+        """Serialize the smell metrics status to a JSON-compatible dictionary."""
+        return {"status": self.status, "reason": self.reason}
+
+
 @dataclass
 class IterationReport:
     """Top-level iteration report encompassing all evaluated resources."""
@@ -230,6 +253,7 @@ class IterationReport:
     overall_health: HealthStatus
     overall_score: float
     resources_evaluated: list[ReviewEvaluation]
+    smell_metrics: SmellMetrics
     total_passed_tests: int = 0
     total_failed_tests: int = 0
     total_complexity_violations: int = 0
@@ -248,6 +272,7 @@ class IterationReport:
             "prescriptive_action": self.prescriptive_action,
             "resources_evaluated": [r.to_dict() for r in self.resources_evaluated],
             "improvement_feedback": [f.to_dict() for f in self.improvement_feedback],
+            "smell_metrics": self.smell_metrics.to_dict(),
         }
 
 
@@ -396,26 +421,6 @@ class _FunctionAggregate:
             self.functions_without_docstrings.append(reading.missing_docstring)
         if reading.missing_type_hints:
             self.functions_without_type_hints.append(reading.missing_type_hints)
-
-
-def _load_smell_quantifier() -> Any | None:
-    """Import the code smell quantifier from the examples tree, if it is present.
-
-    Loaded lazily and optionally: the workbench must keep working in a checkout where the
-    example has been removed, so an absent quantifier degrades the loop rather than
-    breaking it.
-    """
-    example = Path(__file__).resolve().parent.parent / "examples" / "code-smell-quantifier"
-    if not (example / "smell_quantifier.py").exists():
-        return None
-    if str(example) not in sys.path:
-        sys.path.insert(0, str(example))
-    try:
-        import smell_quantifier  # type: ignore[import-not-found]
-
-        return smell_quantifier
-    except ImportError:
-        return None
 
 
 def _load_docs_validator_cls() -> type[Any]:
@@ -925,14 +930,17 @@ def _collect_decay_targets(evaluations: Sequence[ReviewEvaluation], root_dir: Pa
     ]
 
 
-def _run_quantifier_safe(quantifier: Any, targets: list[Path]) -> list[Any]:
-    """Execute smell quantifier safely, returning gating findings or empty list on error."""
+def _run_quantifier_safe(quantifier: Any, targets: list[Path]) -> tuple[list[Any], SmellMetrics]:
+    """Run the smell quantifier and return its gating findings and the status of the metrics.
+
+    An analysis error gives no findings and an unavailable status with the error as reason.
+    """
     try:
         report = quantifier.analyze(targets, include_advisory=False)
-        return list(report.gating)
     except (OSError, SyntaxError, ValueError) as err:
         print(f"⚠️  Structural decay analysis unavailable: {err}", file=sys.stderr)
-        return []
+        return [], SmellMetrics.unavailable(f"{SMELL_EXAMPLE} analysis failed: {err}")
+    return list(report.gating), SmellMetrics()
 
 
 def _collect_test_and_prod_paths(
@@ -974,8 +982,11 @@ class FeedbackAnalyzer:
         cls,
         evaluations: list[ReviewEvaluation],
         root_dir: Path,
-    ) -> list[ImprovementFeedback]:
-        """Analyze review evaluations to generate prioritized improvement feedback."""
+    ) -> tuple[list[ImprovementFeedback], SmellMetrics]:
+        """Analyze review evaluations to generate prioritized improvement feedback.
+
+        Also return the status of the smell metrics, because a cycle can run without them.
+        """
         feedback: list[ImprovementFeedback] = []
         for eval_item in evaluations:
             cls._analyze_refactoring_headroom(eval_item, feedback)
@@ -983,8 +994,8 @@ class FeedbackAnalyzer:
             cls._analyze_execution_telemetry(eval_item, feedback)
             cls._analyze_positive_reinforcement(eval_item, feedback)
         cls._analyze_test_parity(evaluations, feedback, root_dir)
-        cls._analyze_structural_decay(evaluations, feedback, root_dir)
-        return sorted(feedback, key=lambda f: (cls._priority_rank(f.priority), f.target))
+        smell_metrics = cls._analyze_structural_decay(evaluations, feedback, root_dir)
+        return sorted(feedback, key=lambda f: (cls._priority_rank(f.priority), f.target)), smell_metrics
 
     @staticmethod
     def _priority_rank(priority: FeedbackPriority) -> int:
@@ -1131,14 +1142,20 @@ class FeedbackAnalyzer:
         evaluations: Sequence[ReviewEvaluation],
         feedback: list[ImprovementFeedback],
         root_dir: Path,
-    ) -> None:
-        """Surface gating code smells the complexity and depth caps cannot see."""
-        quantifier = _load_smell_quantifier()
-        if quantifier is None:
-            return
+    ) -> SmellMetrics:
+        """Surface gating code smells the complexity and depth caps cannot see.
+
+        The quantifier is optional: when it does not load or does not run, the loop
+        continues and the returned status gives the reason.
+        """
+        try:
+            quantifier = load_example(TOOLING_ROOT, SMELL_EXAMPLE, "smell_quantifier")
+        except ImportError as err:
+            return SmellMetrics.unavailable(f"{SMELL_EXAMPLE} example did not load: {err}")
         targets = _collect_decay_targets(evaluations, root_dir)
-        gating = _run_quantifier_safe(quantifier, targets)
+        gating, smell_metrics = _run_quantifier_safe(quantifier, targets)
         feedback.extend(cls._decay_feedback(finding) for finding in gating[:10])
+        return smell_metrics
 
     @staticmethod
     def _decay_feedback(finding: Any) -> ImprovementFeedback:
@@ -1218,11 +1235,11 @@ class ResourceIterationWorkbench:
             evaluations.append(evaluation)
 
         # Phase 4: FEEDBACK (Meaningful Improvement Analysis)
-        feedback_items = FeedbackAnalyzer.generate_feedback(evaluations, self.root_dir)
+        feedback_items, smell_metrics = FeedbackAnalyzer.generate_feedback(evaluations, self.root_dir)
 
         # Phase 5: ITERATE
         report = self._synthesize_report(
-            evaluations, (total_passed, total_failed, total_violations), feedback_items
+            evaluations, (total_passed, total_failed, total_violations), feedback_items, smell_metrics
         )
         self._save_baseline(evaluations)
         return report
@@ -1282,22 +1299,23 @@ class ResourceIterationWorkbench:
         self,
         evals: list[ReviewEvaluation],
         test_counts: tuple[int, int, int],
-        feedback: list[ImprovementFeedback] | None = None,
+        feedback: list[ImprovementFeedback],
+        smell_metrics: SmellMetrics,
     ) -> IterationReport:
-        fb_list = feedback or []
         if not evals:
             return IterationReport(
                 timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 overall_health=HealthStatus.HEALTHY,
                 overall_score=100.0,
                 resources_evaluated=[],
-                improvement_feedback=fb_list,
+                smell_metrics=smell_metrics,
+                improvement_feedback=feedback,
             )
 
         passed, failed, violations = test_counts
         avg_score = round(sum(e.quality_score for e in evals) / len(evals), 1)
         overall_health, action = self._resolve_overall_health_and_action(
-            evals, (failed, violations), avg_score, fb_list
+            evals, (failed, violations), avg_score, feedback
         )
 
         return IterationReport(
@@ -1305,11 +1323,12 @@ class ResourceIterationWorkbench:
             overall_health=overall_health,
             overall_score=avg_score,
             resources_evaluated=evals,
+            smell_metrics=smell_metrics,
             total_passed_tests=passed,
             total_failed_tests=failed,
             total_complexity_violations=violations,
             prescriptive_action=action,
-            improvement_feedback=fb_list,
+            improvement_feedback=feedback,
         )
 
     @staticmethod
@@ -1329,6 +1348,7 @@ class ResourceIterationWorkbench:
             f"Timestamp: {report.timestamp} | Overall Health: [{report.overall_health.value}] | Score: {report.overall_score}/100",
             f"Tests Passed: {report.total_passed_tests} | Tests Failed: {report.total_failed_tests} | Complexity Violations: {report.total_complexity_violations}",
             f"Prescriptive Action: {report.prescriptive_action}",
+            *self._render_smell_metrics(report.smell_metrics),
             "------------------------------------------------------------------------------------------",
             f"{'RESOURCE':<45} | {'TYPE':<13} | {'M':<3} | {'SCORE':<5} | {'STATUS'}",
             "------------------------------------------------------------------------------------------",
@@ -1351,6 +1371,13 @@ class ResourceIterationWorkbench:
             "=========================================================================================="
         )
         return "\n".join(lines)
+
+    @staticmethod
+    def _render_smell_metrics(smell_metrics: SmellMetrics) -> list[str]:
+        """Return a scorecard line when the smell metrics are missing, else no line."""
+        if smell_metrics.status == "available":
+            return []
+        return [f"⚠️  Smell Metrics: UNAVAILABLE ({smell_metrics.reason})"]
 
     @staticmethod
     def _render_feedback_section(feedback: list[ImprovementFeedback]) -> list[str]:
