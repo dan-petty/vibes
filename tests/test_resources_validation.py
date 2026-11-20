@@ -111,17 +111,16 @@ def test_docker_compose_validity_and_services() -> None:
     compose_path = RESOURCES_DIR / "docker-compose" / "docker-compose.yml"
     assert compose_path.is_file(), f"Missing compose file: {compose_path}"
 
-    docs = _load_all_yaml_documents(compose_path)
-    compose = docs[0]
-
-    assert "services" in compose
-    services = compose["services"]
+    compose = _load_all_yaml_documents(compose_path)[0]
+    services = compose.get("services", {})
     required_services = {"jaeger", "otel-collector", "prometheus", "valkey", "grafana", "agent-sandbox"}
-    assert required_services.issubset(set(services.keys()))
+    sandbox = services.get("agent-sandbox", {})
 
-    sandbox = services["agent-sandbox"]
-    assert sandbox.get("read_only") is True
-    assert sandbox.get("user") == "10001:10001"
+    assert (
+        sorted(required_services - set(services)),
+        sandbox.get("read_only"),
+        sandbox.get("user"),
+    ) == ([], True, "10001:10001")
 
 
 def test_sanitization_across_all_resource_files() -> None:

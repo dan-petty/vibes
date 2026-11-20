@@ -225,17 +225,20 @@ def test_boundary_guard_symlink_containment(tmp_path: Path) -> None:
 def test_cli_demo_and_scan(capsys: Any, tmp_path: Path) -> None:
     """Verify CLI demo execution and single-file scanning."""
     exit_demo = main(["--demo"])
-    assert exit_demo == 0
     captured_demo = capsys.readouterr().out
-    assert "POLYGLOT CST INGESTION SCORECARD" in captured_demo
 
     sample_py = tmp_path / "sample.py"
     sample_py.write_text("def run_job(): pass\n", encoding="utf-8")
 
     exit_scan = main(["--scan", str(sample_py)])
-    assert exit_scan == 0
     captured_scan = capsys.readouterr().out
-    assert "run_job" in captured_scan
+
+    assert (
+        exit_demo,
+        "POLYGLOT CST INGESTION SCORECARD" in captured_demo,
+        exit_scan,
+        "run_job" in captured_scan,
+    ) == (0, True, 0, True)
 
 
 def test_node_decision_weights_and_extractor_dispatch() -> None:

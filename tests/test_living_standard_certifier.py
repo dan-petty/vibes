@@ -79,6 +79,16 @@ REMOTE_CODE_LOAD = (
 # "IGN" spelled in invisible Unicode Tag characters (U+E0000 block).
 TAG_SMUGGLED_PROMPT = "Summarize." + "".join(chr(0xE0000 + ord(char)) for char in "IGN") + "\n"
 
+
+def _waived_detector_fixture(waiver_line: int) -> str:
+    """Return a detector fixture that smuggles tags and waives INJ on the given line."""
+    padding = "\n" * (waiver_line - 2)
+    return (
+        f'"""Negative fixture for the prompt injection scanner."""{padding}\n'
+        "# prompt-scanner: allow[INJ] — negative fixture asserting the detector fires\n"
+        f"PROMPT = {TAG_SMUGGLED_PROMPT!r}\n"
+    )
+
 # Each case adds files to the clean repository so that exactly one pillar's rule breaks.
 BROKEN_RULES: dict[str, tuple[PillarId, dict[str, str]]] = {
     "complexity": (PillarId.P1_COMPLEXITY_BOUNDS, {"branchy.py": BRANCHY_FUNCTION}),
@@ -146,6 +156,17 @@ def test_broken_rule_fails_its_pillar(tmp_path: Path, case: str) -> None:
         True,
         CertificationStatus.FAILED,
     ), pillar.summary
+
+
+@pytest.mark.parametrize(("waiver_line", "passed"), [(3, True), (20, False)])
+def test_prompt_pillar_honors_only_a_header_waiver(tmp_path: Path, waiver_line: int, passed: bool) -> None:
+    """A justified waiver in the first 15 lines mutes a detector fixture; a lower one mutes nothing."""
+    files = {**CLEAN_FILES, "tests/test_detector.py": _waived_detector_fixture(waiver_line)}
+    root = _write_repository(tmp_path / "waived", files)
+
+    pillar = _pillar(evaluate_living_standard(root), PillarId.P6_PROMPT_GUARDRAILS)
+
+    assert pillar.passed is passed, pillar.summary
 
 
 def test_missing_evaluator_is_reported_not_evaluated(

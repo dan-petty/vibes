@@ -6,6 +6,8 @@ lifted from the page is untrusted input to that parser — the same rule this re
 applies to a workflow `run:` block and to a contract's rendered answers.
 """
 
+# prompt-scanner: allow[INJ] — hostile page text that the tests assert the extractor escapes
+
 from __future__ import annotations
 
 import sys

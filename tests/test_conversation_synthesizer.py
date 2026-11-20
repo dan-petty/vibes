@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Automated tests for Autonomous Conversation-to-Case-Study Synthesizer."""
 
+# prompt-scanner: allow[EGR001] — fake tokens that the redaction tests assert the sanitizer masks
+
 from __future__ import annotations
 
 import json

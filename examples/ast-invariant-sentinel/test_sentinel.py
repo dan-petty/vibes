@@ -17,6 +17,7 @@ from sentinel import (
     ComplexityVisitor,
     ConfigOverrides,
     SentinelConfig,
+    WaiverPolicy,
     _read_lsp_message,
     _write_lsp_message,
     audit_file,
@@ -33,6 +34,7 @@ from sentinel import (
     render_presets_table,
     resolve_config,
     run_lsp_server,
+    scan_waivers,
 )
 
 
@@ -274,6 +276,32 @@ def test_waiver_below_module_header_is_not_honored(tmp_path):
     )
     invariants = [v.invariant for v in audit_file(module)]
     assert sorted(invariants) == ["WaiverIntegrity", "ZeroTrustSanitization"]
+
+
+def test_waiver_naming_a_rule_with_digits_is_not_waivable_rather_than_malformed(tmp_path):
+    """A rule name such as EGR001 parses; the sentinel then refuses it because it is not its rule."""
+    module = _write_module(
+        tmp_path,
+        "foreign.py",
+        '"""Doc."""\n# sentinel: allow[EGR001] — a rule of the prompt injection scanner\n',
+    )
+    assert [(v.invariant, "is not waivable" in v.message) for v in audit_file(module)] == [
+        ("WaiverIntegrity", True)
+    ]
+
+
+def test_waiver_policy_reads_only_the_tag_of_its_own_tool():
+    """Another tool's waiver is invisible to the sentinel, and the sentinel's to that tool."""
+    other = WaiverPolicy("other-tool", frozenset({"RULE1"}), "Rule")
+    source = (
+        '"""Doc."""\n'
+        "# sentinel: allow[ZeroTrustSanitization] — fixture for the sentinel detector\n"
+        "# other-tool: allow[RULE1] — fixture for the detector of the other tool\n"
+    )
+    assert (scan_waivers("doc.py", source).waived, scan_waivers("doc.py", source, other).waived) == (
+        frozenset({"ZeroTrustSanitization"}),
+        frozenset({"RULE1"}),
+    )
 
 
 def test_directory_sweep_audits_test_files(tmp_path):

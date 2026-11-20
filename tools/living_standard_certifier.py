@@ -19,6 +19,10 @@ the target root, and passes only when they checked at least one file and found n
   `--strict` does) and the supply chain audit (offline, every finding).
 - Pillar 6, prompt injection vectors: the prompt injection scanner, INJ rules. Canary
   leakage needs the canary values, so the certifier does not check it.
+
+The target root is a repository that people review, so the prompt injection scanner
+applies the header waivers of its files (`# prompt-scanner: allow[INJ] <justification>`),
+as the sentinel applies its own.
 - Pillar 7, deprecation contracts against the `[project]` version in pyproject.toml: the
   deprecation lifecycle sentinel. No instrument finds feature flags in a repository, so
   flag expiry is not checked.
@@ -188,7 +192,7 @@ def _prompt_scan_run(root: Path, rule_prefix: str) -> InstrumentRun:
     """Run the prompt injection scanner and keep the findings of the rules named."""
     from prompt_injection_scanner import scan_paths
 
-    summary = scan_paths(_source_files(root, SCANNED_TEXT_SUFFIXES))
+    summary = scan_paths(_source_files(root, SCANNED_TEXT_SUFFIXES), honor_waivers=True)
     findings = tuple(
         _finding(root, f.file_path, f.line_number, f.message)
         for f in summary.findings

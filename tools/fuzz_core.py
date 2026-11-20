@@ -24,7 +24,8 @@ This module supplies those inputs. Three properties matter more than volume:
 The addresses in the generated corpus are deliberate. RFC 5737 documentation ranges
 appear as literals; the private ranges §2 forbids are assembled from octets at runtime,
 so the generator can drive the sanitization detector's positive path without this file
-carrying the literal it exists to test for.
+carrying the literal it exists to test for. For the same reason the byte order mark in the
+control bytes comes from `chr`: the prompt injection scanner reports it in a literal.
 """
 
 from __future__ import annotations
@@ -426,7 +427,7 @@ def generate(corpus: str, seed: int) -> Case:
 # Bytes chosen because each one reaches a different failure path: NUL is rejected by
 # `ast.parse` with ValueError rather than SyntaxError, a lone CR changes line counting,
 # a BOM mid-file is not a BOM, and the escapes are legal in UTF-8 but not in source.
-_CONTROL_BYTES: Final[tuple[str, ...]] = ("\x00", "\r", "\x0b", "\x0c", "﻿", "\x1b[0m", "\t")
+_CONTROL_BYTES: Final[tuple[str, ...]] = ("\x00", "\r", "\x0b", "\x0c", chr(0xFEFF), "\x1b[0m", "\t")
 
 
 def _lines(text: str) -> list[str]:
