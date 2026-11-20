@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
+from example_loader import load_example
+
 SARIF_VERSION: Final[str] = "2.1.0"
 SARIF_SCHEMA_URI: Final[str] = (
     "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
@@ -191,21 +193,6 @@ def validate_log(log: dict[str, Any], schema_path: Path = DEFAULT_SCHEMA_PATH) -
 TOOLING_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 
 
-def _load_example(root: Path, example: str, module: str) -> Any:
-    """Import a module that lives in `examples/`, which is not a package.
-
-    The examples are standalone demonstrations, deliberately runnable on their own, so
-    they sit on no import path. Each adapter puts its own example directory on `sys.path`
-    the same way the workbench does, rather than the examples being restructured to suit
-    one consumer.
-    """
-    del root
-    directory = (TOOLING_ROOT / "examples" / example).resolve()
-    if str(directory) not in sys.path:
-        sys.path.insert(0, str(directory))
-    return __import__(module)
-
-
 def _sentinel_level(invariant: str) -> str:
     """Every architectural invariant is gating, so every breach is an error."""
     del invariant
@@ -214,7 +201,7 @@ def _sentinel_level(invariant: str) -> str:
 
 def sentinel_run(paths: Sequence[Path], root: Path) -> Run:
     """Collect AST invariant violations: complexity, nesting depth, and egress sanitization."""
-    audit_file = _load_example(root, "ast-invariant-sentinel", "sentinel").audit_file
+    audit_file = load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel").audit_file
 
     rules: dict[str, Rule] = {}
     results: list[Result] = []
@@ -251,7 +238,7 @@ def smell_run(paths: Sequence[Path], root: Path, include_advisory: bool = False)
     reason — and 89 of them arriving as code scanning alerts would bury the two findings
     that actually stop a release.
     """
-    analyze = _load_example(root, "code-smell-quantifier", "smell_quantifier").analyze
+    analyze = load_example(TOOLING_ROOT, "code-smell-quantifier", "smell_quantifier").analyze
 
     report = analyze(list(paths), include_advisory=include_advisory)
     gating = {id(finding) for finding in report.gating}

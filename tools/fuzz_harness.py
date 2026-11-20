@@ -52,6 +52,7 @@ from typing import Any, Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from example_loader import load_example
 from fuzz_core import SUFFIXES, Case, generate, mutate, shrink
 
 # The instruments live beside this tool, not inside whatever tree is being fuzzed.
@@ -158,14 +159,6 @@ class Campaign:
 # withdrawn, and it should be a deliberate edit rather than a silent `except`.
 
 
-def _example(name: str, module: str) -> Any:
-    """Import a module from `examples/`, which is a directory of standalone programs."""
-    directory = (TOOLING_ROOT / "examples" / name).resolve()
-    if str(directory) not in sys.path:
-        sys.path.insert(0, str(directory))
-    return __import__(module)
-
-
 def _write(workspace: Path, target: str, text: str, suffix: str) -> Path:
     """Materialize a case in the target's own scratch directory and return its path."""
     directory = workspace / target
@@ -178,7 +171,7 @@ def _write(workspace: Path, target: str, text: str, suffix: str) -> Path:
 def _invoke_sentinel(text: str, workspace: Path) -> object:
     """Audit a generated module for complexity, nesting and egress invariants."""
     path = _write(workspace, "sentinel", text, ".py")
-    return _example("ast-invariant-sentinel", "sentinel").audit_file(path)
+    return load_example(TOOLING_ROOT, "ast-invariant-sentinel", "sentinel").audit_file(path)
 
 
 def _invoke_smells(text: str, workspace: Path) -> object:
@@ -193,7 +186,7 @@ def _invoke_smells(text: str, workspace: Path) -> object:
     against 0.02s, and moved the yield from 3 findings to 263.
     """
     path = _write(workspace, "smells", text, ".py")
-    analyze = _example("code-smell-quantifier", "smell_quantifier").analyze
+    analyze = load_example(TOOLING_ROOT, "code-smell-quantifier", "smell_quantifier").analyze
     return analyze([path], include_advisory=True).findings
 
 
