@@ -25,12 +25,24 @@ from benchmark_runner import (
     run_token_economy_benchmark,
 )
 
-# The Rust track fails when cargo cannot run, so its tests skip, with a reason, where
-# cargo is not installed. GitHub's runners have cargo, so CI runs them.
-requires_cargo = pytest.mark.skipif(
-    shutil.which("cargo") is None,
-    reason="cargo is not on PATH, so the Rust track cannot run cargo test",
-)
+
+def _cargo_skip_reason() -> str:
+    """Give the reason why cargo cannot build the Rust crate here, or an empty string.
+
+    On Linux, rustc links with ``cc``. It does not read the ``CC`` variable, so this check
+    does not read it either.
+    """
+    if shutil.which("cargo") is None:
+        return "cargo is not on PATH, so the Rust track cannot run cargo test"
+    if shutil.which("cc") is None:
+        return "the C linker cc is not on PATH, so cargo test cannot link the Rust crate"
+    return ""
+
+
+# The Rust track fails when cargo cannot build the crate, so its tests skip, with a reason,
+# where cargo or the C linker cc is not installed. GitHub's runners have both, so CI runs them.
+_CARGO_SKIP_REASON = _cargo_skip_reason()
+requires_cargo = pytest.mark.skipif(bool(_CARGO_SKIP_REASON), reason=_CARGO_SKIP_REASON)
 
 _CARGO_TOML = '[package]\nname = "stand_in"\nversion = "0.1.0"\n'
 
@@ -121,6 +133,23 @@ def test_run_all_benchmarks_scorecard() -> None:
         len(scorecard.results),
         scorecard.overall_score >= 70.0,
     ) == (4, 4, 4, True)
+
+
+@pytest.mark.parametrize(
+    ("on_path", "reason"),
+    [
+        (set(), "cargo is not on PATH, so the Rust track cannot run cargo test"),
+        ({"cargo"}, "the C linker cc is not on PATH, so cargo test cannot link the Rust crate"),
+        ({"cargo", "cc"}, ""),
+    ],
+    ids=["no-cargo", "no-linker", "can-build"],
+)
+def test_rust_track_tests_skip_when_cargo_cannot_build(
+    monkeypatch: pytest.MonkeyPatch, on_path: set[str], reason: str
+) -> None:
+    """cargo cannot link the crate without cc, so the Rust track tests skip and give that reason."""
+    monkeypatch.setattr(shutil, "which", lambda name: f"/stand-in/{name}" if name in on_path else None)
+    assert _cargo_skip_reason() == reason
 
 
 @pytest.fixture
