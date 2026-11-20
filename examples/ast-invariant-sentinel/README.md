@@ -145,7 +145,8 @@ the comment.
 Only `ZeroTrustSanitization` is waivable. `CyclomaticComplexity` and `NestingDepth` are not: a metric
 you can opt out of is not an invariant. A malformed waiver, one naming a non-waivable invariant, or one
 lacking a justification of at least 12 characters raises `WaiverIntegrity` **and** leaves the original
-violation reported.
+violation reported. `--fix` does not write a justification: a bare waiver stays as written and
+raises `WaiverIntegrity` until a person writes the reason.
 
 Another tool can use the same parser with its own tag and its own waivable rules:
 `scan_waivers(path, source, WaiverPolicy(tag, waivable, noun))`. A tool reads only the comments that

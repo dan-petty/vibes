@@ -89,7 +89,7 @@ def _violation_to_lsp_diagnostic(v: Violation) -> dict[str, Any]:
 
 ### 3.3 Safe In-Editor QuickFix Code Actions
 
-When an editor requests code actions for an affected range, the server synthesizes a `quickfix` `WorkspaceEdit` providing deterministic source remediation. `auto_fix_source` fixes only `ZeroTrustSanitization` findings (IP literals, subdomains and waiver comments). It does not fix complexity or nesting violations:
+When an editor requests code actions for an affected range, the server synthesizes a `quickfix` `WorkspaceEdit` providing deterministic source remediation. `auto_fix_source` fixes only `ZeroTrustSanitization` findings (IP literals and subdomains). It does not write a waiver justification, because only a person knows why a waiver exists, and it does not fix complexity or nesting violations:
 
 ```python
 def _handle_code_action(

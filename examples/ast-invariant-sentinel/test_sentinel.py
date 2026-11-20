@@ -722,15 +722,35 @@ def test_auto_fix_source_remediates_subdomain() -> None:
     ) == (1, True, 0)
 
 
-def test_auto_fix_source_remediates_waiver_justification() -> None:
-    """auto_fix_source appends compliant justification to bare or truncated waiver pragmas."""
-    source = "# sentinel: allow[ZeroTrustSanitization]\n"
+def test_auto_fix_source_keeps_bare_waiver_and_fixes_ip() -> None:
+    """auto_fix_source writes no waiver reason; it still replaces a private IP in the same source."""
+    bare_waiver = "# sentinel: allow[ZeroTrustSanitization]"
+    bad_ip = "192." + "168.1.10"
+    source = f'{bare_waiver}\nHOST = "{bad_ip}"\n'
     fixed, count = auto_fix_source(source)
     assert (
         count,
-        "sanitized mock reference" in fixed,
-        fixed.startswith("# sentinel: allow[ZeroTrustSanitization] —"),
-    ) == (1, True, True)
+        fixed.splitlines()[0],
+        bad_ip in fixed,
+        SAFE_DOC_REPLACEMENT_IP in fixed,
+    ) == (1, bare_waiver, False, True)
+
+
+def test_cli_fix_leaves_bare_waiver_and_reports_it(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """--fix leaves a bare waiver header as written and reports it as WaiverIntegrity, so a person writes the reason."""
+    py_file = tmp_path / "bare_waiver.py"
+    original = '"""Fixture module."""\n\n# sentinel: allow[ZeroTrustSanitization]\n\nVALUE = 1\n'
+    py_file.write_text(original, encoding="utf-8")
+
+    exit_code = main(["sentinel.py", "--fix", str(py_file)])
+    output = capsys.readouterr().out
+
+    assert (
+        exit_code,
+        py_file.read_text(encoding="utf-8"),
+        "Applied 0 automatic remediation(s)" in output,
+        f"[WaiverIntegrity] {py_file}:3" in output,
+    ) == (1, original, True, True)
 
 
 def test_auto_fix_source_clean_noop() -> None:

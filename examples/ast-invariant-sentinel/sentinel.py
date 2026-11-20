@@ -109,7 +109,6 @@ class WaiverPolicy:
 
 
 SENTINEL_WAIVERS = WaiverPolicy("sentinel", WAIVABLE_INVARIANTS)
-WAIVER_PRAGMA_RE = SENTINEL_WAIVERS.pragma
 
 
 @dataclass(frozen=True)
@@ -1290,30 +1289,17 @@ def _fix_subdomains_in_line(line: str) -> tuple[str, int]:
     return fixed, count
 
 
-def _is_valid_waiver_line(line: str) -> bool:
-    """Return True if line has a compliant waiver justification."""
-    match = WAIVER_PRAGMA_RE.match(line.strip())
-    return bool(match and len(match.group("reason").strip()) >= MIN_WAIVER_JUSTIFICATION_CHARS)
-
-
-def _fix_waiver_in_line(line: str) -> tuple[str, int]:
-    """Normalize malformed waiver justifications to compliant form."""
-    if "sentinel: allow" not in line or not line.strip().startswith("#"):
-        return line, 0
-    if _is_valid_waiver_line(line):
-        return line, 0
-    inv_match = re.search(r"allow\[([A-Za-z]+)\]", line)
-    if not inv_match or inv_match.group(1) not in WAIVABLE_INVARIANTS:
-        return line, 0
-    return f"# sentinel: allow[{inv_match.group(1)}] — sanitized mock reference\n", 1
-
-
 def auto_fix_source(
     source: str,
     file_path: str = "<source>",
     config: SentinelConfig | None = None,
 ) -> tuple[str, int]:
-    """Automatically remediate fixable invariant violations in Python source."""
+    """Automatically remediate fixable invariant violations in Python source.
+
+    It replaces private IPs and normalizes mock subdomains. It never writes a waiver
+    justification: only a person knows why a waiver exists, so a bare waiver stays as
+    written and the audit reports it as `WaiverIntegrity` (AGENTS.md §2.3).
+    """
     active_config = config or SentinelConfig(active_rules=ALL_INVARIANT_RULES)
     if not active_config.is_rule_active("ZeroTrustSanitization"):
         return source, 0
@@ -1325,8 +1311,7 @@ def auto_fix_source(
     for line in lines:
         curr, fixes1 = _fix_ip_in_line(line)
         curr, fixes2 = _fix_subdomains_in_line(curr)
-        curr, fixes3 = _fix_waiver_in_line(curr)
-        total_fixes += fixes1 + fixes2 + fixes3
+        total_fixes += fixes1 + fixes2
         remediated_lines.append(curr)
 
     if total_fixes == 0:
