@@ -26,6 +26,8 @@ High-density product roadmap, engineering milestones, and open-source curation s
 > [!NOTE]
 > This file records the milestones and their delivered scope. It takes no new work: file new work as a GitHub issue ([AGENTS.md §8.12](../AGENTS.md#8-autonomous-recursive-development-protocol--project-tooling)).
 
+The complexity claims in the milestones below come from `python examples/ast-invariant-sentinel/sentinel.py --preset strict <path>` ($M \le 6$, depth $\le 3$), `--preset pedantic` ($M \le 4$, depth $\le 2$), or `--max-complexity` and `--max-depth` for other ceilings. The sentinel does not count parameters. `ruff check --select PLR0913 --config 'lint.pylint.max-args=4' <path>` checks a claim of at most 4 parameters; set `max-args` to the cap that an item states.
+
 ```mermaid
 timeline
     title Milestone arc, foundations to living standard
@@ -74,7 +76,7 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
   - CI (`ci.yml`, one leg of the `certify` matrix) runs `go vet ./...` and `go test ./...` on the Go package with the Go version that `go.mod` declares.
 - [x] **Rust Memory & Type-State Benchmark Track (`benchmarks/rust/`)**:
   - A Rust crate (`benchmarks/rust/src/lib.rs`) that shows ownership-consuming transitions and type-state builders. No agent or model is run against it.
-  - `benchmarks/benchmark_runner.py` checks the source text for `#![forbid(unsafe_code)]` and runs `cargo test` when `cargo` is installed; the crate's tests assert `size_of::<State>() == 0`. When `cargo` is absent, times out or cannot start, the runner fails the track and reports 0 tests. Invalid lifecycle transitions do not compile, but no test (for example a `compile_fail` doctest) checks this.
+  - `benchmarks/benchmark_runner.py` checks the source text for `#![forbid(unsafe_code)]` and runs `cargo test` when `cargo` is installed; the crate's tests assert `size_of::<State>() == 0`. When `cargo` is absent, times out or cannot start, the runner fails the track and sets `cargo_tests_passed` to 0. Invalid lifecycle transitions do not compile, but no test (for example a `compile_fail` doctest) checks this.
 - [x] **Ephemeral Rootless Docker Sandbox Harness (`examples/ephemeral-container-sandbox/`)**:
   - Execution harness for untrusted agent-generated code inside `docker` / `podman` containers when an engine is present (it does not check that the engine runs rootless), with a POSIX simulator fallback that applies rlimits.
   - Container-mode policy: memory 512MB, 1 CPU and 100 PIDs (limits the engine sets through cgroups), read-only root filesystem, tmpfs scratch space, dropped capabilities (`--cap-drop ALL`), a filtered environment, and `--network none`. An auditor scores the policy against 8 controls modeled on the CIS Docker Benchmark; their labels `CIS-5.1`–`CIS-5.8` are the exhibit's own, and CIS publishes no separate rootless benchmark. The simulator path does not apply the read-only root filesystem or the private tmpfs (6 of 8 controls).
@@ -120,25 +122,25 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
 - [x] **Closed-Loop PR Triage & Invariant Review Bot (`tools/pr_triage_bot.py`)**:
   - Multi-persona code review engine orchestrating specialized persona audits (`security`, `architecture`, `devops`, `qa`) against pull request files and diffs.
   - Generates structured Markdown review summaries with per-persona findings tables, severity aggregation (`error`, `warning`, `info`), and overall verdicts (`APPROVE`, `COMMENT`, `REQUEST_CHANGES`). Machine-readable JSON output (`--json`); no workflow in this repository runs the bot.
-  - Accompanied by a comprehensive 10-test suite in `tests/test_pr_triage_bot.py` with structural tuple equality assertions and 95% coverage, with all functions at $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by a test suite in `tests/test_pr_triage_bot.py` with structural tuple equality assertions. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Autonomous Conversation-to-Case-Study Synthesizer (`tools/conversation_synthesizer.py`)**:
   - Automated pipeline ingesting raw agent trajectory logs (JSONL transcripts), enforcing zero-trust redaction (RFC 5737 IPs, `example.com` domains, secret masking, user path generalization), calculating quantitative telemetry and AST complexity metrics, and drafting structured 5-section observation reports with Mermaid diagrams.
-  - Accompanied by a comprehensive 12-test suite in `tests/test_conversation_synthesizer.py` with structural tuple equality assertions and 98% coverage, with all functions at $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by a test suite in `tests/test_conversation_synthesizer.py` with structural tuple equality assertions. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Multi-Model Leaderboard & Cost-Per-Invariant Index (`tools/model_leaderboard.py`)**:
   - Scores model run records supplied as JSON (`score <file>`) or the built-in sample runs (`sample`, from `generate_sample_benchmark_runs()`). It calls no model. Its pricing catalog names Claude 3.5 Sonnet, GPT-4o, DeepSeek-V3, DeepSeek-R1, Qwen-2.5-Coder-32B and Qwen-2.5-Coder-7B.
   - Markdown and JSON reports: Pass@1 on AST complexity invariants ($M \le 10$, depth $\le 5$), proactive headroom ($M \le 6$, depth $\le 2$), AST-aware patch minimality score, and cloud token expenditure / Cost-Per-Invariant (CPI) index.
-  - Accompanied by a comprehensive 14-test suite in `tests/test_model_leaderboard.py` with structural tuple equality assertions and 100% pass rate, with all functions at $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by a test suite in `tests/test_model_leaderboard.py` with structural tuple equality assertions. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Hierarchical Subagent Slot Offloading Orchestrator (`tools/subagent_orchestrator.py`)**:
   - Multi-agent coordinator implementing the "Big decides, small types, big checks" architectural pattern.
   - Assigns planning to a frontier model tier, typing and refactoring to local model tiers, and verification to deterministic AST oracles. The `demo` subcommand is a mock with fixed model names, statuses and token counts; it calls no model.
   - Telemetry fields for epistemic loss across delegation boundaries, token cost savings, and typed invariant envelope preservation. The 59.6% token offload and 55.8% dollar savings are illustrative output of `python3 tools/subagent_orchestrator.py demo`, computed from token counts hard-coded in `execute_mock_demo()`.
-  - Accompanied by Observation 21 (`observations/systems/21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md`) and a comprehensive 11-test suite in `tests/test_subagent_orchestrator.py` with structural tuple equality assertions and 100% pass rate, with all functions at $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by Observation 21 (`observations/systems/21-hierarchical-subagent-slot-offloading-and-epistemic-loss.md`) and a test suite in `tests/test_subagent_orchestrator.py` with structural tuple equality assertions. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Autonomous Milestone Scope Governor & Release Air-Lock Oracle (`tools/milestone_governor.py`)**:
   - Detects the Milestone Horizon Inflation Trap and autonomous scope cascades seen in `devops-cli` Milestone 36 (`v0.2.23`, 171 closed issues). The governor and its air-lock phases exist only in this repository; devops-cli does not use them.
   - Computes rolling Scope Injection Velocity ($V_{\text{scope}}$), Burn Velocity ($V_{\text{burn}}$), and mathematical Convergence Ratio ($C_R = V_{\text{burn}} / \max(V_{\text{scope}}, 0.01)$), enforcing milestone phase ratchets (`INTAKE` $\to$ `AIR_LOCKED` $\to$ `FROZEN` $\to$ `CLOSED`).
   - Enforces invariant rules: `MLS001` (ScopeExpansionLiveLock when $V_{\text{burn}} - V_{\text{scope}} \le 0.05$ items/day, and a warning when $C_R < 1.2$), `MLS002` (AirLockBoundaryBreach when non-P0 items enter during `AIR_LOCKED` or any item remains open in `FROZEN`), `MLS003` (MegaMilestoneSizingAlert for backlogs $> 50$ warning or $> 100$ error), and `MLS004` (StagnantHorizonRatchet when completion is trapped at $70\%-90\%$ with $\ge 15$ open issues).
   - Implements deterministic automated backlog partitioning (`partition_milestone_rollover`) isolating retained blockers from `vNext` rollover candidates with OASIS SARIF 2.1.0 telemetry export.
-  - Accompanied by Observation 21 (`observations/devops-cli/21-milestone-horizon-expansion-and-autonomous-scope-cascades.md`), architectural pattern (`patterns/milestone-airlock-and-scope-freeze-governance.md`), and comprehensive unit test suite in `tests/test_milestone_governor.py` (13 passed) certified compliant with AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$, $\le 4$ params).
+  - Accompanied by Observation 21 (`observations/devops-cli/21-milestone-horizon-expansion-and-autonomous-scope-cascades.md`), architectural pattern (`patterns/milestone-airlock-and-scope-freeze-governance.md`), and a test suite in `tests/test_milestone_governor.py`. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Comparable-Project Landscape Survey & Gap-to-Roadmap Emitter (`tools/landscape_survey.py`)**:
   - Scores the maturity of comparable open-source projects from mechanical GitHub signals, compares features against this repository's capabilities from a citation-bound manifest, and emits the differences as roadmap deliverables the existing prioritizer already ingests. Facts are cached in a committed snapshot and scored against their own fetch time, so reports are reproducible offline. A feature nobody cited is `unknown`, never absent, so the survey cannot manufacture work.
 - [x] **Supply Chain & Network Integration Audit with Mechanical Repair (`tools/supply_chain_audit.py`)**:
@@ -149,29 +151,29 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
   - Six calibrated presets (`standard`, `strict`, `pedantic`, `relaxed`, `security_only`, `structural_only`) targeting progressive complexity and nesting ceilings from proactive headroom ($M \le 6, d \le 3$) to pedantic kernels ($M \le 4, d \le 2$).
   - TOML configuration discovery reading `[tool.sentinel]` from `pyproject.toml` or `sentinel.toml` using standard library `tomllib`.
   - Ergonomic rule codes and aliases (`CC001`, `ND001`, `ZT001`, `SI001`, `TI001`, `WI001`) with granular `--select`, `--ignore`, and `--extend-select` controls.
-  - Comprehensive 52-test test suite with 100% passing rate. Function-level complexity in the example is $M \le 6$ with $\le 4$ parameters; one function (`_audit_polyglot_path`) reaches depth 4, above the strict preset's $\le 3$.
+  - Accompanied by a test suite in `examples/ast-invariant-sentinel/test_sentinel.py`. Each function in the example is at $M \le 6$ and takes at most 4 parameters; one function (`_audit_polyglot_path`) reaches depth 4, above the strict preset's $\le 3$.
 - [x] **Docs validator: selectable rule presets and TOML configuration (`tools/docs_validator.py`)**:
   - Six calibrated presets (`standard`, `strict`, `structure_only`, `links_only`, `code_only`, `sanitization_only`) targeting specialized validation domains from rapid link checking to full structural and security verification.
   - Automatic configuration discovery from `pyproject.toml` (`[tool.docs_validator]` / `[tool.doclint]`), `docs_validator.toml`, and `.markdownlint.json`.
   - Ergonomic rule codes and aliases (`DOC001` through `DOC010`, `fence`, `mermaid`, `snippet`, `dirmap`, `security`) with granular `--select`, `--ignore`, `--extend-select`, `--preset`, `--config`, and `--list-presets` CLI controls.
-  - Comprehensive 99-test validation suite with 100% passing rate and certified function-level complexity $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by a test suite in `tests/test_docs_validator.py`. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Docs validator: multi-language and multi-format documentation validation (`tools/doc_rules_polyglot.py`)**:
   - Polyglot document format detection (`markdown`, `html`, `rst`, `asciidoc`, `plaintext`) with format-specific link extraction, target anchor discovery, and syntax validation.
   - Snippet validation for 25 fence tags across 12 languages and data formats: Python, JSON, YAML, TOML, XML/SVG/XHTML, HTML, INI/properties, Shell/Bash (with line continuation support), Rust, Go, TypeScript, and JavaScript. Rust, Go, TypeScript and JavaScript get a bracket-balance check only.
   - New `DOC011` / `multi_language` rule with aliases (`multilang`, `polyglot`, `formats`), `polyglot` preset, `--extensions` filter, and `--all-formats` discovery.
-  - Comprehensive unit test suite with 100% passing rate and certified function-level complexity $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by tests in `tests/test_docs_validator.py`. The module passes AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Docs validator: configurable prose style guides and inclusive terminology gates (`tools/doc_rules_style.py`)**:
   - Checks for four terms that the Google Developer Documentation Style Guide and the Microsoft Writing Style Guide advise against (below). It does not implement those guides.
   - Enforces inclusive terminology rules (detecting `blacklist`, `whitelist`, `master/slave`, `sanity check`) with prescriptive replacement guidance.
   - Implements lexical prose sanitization (`_strip_inline_code` with `__code__` placeholders) and CommonMark fence parser integration, so that inline code identifiers and fenced examples are not checked.
   - Detects repeated word artifacts (`the the`) and unresolved drafting placeholders (`TODO`, `FIXME`, `TBD`).
   - Registers rule `DOC014` / `prose_style` with aliases (`style`, `prose`, `vale`, `terminology`) and calibrated `style_only` preset.
-  - Accompanied by Observation 40 (`observations/systems/40-configurable-prose-style-guides-and-inclusive-terminology-gates.md`), pattern documentation, and comprehensive unit tests with 100% pass rate.
+  - Accompanied by Observation 40 (`observations/systems/40-configurable-prose-style-guides-and-inclusive-terminology-gates.md`), pattern documentation, and tests in `tests/test_docs_validator.py`.
 - [x] **Prompt fuzzer: multi-provider model execution (`examples/prompt-mutation-fuzzer/providers.py`)**:
   - Unified model provider abstractions and factory registry driving five model backends out of the box: `MockModelProvider` (deterministic heuristic drift for offline CI), `OpenAIProvider` (/v1/chat/completions), `AnthropicProvider` (/v1/messages), `OllamaProvider` (/api/generate), and `GenericRestProvider` (configurable arbitrary JSON endpoints).
   - Dynamic mutation-to-code execution in `PromptMutationFuzzer`, sending perturbed system prompts to model providers and auditing generated code with AST invariant gates.
   - CLI integration with `--provider`, `--model`, `--api-base`, `--api-key`, and `--list-providers` flags.
-  - Comprehensive 21-test validation suite with 100% passing rate and certified function-level complexity $M \le 6$, depth $\le 3$, and $\le 4$ parameters.
+  - Accompanied by tests in `examples/prompt-mutation-fuzzer/test_fuzzer.py`. The module and its tests pass AST Invariant Sentinel `--preset strict` ($M \le 6$, depth $\le 3$), and each function takes at most 4 parameters.
 - [x] **Code smell quantifier: Radon cyclomatic complexity ranking and gating (`examples/code-smell-quantifier/`)**:
   - Direct AST-level cyclomatic complexity calculation using Radon's `cc_visit_ast` on the shared in-memory AST.
   - Closes the landscape survey capability gap for `cyclomatic_complexity` under `smell-quantification` (previously held by `rubik/radon`).
@@ -186,15 +188,13 @@ Three milestones are complete and archived in [`docs/archive/delivered-milestone
   - Pure-Python Type-2 regex token normalization erasing identifiers and literals to generic `<ID>` and `<LIT>` placeholders while preserving control flow keywords, operators, and structural syntax across TypeScript/JavaScript (`.ts`, `.tsx`, `.js`), Go (`.go`), Rust (`.rs`), C/C++ (`.c`, `.cpp`, `.h`), Shell (`.sh`, `.bash`), JSON, and YAML.
   - Closes the final open `build` gap in the landscape survey (`multi_language` under `smell-quantification`, previously held by `kucherenko/jscpd`), reducing total survey gaps from 5 down to 4 and completely eliminating all open build gaps across the entire repository (0 build gaps remaining).
   - Language-agnostic Halstead volume, operator/operand counts, and normalized Maintainability Index (0–100 scale) for polyglot codebases without requiring native compiler bindings or node/npm dependencies.
-  - Accompanied by Observation 44 (`observations/systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md`), architectural pattern (`patterns/polyglot-token-normalization-and-clone-quantification.md`), and comprehensive unit test suite in `examples/code-smell-quantifier/test_smell_quantifier.py` (39 passed). The example's functions are at $M \le 6$ and $\le 4$ params; one reaches depth 4.
+  - Accompanied by Observation 44 (`observations/systems/44-polyglot-token-normalization-and-multi-language-code-smell-quantification.md`), architectural pattern (`patterns/polyglot-token-normalization-and-clone-quantification.md`), and comprehensive unit test suite in `examples/code-smell-quantifier/test_smell_quantifier.py`. The example's functions are at $M \le 6$ and $\le 4$ params; one reaches depth 4.
 
 
 
 ---
 
 ### Milestone 6: Enterprise Governance, AIBOM & Living Standard (v1.0.0 - Complete, Not Released)
-
-The complexity claims below come from `python examples/ast-invariant-sentinel/sentinel.py --preset strict <path>` ($M \le 6$, depth $\le 3$), `--preset pedantic` ($M \le 4$, depth $\le 2$), or `--max-complexity` and `--max-depth` for other ceilings. The sentinel does not count parameters. `ruff check --select PLR0913 --config 'lint.pylint.max-args=4' <path>` checks a claim of at most 4 parameters; set `max-args` to the cap that an item states.
 
 - [x] **Post-1.0 Deprecation Lifecycle Enforcement (`examples/deprecation-lifecycle-sentinel/`)**:
   - Executable release gate enforcing the deprecation contract (`since`, `remove_in`, `replacement`), runtime `DeprecationWarning` emission, major-boundary removal scheduling, and internal call-site migration.
