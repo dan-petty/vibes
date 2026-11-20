@@ -64,6 +64,33 @@ TETRAGON_PROCESS_EXEC: Final[dict[str, Any]] = {
 # How Tetragon applies the string operators of the exec kprobe selectors.
 TETRAGON_STRING_OPS: Final[dict[str, Any]] = {"Equal": str.__eq__, "Postfix": str.endswith}
 
+# The path that each exec hook reads for one `execveat(fd, "", argv, envp, AT_EMPTY_PATH)`
+# call, which glibc `fexecve` makes, of the Debian 13 `nc`. The system call gets the empty
+# path. `security_bprm_check` gets the file that the kernel opened: `/usr/bin/nc` links to
+# the alternatives target `nc.openbsd` of the netcat-openbsd package.
+FEXECVE_NC_HOOK_PATHS: Final[dict[str, list[str]]] = {
+    "sys_execveat": [""],
+    "security_bprm_check": ["/usr/bin/nc.openbsd"],
+}
+
+# The names that the exec kprobes kill: the deny list and the files that its links resolve to.
+DENIED_EXEC_NAMES: Final[list[str]] = [
+    "chattr",
+    "inetutils-telnet",
+    "nc",
+    "nc.openbsd",
+    "nc.traditional",
+    "ncat",
+    "netcat",
+    "nmap",
+    "socat",
+    "socat1",
+    "tcpdump",
+    "telnet",
+    "telnet.netkit",
+    "wireshark",
+]
+
 
 def _tetragon_kprobe(binary: str, arguments: str, function_name: str, args: list[dict[str, Any]]) -> dict[str, Any]:
     """Return a native Tetragon `process_kprobe` record of one call in the sandbox pod.
@@ -115,6 +142,22 @@ NATIVE_AND_FLAT_RECORDS: Final[dict[str, tuple[dict[str, Any], dict[str, Any]]]]
     "kprobe-execveat-EBPF001": (
         _tetragon_kprobe("/bin/sh", "-c nc -lvp 4444", "__x64_sys_execveat", [{"string_arg": "/usr/bin/nc"}]),
         {"event_type": "execve", "syscall": "execveat", "pid": 4300, "comm": "nc", "args": "/usr/bin/nc"},
+    ),
+    # `fexecve` of the Debian 13 `nc`: the LSM hook reads the file that `/usr/bin/nc` links to.
+    "kprobe-bprm_check-EBPF001": (
+        _tetragon_kprobe(
+            "/usr/bin/python3",
+            "run.py",
+            "security_bprm_check",
+            [{"linux_binprm_arg": {"path": "/usr/bin/nc.openbsd", "permission": "-rwxr-xr-x"}}],
+        ),
+        {
+            "event_type": "execve",
+            "syscall": "security_bprm_check",
+            "pid": 4300,
+            "comm": "nc.openbsd",
+            "args": "/usr/bin/nc.openbsd",
+        },
     ),
     "kprobe-tcp_connect-EBPF002": (
         _tetragon_kprobe(
@@ -588,8 +631,11 @@ def test_policy_synthesis_tetragon_and_falco() -> None:
 
 
 def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
-    """Verify the `execve` and `execveat` syscall kprobes and that each key is a field of the TracingPolicy CRD.
+    """Verify the exec kprobes and that each key is a field of the TracingPolicy CRD.
 
+    The `execve` and `execveat` syscall kprobes match the path that the caller gives. The
+    `security_bprm_check` kprobe matches the file that the kernel opened (type
+    `linux_binprm`), which is an absolute path, so it needs no `Equal` selector.
     Field names and enums follow the CRD of Tetragon v1.8.0
     (pkg/k8s/apis/cilium.io/client/crds/v1alpha1/cilium.io_tracingpolicies.yaml). The CRD
     has no `allowedProcesses` field; `kubectl apply` rejects an unknown field. The pod
@@ -597,7 +643,18 @@ def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
     """
     policy = generate_tetragon_policy([EbpfTraceEvent(EbpfEventType.EXECVE, 1, "python3")])
     custom = generate_tetragon_policy([], pod_label=("team", "agents"))
-    binaries = ["chattr", "nc", "ncat", "netcat", "nmap", "socat", "tcpdump", "telnet", "wireshark"]
+    binaries = DENIED_EXEC_NAMES
+    file_kprobe = {
+        "call": "security_bprm_check",
+        "syscall": False,
+        "args": [{"index": 0, "type": "linux_binprm"}],
+        "selectors": [
+            {
+                "matchArgs": [{"index": 0, "operator": "Postfix", "values": [f"/{b}" for b in binaries]}],
+                "matchActions": [{"action": "Sigkill"}],
+            }
+        ],
+    }
 
     assert (
         sorted(policy),
@@ -628,7 +685,8 @@ def test_tetragon_policy_uses_only_tracingpolicy_crd_fields() -> None:
             }
             # execve(path, argv, envp) and execveat(dirfd, path, argv, envp, flags): the path index differs.
             for call, index in (("sys_execve", 0), ("sys_execveat", 1))
-        ],
+        ]
+        + [file_kprobe],
     )
 
 
@@ -640,16 +698,38 @@ def _kernel_kills(kprobe: dict[str, Any], path: str) -> bool:
     )
 
 
+def _kills_by_hook(kprobes: list[dict[str, Any]], paths: dict[str, list[str]]) -> dict[str, dict[str, bool]]:
+    """Apply each kprobe whose call is a key of `paths` to the paths that its hook reads."""
+    hooked = [k for k in kprobes if k["call"] in paths]
+    return {k["call"]: {p: _kernel_kills(k, p) for p in paths[k["call"]]} for k in hooked}
+
+
 def test_tetragon_selectors_kill_where_the_audit_flags() -> None:
-    """Verify that the selectors of each exec kprobe kill the paths that EBPF001 flags, and no other path."""
+    """Verify that the selectors of each exec kprobe kill the paths that EBPF001 flags, and no other path.
+
+    The LSM hook reads an absolute path, so it gets no bare or relative name. A busybox
+    applet, such as the Alpine `nc`, resolves to `busybox`: only the syscall kprobes see its name.
+    """
     kprobes = generate_tetragon_policy([])["spec"]["kprobes"]
     tracer = EbpfSandboxTracer(TracerPreset.STRICT)
-    paths = ["/usr/bin/nc", "/bin/ncat", "nc", "./socat", "/usr/bin/ncal", "/usr/bin/nc.openbsd", "/usr/bin/python3"]
-    flagged = {p: bool(tracer.audit_event(EbpfTraceEvent(EbpfEventType.EXECVE, 1, p))) for p in paths}
+    files = ["/usr/bin/nc", "/bin/ncat", "/usr/bin/ncal", "/usr/bin/ncfoo", "/usr/bin/nc.openbsd"]
+    files += ["/usr/bin/socat1", "/usr/bin/busybox", "/usr/bin/python3"]
+    names = [*files, "nc", "./socat", "nc.traditional"]
+    paths = {"sys_execve": names, "sys_execveat": names, "security_bprm_check": files}
+    flagged = {p: bool(tracer.audit_event(EbpfTraceEvent(EbpfEventType.EXECVE, 1, p))) for p in names}
 
-    assert {k["call"]: {p: _kernel_kills(k, p) for p in paths} for k in kprobes} == {
-        "sys_execve": flagged,
-        "sys_execveat": flagged,
+    assert _kills_by_hook(kprobes, paths) == {
+        call: {p: flagged[p] for p in hook_paths} for call, hook_paths in paths.items()
+    }
+
+
+def test_tetragon_policy_kills_a_denied_binary_run_through_fexecve() -> None:
+    """Verify that the policy kills `nc` run with `AT_EMPTY_PATH`, which gives the syscall an empty path."""
+    kprobes = generate_tetragon_policy([])["spec"]["kprobes"]
+
+    assert _kills_by_hook(kprobes, FEXECVE_NC_HOOK_PATHS) == {
+        "sys_execveat": {"": False},
+        "security_bprm_check": {"/usr/bin/nc.openbsd": True},
     }
 
 
