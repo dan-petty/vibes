@@ -40,7 +40,7 @@ The diagram shows the kernel design that this exhibit models. In this code, the 
 
 | Rule ID | Name | Trigger Condition | Default Action |
 |---|---|---|---|
-| `LSM001` | Unauthorized Binary Execution | Binary not in allowlist or explicitly in blocklist (`nc`, `socat`, `telnet`) | `BLOCK` (`-EPERM`) |
+| `LSM001` | Unauthorized Binary Execution | Binary not in allowlist, or in blocklist (`nc`, `socat`, `telnet`) or a file that a blocked name links to (`nc.openbsd`, `socat1`, `inetutils-telnet`) | `BLOCK` (`-EPERM`) |
 | `LSM002` | Network Egress Violation | Socket destination targets private RFC 1918/4193 addresses or metadata (`169.254.169.254`) | `BLOCK` (`-EPERM`) |
 | `LSM003` | Sensitive Path Access | Normalized path is a blocked entry or lies below it, compared by whole path components: `/etc/shadow`, its backup `/etc/shadow-`, `/root`, `~/.ssh` and `~/.aws` in each home directory, and `.git/hooks` at any depth. `/root/x` is blocked; `/rootfs/x` is allowed | `BLOCK` (`-EPERM`) |
 | `LSM004` | Privilege Escalation | Subprocess attempts `setuid(0)` or requests administrative capabilities (`CAP_SYS_ADMIN`) | `BLOCK` (`-EPERM`) |
@@ -92,7 +92,7 @@ The command prints a Tetragon `TracingPolicy` built from `LSMPolicy`. It has one
 
 | Kprobe | Argument | Match | Source in `LSMPolicy` |
 |---|---|---|---|
-| `security_bprm_check` | `linux_binprm` (index 0) | `Postfix` on the program path (`/nc`, `/socat`, ...) | `blocked_binaries` |
+| `security_bprm_check` | `linux_binprm` (index 0) | `Postfix` on the path of the opened file (`/nc`, `/nc.openbsd`, `/socat1`, ...) | `blocked_binaries`, and the files that their links resolve to (`denied_exec_names`) |
 | `security_file_open` | `file` (index 0) | Two selectors: `Equal` on the blocked path, or `Prefix` on the blocked path plus `/` | absolute entries of `blocked_paths`, with `~` entries expanded below `home_dirs` |
 | `security_socket_connect` | `sockaddr` (index 1) | `Family` is `AF_INET` or `AF_INET6`, and `NotSAddr` is loopback | `allow_loopback_only` |
 
@@ -101,8 +101,9 @@ Limits of the generated policy:
 - **Whole path components**: A Tetragon selector matches only when all of its argument matches hold, and the kprobe acts when any one of its selectors matches. Thus the file kprobe has one `Equal` selector and one `Prefix` selector. Each `Prefix` value ends with `/`, so `/root/` matches `/root/x` and not `/rootfs`.
 - **Home directories**: The generator writes each `~` entry below each directory of `home_dirs` (default `/root` and `/home/user`), so the policy holds no `~`. Tetragon has no wildcard operator for a path, so `/home/*` cannot be written; list each home directory by name.
 - **Simulation-only rules**: The binary allowlist, the relative path `.git/hooks`, `LSM004` and `LSM005` have no kernel selector. With `allow_loopback_only=False`, the policy blocks only the link-local range that holds the metadata endpoint; the private ranges stay a simulation check.
-- **Value count**: The Tetragon limits page gives at most 8 path values in one `file` match on kernel 5.3 and later. The default policy emits 7 paths in each selector. A policy with more absolute paths needs more selectors, and Tetragon allows at most 5 selectors in one kprobe.
-- **Resolved paths**: Tetragon reads the path from the kernel `struct file`, so `/etc/./shadow` reaches the `Prefix` match as `/etc/shadow`. It also follows symbolic links, so a program that links to another name, such as `nc` to `nc.openbsd`, needs that name in `blocked_binaries`.
+- **Value count**: The Tetragon limits page gives at most 8 path values in one `file` match on kernel 5.3 and later. The default policy emits 7 paths in each selector. A policy with more absolute paths needs more selectors, and Tetragon allows at most 5 selectors in one kprobe. The exec selector has 12 `Postfix` values. Tetragon writes `Postfix` values to a BPF map and does not limit their number (`writePostfix` in `pkg/selectors/kernel.go`); each value must be shorter than 127 characters on kernel 5.3 and later.
+- **Resolved paths**: Tetragon reads the path from the kernel `struct file`, so `/etc/./shadow` reaches the `Prefix` match as `/etc/shadow`. The path also has its symbolic links resolved: the `linux_binprm` argument is the opened file (`bprm->file`), so on Debian `/usr/bin/nc` reaches the exec selector as `/usr/bin/nc.openbsd`.
+- **Resolved binary names**: For each blocked name, the generator adds the files that its links resolve to (`DISALLOWED_BINARY_FILES` in `lsm_gate.py`). The names come from the Debian 13 packages netcat-openbsd and netcat-traditional (`nc.openbsd`, `nc.traditional` for `nc` and `netcat`), inetutils-telnet (`inetutils-telnet`) and socat (`socat1`), and from the Ubuntu 22.04 telnet package (`telnet.netkit`). The simulated blocklist uses the same names. `Postfix` on `/nc` kills `/usr/bin/nc` and `/usr/bin/nc.openbsd`, but not `/usr/bin/ncfoo`. These programs still run: a busybox applet, such as Alpine `nc`, because its link resolves to `busybox`, which is not blocked; a copy of a blocked binary with a new name; and a file that another distribution links a blocked name to. Add the names of your image to `blocked_binaries`. A name list is a tripwire, not containment: for containment, use an image that does not have these binaries.
 - **Sigkill**: `Sigkill` stops the calling process in the kernel. The [Tetragon enforcement page](https://tetragon.io/docs/concepts/enforcement/) states that a signal does not always stop the operation itself. To make the call fail with an error, add an `Override` action with `argError: -1` (`-EPERM`); `Override` needs a kernel built with `CONFIG_BPF_KPROBE_OVERRIDE`.
 
 The example ships no BPF C. A BPF LSM program that checks a path needs `bpf_d_path` and a kernel to verify it, and no test here can run one.
