@@ -232,9 +232,10 @@ _COMPLEX_BODY = "".join(f"    if x == {i}:\n        return {i}\n" for i in range
 def _thread_node(path: str, line: int, body: str, **extra: object) -> dict[str, object]:
     """Builds one GraphQL review thread node with one bot comment."""
     comment: dict[str, object] = {"id": "C1", "author": {"login": "bot"}, "body": body, "createdAt": "t"}
-    hunk = extra.pop("diffHunk", None)
-    if hunk is not None:
-        comment["diffHunk"] = hunk
+    for key in ("diffHunk", "side"):
+        value = extra.pop(key, None)
+        if value is not None:
+            comment[key] = value
     return {"id": "PRRT_X", "isResolved": False, "path": path, "line": line, "comments": [comment], **extra}
 
 
@@ -412,5 +413,89 @@ def test_verified_replies_claim_only_what_was_measured(tmp_path: Path) -> None:
         True,
         False,
         False,
+        True,
+    )
+
+
+def _deep_function(name: str) -> str:
+    """Returns a function whose deepest statement sits under five nested `if` blocks: depth 6."""
+    nested = "".join("    " * depth + f"if x > {depth}:\n" for depth in range(1, 6))
+    return f"def {name}(x):\n{nested}" + "    " * 6 + "return x\n    return 0\n"
+
+
+def test_nd001_thread_past_the_end_of_the_file_stays_unresolved(tmp_path: Path) -> None:
+    """An ND001 thread on line 500 of a 20-line file measures nothing, so it must not pass."""
+    source = "def f(x):\n    return x\n" + "".join(f"V{i} = {i}\n" for i in range(18))
+    (tmp_path / "mod.py").write_text(source, encoding="utf-8")
+    result = _analyze(tmp_path, _thread_node("mod.py", 500, "nesting depth too deep"))
+    assert (result.status, "line 500" in result.explanation, result.suggested_reply) == (
+        ResolutionStatus.ACTION_REQUIRED,
+        True,
+        "",
+    )
+
+
+def test_nd001_measures_the_named_function_wherever_it_moved(tmp_path: Path) -> None:
+    """ND001 measures the nesting depth of the function that the thread names, not the thread line."""
+    prefix = '"""Module."""\n\n\ndef helper():\n    return 1\n\n\n'
+    (tmp_path / "deep.py").write_text(prefix + _deep_function("g"), encoding="utf-8")
+    (tmp_path / "flat.py").write_text(prefix + "def g(x):\n    return x if x > 5 else 0\n", encoding="utf-8")
+    body = "Nesting depth of g is 6"
+
+    deep = _analyze(tmp_path, _thread_node("deep.py", 5, body, symbolName="g"))
+    flat = _analyze(tmp_path, _thread_node("flat.py", 30, body, symbolName="g"))
+
+    outcome = (deep.status, "depth 6" in deep.suggested_reply, flat.status, "depth 1" in flat.suggested_reply)
+    assert outcome == (ResolutionStatus.ACTION_REQUIRED, True, ResolutionStatus.FIX_VERIFIED, True)
+
+
+def test_parser_keeps_the_diff_side_and_reads_a_left_hunk_on_the_old_side() -> None:
+    """The parser keeps LEFT from `diffSide` or a comment's `side`, and walks a LEFT hunk's old lines."""
+    hunk = "@@ -1,3 +1,2 @@\n-def f(x):\n+def g(x):\n     y = 1\n-    return y"
+    graphql_left = _thread_node("a.py", 3, "x", diffHunk=hunk, diffSide="LEFT")
+    rest_left = _thread_node("a.py", 3, "x", side="LEFT")
+    right = _thread_node("a.py", 3, "x", diffHunk=hunk)
+    threads = parse_review_threads([graphql_left, rest_left, right])
+    sides = tuple(str(thread.side) for thread in threads)
+    assert (sides, threads[0].symbol_name, threads[2].symbol_name) == (("LEFT", "LEFT", "RIGHT"), "f", "g")
+
+
+# Line 12 of the left version is a deleted line inside f. In the current file, line 12 lies
+# inside g, so reading the LEFT line number against the current file checks the wrong code.
+_LEFT_VERSION = "\n" * 4 + _deep_function("f") + "\n\ndef g(x):\n    return x\n"
+_CURRENT_SHALLOW_G = '"""Module."""\n' + "\n" * 9 + "def g(x):\n    return x\n"
+
+
+def test_left_side_thread_without_a_left_version_stays_unresolved(tmp_path: Path) -> None:
+    """A LEFT-side line numbers the base of the diff, so it is never read against the current file."""
+    (tmp_path / "mod.py").write_text(_CURRENT_SHALLOW_G, encoding="utf-8")
+    result = _analyze(tmp_path, _thread_node("mod.py", 12, "nesting depth too deep", diffSide="LEFT"))
+    assert (result.status, "LEFT" in result.explanation) == (ResolutionStatus.ACTION_REQUIRED, True)
+
+
+def test_left_side_thread_checks_the_current_definition_of_its_base_symbol(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A LEFT-side comment on a deleted line inside f is checked against the current f."""
+    left, base, head, fixed = (tmp_path / name for name in ("left", "base", "head", "fixed"))
+    for directory in (left, base, head, fixed):
+        directory.mkdir()
+    (left / "mod.py").write_text(_LEFT_VERSION, encoding="utf-8")
+    (base / "mod.py").write_text(_CURRENT_SHALLOW_G, encoding="utf-8")
+    (head / "mod.py").write_text(_CURRENT_SHALLOW_G + "\n" * 20 + _deep_function("f"), encoding="utf-8")
+    (fixed / "mod.py").write_text(_CURRENT_SHALLOW_G + "\n\ndef f(x):\n    return x if x > 5 else 0\n", encoding="utf-8")
+    node = _thread_node("mod.py", 12, "nesting depth too deep", diffSide="LEFT", originalLine=12)
+    (tmp_path / "threads.json").write_text(json.dumps([node]), encoding="utf-8")
+
+    argv = ["--input", str(tmp_path / "threads.json"), "--base-root", str(base), "--left-root", str(left)]
+    exit_code = main([*argv, "--root", str(head), "--json", "--exit-code"])
+    (moved,) = json.loads(capsys.readouterr().out)
+    (thread,) = parse_review_threads([node])
+    repaired = verify_thread_resolution(fixed, thread, left_root=left)
+
+    outcome = (exit_code, moved["status"], "f has nesting depth 6" in moved["suggested_reply"])
+    assert outcome == (1, "ACTION_REQUIRED", True)
+    assert (repaired.status, "f has nesting depth 1" in repaired.suggested_reply) == (
+        ResolutionStatus.FIX_VERIFIED,
         True,
     )
