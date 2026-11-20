@@ -129,6 +129,6 @@ Presenting the failure as a concrete counterexample points the agent at line 42 
 
 This pattern establishes three non-negotiable operational invariants:
 
-1. **Inner-Loop Latency Cap**: The inner verification cycle ($L_0 + L_1$) must complete in under $1.0\text{s}$. If a unit test requires external database spin-up or network calls, it must be migrated to Layer 2 or Layer 3.
+1. **Inner-Loop Latency Cap**: The inner verification cycle ($L_0 + L_1$) must complete in under $1.0\text{s}$. If a unit test requires external database spin-up or network calls, it must be migrated to Layer 2 or Layer 3. The reference auditor reads source only and does not time tests; `pytest --durations=0 --durations-min=0.5` lists the tests over the 500 ms Layer 1 budget.
 2. **Assertion Complexity Ceilings**: Test functions are subject to the same $M \le 10$ and depth $\le 5$ ceilings as application code.
 3. **Pre-Push Quality Gate Mandate**: Layer 3 remote CI must be mirrored locally via a single unified command (`uv run devops ci`), which must pass 100% before any commit is pushed.

@@ -9,11 +9,15 @@ latency cliffs (T_verify > 45s), context dilution, tool execution timeouts, and
 assertion density traps where linear `assert` statements inflate cyclomatic
 complexity (M + 1 per assert).
 
-This oracle enforces the 4-Tier Verification Pyramid:
+The 4-Tier Verification Pyramid sets these latency budgets:
   Layer 0: In-Memory AST Sentinel (<= 50ms)
   Layer 1: Focused Slice Oracles (<= 500ms)
   Layer 2: Local Pre-Commit Hooks (<= 5.0s)
   Layer 3: Gated Remote Matrix CI (1m - 5m)
+
+The auditor reads source only. It does not run tests, so it does not measure
+their latency. To find the tests over the Layer 1 budget, run
+`pytest --durations=0 --durations-min=0.5`.
 """
 
 from __future__ import annotations
@@ -34,7 +38,6 @@ from source_tree_policy import iter_source_files
 INFORMATION_URI: Final[str] = "https://github.com/dan-petty/vibes"
 MAX_LINEAR_ASSERTS_THRESHOLD: Final[int] = 4
 MAX_TESTS_PER_FILE_THRESHOLD: Final[int] = 30
-SUB_SECOND_CEILING_SECONDS: Final[float] = 0.50
 
 
 class VerificationRule(StrEnum):
@@ -44,7 +47,6 @@ class VerificationRule(StrEnum):
     UNCONTAINED_PROCESS_SPAWN = "VER002"
     SHARED_STATE_CONTENTION = "VER003"
     MONOLITHIC_COLD_START = "VER004"
-    VERIFICATION_LATENCY_CLIFF = "VER005"
 
 
 class VerificationSeverity(StrEnum):
@@ -94,13 +96,6 @@ RULE_DESCRIPTORS: Final[dict[VerificationRule, RuleDescriptor]] = {
         severity=VerificationSeverity.NOTE,
         short_description="Test file exceeds test count ceiling, risking slow suite slice runs.",
         recommendation="Decompose large test modules into focused, sub-second test slices.",
-    ),
-    VerificationRule.VERIFICATION_LATENCY_CLIFF: RuleDescriptor(
-        code=VerificationRule.VERIFICATION_LATENCY_CLIFF,
-        name="VerificationLatencyCliff",
-        severity=VerificationSeverity.WARNING,
-        short_description="Test execution latency exceeds inner-loop ceiling (500ms).",
-        recommendation="Mock heavy I/O or isolate into Layer 2/3 test stages.",
     ),
 }
 
