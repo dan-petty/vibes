@@ -225,7 +225,7 @@ Follow our multi-milestone evolution from foundational case studies to polyglot 
 - **v0.3.0 — Benchmark Suites & Observability Mesh** (✅ *Completed*): Multi-Agent Benchmark Runner, Waterfall Trace Generator, Prompt Mutation Fuzzing, Tool Contract Verification, AST Conditional Refactorer, and Valkey L2 Repomap Cache.
 - **v0.4.0 — Polyglot Invariants & Ephemeral Sandboxes** (✅ *Completed*): Go Goroutine Leak Sentinel, Rust Type-State Track, Rootless Docker Container Sandboxes, and a polyglot symbol extractor (Python `ast` and regular expressions, no tree-sitter).
 - **v0.5.0 — Autonomous Swarm Orchestration** (✅ *Completed, not released*): Closed-loop PR Triage Bot, Conversation-to-Case-Study Synthesizer, and a Multi-Model Cost-per-Invariant Index that scores supplied run records.
-- **v1.0.0 — Enterprise Governance & Living Standard** (💡 *North Star*): AIBOM Supply-Chain Scanner, Prompt Injection Egress Validator, and Certified Living Standard.
+- **v1.0.0 — Enterprise Governance & Living Standard** (✅ *Completed, not released*): AIBOM Supply-Chain Scanner, Prompt Injection Egress Validator, and Certified Living Standard.
 
 Read the complete [**Strategic Roadmap (`docs/ROADMAP.md`)**](./docs/ROADMAP.md) including the prioritized Value vs. Effort matrix and Living Research Queue.
 
