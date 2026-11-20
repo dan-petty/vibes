@@ -677,11 +677,15 @@ def generate_resolution_mutation(thread_id: str, reply_body: str) -> str:
 
 
 def export_sarif(analyses: Sequence[ThreadAnalysis]) -> dict[str, Any]:
-    """Exports thread analyses as an OASIS SARIF 2.1.0 telemetry payload."""
+    """Exports thread analyses as an OASIS SARIF 2.1.0 telemetry payload.
+
+    The run declares each rule once, in the order the threads first name it: the schema
+    requires the items of `tool.driver.rules` to be unique, and many threads can share a rule.
+    """
     results = [_make_sarif_result(item) for item in analyses]
     rules = [
-        {"id": f"PR_THREAD_{item.rule_id}", "shortDescription": {"text": f"PR Thread Rule {item.rule_id}"}}
-        for item in analyses
+        {"id": f"PR_THREAD_{rule_id}", "shortDescription": {"text": f"PR Thread Rule {rule_id}"}}
+        for rule_id in dict.fromkeys(item.rule_id for item in analyses)
     ]
 
     return {
