@@ -18,7 +18,7 @@ dependencies = [
     "jsonschema>=4.0",       # Validates emitted SARIF against the OASIS 2.1.0 schema
     "markdown-it-py>=4.0",   # CommonMark parser backing the documentation validator
     "networkx>=3.0",         # Graph algorithms: elementary cycle detection
-    "pyyaml>=6.0.3",           # Kubernetes, compose and workflow manifest validation
+    "pyyaml>=6.0.4",           # Kubernetes, compose and workflow manifest validation
     "radon>=6.0.1",            # Maintainability index, Halstead metrics, cyclomatic complexity
     "vulture>=2.11",         # Unreferenced code detection
 ]
