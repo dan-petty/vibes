@@ -2,7 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Renovate opens the dependency update pull requests of vibes. The shared preset of devops-cli sets the schedule and the groups: security fixes and patch releases come at once, other updates come each Monday with the minor updates of each ecosystem in one group, and no update waits for a minimum release age.",
   "extends": [
-    "github>dan-petty/devops-cli//.github/renovate/base"
+    "github>dan-petty/infra//renovate/base"
   ],
   "labels": ["type/chore"],
   "commitMessagePrefix": "chore:",
