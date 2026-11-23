@@ -51,7 +51,7 @@ services:
 
   # Valkey L2 AST & Tool Caching
   valkey:
-    image: valkey/valkey:8.1.12
+    image: valkey/valkey:9.2.0
     container_name: vibes-valkey
     restart: unless-stopped
     command:
