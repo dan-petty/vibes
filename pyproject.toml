@@ -15,19 +15,19 @@ license = { text = "Apache-2.0" }
 # CONTRIBUTING.md, and drifted — the pre-push hook shipped without pyyaml and
 # markdown-it-py and aborted every push until it was noticed.
 dependencies = [
-    "jsonschema>=4.0",       # Validates emitted SARIF against the OASIS 2.1.0 schema
-    "markdown-it-py>=4.0",   # CommonMark parser backing the documentation validator
-    "networkx>=3.0",         # Graph algorithms: elementary cycle detection
+    "jsonschema>=4.26.0",       # Validates emitted SARIF against the OASIS 2.1.0 schema
+    "markdown-it-py>=4.3.0",   # CommonMark parser backing the documentation validator
+    "networkx>=3.7",         # Graph algorithms: elementary cycle detection
     "pyyaml>=6.0.4",           # Kubernetes, compose and workflow manifest validation
     "radon>=6.0.1",            # Maintainability index, Halstead metrics, cyclomatic complexity
-    "vulture>=2.11",         # Unreferenced code detection
+    "vulture>=2.16",         # Unreferenced code detection
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.0",
-    "pytest-cov>=7.0",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "pytest-cov>=7.1.0",
     # The crawler imports httpx lazily so the exhibit still runs without it, but the
     # SSRF-across-redirects regression cannot be exercised without a transport that
     # answers a 302. A security regression test that skips when a dependency is
@@ -37,7 +37,7 @@ test = [
 # Static gates. Declared here for the same reason as the runtime list above: the versions
 # CI installs and the versions a contributor installs must come from one place.
 lint = [
-    "mypy>=2.0",
+    "mypy>=2.4.1",
     "ruff>=0.17.6",
     "types-PyYAML",
     "types-jsonschema",
