@@ -18,7 +18,7 @@ services:
 
   # OpenTelemetry Collector Contrib
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.112.0
+    image: otel/opentelemetry-collector-contrib:0.165.0
     container_name: vibes-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
@@ -51,7 +51,7 @@ services:
 
   # Valkey L2 AST & Tool Caching
   valkey:
-    image: valkey/valkey:8.0.13
+    image: valkey/valkey:8.1.12
     container_name: vibes-valkey
     restart: unless-stopped
     command:
@@ -72,7 +72,7 @@ services:
 
   # Grafana Dashboard & Visualizations
   grafana:
-    image: grafana/grafana:11.3.9
+    image: grafana/grafana:11.6.16
     container_name: vibes-grafana
     restart: unless-stopped
     ports:

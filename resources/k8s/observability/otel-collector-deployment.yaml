@@ -75,7 +75,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: collector
-          image: otel/opentelemetry-collector-contrib:0.112.0
+          image: otel/opentelemetry-collector-contrib:0.165.0
           args: ["--config=/etc/otelcol/collector.yaml"]
           securityContext:
             allowPrivilegeEscalation: false
