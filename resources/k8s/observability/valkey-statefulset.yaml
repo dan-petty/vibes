@@ -23,7 +23,7 @@ spec:
         fsGroup: 999
       containers:
         - name: valkey
-          image: valkey/valkey:8.1.12
+          image: valkey/valkey:9.2.0
           # The password comes from the valkey-auth Secret, which the deployer creates
           # (see the README). The kubelet expands $(VALKEY_PASSWORD) without a shell.
           # With a password set, protected mode accepts clients from other pods.
