@@ -35,7 +35,7 @@ services:
 
   # Prometheus Metric Store & Alerts
   prometheus:
-    image: prom/prometheus:v2.55.1
+    image: prom/prometheus:v3.16.0
     container_name: vibes-prometheus
     restart: unless-stopped
     ports:
