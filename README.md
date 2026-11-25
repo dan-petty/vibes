@@ -294,6 +294,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 
 ```text
 ├── .github/
+│   ├── CODEOWNERS                     # Requests @dan-petty to review pull requests
 │   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
 │   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
 │   ├── labels.yml                     # Labels the roadmap jobs read and apply
