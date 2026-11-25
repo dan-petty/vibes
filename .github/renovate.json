@@ -10,7 +10,7 @@
     "labels": ["type/chore"]
   },
   "vulnerabilityAlerts": {
-    "description": "vibes declares no scope/ labels and uses no scope in titles. No automerge: the ruleset of main requires no status check.",
+    "description": "vibes declares no scope/ labels and uses no scope in titles. Renovate merges updates after all checks pass.",
     "labels": ["type/security"],
     "commitMessagePrefix": "fix:"
   },
