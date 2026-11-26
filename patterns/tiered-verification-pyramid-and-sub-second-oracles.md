@@ -31,7 +31,7 @@ The **Tiered Verification Pyramid** decouples test suite depth from agent iterat
 ```mermaid
 flowchart TD
     subgraph Pyramid ["The Tiered Verification Pyramid"]
-        L3["Layer 3: Gated Remote Matrix CI (1m - 5m)<br/>Python 3.12-3.14, CodeQL, full security scan"]
+        L3["Layer 3: Gated Remote Matrix CI (1m - 5m)<br/>Python 3.15, CodeQL, full security scan"]
         L2["Layer 2: Local Pre-Commit Hooks (2s - 5s)<br/>Docs validator, smell quantifier, fuzz replay"]
         L1["Layer 1: Focused Slice Oracles (< 500ms)<br/>Targeted pytest -k, in-memory mocks, tuple equality"]
         L0["Layer 0: In-Memory AST Sentinel (< 50ms)<br/>Cyclomatic M<=10, depth<=5, sanitization"]

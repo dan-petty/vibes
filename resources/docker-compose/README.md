@@ -13,7 +13,7 @@ A multi-container local evaluation environment with distributed tracing, a metri
 | **`prometheus`** | `prom/prometheus:v2.55.0` | `:9090` (UI) | Metrics database. It loads the agent alert rules from [`prometheus.yaml`](../observability/prometheus.yaml) and scrapes the collector on `:8889`. |
 | **`valkey`** | `valkey/valkey:8.0.1` | `:6379` | In-memory cache (`256mb`, `allkeys-lru`). No other service in the stack uses it. |
 | **`grafana`** | `grafana/grafana:11.3.0` | `:3000` (UI) | Dashboards. It provisions a default Prometheus data source and the agent dashboard from [`grafana/provisioning/`](../observability/grafana/provisioning/). |
-| **`agent-sandbox`** | `python:3.14.10-slim` | *Internal only* | Non-root (`10001`), read-only container with CPU and memory limits. It runs `sleep infinity`; use `docker exec` to run code in it. |
+| **`agent-sandbox`** | `python:3.15.2-slim` | *Internal only* | Non-root (`10001`), read-only container with CPU and memory limits. It runs `sleep infinity`; use `docker exec` to run code in it. |
 
 Each image has a pinned version tag. The Kubernetes manifests in [`../k8s/`](../k8s/README.md) use the same tag for each service that they also run.
 

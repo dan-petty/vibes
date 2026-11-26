@@ -47,7 +47,7 @@ MAX_OUTPUT_BYTES = 65536
 TRUNCATION_MARKER = "\n... [TRUNCATED DUE TO BUFFER LIMIT] ...\n"
 # The image that container mode runs payloads in, and the interpreter on its PATH. The host
 # interpreter path in `sys.executable` does not exist in the image.
-CONTAINER_IMAGE = "python:3.12-slim"
+CONTAINER_IMAGE = "python:3.15-slim"
 CONTAINER_PYTHON = "python3"
 # How long `<engine> kill` may take to stop a container that ran past its timeout.
 ENGINE_KILL_TIMEOUT_SECONDS = 10.0
