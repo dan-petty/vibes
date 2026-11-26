@@ -1,0 +1,21 @@
+name: PR Title
+
+# release-please reads the title of each squash commit on main as a Conventional Commit, so the
+# reusable workflow pr-title.yml of infra checks the title of each pull request into main. A scope
+# is one of the scope/* labels of .github/labels.yml, or main, the scope of the release pull request.
+# The caller pins the release tag of infra that rendered this file, and `copier update` changes it.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  pr-title:
+    name: PR title
+    uses: dan-petty/infra/.github/workflows/pr-title.yml@v0.24.1
+    permissions:
+      contents: read # Read .github/labels.yml.
+      pull-requests: read # Read the title and the commits of the pull request.
