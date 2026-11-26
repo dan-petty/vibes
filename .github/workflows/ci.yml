@@ -26,7 +26,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.15"
 
       - name: Install Dependencies
         run: pip install --editable "."
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12", "3.13", "3.14"]
+        python-version: ["3.15"]
 
     steps:
       - name: Checkout Repository
@@ -86,19 +86,19 @@ jobs:
       # version, so one leg runs it. The module has no dependencies and no go.sum,
       # so there is nothing to cache.
       - name: Set up Go
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.15'
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: examples/go-leak-sentinel/go.mod
           cache: false
 
       - name: Vet the Go Leak Sentinel
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.15'
         working-directory: examples/go-leak-sentinel
         run: go vet ./...
 
       - name: Test the Go Leak Sentinel
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.15'
         working-directory: examples/go-leak-sentinel
         run: go test ./...
 

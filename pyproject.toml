@@ -7,7 +7,7 @@ name = "vibes"
 version = "0.4.0"
 description = "The living showcase, open collection and artifact repository of agentic software engineering"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.15.2,<3.16"
 license = { text = "Apache-2.0" }
 
 # Runtime dependencies of the repository's own tooling. Declared here and nowhere else:
@@ -112,6 +112,6 @@ module = ["radon.*"]
 ignore_missing_imports = true
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.15"
 warn_unused_ignores = true
 warn_redundant_casts = true

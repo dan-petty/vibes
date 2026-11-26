@@ -3,7 +3,7 @@
 > **Sample Application**: Concurrency Verification & Goroutine Leak Sentinel
 > **Classification**: Polyglot Systems Invariant Enforcement
 > **Source Project**: [`vibes`](https://github.com/dan-petty/vibes)
-> **Primary Tech**: Go 1.22+, `runtime/pprof`, Python 3.12+
+> **Primary Tech**: Go 1.22+, `runtime/pprof`, Python 3.15+
 
 ---
 

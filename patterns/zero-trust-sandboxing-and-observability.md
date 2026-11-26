@@ -74,7 +74,7 @@ flowchart TD
 ### Docker Sandbox Definition:
 ```yaml
 agent-sandbox:
-  image: python:3.14-slim
+  image: python:3.15-slim
   user: "10001:10001"
   read_only: true
   cap_drop: ["ALL"]

@@ -97,7 +97,7 @@ def test_container_command_builder_docker() -> None:
     policy = SandboxSecurityPolicy()
     cmd = ContainerCommandBuilder.build_run_args(
         engine="docker",
-        image="python:3.12-slim",
+        image="python:3.15-slim",
         command=["python3", "-c", "print('hello')"],
         policy=policy,
     )
