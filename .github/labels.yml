@@ -1,8 +1,18 @@
+<<<<<<< before updating
 # Labels the roadmap jobs read and apply in this repository (devops-cli ADR 0001).
 # Intake reads the type/ labels from this file; sync them with: devops gh label sync
 # devops-cli also declares its workflow labels (roadmap/workflow_labels.py). For a
 # name that both declare, the sync keeps the devops-cli color and description.
 # Add this repository's own scope/ labels below.
+=======
+# The labels of this repository only. `devops repos onboard` adds each label that is missing on
+# GitHub. The workflow labels, such as type/* and status/*, come from devops-cli. Intake gives an
+# issue the scope/* label of its Conventional Commit scope, and the PR title check accepts each
+# scope of this file. In every repository it also accepts ci, deps, docs, main and spec, with or
+# without a label. Each scope/* label is gray (DCDCD6), as in devops-cli. The template writes this
+# file from the answers scopes and scope_descriptions: change a scope or its description with
+# `copier update --data scopes=<scopes>` or `--data scope_descriptions=<mapping>`, not here.
+>>>>>>> after updating
 
 # ── Type labels: intake assigns one of these (type/epic aside) ────────────────
 - name: "type/feature"
