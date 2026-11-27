@@ -1,7 +1,7 @@
 # The settings baseline of this repository on GitHub. `devops repos onboard` applies it, and
 # `devops repos onboard --all --plan` shows each difference. Each key is the request body of one
 # endpoint of the GitHub REST API, with the field names of that body. The schema of the file is
-# templates/github-repository.schema.json of dan-petty/infra at the tag v0.24.1.
+# templates/github-repository.schema.json of dan-petty/infra at the tag v0.25.2.
 
 # PATCH /repos/{owner}/{repo}. Squash is the only merge method. The squash commit gets the title and
 # the body of the pull request, so the pull request title is the Conventional Commit that
