@@ -53,7 +53,7 @@ python tools/docs_validator.py --fix
 | Executable reference app | `examples/<slug>/` | `<slug>.py`, `test_<slug>.py`, `README.md` |
 | Foundational docs | `docs/` | Descriptive SCREAMING-KEBAB names |
 
-Never scatter loose files in the repo root. It holds only the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`) and tooling configuration (`pyproject.toml`, `pytest.ini`, `.pre-commit-config.yaml`, `.gitignore`).
+Never scatter loose files in the repo root. It holds only the repository-level documents (`README.md`, `LICENSE`, `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`), the agent pointers to `AGENTS.md` (`CLAUDE.md`, `GEMINI.md`), tooling configuration (`pyproject.toml`, `pytest.ini`, `.pre-commit-config.yaml`, `.gitignore`) and the files of the repository template of dan-petty/infra (`.copier-answers.yml`, `.devops/`, `github/`, `openspec/`).
 
 ---
 
