@@ -297,6 +297,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── CODEOWNERS                     # Requests @dan-petty to review pull requests
 │   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
 │   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
+│   ├── copilot-instructions.md        # Pointer that sends GitHub Copilot to AGENTS.md
 │   ├── labels.yml                     # Labels the roadmap jobs read and apply
 │   ├── project-template.json          # Declarative GitHub Projects v2 schema template
 │   ├── renovate.json                  # Renovate update PRs: actions, hooks, pip floors, images
@@ -305,15 +306,22 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │       ├── codeql.yml                 # CodeQL default security queries (Python, Actions)
 │       ├── fuzz.yml                   # Daily instrument fuzzing & hash-seed determinism check
 │       ├── pr-sentinel.yml            # Automated PR diff invariant gate & certification
+│       ├── pr-title.yml               # PR title check: calls the reusable workflow of infra
 │       └── recursive-hardening.yml    # Closed-loop AGENTS.md hardening audit
 │
 ├── AGENTS.md                          # Foundational agent operating instructions for vibes
 ├── CHANGELOG.md                       # Structured release history
+├── CLAUDE.md                          # Pointer that loads AGENTS.md into Claude Code
 ├── CONTRIBUTING.md                    # Contributor entry point, local gates, and conventions
+├── GEMINI.md                          # Pointer that loads AGENTS.md into Gemini CLI
 ├── LICENSE                            # Apache 2.0 open-source license
 ├── README.md                          # Repository homepage and exhibition tour (this file)
 ├── pyproject.toml                     # Project metadata and the single dependency manifest
 ├── pytest.ini                         # Isolated test config preventing parent plugin discovery
+│
+├── github/                            # GitHub settings baseline that `devops repos onboard` applies
+│
+├── openspec/                          # OpenSpec project config for planned changes
 │
 ├── docs/                              # Foundational theory, taxonomy, and curation standards
 │   ├── MANIFESTO.md                   # Beyond "Vibe Coding": The Disciplined Agentic Manifesto

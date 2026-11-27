@@ -1,0 +1,64 @@
+# The OpenSpec config of this repository. This file tells devops-cli that the repository plans each
+# roadmap item as an OpenSpec change in openspec/changes/<issue>-<slug>/. The stage job of devops-cli
+# writes each change with the context and the rules of this file, and `devops pr create` asks each
+# pull request body for its lines `Closes` and `Change:`. The template of infra gives the rules of
+# the jobs of devops-cli, and no fact of this repository: a person writes the first line of context.
+schema: spec-driven
+
+context: |
+  Product: <one line: what this repository makes, for whom, and its main constraints>.
+  One roadmap item is one GitHub issue, one change named <issue>-<slug>, for example 12-health-check, and one
+  pull request into main that closes the issue. An issue too large for one pull request becomes sub-issues,
+  each with its own change.
+  Status, priority, milestone and pull request numbers live on GitHub: never write them in an artifact.
+  Artifacts are committed exactly as they will read once merged, so a task is ticked [x] only when its work is
+  in the merged tree. Artifacts describe the final state, never a transition.
+  The documents that AGENTS.md routes to hold the engineering standards; an artifact does not restate them.
+  Never write an internal hostname, a private address or a private registry: use example.com, RFC 5737
+  addresses and roles such as <storage-node>.
+
+rules:
+  proposal:
+    - >-
+      Cite the issue as #<issue> in Why. End the proposal with two sections. "## Feasibility" names how the
+      premise was confirmed against the real system (upstream documentation, library source, or command output
+      with its version); when the premise fails, write no compensating code: state the evidence and propose
+      the re-scope. "## Existing Tool Considered" names the open, maintained tool or library that covers the
+      need; a change that builds instead states the cost in tokens and time to build, keep and fix it. Either
+      way, list the internal code the change deletes.
+    - >-
+      State whether the change fits one pull request.
+    - >-
+      A change that alters no behavior a consumer observes (tests, CI workflows, documentation, a refactor that
+      keeps behavior) has no spec delta and sets skip_specs: true in its .openspec.yaml. Say why in What
+      Changes.
+  specs:
+    - >-
+      Run openspec list --specs first and reuse a capability. The delta that creates a capability starts with
+      a "## Purpose" section of at least 50 characters, so archive never writes TBD.
+    - >-
+      Change an existing requirement only with MODIFIED, REMOVED or RENAMED, and only when it exists in
+      openspec/specs/. Two active changes never MODIFY, REMOVE or RENAME one requirement.
+    - >-
+      Write each scenario so that a test can assert it offline, with no network. A scenario of a manifest, a
+      workflow or a config file names a validator command or a live check as its proof, never a test that
+      reads a value of the file.
+  design:
+    - >-
+      Record each rejected alternative with the evidence that rejected it.
+  tasks:
+    - >-
+      Write the tasks of the one pull request in "## <n>. <Group title>" groups. The pull request that closes
+      the issue leaves no task unticked.
+    - >-
+      Give each group a kind. A `behavior` group adds or changes what the code does: order its tasks as failing
+      test, then implementation, and name each task's verification command on a nested line under the task
+      that starts with `Verification:` and holds the command in one code span, with `$ ` before the command
+      (the implement step runs only the code spans that start with `$ `). Every other group (documents,
+      manifests, workflows, a deletion or a refactor that keeps behavior, test-only edits, data) has no test:
+      it gives a verification command that can run again, or the steps of a repeatable manual check.
+    - >-
+      Delete obsolete code and its tests in the group that replaces them.
+    - >-
+      Work the item will not do is a plain bullet, with no checkbox, naming its follow-up issue under
+      "## Workflow follow-up". A check only a person can run is a plain bullet starting "Pending a person:".

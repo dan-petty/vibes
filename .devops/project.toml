@@ -1,0 +1,6 @@
+# The project profile of this repository: the facts of its files that devops-cli reads, such as its
+# type (extends) and the folder of its Kubernetes manifests ([kubernetes] dir). devops-cli merges
+# the defaults, the template of the type, the facts that it detects in the files, and this file, in
+# that order, and owns each key ("Project profile" in the CONTEXT.md of devops-cli). A new
+# repository has no fact that detection does not find, so the file holds no key. Add a key only
+# when detection gives a wrong value.
