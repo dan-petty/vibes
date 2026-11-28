@@ -32,7 +32,7 @@ test = [
     # SSRF-across-redirects regression cannot be exercised without a transport that
     # answers a 302. A security regression test that skips when a dependency is
     # absent reports green on the machine least likely to have it.
-    "httpx>=0.28.1",
+    "httpx>=0.29.0",
 ]
 # Static gates. Declared here for the same reason as the runtime list above: the versions
 # CI installs and the versions a contributor installs must come from one place.
