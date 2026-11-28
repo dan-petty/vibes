@@ -18,7 +18,7 @@ services:
 
   # OpenTelemetry Collector Contrib
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.165.0
+    image: otel/opentelemetry-collector-contrib:0.166.0
     container_name: vibes-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
