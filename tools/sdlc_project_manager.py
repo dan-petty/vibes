@@ -34,9 +34,9 @@ PRIORITY_BASE_WEIGHTS = {
     "P3_LOW": 50.0,
 }
 
-# Label severity modifiers, keyed on the names that .github/labels.yml declares. `type/bug`
+# Label severity modifiers, keyed on the type/ names of the workflow labels of devops-cli. `type/bug`
 # also covers a regression. `performance` is the one local name: the workbench writes its
-# feedback category as a label, and labels.yml declares no performance type.
+# feedback category as a label, and the workflow labels have no performance type.
 LABEL_WEIGHT_MODIFIERS: Final[dict[str, float]] = {
     "type/security": 400.0,
     "type/bug": 250.0,
@@ -191,7 +191,7 @@ class PrioritizationScorer:
 
     @staticmethod
     def _label_modifiers(labels: list[str]) -> float:
-        """Sum the label modifiers. A name that labels.yml does not declare adds nothing."""
+        """Sum the label modifiers. A name with no modifier adds nothing."""
         return sum((LABEL_WEIGHT_MODIFIERS.get(label.lower(), 0.0) for label in labels), 0.0)
 
     @staticmethod

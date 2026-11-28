@@ -1,143 +1,26 @@
-# Labels the roadmap jobs read and apply in this repository (devops-cli ADR 0001).
-# Intake reads the type/ labels from this file; sync them with: devops gh label sync
-# devops-cli also declares its workflow labels (roadmap/workflow_labels.py). For a
-# name that both declare, the sync keeps the devops-cli color and description.
-# Add this repository's own scope/ labels below.
+# The labels of this repository only. `devops repos onboard` adds each label that is missing on
+# GitHub. The workflow labels, such as type/* and status/*, come from devops-cli. Intake gives an
+# issue the scope/* label of its Conventional Commit scope, and the PR title check accepts each
+# scope of this file. In every repository it also accepts ci, deps, docs, main and spec, with or
+# without a label. Each scope/* label is gray (DCDCD6), as in devops-cli. The template writes this
+# file from the answers scopes, scope_descriptions and extra_labels: change a scope, its description
+# or a label of this repository that is not a scope with `copier update --data scopes=<scopes>`,
+# `--data scope_descriptions=<mapping>` or `--data extra_labels=<mapping>`, not here.
 
-# ── Type labels: intake assigns one of these (type/epic aside) ────────────────
-- name: "type/feature"
-  color: "0E8A16"
-  description: "New user-facing functionality or capability addition"
-
-- name: "type/bug"
-  color: "D73A4A"
-  description: "Defect, regression, or incorrect runtime behavior"
-
-- name: "type/security"
-  color: "B60205"
-  description: "Security vulnerability, CVE, or credential protection"
-
-- name: "type/refactor"
-  color: "1D76DB"
-  description: "Code simplification, deduplication, or structural reorganization"
-
-- name: "type/docs"
-  color: "0075CA"
-  description: "Documentation additions, guides, manuals, or README updates"
-
-- name: "type/infra"
-  color: "5319E7"
-  description: "Kubernetes, Docker, DevContainer, or OpenTofu infrastructure"
-
-- name: "type/test"
-  color: "FBCA04"
-  description: "Unit, integration, invariant, or benchmark test authoring"
-
-- name: "type/chore"
-  color: "CFD3D7"
-  description: "Dependency upgrades, tooling adjustments, or maintenance"
-
-- name: "type/epic"
-  color: "3E4B9E"
-  description: "High-level tracking epic or release parent issue coordinating deliverables"
-
-# ── Priority labels ───────────────────────────────────────────────────────────
-- name: "priority/p0-critical"
-  color: "B60205"
-  description: "Urgent blockages, critical vulnerabilities, or release blockers"
-
-- name: "priority/p1-high"
-  color: "D93F0B"
-  description: "High impact work required for upcoming release milestone"
-
-- name: "priority/p2-medium"
-  color: "FBCA04"
-  description: "Standard priority feature work and architectural improvements"
-
-- name: "priority/p3-low"
-  color: "0E8A16"
-  description: "Minor polish, low-severity improvements, and backlogged tasks"
-
-# ── Status labels ─────────────────────────────────────────────────────────────
-- name: "status/new"
+- name: "scope/ci"
   color: "DCDCD6"
-  description: "Status New: the item is not ready yet"
+  description: "GitHub Actions workflows and pre-commit hooks"
 
-- name: "status/triage"
-  color: "EDEDED"
-  description: "New issue or PR awaiting technical triage and scoping"
-
-- name: "status/in-progress"
-  color: "BFDADC"
-  description: "Actively being designed or implemented by developer or agent"
-
-- name: "status/in-review"
-  color: "D4C5F9"
-  description: "Pull request open and undergoing multi-persona review or CI gates"
-
-- name: "status/blocked"
-  color: "E11D21"
-  description: "Execution blocked by external dependency or upstream review"
-
-- name: "status/ready-to-merge"
-  color: "0E8A16"
-  description: "All quality gates passed and approved by maintainer for merge"
-
-# ── Value, effort and owner labels: intake and the roadmap jobs apply these ───
-- name: "value/high"
+- name: "scope/deps"
   color: "DCDCD6"
-  description: "Value High: the delivery of the item matters much"
+  description: "Dependency pins and the updates of Renovate"
 
-- name: "value/medium"
+- name: "scope/docs"
   color: "DCDCD6"
-  description: "Value Medium"
+  description: "README and other documents"
 
-- name: "value/low"
-  color: "DCDCD6"
-  description: "Value Low: the delivery of the item matters little"
+# The labels of this repository that are not scopes (the answer extra_labels).
 
-- name: "effort/high"
-  color: "DCDCD6"
-  description: "Effort High: much work, in one pull request"
-
-- name: "effort/medium"
-  color: "DCDCD6"
-  description: "Effort Medium"
-
-- name: "effort/low"
-  color: "DCDCD6"
-  description: "Effort Low: little work"
-
-- name: "owner/service"
-  color: "DCDCD6"
-  description: "Owner Service: the roadmap Service works on the item in a Job"
-
-- name: "owner/agent"
-  color: "DCDCD6"
-  description: "Owner Agent: an agentic coder works on the item"
-
-- name: "owner/human"
-  color: "DCDCD6"
-  description: "Owner Human: a person works on the item"
-
-# ── Roadmap job labels ────────────────────────────────────────────────────────
-- name: "release"
-  color: "1D76DB"
-  description: "Pull request or issue associated with a release cut"
-
-- name: "needs-split"
-  color: "FBCA04"
-  description: "Too big for one pull request; reprioritization descopes it until it is split"
-
-- name: "source/agent"
-  color: "5319E7"
-  description: "Filed by an agent; counts toward the filing quota"
-
-- name: "budget/borrowed"
-  color: "B60205"
-  description: "Agent opening beyond the quota allowance; counts as debt until closed"
-
-# ── Workflow labels ───────────────────────────────────────────────────────────
 - name: "certified-by-sentinel"
   color: "0E8A16"
   description: "pr-sentinel.yml passed: the AST invariant sentinel found no violation"

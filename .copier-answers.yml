@@ -1,7 +1,18 @@
 # Copier writes this file. Change an answer with `copier update --data <question>=<answer>`, not here.
-_commit: v0.25.2
-_src_path: https://github.com/dan-petty/infra.git
+_commit: v0.2.0
+_src_path: https://github.com/dan-petty/github-workflows.git
 code_coverage: false
 code_owner: '@dan-petty'
+extra_labels:
+    certified-by-sentinel:
+        color: 0E8A16
+        description: 'pr-sentinel.yml passed: the AST invariant sentinel found no
+            violation'
+    needs-guardrail:
+        color: D93F0B
+        description: Defect fix that a written AGENTS.md rule would have prevented;
+            recursive-hardening.yml audits it
 release_flow: false
+required_checks: ''
+scope_descriptions: {}
 scopes: ''

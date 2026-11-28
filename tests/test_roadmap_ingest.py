@@ -200,7 +200,7 @@ def test_blocked_items_are_labelled_and_explained_in_the_backlog(tmp_path: Path)
 
 
 def test_an_unblocked_roadmap_task_carries_the_declared_feature_label(tmp_path: Path) -> None:
-    """A deliverable is labelled `type/feature`, the name that .github/labels.yml declares."""
+    """A deliverable is labelled `type/feature`, the name of the workflow label of devops-cli."""
     roadmap = tmp_path / "ROADMAP.md"
     roadmap.write_text("### Milestone (v0.3.0)\n\n- [ ] **Thing**:\n", encoding="utf-8")
     task = parse_roadmap(roadmap)[0].to_backlog_task(2001)

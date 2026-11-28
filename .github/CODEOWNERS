@@ -1,2 +1,4 @@
-# GitHub asks each code owner to review a pull request when it opens (public repos, or private repos on a paid plan).
+# GitHub asks each code owner to review a pull request when it opens, the release pull request
+# of release-please too. It needs no workflow step and no key. The template writes this file from
+# the answer code_owner: change it with `copier update --data code_owner=<owner>`, not here.
 * @dan-petty

@@ -110,7 +110,7 @@ def _labelled_score(*labels: str) -> float:
 
 
 def test_a_declared_type_bug_label_scores_as_a_defect() -> None:
-    """The type/ names that .github/labels.yml declares carry the label modifiers."""
+    """The type/ names of the workflow labels of devops-cli carry the label modifiers."""
     base = _labelled_score()
     assert (
         _labelled_score("type/bug") - base,
@@ -121,7 +121,7 @@ def test_a_declared_type_bug_label_scores_as_a_defect() -> None:
 
 
 def test_label_names_that_labels_yml_does_not_declare_add_nothing() -> None:
-    """A bare name such as `bug` is not a declared label, so it must not move the rank."""
+    """A bare name such as `bug` is not a workflow label, so it must not move the rank."""
     base = _labelled_score()
     bare = ("bug", "security", "regression", "feature", "docs", "enhancement")
     assert {name: _labelled_score(name) - base for name in bare} == dict.fromkeys(bare, 0.0)
