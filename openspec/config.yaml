@@ -1,8 +1,9 @@
 # The OpenSpec config of this repository. This file tells devops-cli that the repository plans each
 # roadmap item as an OpenSpec change in openspec/changes/<issue>-<slug>/. The stage job of devops-cli
 # writes each change with the context and the rules of this file, and `devops pr create` asks each
-# pull request body for its lines `Closes` and `Change:`. The template of infra gives the rules of
-# the jobs of devops-cli, and no fact of this repository: a person writes the first line of context.
+# pull request body for its lines `Closes` and `Change:`. The template of dan-petty/github-workflows
+# gives the rules of the jobs of devops-cli, and no fact of this repository: a person writes the
+# first line of context.
 schema: spec-driven
 
 context: |

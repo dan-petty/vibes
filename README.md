@@ -298,7 +298,7 @@ This repository is distributed under the terms of the [Apache License, Version 2
 │   ├── ISSUE_TEMPLATE/                # Issue templates for observations and artifacts
 │   ├── PULL_REQUEST_TEMPLATE.md       # Pull request template with sanitization rubric
 │   ├── copilot-instructions.md        # Pointer that sends GitHub Copilot to AGENTS.md
-│   ├── labels.yml                     # Labels the roadmap jobs read and apply
+│   ├── labels.yml                     # Scope and repository labels (template)
 │   ├── project-template.json          # Declarative GitHub Projects v2 schema template
 │   ├── renovate.json                  # Renovate update PRs: actions, hooks, pip floors, images
 │   └── workflows/                     # Autonomous recursive CI/CD workflows

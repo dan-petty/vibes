@@ -57,7 +57,7 @@ The priority score $S$ for each SDLC resource is computed across six dimensions:
 $$S = \left(S_{\text{base}} + \sum M_{\text{labels}} + (N_{\text{blocks}} \times 150) + M_{\text{pr}} + \text{ROI}_{\text{effort}} + \min(\text{age}_{\text{days}} \times 12, 200)\right) \times P_{\text{blocked}}$$
 
 - **$S_{\text{base}}$**: Base urgency (`P0_CRITICAL` = 1000, `P1_HIGH` = 500, `P2_MEDIUM` = 200, `P3_LOW` = 50).
-- **$M_{\text{labels}}$**: Label modifiers, keyed on the names that [`.github/labels.yml`](../.github/labels.yml) declares (`type/security` = +400, `type/bug` = +250, `type/feature` = +100, `type/docs` = +50), plus the workbench category `performance` = +150. A label name that the file does not declare adds nothing.
+- **$M_{\text{labels}}$**: Label modifiers, keyed on the `type/` names of the workflow labels of devops-cli (`type/security` = +400, `type/bug` = +250, `type/feature` = +100, `type/docs` = +50), plus the workbench category `performance` = +150. A label name with no modifier adds nothing.
 - **$N_{\text{blocks}}$**: Unblocking multiplier: items that unblock $N$ downstream tasks receive $+150 \times N$ to clear critical paths.
 - **$M_{\text{pr}}$**: Pull Request in-flight bonus (+300 for active PRs, +250 for failing checks, +50 per unresolved review thread).
 - **$\text{ROI}_{\text{effort}}$**: Value-to-effort ratio: $(\text{business\_value} \times 25) / \text{effort\_points}$.

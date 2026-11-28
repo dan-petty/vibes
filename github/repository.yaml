@@ -1,7 +1,9 @@
 # The settings baseline of this repository on GitHub. `devops repos onboard` applies it, and
 # `devops repos onboard --all --plan` shows each difference. Each key is the request body of one
 # endpoint of the GitHub REST API, with the field names of that body. The schema of the file is
-# templates/github-repository.schema.json of dan-petty/infra at the tag v0.25.2.
+# templates/github-repository.schema.json of dan-petty/github-workflows at the tag v0.2.0.
+# The template writes this file from the answers of .copier-answers.yml: change an answer with
+# `copier update --data <question>=<answer>`, not this file.
 
 # PATCH /repos/{owner}/{repo}. Squash is the only merge method. The squash commit gets the title and
 # the body of the pull request, so the pull request title is the Conventional Commit that
@@ -68,12 +70,16 @@ rulesets:
           require_last_push_approval: false
           required_approving_review_count: 0
           required_review_thread_resolution: false
-      # The command adds each check that reported on the template pull request
-      # (devops-cli#6773, decision D3).
+      # Each check of the answer required_checks, and the title check of
+      # .github/workflows/pr-title.yml, which reports on each pull request into main. Integration
+      # 15368 is GitHub Actions: only a job of a workflow can report the check. The command also
+      # adds each check that reported on the template pull request (devops-cli#6773, decision D3).
       - type: required_status_checks
         parameters:
           do_not_enforce_on_create: true
-          required_status_checks: []
+          required_status_checks:
+            - context: PR title / Semantic PR title
+              integration_id: 15368
           strict_required_status_checks_policy: false
       - type: code_scanning
         parameters:
